@@ -59,6 +59,7 @@ uv run python -m compileall -q <改动文件>   # 改完先做语法检查
 - `events.py`（进程内/间事件门面）、`ipc.py`（会话级事件总线）、`streaming.py`、`token_estimator.py`。
 - `slurm.py`、`compute_utils.py`、`operations.py`（数据目录备份/恢复）、`yolo_guard.py`（自动审批安全守卫）。
 - `platform_utils.py`、`runtime_profile.py`（运行能力 profile，registry 的 runtime_profiles 过滤用）。
+- `json_args.py` — 工具参数 JSON 的宽松解析/修复（LLM 产出的畸形 JSON 在此兜底）。
 - `infra/` 基础设施备注：`config.py` 的 `save()` 对 `plugins` 键**磁盘优先合并**（磁盘 YAML 存在非 None 值就原样保留，否则落内存值）——堵住运行中服务用旧内存快照整文件重写、抹掉 `knowledge install` 手写 plugins 的竞态；代价是 `save()` 无法移除 plugins 条目，卸载插件手改 YAML。
 **包根一级子包**：`dag/`、`runtime/`（仅剩共享件，见上）、`tools/`、`subagents/`、`prompts/`、`skills/`、`benchmark/`。
 

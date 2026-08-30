@@ -54,6 +54,8 @@ class ChemKBPlugin:
     # 禁止构造期 IO（见模块 docstring）；db/httpx 客户端都在 search 期获取。
 
     def search(self, query: str, *, limit: int = 5) -> list[KnowledgeEntry]:
+        if limit < 1:
+            return []
         if limit < 2:
             sem_quota = graph_quota = 1
         else:

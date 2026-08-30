@@ -18,10 +18,14 @@ if (-not $Python) {
     $Python = $env:KG_VEC_PYTHON
 }
 if (-not $Python) {
-    $Python = "D:\AAA-LY\work\卢天的帖子\清洗的代码\.venv-trans\Scripts\python.exe"
+    # 无默认值（本机路径不进仓）：首次部署请用 -Python 或 KG_VEC_PYTHON 指向
+    # 装有 sentence-transformers/torch/numpy 的外部 venv 解释器。
+    Write-Error ("no interpreter configured: pass -Python or set $env:KG_VEC_PYTHON " +
+        "to the external venv python (needs sentence-transformers/torch/numpy)")
+    exit 1
 }
 if (-not (Test-Path -LiteralPath $Python)) {
-    Write-Error ("python not found: " + $Python + " (set -Python or $env:KG_VEC_PYTHON)")
+    Write-Error ("python not found: " + $Python)
     exit 1
 }
 
