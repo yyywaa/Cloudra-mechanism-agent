@@ -150,13 +150,20 @@ _DEG_CTE = """
 
 
 def _match_seeds(con: sqlite3.Connection, query: str, cap: int) -> tuple[list[sqlite3.Row], str]:
-    """直接命中（FTS 优先，短 token / 零命中时整体 LIKE 回退）。"""
+    """直接命中（FTS 优先，整体 LIKE 回退）。
+
+    v11 语义：≥3 字符的 token 进 FTS（先全 AND，零命中再 OR——bm25 排序天然
+    压低英文停用词权重）；短 token（"to"/"TS"/2 字中文）不参与 FTS，保留给
+    整串 LIKE 兜底。英文自然语句（"how to find …"）由此可经 props.label_en
+    命中图谱。fallback 标记：fts / fts_or / like。
+    """
     tokens = [t for t in query.split() if t]
-    if tokens and all(len(t) >= 3 for t in tokens):
-        match = " ".join('"' + t.replace('"', '""') + '"' for t in tokens)
+    fts_tokens = [t for t in tokens if len(t) >= 3]
+    if fts_tokens:
+        match = " ".join('"' + t.replace('"', '""') + '"' for t in fts_tokens)
         rows = con.execute(
             """
-            SELECT e.id, e.type, e.label, e.smiles, e.n_sources,
+            SELECT e.id, e.type, e.label, e.smiles, e.n_sources, e.props,
                    bm25(kg_entities_fts) AS r
             FROM kg_entities_fts f JOIN kg_entities e ON e.rowid = f.rowid
             WHERE kg_entities_fts MATCH ?
@@ -166,10 +173,24 @@ def _match_seeds(con: sqlite3.Connection, query: str, cap: int) -> tuple[list[sq
         ).fetchall()
         if rows:
             return rows, "fts"
+        if len(fts_tokens) > 1:
+            match_or = " OR ".join('"' + t.replace('"', '""') + '"' for t in fts_tokens)
+            rows = con.execute(
+                """
+                SELECT e.id, e.type, e.label, e.smiles, e.n_sources, e.props,
+                       bm25(kg_entities_fts) AS r
+                FROM kg_entities_fts f JOIN kg_entities e ON e.rowid = f.rowid
+                WHERE kg_entities_fts MATCH ?
+                ORDER BY r LIMIT ?
+                """,
+                (match_or, cap),
+            ).fetchall()
+            if rows:
+                return rows, "fts_or"
     like = "%" + _escape_like(" ".join(tokens)) + "%"
     rows = con.execute(
         """
-        SELECT id, type, label, smiles, n_sources, NULL AS r
+        SELECT id, type, label, smiles, n_sources, props, NULL AS r
         FROM kg_entities
         WHERE label LIKE ? ESCAPE '\\' OR smiles LIKE ? ESCAPE '\\'
            OR props LIKE ? ESCAPE '\\'
