@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import re
 import sqlite3
 import time
@@ -179,6 +180,17 @@ def _match_seeds(con: sqlite3.Connection, query: str, cap: int) -> tuple[list[sq
     return rows, "like"
 
 
+def _label_en(props: Any) -> str | None:
+    """props 列（JSON 字符串）里的 label_en；解析失败/缺失返回 None。"""
+    if not props:
+        return None
+    try:
+        val = json.loads(props).get("label_en")
+        return str(val) if val else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _bm25_score(raw: Any, n_sources: int) -> float:
     # bm25 为负值（越负越相关）；归一到 (0,1) 并叠加轻量 n_sources 先验。
     try:
@@ -217,7 +229,7 @@ def search_graph(db_path: PathLike, query: str, limit: int = 8) -> list[dict[str
               FROM walk w JOIN kg_relations r ON w.id IN (r.src_id, r.dst_id)
               WHERE w.hop < 2
             ),""" + _DEG_CTE + """
-            SELECT e.id, e.type, e.label, e.smiles, e.n_sources,
+            SELECT e.id, e.type, e.label, e.smiles, e.n_sources, e.props,
                    MIN(w.hop) AS hop, COALESCE(d.degree, 0) AS degree
             FROM walk w JOIN kg_entities e ON e.id = w.id LEFT JOIN deg d ON d.id = e.id
             GROUP BY e.id
@@ -243,6 +255,7 @@ def search_graph(db_path: PathLike, query: str, limit: int = 8) -> list[dict[str
                 "id": eid,
                 "type": r["type"],
                 "label": r["label"],
+                "label_en": _label_en(r["props"]),
                 "content": content,
                 "score": score,
                 "hop": int(r["hop"] or 0),
