@@ -292,7 +292,9 @@ class AgentRunner:
                 current = contexts.current_messages(agent.id)
                 if current:
                     effective = self._effective_settings(agent)
-                    if context_over_budget(
+                    # tiktoken 计数对大上下文是毫秒级 CPU 工作，卸载出事件循环。
+                    if await asyncio.to_thread(
+                        context_over_budget,
                         current,
                         context_window=effective.context_window,
                         max_output=effective.max_tokens,
@@ -867,6 +869,9 @@ class AgentRunner:
                 max_output=settings.max_tokens,
                 trigger=trigger,
                 old_head_len=old_head_len,
+                # 摘要调用有界等待：provider 停滞时按 segment_failed 收敛，
+                # 不许一次 ~1M tokens 的摘要调用把轮次无限挂起（GH #40）。
+                summary_timeout=float(settings.timeout) if settings.timeout else None,
             )
         except Exception as exc:
             # Compaction is best-effort: a summarization failure must never

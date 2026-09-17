@@ -188,8 +188,22 @@ def usable_prompt_chars(context_window: int, max_output: int) -> int:
 def context_over_budget(
     messages: list[dict[str, Any]], *, context_window: int, max_output: int
 ) -> bool:
-    """预算触发判据：投影估算超过可用容量（未配置 context_window 用内部兜底）。"""
-    return measure_messages(messages) > usable_prompt_chars(context_window, max_output)
+    """预算触发判据：估算 tokens 超过可用容量（未配置 context_window 用内部兜底）。
+
+    优先 ``TokenEstimator.count_messages``（tiktoken 实数，对 CJK/JSON 远比
+    ``chars / CHARS_PER_TOKEN`` 逼近 provider 真值——GH #40 实测 chars/4 低估
+    2.3×，预算线形同虚设）；tiktoken 不可用时 TokenEstimator 内部落到
+    CJK 感知启发式，仍比 chars/4 保守。
+    """
+    from cloudra.infra.token_estimator import TokenEstimator
+
+    try:
+        used_tokens = TokenEstimator.count_messages(messages)
+    except Exception:
+        used_tokens = measure_messages(messages) // CHARS_PER_TOKEN
+    window = context_window or _DEFAULT_CONTEXT_WINDOW
+    usable_tokens = int((window - (max_output or 0)) * _BUDGET_MARGIN)
+    return used_tokens > max(usable_tokens, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +212,7 @@ def context_over_budget(
 
 
 class CompactSummaryError(ValueError):
-    """摘要输出为空 / 非 JSON / 结构不符 / 来源序号越界。"""
+    """摘要输出为空 / 非 JSON / 结构不符（来源下标越界不在此列：钳制并计数）。"""
 
 
 class SummaryEntry(BaseModel):
@@ -220,6 +234,8 @@ class CompactSummary(BaseModel):
     failed_attempts: list[SummaryEntry] = Field(default_factory=list)
     evidence: list[SummaryEntry] = Field(default_factory=list)
     next_actions: list[SummaryEntry] = Field(default_factory=list)
+    # 越界来源下标被钳制进轨迹范围的数量（parse 阶段计入，stats 透出）。
+    clamped_sources: int = 0
 
 
 def _all_entries(summary: CompactSummary) -> list[SummaryEntry]:
@@ -237,7 +253,15 @@ def _all_entries(summary: CompactSummary) -> list[SummaryEntry]:
 
 
 def parse_compact_summary(raw: str, *, trajectory_len: int) -> CompactSummary:
-    """json.loads + pydantic + 显式检查（来源序号在轨迹范围内）。"""
+    """json.loads + pydantic 校验 + 来源下标钳制。
+
+    结构不符 / 空目标仍 fail-loud 拒收（绝不降级解析）。来源下标越界则
+    **钳制**进轨迹范围并计数（``clamped_sources``，随 stats 透出）：
+    在上千条消息的轨迹上要求模型精确引用位置下标本就不可满足，实测
+    （GH #40）一次 1606 条轨迹的摘要因越界 10 被整体拒收，压缩永久
+    失败；钳制 + 计数记录优于放弃全部压缩成果——这不是静默降级，
+    偏差数量在 compaction stats 里可审计。
+    """
     text = (raw or "").strip()
     if not text:
         raise CompactSummaryError("empty summary output")
@@ -258,12 +282,21 @@ def parse_compact_summary(raw: str, *, trajectory_len: int) -> CompactSummary:
         ) from exc
     if not summary.objective.text.strip():
         raise CompactSummaryError("objective is empty")
+    clamped = 0
+    last = max(trajectory_len - 1, 0)
     for entry in _all_entries(summary):
-        for index in entry.sources:
+        for position, index in enumerate(entry.sources):
             if index < 0 or index >= trajectory_len:
-                raise CompactSummaryError(
-                    f"source index {index} out of trajectory range 0..{trajectory_len - 1}"
-                )
+                entry.sources[position] = min(max(index, 0), last)
+                clamped += 1
+    summary.clamped_sources = clamped
+    if clamped:
+        logger.warning(
+            "compaction summary: clamped %d out-of-range source index(es) "
+            "into trajectory range 0..%d",
+            clamped,
+            last,
+        )
     return summary
 
 
@@ -428,14 +461,23 @@ async def compact_context(
     max_output: int,
     trigger: str = "manual",
     old_head_len: int = 0,
+    summary_timeout: float | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """统一压缩：覆盖全部轮次，返回 (候选上下文, stats)。
 
     ``stats["compacted"]`` 为 False 即拒替换（reason 说明原因），调用方
     不得安装候选。``old_head_len`` 是当前投影里旧 harness 前缀的消息数
     （由调用方从 prefix_meta 读出；无前缀的会话为 0）——旧前缀不进摘要
-    输入，由调用方重新装配的 ``head`` 替换。
+    输入，由调用方重新装配的 ``head`` 替换。``summary_timeout`` 是单次
+    摘要调用的有界等待（秒；None/≤0 不限时）——超时按 ``segment_failed``
+    /``merge_failed`` 终态返回，绝不无限挂起阻塞轮次（GH #40）。
     """
+
+    async def _bounded(coro: Any) -> Any:
+        if summary_timeout is not None and summary_timeout > 0:
+            return await asyncio.wait_for(coro, summary_timeout)
+        return await coro
+
     base_stats: dict[str, Any] = {
         "keep_recent": keep_recent,
         "before_messages": len(messages),
@@ -475,13 +517,16 @@ async def compact_context(
     segments = segment_trajectory(trajectory, budget)
     partials: list[CompactSummary] = []
     coverage: list[dict[str, Any]] = []
+    clamped_sources = 0
     for seg_index, segment in enumerate(segments):
         try:
-            partial = await _summarize_validated(
-                summarize,
-                instruction=_COMPACT_INSTRUCTION,
-                payload=segment["text"],
-                trajectory_len=len(trajectory),
+            partial = await _bounded(
+                _summarize_validated(
+                    summarize,
+                    instruction=_COMPACT_INSTRUCTION,
+                    payload=segment["text"],
+                    trajectory_len=len(trajectory),
+                )
             )
         except asyncio.CancelledError:
             raise
@@ -502,6 +547,7 @@ async def compact_context(
                 "error": str(exc),
             }
         partials.append(partial)
+        clamped_sources += partial.clamped_sources
         coverage.append(
             {
                 "segment": seg_index,
@@ -515,12 +561,15 @@ async def compact_context(
             [partial.model_dump() for partial in partials], ensure_ascii=False, indent=2
         )
         try:
-            summary = await _summarize_validated(
-                summarize,
-                instruction=_MERGE_INSTRUCTION,
-                payload=merge_input,
-                trajectory_len=len(trajectory),
+            summary = await _bounded(
+                _summarize_validated(
+                    summarize,
+                    instruction=_MERGE_INSTRUCTION,
+                    payload=merge_input,
+                    trajectory_len=len(trajectory),
+                )
             )
+            clamped_sources += summary.clamped_sources
         except asyncio.CancelledError:
             raise
         except CompactSummaryError as exc:
@@ -565,6 +614,7 @@ async def compact_context(
         "instruction_messages": len(instructions),
         "tail_messages": len(tail),
         "segments": coverage,
+        "clamped_sources": clamped_sources,
     }
 
 

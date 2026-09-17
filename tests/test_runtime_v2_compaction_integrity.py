@@ -14,7 +14,6 @@ import pytest
 
 from cloudra.runtime_v2.compaction import (
     COMPACT_SUMMARY_CONTRACT,
-    CompactSummaryError,
     compact_context,
     context_over_budget,
     parse_compact_summary,
@@ -288,14 +287,51 @@ async def test_structural_validation_error_refused():
 
 
 @pytest.mark.asyncio
-async def test_source_index_out_of_range_refused():
+async def test_source_index_out_of_range_clamped_and_recorded():
+    """真实故障（GH #40）：1606 条轨迹的摘要因来源下标越界 10 被整体拒收，
+    压缩永久失败。越界下标现在钳制进范围并计数，压缩得以完成。"""
     messages = _trajectory_context()
-    bad = _summary_json(
-        objective={"text": "o", "sources": [9999]}
+    bad = _summary_json(objective={"text": "o", "sources": [9999]})
+    new_context, stats = await compact_context(
+        messages,
+        head=[],
+        notices=[],
+        keep_recent=0,
+        summarize=RecordingSummarizer([bad]),
+        context_window=200_000,
+        max_output=32_768,
     )
-    stats = await _refusal(messages, RecordingSummarizer([bad] * 2))
-    assert stats["reason"] == "summary_invalid"
-    assert "out of trajectory range" in stats["error"]
+    assert stats["compacted"] is True
+    assert stats["clamped_sources"] >= 1
+    assert len(new_context) < len(messages)
+
+
+@pytest.mark.asyncio
+async def test_summary_timeout_reports_segment_failure():
+    """provider 对超大摘要分段停滞时必须有界收敛（GH #40：挂起 10+ 分钟）。"""
+
+    class SlowSummarizer:
+        async def __call__(self, _messages):
+            await asyncio.sleep(30)
+            return _summary_json()
+
+    messages = _trajectory_context()
+    started = asyncio.get_running_loop().time()
+    new_context, stats = await compact_context(
+        messages,
+        head=[],
+        notices=[],
+        keep_recent=0,
+        summarize=SlowSummarizer(),
+        context_window=200_000,
+        max_output=32_768,
+        summary_timeout=0.05,
+    )
+    elapsed = asyncio.get_running_loop().time() - started
+    assert stats["compacted"] is False
+    assert stats["reason"] == "segment_failed"
+    assert elapsed < 5
+    assert new_context == messages
 
 
 @pytest.mark.asyncio
@@ -481,8 +517,23 @@ def test_parse_accepts_fenced_json_and_validates_sources():
     fenced = f"```json\n{payload}\n```"
     summary = parse_compact_summary(fenced, trajectory_len=10)
     assert summary.corrections[0].replaces == "use gaussian"
-    with pytest.raises(CompactSummaryError):
-        parse_compact_summary(payload, trajectory_len=3)  # source 4 越界
+    # source 4 越界：不再整体拒收，钳制进范围并计数（GH #40）。
+    clamped = parse_compact_summary(payload, trajectory_len=3)
+    assert clamped.corrections[0].sources == [2]
+    assert clamped.clamped_sources == 1
+
+
+def test_parse_clamps_negative_and_far_out_of_range_sources():
+    payload = _summary_json(
+        pending=[
+            {"text": "a", "sources": [-7]},
+            {"text": "b", "sources": [1616]},
+        ]
+    )
+    summary = parse_compact_summary(payload, trajectory_len=1607)
+    assert summary.pending[0].sources == [0]
+    assert summary.pending[1].sources == [1606]
+    assert summary.clamped_sources == 2
 
 
 def test_render_keeps_correction_replacement_visible():
@@ -523,9 +574,18 @@ def test_segment_trajectory_never_truncates_and_covers_all():
 
 
 def test_context_over_budget_uses_existing_window_and_output():
-    messages = [{"role": "user", "content": "x" * 5000}]
+    messages = [{"role": "user", "content": "solve the mechanism task. " * 700}]
     assert context_over_budget(messages, context_window=500, max_output=0)
     assert not context_over_budget(messages, context_window=200_000, max_output=32_768)
+
+
+def test_context_over_budget_counts_cjk_tokens_not_chars():
+    """GH #40：chars/CHARS_PER_TOKEN(=4) 对中文低估 ~2.3×——
+    2992 个汉字按 chars/4 只有 ~750 tokens（旧判据 3008 < 3400 放行），
+    真实分词 ~2000-3000 tokens，必须触发预算。"""
+    messages = [{"role": "tool", "content": "过渡态搜索与极小值优化" * 272}]
+    assert context_over_budget(messages, context_window=1_000, max_output=0)
+    assert not context_over_budget(messages, context_window=1_000_000, max_output=32_768)
 
 
 # ---------------------------------------------------------------------------
