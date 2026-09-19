@@ -624,6 +624,26 @@ export default function App() {
         if (event.type === 'approval.decided' && activeProjectId) {
           api.approvals(activeProjectId).then(setApprovals).catch(() => undefined);
         }
+        // Compact feedback: the button only queues the request — the actual
+        // run happens at the next turn boundary and can take minutes on
+        // thinking models. Surface started/finished so the button is not a
+        // black box (refusals include the reason + error label).
+        if (
+          (event.type === 'compaction.started' || event.type === 'compaction.finished') &&
+          sessionId &&
+          sessionId === activeAgentIdRef.current &&
+          !replaying
+        ) {
+          if (event.type === 'compaction.started') {
+            pushToast('info', `Compacting context… (${event.data?.history_messages ?? '?'} messages)`);
+          } else if (event.data?.compacted) {
+            pushToast('ok', `Compacted: ${event.data?.before_messages ?? '?'} → ${event.data?.after_messages ?? '?'} messages`);
+          } else {
+            const reason = String(event.data?.reason ?? 'refused');
+            const err = String(event.data?.error ?? '').slice(0, 80);
+            pushToast('error', `Compaction refused: ${reason}${err ? ` (${err})` : ''}`);
+          }
+        }
         if (event.type === 'interaction.requested' && activeProjectId) {
           api.interactions(activeProjectId).then(setInteractions).catch(() => undefined);
         }
