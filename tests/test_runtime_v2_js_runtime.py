@@ -703,3 +703,20 @@ def test_terminate_process_survives_missing_killpg(monkeypatch):
 
     monkeypatch.delattr(os, "killpg", raising=False)
     asyncio.run(_scenario())
+
+
+def test_host_env_inherits_full_environment_on_windows():
+    """Windows：node.exe 缺 SystemRoot/TEMP/APPDATA 会启动即 abort（rc=134，
+    host closed stdout）——_host_env 必须继承完整环境；POSIX 保持最小环境。"""
+    import os as _os
+
+    from cloudra.runtime_v2.js_runtime import JavaScriptRuntime
+
+    extras = {
+        k: _os.environ[k] for k in ("LANG", "LC_ALL", "LC_CTYPE", "TZ") if k in _os.environ
+    }
+    win_env = JavaScriptRuntime._host_env(platform="nt")
+    assert win_env == {**_os.environ, **extras}  # 完整继承 + locale/TZ
+
+    posix_env = JavaScriptRuntime._host_env(platform="posix")
+    assert posix_env == {"PATH": _os.environ.get("PATH", ""), **extras}  # 最小环境

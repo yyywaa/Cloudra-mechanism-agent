@@ -190,12 +190,28 @@ class JavaScriptRuntime:
             return f"JavaScript runtime prerequisites are unavailable; {install_hint}"
         return None
 
-    async def _launch(self, node: str, cwd: str) -> asyncio.subprocess.Process:
-        env = {"PATH": os.environ.get("PATH", "")}
+    @staticmethod
+    def _host_env(*, platform: str | None = None) -> dict[str, str]:
+        """JS 宿主进程环境。
+
+        POSIX：最小环境（PATH + locale/TZ）——既有语义不变。
+        Windows：继承完整环境。node.exe 缺 ``SystemRoot``/``TEMP``/``APPDATA``
+        等系统变量会在启动即 abort（实测 rc=134，宿主 stdout 直接关闭——
+        连空程序都报 host closed stdout，全部工具调用发不出去），
+        最小环境在该平台不可用。``platform`` 仅测试注入用。
+        """
+        kind = platform if platform is not None else os.name
+        if kind == "nt":
+            env = dict(os.environ)
+        else:
+            env = {"PATH": os.environ.get("PATH", "")}
         for key in ("LANG", "LC_ALL", "LC_CTYPE", "TZ"):
             value = os.environ.get(key)
             if value:
                 env[key] = value
+        return env
+
+    async def _launch(self, node: str, cwd: str) -> asyncio.subprocess.Process:
         return await asyncio.create_subprocess_exec(
             node,
             "--max-old-space-size=128",
@@ -204,7 +220,7 @@ class JavaScriptRuntime:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
-            env=env,
+            env=self._host_env(),
             start_new_session=True,
             limit=self.limits.rpc_line_bytes + 4096,
         )
