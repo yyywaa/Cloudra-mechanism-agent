@@ -2,11 +2,41 @@ name: CI
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, windows]
   pull_request:
-    branches: [master, main]
+    branches: [master, main, windows]
 
 jobs:
+  windows-smoke:
+    # windows 分支的诚实护栏：平台敏感面（flocks msvcrt 后端、JS host 环境、
+    # 配置 mutate）在真实 Windows runner 上过一遍。smoke 范围随移植进度扩展，
+    # 新增 Windows 兼容修复必须连带把对应测试加进这里——否则兼容就是腐烂中的摆设。
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run ruff
+        run: ruff check cloudra
+
+      - name: Compile check
+        run: python -m compileall -q cloudra
+
+      - name: Run Windows-sensitive smoke tests
+        run: |
+          pytest tests/test_config_mutate.py -q
+          pytest tests/test_runtime_v2_js_runtime.py -q -k host_env
+
   test:
     runs-on: ubuntu-latest
     # 任何测试挂起时 15 分钟快速失败，而不是空烧默认 6 小时
