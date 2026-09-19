@@ -994,7 +994,12 @@ export default function App() {
           setDraft('');
           if (activeAgent) {
             await api.compactAgent(activeAgent.id);
-            pushToast('ok', 'Context compaction requested');
+            const st = String(activeAgent.state ?? '');
+            if (st === 'running' || st === 'queued' || st === 'waiting_approval' || st === 'waiting_input') {
+              pushToast('ok', 'Compaction queued — the running agent executes it at its next turn boundary');
+            } else {
+              pushToast('error', `Agent is ${st || 'not running'} — compaction queued but it will NOT run until the agent runs again`);
+            }
           }
           return;
         }
@@ -3388,7 +3393,12 @@ function Inspector({
                       onClick={async () => {
                         try {
                           await api.compactAgent(activeAgent.id);
-                          onToast('ok', 'Compaction queued — applies on the next turn');
+                          const st = String(activeAgent.state ?? '');
+                          if (st === 'running' || st === 'queued' || st === 'waiting_approval' || st === 'waiting_input') {
+                            onToast('ok', 'Compaction queued — the running agent executes it at its next turn boundary');
+                          } else {
+                            onToast('error', `Agent is ${st || 'not running'} — compaction is queued but will NOT run until the agent runs again (send it a message or restart it)`);
+                          }
                         } catch (e) {
                           onError(e);
                         }
