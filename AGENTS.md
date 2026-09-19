@@ -76,5 +76,6 @@ npm --prefix cloudra/runtime_v2/js_host test   # JS 宿主测试；先 npm ci --
 - **执行面可靠性铁律**：调度器/guard 任何路径不得 kill 计算进程（取消只走显式 `cancel_requested` → Slurm scancel 路径）；进程存活判定一律 `infra/flocks.py` 的 flock 探测，禁止 PID/`ps`//proc 文本判定；核心链路禁止解析计算输入文件。子进程归属链：API/CLI →（detach）scheduler/kg_vec 守护 → guard → calculator.sh → 引擎 → 引擎的 external 子进程（如 MACE 由 ORCA 启动，**Cloudra 从不直接 spawn MACE**）。
 - **禁止引入正则**：`re` 唯一允许的场合是**解析计算引擎输出文件**（`tools/core/*_frames.py`、`log_parser.py`、`ts_guess.py` 等纯解析）。**校验路径一律不准有正则**——尤其是对 agent/LLM 输出：取值与判定走结构化路径（pydantic 校验、`json.loads`、显式 token 扫描、枚举精确比对）或对物理量做确定性比对，一律 fail-loud。常驻护栏 `tests/test_benchmark.py::test_scoring_modules_do_not_import_regex`。
 - 不引入项目未依赖的库；可选能力走 `pyproject.toml` 的 extras（chem/browser/pdf/visual/dev）。
+- **双远端同步（2026-09-20 起）**：仓库同时托管 GitHub（remote `github`，经 `remote.github.proxy` 走本地代理）与 Gitee（remote `origin`，直连）。pull/push 一律两个远端都做，保持镜像一致；Windows 版日常开发直接在 `windows` 分支上进行（政策见 `docs/WINDOWS_PORT.md`）。代理端口变动时更新 `remote.github.proxy`。
 - 改了结构、命令或约定时同步更新本文件。
 - 未经明确要求不做 git 提交/推送等变更操作。
