@@ -30,6 +30,14 @@
 
 未命中任何已知标记的非零退出落 ``unknown_failure``：保留完整原文（日志路径）并明确报错，
 不猜测原因、不按"产物在就成功"放行。
+
+除默认构象搜索外支持 CREST 2.12 的特殊 runtype（``runtype`` 字段）：``nci``（非共价复合物
+系综，椭球壁势）、``qcg``（quantum cluster growth 显式溶剂壳，需 xtb-IFF——缺失有专属终止
+类别 ``qcg_xtbiff_missing``，fail-loud 不猜）、``protonate``/``deprotonate``/``tautomerize``
+（质子化态/互变异构筛选）。各 runtype 的产物集合文件名与产物原子数不同（CREST 2.12 实测：
+``protonated.xyz`` 为输入+1 原子、``deprotonated.xyz`` 为 -1、``tautomers.xyz`` 原子数不变、
+qcg 主产物 ``ensemble/final_ensemble.xyz`` 为 溶质+nsolv×溶剂 原子），完整性核对按 runtype
+各自的口径执行，不匹配即 ``incomplete_artifacts``，绝不放宽。
 """
 
 from __future__ import annotations
@@ -64,6 +72,8 @@ MARKER_MTD_TRIAL_PREFIX = "Trial MTD "
 MARKER_MTD_TRIAL_SUFFIX = "did not converge!"
 MARKER_MD_FAILED = "Warning: MD seemingly failed (no xtb.trj)"
 MARKER_RESTART_FAILED_PREFIX = "Automatic xtb restart failed "
+#: QCG 缺 xtb-IFF 时的 ERROR STOP 文本（CREST 2.12 实测）。
+MARKER_QCG_NO_IFF = "No xtb-IFF found"
 #: CREST 在初始优化失败时写出的哨兵文件（空文件）；作为标记的旁证，不单独作为判据。
 SENTINEL_NOT_CONVERGED = "NOT_CONVERGED"
 
@@ -72,6 +82,22 @@ CONFORMERS_NAME = "crest_conformers.xyz"
 XTBOPT_LOG_NAME = "xtbopt.log"
 RUNS_DIR_NAME = "crest_runs"
 MAX_EVIDENCE_LINES = 20
+
+CrestRuntype = Literal["default", "nci", "qcg", "protonate", "deprotonate", "tautomerize"]
+
+#: 各 runtype 的产物集合文件（CREST 2.12 实测 + 二进制字符串核实；qcg 主产物在子目录，
+#: 其 ``grow/cluster.xyz`` 只是生长终态的单体几何，不构成系综产物）。
+RUNTYPE_PRODUCT = {
+    "default": CONFORMERS_NAME,
+    "nci": CONFORMERS_NAME,
+    "qcg": os.path.join("ensemble", "final_ensemble.xyz"),
+    "protonate": "protonated.xyz",
+    "deprotonate": "deprotonated.xyz",
+    "tautomerize": "tautomers.xyz",
+}
+
+#: 产物相对输入的原子数变化（CREST 2.12 实测；qcg 由调用方按 nsolv×溶剂原子数另算）。
+RUNTYPE_ATOM_DELTA = {"protonate": 1, "deprotonate": -1}
 
 CrestTermination = Literal[
     "completed",
@@ -82,6 +108,7 @@ CrestTermination = Literal[
     "incomplete_artifacts",
     "unknown_failure",
     "executable_missing",
+    "qcg_xtbiff_missing",
 ]
 
 CrestStage = Literal[
@@ -112,6 +139,16 @@ class CrestRunRequest(BaseModel):
                     "刻意**不**同时加 ``-notopo``——那是关闭 CREGEN 的全部拓扑检查，会连搜索过程中的"
                     "结构身份检查一起去掉，本模块不提供该组合。开启时运行结果里会显式记录这个事实。",
     )
+    runtype: CrestRuntype = Field(
+        default="default",
+        description="CREST 运行类型：default/nci 为构象系综搜索（nci 加椭球壁势，非共价复合物专用）；"
+                    "qcg 为 quantum cluster growth 显式溶剂壳生长（需 solvent_xyz_text 与 nsolv，"
+                    "且依赖外部 xtb-IFF）；protonate/deprotonate/tautomerize 为质子化态/互变异构筛选。",
+    )
+    solvent_xyz_text: str = Field(
+        default="", description="runtype='qcg' 的溶剂分子 xyz 文本（单帧）；其余 runtype 必须为空",
+    )
+    nsolv: int = Field(default=0, description="runtype='qcg' 要生长的溶剂分子数（--nsolv）")
     expected_product_xyz: str = Field(
         default="",
         description="可选的预期产物单帧 xyz 文本。给出时，拓扑变更报告会额外汇总优化末帧的"
@@ -137,6 +174,11 @@ class CrestConformer(BaseModel):
     frame_index: int
     energy_eh: float
     positions: list[list[float]]
+    symbols: list[str] = Field(
+        default_factory=list,
+        description="该帧的元素序列。protonate/qcg 等 runtype 的产物原子集合与输入不同，"
+                    "调用方必须用这里的元素序列而不是输入的；default/nci 与输入一致",
+    )
 
 
 class CrestRunResult(BaseModel):
@@ -171,14 +213,29 @@ def build_crest_command(request: CrestRunRequest) -> list[str]:
     """构造 CREST 命令行。
 
     电荷与自旋**显式**透传（``--uhf = multiplicity - 1``，与 xtb 通道口径一致），
-    绝不依赖 CREST 对带电/开壳层体系的默认推断。
+    绝不依赖 CREST 对带电/开壳层体系的默认推断。qcg 的溶剂文件与 nsolv 是位置性要件，
+    缺失即在这里 fail-loud，不留到 CREST 报错。
     """
     if request.multiplicity < 1:
         raise ValueError(f"multiplicity must be >= 1 (2S+1), got {request.multiplicity}")
-    command = ["crest", "input.xyz", f"-{request.method.lstrip('-')}"]
-    if request.quick:
+    method = f"-{request.method.lstrip('-')}"
+    if request.runtype == "qcg":
+        if not request.solvent_xyz_text.strip():
+            raise ValueError("runtype='qcg' requires solvent_xyz_text (the solvent molecule xyz)")
+        if request.nsolv < 1:
+            raise ValueError(f"runtype='qcg' requires nsolv >= 1, got {request.nsolv}")
+        command = ["crest", "input.xyz", "--qcg", "solvent.xyz", "--nsolv", str(request.nsolv), method]
+    else:
+        if request.solvent_xyz_text.strip() or request.nsolv:
+            raise ValueError("solvent_xyz_text/nsolv are only valid with runtype='qcg'")
+        command = ["crest", "input.xyz", method]
+    if request.quick and request.runtype in ("default", "nci"):
         command.append("--quick")
     command += ["--chrg", str(request.charge), "--uhf", str(request.multiplicity - 1)]
+    if request.runtype == "nci":
+        command.append("--nci")
+    elif request.runtype in ("protonate", "deprotonate", "tautomerize"):
+        command.append(f"--{request.runtype}")
     if request.noreftopo:
         # 只关初始拓扑检查；绝不同时加 -notopo（那会关掉 CREGEN 的全部拓扑检查）
         command.append("--noreftopo")
@@ -224,6 +281,10 @@ def _scan_markers(lines: list[str]) -> tuple[list[str], Optional[CrestTerminatio
                 stage = "search"
         elif MARKER_ABNORMAL_TERMINATION in stripped:
             note(stripped)
+        elif MARKER_QCG_NO_IFF in stripped:
+            note(stripped)
+            if termination is None:
+                termination = "qcg_xtbiff_missing"
         elif MARKER_NORMAL_TERMINATION in stripped:
             note(stripped)
             if termination is None:
@@ -273,6 +334,7 @@ def _parse_conformers(path: str, expected_atoms: int) -> tuple[list[CrestConform
                 "coordinate lines follow (truncated)"
             )
         positions: list[list[float]] = []
+        symbols: list[str] = []
         for line in block:
             parts = line.split()
             if len(parts) < 4:
@@ -281,8 +343,9 @@ def _parse_conformers(path: str, expected_atoms: int) -> tuple[list[CrestConform
                 positions.append([float(parts[1]), float(parts[2]), float(parts[3])])
             except ValueError:
                 return [], f"non-numeric coordinate in frame {len(conformers) + 1}: {line!r}"
+            symbols.append(parts[0])
         conformers.append(CrestConformer(
-            frame_index=len(conformers), energy_eh=energy, positions=positions,
+            frame_index=len(conformers), energy_eh=energy, positions=positions, symbols=symbols,
         ))
         index += 2 + count
     if not conformers:
@@ -290,23 +353,37 @@ def _parse_conformers(path: str, expected_atoms: int) -> tuple[list[CrestConform
     return conformers, None
 
 
-def _expected_atom_count(xyz_text: str, declared: Optional[int]) -> int:
-    if declared is not None:
-        if declared < 1:
-            raise ValueError(f"expected_atoms must be >= 1, got {declared}")
-        return declared
+def _xyz_atom_count(xyz_text: str, what: str) -> int:
     lines = xyz_text.splitlines()
     if not lines:
-        raise ValueError("the CREST input xyz text is empty")
+        raise ValueError(f"the {what} xyz text is empty")
     try:
         count = int(lines[0].strip())
     except ValueError as exc:
         raise ValueError(
-            f"the CREST input xyz first line must be the atom count, got {lines[0]!r}"
+            f"the {what} xyz first line must be the atom count, got {lines[0]!r}"
         ) from exc
     if count < 1:
-        raise ValueError(f"the CREST input xyz declares {count} atoms")
+        raise ValueError(f"the {what} xyz declares {count} atoms")
     return count
+
+
+def _expected_atom_count(request: CrestRunRequest) -> int:
+    """产物帧应有的原子数：default/nci/tautomerize 与输入一致；protonate/deprotonate 各 ±1
+    （CREST 2.12 实测，默认单轮质子化/去质子化）；qcg 为 溶质 + nsolv×溶剂。"""
+    base = request.expected_atoms
+    if base is not None:
+        if base < 1:
+            raise ValueError(f"expected_atoms must be >= 1, got {base}")
+    else:
+        base = _xyz_atom_count(request.xyz_text, "CREST input")
+    if request.runtype in RUNTYPE_ATOM_DELTA:
+        base += RUNTYPE_ATOM_DELTA[request.runtype]
+    elif request.runtype == "qcg":
+        base += request.nsolv * _xyz_atom_count(request.solvent_xyz_text, "QCG solvent")
+    if base < 1:
+        raise ValueError(f"the expected product atom count is {base} (runtype={request.runtype})")
+    return base
 
 
 def run_crest(request: CrestRunRequest) -> CrestRunResult:
@@ -314,18 +391,21 @@ def run_crest(request: CrestRunRequest) -> CrestRunResult:
 
     本函数是同步的（子进程 + 文件 IO）；异步调用方必须经 ``asyncio.to_thread`` 卸载。
     """
-    expected_atoms = _expected_atom_count(request.xyz_text, request.expected_atoms)
+    expected_atoms = _expected_atom_count(request)
     command = build_crest_command(request)
     run_dir = next_run_dir(request.output_dir, RUNS_DIR_NAME, request.run_label)
 
+    product_name = RUNTYPE_PRODUCT[request.runtype]
     input_path = os.path.join(run_dir, "input.xyz")
     command_path = os.path.join(run_dir, "command.txt")
     versions_path = os.path.join(run_dir, "versions.txt")
     stdout_path = os.path.join(run_dir, "stdout.log")
     stderr_path = os.path.join(run_dir, "stderr.log")
-    conformers_path = os.path.join(run_dir, CONFORMERS_NAME)
+    conformers_path = os.path.join(run_dir, product_name)
 
     atomic_write_text(input_path, request.xyz_text)
+    if request.runtype == "qcg":
+        atomic_write_text(os.path.join(run_dir, "solvent.xyz"), request.solvent_xyz_text)
     atomic_write_text(command_path, " ".join(command) + "\n")
     atomic_write_text(versions_path, capture_versions(("crest", "xtb"), ("Version", "version", "xTB program")))
 
@@ -385,7 +465,10 @@ def run_crest(request: CrestRunRequest) -> CrestRunResult:
     ]
     # 初始优化一旦跑过，CREST 就把逐帧轨迹留在 xtbopt.log；末帧即它真正拿到的几何。
     # 这里记录"输入 → 优化末帧"的连接表差异（片内/片间）供人判断，绝不代替人判断。
-    result.topology_change = _topology_change_report(request, run_dir, input_path)
+    # 只有 default/nci 的产物与输入同原子集合，对比才有意义；protonate/tautomerize/qcg
+    # 的产物刻意改变原子数或连接性，跳过对比（xtbopt.log 在这些模式下也未必存在）。
+    if request.runtype in ("default", "nci"):
+        result.topology_change = _topology_change_report(request, run_dir, input_path)
 
     if request.noreftopo:
         result.diagnostics.append(
@@ -395,7 +478,9 @@ def run_crest(request: CrestRunRequest) -> CrestRunResult:
             "recorded in topology_change; treat the ensemble accordingly."
         )
     lines = (stdout or "").splitlines()
-    hits, marker, stage = _scan_markers(lines)
+    # Fortran ERROR STOP（如 QCG 缺 xtb-IFF）写 stderr 而非 stdout，两路都要扫。
+    scan_lines = lines + (stderr or "").splitlines()
+    hits, marker, stage = _scan_markers(scan_lines)
     result.evidence = hits
     result.stage = stage
 
@@ -416,6 +501,11 @@ def run_crest(request: CrestRunRequest) -> CrestRunResult:
 
     if returncode != 0:
         result.termination_reason = marker if marker and marker != "completed" else "unknown_failure"
+        if result.termination_reason == "qcg_xtbiff_missing":
+            result.diagnostics.append(
+                "QCG requires the external xtb-IFF program, which CREST did not find "
+                "(https://github.com/grimme-lab/xtbiff); install it or use a non-QCG runtype"
+            )
         if result.termination_reason == "unknown_failure":
             tail = "\n".join(lines[-15:]) if lines else (stderr or "")[-2000:]
             result.diagnostics.append(
@@ -424,7 +514,7 @@ def run_crest(request: CrestRunRequest) -> CrestRunResult:
             result.diagnostics.append(tail)
         if os.path.isfile(conformers_path):
             result.diagnostics.append(
-                f"a partial {CONFORMERS_NAME} exists in the run directory; it is kept as evidence "
+                f"a partial {product_name} exists in the run directory; it is kept as evidence "
                 "but NOT used, because the process did not exit successfully"
             )
         result.message = (
@@ -448,11 +538,11 @@ def run_crest(request: CrestRunRequest) -> CrestRunResult:
     if problem is not None:
         result.termination_reason = "incomplete_artifacts"
         result.diagnostics.append(
-            f"{CONFORMERS_NAME} is unusable: {problem} (the file is kept in the run directory)"
+            f"{product_name} is unusable: {problem} (the file is kept in the run directory)"
         )
         result.message = (
-            f"CREST reported normal termination but its conformer output is unusable ({problem}). "
-            f"Full log: {stdout_path}"
+            f"CREST reported normal termination but its {product_name} output is unusable "
+            f"({problem}). Full log: {stdout_path}"
         )
         return result
 
@@ -462,7 +552,8 @@ def run_crest(request: CrestRunRequest) -> CrestRunResult:
     result.conformer_count = len(conformers)
     result.scientific_success = True
     result.message = (
-        f"CREST completed: {len(conformers)} conformers. Run directory: {run_dir}"
+        f"CREST completed (runtype={request.runtype}): {len(conformers)} structures in "
+        f"{product_name}. Run directory: {run_dir}"
     )
     return result
 
