@@ -4,15 +4,10 @@ on:
   # 只列真实存在的分支：上游没有 `main`，写进触发列表是死触发（推送/PR 永远
   # 匹配不到），还会让人以为存在一条 main 线。
   push:
-<<<<<<< HEAD
-    branches: [master, main, windows]
+    # windows 分支保留自身触发；master 侧已去掉不存在的 `main` 死触发。
+    branches: [master, windows]
   pull_request:
-    branches: [master, main, windows]
-=======
-    branches: [master]
-  pull_request:
-    branches: [master]
->>>>>>> master
+    branches: [master, windows]
 
 jobs:
   windows-smoke:
