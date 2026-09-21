@@ -1,3 +1,4 @@
+import asyncio
 import json
 import time
 from typing import Any, Literal
@@ -143,7 +144,15 @@ class SubmitComputeJob(Tool):
         # services/compute_admission；TS 搜索 SOP 的 submit 阶段复用同一份，
         # 否则同一份作业会在两条入口下得出不同准入结论。
         f_path = resolve_tool_path(self, user_input.input_file)
-        conv_id = getattr(self.subagent, 'conversation_id', None) or 'default'
+        conv_id = getattr(self.subagent, 'conversation_id', None)
+        if not conv_id:
+            return SubmitComputeJob_output_schema(
+                is_success=False,
+                message=(
+                    "submit_compute_job requires conversation_id on the agent; "
+                    "refusing to attribute the job to 'default'."
+                ),
+            )
 
         # 未显式申请内存时按输入文件自述（%mem/%maxcore）派生申请值——省略申请不再
         # 等于脱账，超容量声明会被 admit_job 的容量硬校验拒收。
@@ -212,7 +221,28 @@ class SubmitComputeJob(Tool):
                                 "fix the cause and resubmit with submit_compute_job.")
 
         else:
-            # 直接写入 running，并开始计算
+            # 直接写入 running，并开始计算——同步路径也要过容量闸门，
+            # 否则 is_async=false 能绕开 scheduler claim 打满节点。
+            from cloudra.services.compute_store import sync_local_fits_capacity
+
+            fits = await asyncio.to_thread(
+                sync_local_fits_capacity,
+                db,
+                node_id=admission.node_id,
+                cpus=user_input.cpus,
+                memory_mb=memory_mb,
+                node_resources=admission.node_resources,
+            )
+            if not fits:
+                return SubmitComputeJob_output_schema(
+                    is_success=False,
+                    message=(
+                        f"Node {admission.node_id} has no free slot "
+                        f"(max_concurrent={admission.node_resources.get('max_concurrent', 1)}). "
+                        "Wait for a running job to finish, or submit with is_async=true "
+                        "so the scheduler queues it."
+                    ),
+                )
             job_id = -1
             try:
                 job_id = await ainsert_compute_job(

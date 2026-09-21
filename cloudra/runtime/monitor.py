@@ -132,10 +132,21 @@ async def _parse_log(
     if job_type == "orca":
         return await _parse_orca_log(target)
 
+    if job_type == "gaussian":
+        return await _parse_gaussian_log(target)
+
+    if job_type == "vasp":
+        data_dic, is_success = _parse_vasp_log(target)
+        if data_dic is not None:
+            data_dic["log_file"] = str(target)
+        return data_dic, is_success
+
     parsed = await _cclib_parse(target)
     if parsed is None:
         return None, None
-    return parsed
+    data_dic, _cclib_success = parsed
+    # 未知引擎：cclib 只取数据，不定成败（与 Gaussian/ORCA 同口径）。
+    return data_dic, False
 
 
 async def _cclib_parse(target: Path) -> tuple[dict, bool] | None:
@@ -182,6 +193,25 @@ async def _cclib_parse(target: Path) -> tuple[dict, bool] | None:
             await asyncio.sleep(retry_sleep)
     print(f'日志解析失败：{last_error}')
     return None
+
+
+async def _parse_gaussian_log(target: Path) -> tuple[dict, bool]:
+    """Gaussian 日志解析：终止标记定成败，cclib 只负责提取数据字段。"""
+    from cloudra.tools.core.gaussian_frames import normal_termination
+
+    try:
+        text = target.read_text(encoding="utf-8", errors="replace")
+    except OSError as e:
+        print(f'读取 Gaussian 日志失败：{e}')
+        return {"is_success": False, "log_file": str(target)}, False
+    is_success = normal_termination(text)
+    parsed = await _cclib_parse(target)
+    if parsed is None:
+        return {"is_success": is_success, "log_file": str(target)}, is_success
+    data_dic, _cclib_success = parsed
+    data_dic["is_success"] = is_success
+    data_dic["log_file"] = str(target)
+    return data_dic, is_success
 
 
 async def _parse_orca_log(target: Path) -> tuple[dict, bool]:
@@ -314,6 +344,46 @@ def _parse_cp2k_log(log_path: Path) -> tuple[dict, bool] | None:
     if energy is not None:
         data_dic["scf_energy_hartree"] = energy
         data_dic["scf_energy_ev"] = energy * 27.211386245988
+    return data_dic, is_success
+
+
+def _parse_vasp_log(log_path: Path) -> tuple[dict, bool] | None:
+    """轻量解析 VASP OUTCAR / 重定向 .out。
+
+    成功判据：出现 ``General timing and accounting informations for this job:``
+    （正常退出才打印），且没有 fatal error。能量取最后一次 ``free  energy   TOTEN``。
+    """
+    try:
+        text = log_path.read_text(encoding="utf-8", errors="replace")
+    except OSError as e:
+        print(f'读取 VASP 日志失败：{e}')
+        return None
+    if not text.strip():
+        return None
+
+    normal = "General timing and accounting informations for this job:" in text
+    aborted = any(
+        marker in text
+        for marker in ("ZBRENT: fatal error", "fatal error in bracketing", "VERY SERIOUS PROBLEMS")
+    )
+    is_success = normal and not aborted
+
+    energy_ev = None
+    for line in reversed(text.splitlines()):
+        if "free  energy   TOTEN" in line and "=" in line:
+            raw = line.split("=", 1)[1].replace("eV", "").strip()
+            try:
+                energy_ev = float(raw.split()[0] if raw.split() else raw)
+            except ValueError:
+                pass
+            break
+
+    data_dic: dict = {"is_success": is_success}
+    if energy_ev is not None:
+        data_dic["scf_energy_ev"] = energy_ev
+        hartree = energy_ev / 27.211386245988
+        data_dic["scf_energy_hartree"] = hartree
+        data_dic["total_energy_hartree"] = hartree
     return data_dic, is_success
 
 

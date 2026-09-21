@@ -252,7 +252,7 @@ class AgentRunner:
                 # scheduled the task afterwards.
                 run_id = agent.current_run.run_id
             else:
-                run_id = core.agent_host.start_run(agent)
+                run_id = await core.agent_host.start_run_durable(agent)
             contexts = core.contexts
             # 上下文前缀 owner（Task 2/4）：每个 run 创建一个，但状态从会话
             # 级上下文投影回灌（restored）——跨 run/重启不重装前缀，
@@ -285,8 +285,7 @@ class AgentRunner:
                 )
                 if contexts.current_messages(agent.id):
                     if agent.id in core.pending_compactions:
-                        core.pending_compactions.discard(agent.id)
-                        await self._apply_compaction(
+                        await self._consume_pending_compaction(
                             agent, run_id, context_prefix=context_prefix
                         )
                 # 预算触发：达到上下文预算即压缩——估算用现有 context_window
@@ -484,7 +483,7 @@ class AgentRunner:
                         hook = getattr(stage, "on_run_end", None)
                         if hook is not None:
                             await hook(agent, explicit_stop=explicit_stop)
-                    core.agent_host.finish_run(agent, outcome="succeeded")
+                    await core.agent_host.finish_run_durable(agent, outcome="succeeded")
                     # peek 与 finish 之间到达的消息：deliver 方的 wake 此刻仍可能
                     # 撞在 RUNNING 上（事件未应用前）；状态已 SUCCEEDED 后复查并
                     # 显式 wake 开新 run，关掉最后一段竞态窗口。
@@ -531,7 +530,7 @@ class AgentRunner:
         except Exception as exc:  # pipeline crash becomes a durable failure
             logger.exception("agent %s pipeline failed", agent.id)
             if agent.state is AgentState.RUNNING:
-                core.agent_host.finish_run(agent, outcome="failed", error=str(exc))
+                await core.agent_host.finish_run_durable(agent, outcome="failed", error=str(exc))
             self._deliver_child_completion(agent)
         finally:
             # Flush the tail events (message_emitted, finish_run's
@@ -746,32 +745,10 @@ class AgentRunner:
         return prepared
 
     def _tool_result_content(self, agent: AgentSession, result) -> object:
-        """Context content for one tool result, with image re-injection.
+        """Context content for one tool result, with image re-injection."""
+        from cloudra.runtime_v2.invocation import tool_result_context_content
 
-        A result carrying ``image_paths`` (or a single ``image_path``) gets one
-        stable ``image_ref`` part per path (no base64 in the projection);
-        resolution to data URLs happens at send time.  There is no N-image cap.
-        """
-        from cloudra.infra.media import snapshot_image_reference
-        from cloudra.runtime_v2.invocation import image_paths_from_tool_result
-
-        summary = result.summary
-        paths = image_paths_from_tool_result(result)
-        if not paths:
-            return summary
-        parts: list[dict] = [{"type": "text", "text": summary or ""}]
-        parts.extend(
-            snapshot_image_reference(
-                path, conv_id=agent.project_id,
-                fallback=(
-                    f"[Image rendered at: {path} — the configured model has no "
-                    "vision support or the file is unavailable; inspect the "
-                    "file directly if needed.]"
-                ),
-            )
-            for path in paths
-        )
-        return parts
+        return tool_result_context_content(agent, result)
 
     async def _commit_turn_output(self, agent: AgentSession, run_id: str, outcome) -> None:
         """响应消息恰好一次落进会话上下文投影（context.appended）。
@@ -812,7 +789,35 @@ class AgentRunner:
                     "content": outcome.message or "blocked by policy",
                 }
             )
-        await self.core.contexts.append_output(agent=agent, run_id=run_id, messages=entries)
+        existing = self.core.contexts.current_messages(agent.id)
+        existing_tool_ids = {
+            message.get("tool_call_id")
+            for message in existing
+            if message.get("role") == "tool" and message.get("tool_call_id")
+        }
+        existing_assistant_ids = {
+            frozenset(
+                str(call.get("id"))
+                for call in (message.get("tool_calls") or [])
+                if isinstance(call, dict) and call.get("id")
+            )
+            for message in existing
+            if message.get("role") == "assistant" and message.get("tool_calls")
+        }
+        filtered: list[dict] = []
+        for entry in entries:
+            if entry.get("role") == "tool" and entry.get("tool_call_id") in existing_tool_ids:
+                continue
+            if entry.get("role") == "assistant" and entry.get("tool_calls"):
+                ids = frozenset(
+                    str(call.get("id"))
+                    for call in entry["tool_calls"]
+                    if isinstance(call, dict) and call.get("id")
+                )
+                if ids and ids in existing_assistant_ids:
+                    continue
+            filtered.append(entry)
+        await self.core.contexts.append_output(agent=agent, run_id=run_id, messages=filtered)
 
     def _effective_settings(self, agent: AgentSession):
         """容量判定用的生效设置：spawn 快照里 context_window=0 表示未设置，
@@ -836,6 +841,21 @@ class AgentRunner:
             return True
         step = max(int(budget_tokens * COMPACT_RETRY_GROWTH), 1024)
         return tokens_now - refused_at >= step
+
+    async def _consume_pending_compaction(
+        self,
+        agent: AgentSession,
+        run_id: str,
+        *,
+        context_prefix=None,
+    ) -> dict:
+        """Apply a manual compact request; drop pending only after a successful install."""
+        stats = await self._apply_compaction(
+            agent, run_id, context_prefix=context_prefix
+        )
+        if stats.get("compacted"):
+            self.core.pending_compactions.discard(agent.id)
+        return stats
 
     async def _apply_compaction(
         self,

@@ -334,3 +334,69 @@ async def test_check_command_requires_approval_when_not_yolo(monkeypatch):
     assert created.is_success is True
     assert any(e.type == "reminder.scheduled" for e in core.event_log)
     await core.reminders.close()
+
+
+@pytest.mark.asyncio
+async def test_reminder_does_not_reopen_cancelled_agent():
+    """system 投递的 reminder 不得把已取消 agent 从 CANCELLED 拉回 QUEUED。"""
+    from cloudra.runtime_v2.schemas import AgentState
+
+    core = RuntimeCore(strict_events=True)
+    _project, agent = await _spawn_ready(core)
+    executor = LegacyToolExecutor(core)
+    created = await executor.execute(
+        agent,
+        _schedule_call("create", message="late ping", delay_seconds=0.05),
+    )
+    assert created.is_success is True
+    await CommandBus(core).execute(
+        Command(type="agent.cancel", target={"session_id": agent.id}, payload={})
+    )
+    assert agent.state is AgentState.CANCELLED
+    await asyncio.sleep(0.25)
+    assert agent.state is AgentState.CANCELLED
+    await core.reminders.close()
+
+
+@pytest.mark.asyncio
+async def test_reminder_parks_waiting_approval_agent():
+    """system reminder 必须遵守 park-don't-wake：WAITING_APPROVAL 只写信箱。"""
+    from cloudra.runtime_v2.apply import apply_event
+    from cloudra.runtime_v2.schemas import AgentState
+
+    core = RuntimeCore(strict_events=True)
+    project, agent = await _spawn_ready(core)
+    core.agent_host.start_run(agent)
+    parked = core.event_log.append(
+        "agent.state_changed",
+        stream="agent",
+        project_id=project.id,
+        session_id=agent.id,
+        run_id=agent.current_run.run_id if agent.current_run else None,
+        data={"from": "running", "to": "waiting_approval", "reason": "wait_review"},
+    )
+    apply_event(core, parked)
+    assert agent.state is AgentState.WAITING_APPROVAL
+
+    past = time.time() - 5
+    core.event_log.append(
+        "reminder.scheduled",
+        stream="agent",
+        project_id=project.id,
+        session_id=agent.id,
+        data={
+            "message": "review still open",
+            "wake_at": "2020-01-01T00:00:00+00:00",
+            "wake_ts": past,
+        },
+    )
+    await core.reminders.rearm_all()
+    await _wait_for(lambda: any(e.type == "reminder.fired" for e in core.event_log))
+    assert agent.state is AgentState.WAITING_APPROVAL
+    injected = [
+        e for e in core.event_log.query_session(agent.id) if e.type == "agent.message_injected"
+    ]
+    assert any("review still open" in str(e.data.get("content", "")) for e in injected)
+    inbox = core.mailbox.inbox(agent.id)
+    assert inbox is not None and inbox.qsize() >= 1
+    await core.reminders.close()

@@ -28,14 +28,18 @@ from cloudra.infra.compute_utils import (
     spawn_detached,
 )
 from cloudra.infra.flocks import is_lock_held, try_acquire_lock
+from cloudra.infra.slurm import query_job_by_name
 from cloudra.persistence import paths
 from cloudra.persistence.database import ComputeDB
 from cloudra.runtime.compute_executor import _mark_failed, run_compute
 from cloudra.services.compute_store import (
+    cancel_compute_job,
     claim_ready_compute_job_with_capacity,
     extend_compute_lease,
     list_running_jobs,
+    mark_slurm_submitted,
     reap_exhausted_compute_leases,
+    take_compute_lease,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,6 +52,8 @@ _LEASE_AFTER_ADOPT_SPAWN = 300
 # 同一作业的 adopt guard 重拉起最小间隔：adopt guard 崩溃（还没抢到 guard 锁
 # 就退出）时每轮对账都会重拉起，落 ``<guard锁>.adopt_last_spawn`` 时间戳节流。
 _ADOPT_RESPAWN_SECONDS = 60.0
+# 同步提交刚写入 running、guard 还没持锁：这段窗口对账不得 adopt。
+_ADOPT_LAUNCH_GRACE_SECONDS = 60.0
 
 
 def scheduler_lock_path() -> str:
@@ -146,12 +152,12 @@ class SchedulerDaemon:
             if daemons_shutdown_requested():
                 logger.info("daemons shutdown requested (stop marker); scheduler exiting")
                 return
+            now = time.time()
+            if now - last_reconcile >= self.reconcile_interval:
+                last_reconcile = now
+                await self._reconcile_all()
             claimed = await asyncio.to_thread(self._claim_one)
             if claimed is None:
-                now = time.time()
-                if now - last_reconcile >= self.reconcile_interval:
-                    last_reconcile = now
-                    await self._reconcile_all()
                 try:
                     await asyncio.wait_for(self._stop.wait(), timeout=self.poll_interval)
                 except asyncio.TimeoutError:
@@ -187,6 +193,16 @@ class SchedulerDaemon:
             await run_compute(task_id, self.db, worker_id=self.worker_id)
         except Exception:
             logger.exception("compute job %s crashed", task_id)
+            from cloudra.services.compute_store import get_compute_job
+
+            row = await asyncio.to_thread(get_compute_job, self.db, task_id)
+            if row and row["state"] in {"running", "cancel_requested"}:
+                logger.error(
+                    "compute job %s raised after launch; leaving ledger %s for adopt/poller",
+                    task_id,
+                    row["state"],
+                )
+                return
             try:
                 await _mark_failed(
                     self.db,
@@ -200,20 +216,65 @@ class SchedulerDaemon:
 
     async def _reconcile_all(self) -> None:
         try:
-            await asyncio.to_thread(self._reconcile_central)
+            reattach = await asyncio.to_thread(self._reconcile_central)
         except Exception:
             logger.exception("reconcile failed")
+            reattach = []
+        for task_id in reattach:
+            if task_id in self._jobs:
+                continue
+            job = asyncio.create_task(
+                self._run(task_id), name=f"compute-job-{task_id}"
+            )
+            self._jobs[task_id] = job
+            job.add_done_callback(lambda _t, key=task_id: self._jobs.pop(key, None))
         try:
             await asyncio.to_thread(reap_exhausted_compute_leases, self.db)
         except Exception:
             logger.exception("reap failed")
 
-    def _reconcile_central(self) -> None:
-        """对中央库跑一次对账：running 的 local 作业逐条探 guard 锁。"""
+    def _reconcile_central(self) -> list[int]:
+        """对中央库跑一次对账：running 的 local 作业逐条探 guard 锁。
+
+        Slurm running 且已有 scheduler_job_id、本进程未在 poll 的作业返回给
+        调用方重挂 ``run_slurm_compute``（attach 路径），不改投、不杀进程。
+        """
+        reattach: list[int] = []
         for row in list_running_jobs(self.db):
             task_id = int(row["id"])
             if (row["scheduler"] or "local") != "local":
-                continue  # Slurm：租约重领路径已覆盖，sacct 是外部权威
+                scheduler_job_id = row["scheduler_job_id"]
+                if not scheduler_job_id:
+                    try:
+                        recovered = query_job_by_name(f"cloudra-{task_id}")
+                    except Exception:
+                        recovered = None
+                    if recovered:
+                        mark_slurm_submitted(self.db, task_id, recovered)
+                        scheduler_job_id = recovered
+                if scheduler_job_id and task_id not in self._jobs:
+                    take_compute_lease(
+                        self.db, task_id, self.worker_id, _LEASE_RENEW_AFTER_CHECK
+                    )
+                    reattach.append(task_id)
+                elif (
+                    (row.get("state") or "") == "cancel_requested"
+                    and not scheduler_job_id
+                ):
+                    start_ts = float(row.get("start_timestamp") or -1)
+                    if (
+                        start_ts > 0
+                        and (time.time() - start_ts) >= _ADOPT_LAUNCH_GRACE_SECONDS
+                    ):
+                        logger.warning(
+                            "compute job %s: cancel_requested with no recoverable "
+                            "Slurm handle; closing ledger as cancelled",
+                            task_id,
+                        )
+                        cancel_compute_job(self.db, task_id)
+                continue
+            if (row.get("state") or "running") != "running":
+                continue
             path = row["path"] or ""
             workdir = os.path.dirname(path)
             if not workdir:
@@ -222,6 +283,12 @@ class SchedulerDaemon:
             if is_lock_held(lock_path):
                 # guard 活着：续租防重领（租约只剩认领语义，存活以锁为准）
                 extend_compute_lease(self.db, task_id, _LEASE_RENEW_AFTER_CHECK)
+                continue
+            start_ts = float(row.get("start_timestamp") or -1)
+            if (
+                start_ts > 0
+                and (time.time() - start_ts) < _ADOPT_LAUNCH_GRACE_SECONDS
+            ):
                 continue
             if _adopt_spawn_throttled(lock_path):
                 continue  # 60s 内已拉起过 adopt guard，等下轮对账（防崩溃循环轰炸）
@@ -246,6 +313,7 @@ class SchedulerDaemon:
                 extend_compute_lease(self.db, task_id, _LEASE_AFTER_ADOPT_SPAWN)
             except Exception:
                 logger.exception("could not spawn adopt guard for job %s", task_id)
+        return reattach
 
 
 def main() -> int:
