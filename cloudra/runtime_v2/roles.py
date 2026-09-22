@@ -21,9 +21,10 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("coordinator"),
         display_name="Coordinator",
         description="Decomposes objectives and dispatches peer agents.",
-        # 评审 5.6：保留管理能力。destructive 亦保留——顶层角色的清理动作仍会
-        # 发生，审批路径照旧独立；若需一并收紧，改这一行 + tests/test_permission_matrix.py。
-        permissions=PermissionSet(read=True, write=True, manage=True, script=True, destructive=True),
+        # 评审 5.6（严格口径）：保留管理能力，但 destructive 默认不授予任何角色
+        # ——删除/覆盖类命令执行前硬拒（不进审批，yolo 也不扩权）。如需放开，
+        # 改这一行 + tests/test_permission_matrix.py 并同步 AGENTS.md 口径段。
+        permissions=PermissionSet(read=True, write=True, manage=True, script=True, destructive=False),
         can_spawn=True,
         spawn_roles=None,
     ),
@@ -94,8 +95,9 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("env"),
         display_name="Environment",
         description="Scientific software environment setup and debugging.",
-        # 评审 5.6：manage/script（环境管理）；破坏性操作仍需明确审批。
-        permissions=PermissionSet(read=True, write=True, manage=True, script=True, destructive=True),
+        # 评审 5.6（严格口径）：manage/script（环境管理）；删除/覆盖一律硬拒
+        # （不默认持有 destructive）。
+        permissions=PermissionSet(read=True, write=True, manage=True, script=True, destructive=False),
         can_spawn=False,
     ),
     RoleProfile(

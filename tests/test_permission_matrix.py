@@ -33,7 +33,7 @@ _EXCLUDED_MODULE_PREFIX = "cloudra.tools.Plantool.dag_tools."
 # 矩阵的唯一预期表（逐格：允许与拒绝都在表里）。任何一位漂移都会在这里变红；
 # 调整口径时改 roles.py 与此表两处即可。
 _EXPECTED_MATRIX = {
-    "coordinator": {"read": True, "write": True, "manage": True, "script": True, "destructive": True},
+    "coordinator": {"read": True, "write": True, "manage": True, "script": True, "destructive": False},
     "explorer": {"read": True, "write": False, "manage": False, "script": False, "destructive": False},
     "writer": {"read": True, "write": True, "manage": False, "script": False, "destructive": False},
     "researcher": {"read": True, "write": True, "manage": False, "script": False, "destructive": False},
@@ -41,7 +41,7 @@ _EXPECTED_MATRIX = {
     "md": {"read": True, "write": True, "manage": False, "script": True, "destructive": False},
     "dft": {"read": True, "write": True, "manage": False, "script": True, "destructive": False},
     "experiment": {"read": True, "write": True, "manage": False, "script": False, "destructive": False},
-    "env": {"read": True, "write": True, "manage": True, "script": True, "destructive": True},
+    "env": {"read": True, "write": True, "manage": True, "script": True, "destructive": False},
     "supervisor": {"read": True, "write": False, "manage": False, "script": False, "destructive": False},
 }
 
@@ -84,8 +84,10 @@ def test_compute_roles_keep_scripts_but_not_arbitrary_delete(role_id):
 
 
 @pytest.mark.parametrize("role_id", ["env", "coordinator"])
-def test_management_roles_keep_delete_with_approval_path(role_id):
-    assert _bash_for(role_id).has_command_permission("rm -rf stale/") is True
+def test_no_role_runs_destructive_or_file_writing_bash_commands(role_id):
+    """严格口径：删除/覆盖类命令在所有角色上都硬拒（不进审批）。"""
+    assert _bash_for(role_id).has_command_permission("rm -rf stale/") is False
+    assert _bash_for(role_id).has_command_permission("touch note.txt") is False
 
 
 def test_yolo_mode_does_not_expand_role_capabilities(monkeypatch):
@@ -191,7 +193,7 @@ def test_declared_permissions_match_tool_class_projections():
 
 # 探针命令 -> 分类器给出的必需位。分类结果在用例里现算并核对（分类器改变先红），
 # 防止探针悄悄失效。注意「写文件类」命令（touch/mkdir/重定向）按分类器需要
-# write+destructive（防覆盖）——所以能经 bash 写文件的只有管理角色。
+# write+destructive（防覆盖）——严格口径下没有任何角色默认持有 destructive，因此经 bash 的写文件/删除命令一律硬拒；文件写入只能走工具。
 _COMMAND_PROBES = (
     ("ls -la", ("read",)),
     ("touch note.txt", ("write", "destructive")),
