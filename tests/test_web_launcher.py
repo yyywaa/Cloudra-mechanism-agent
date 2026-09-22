@@ -177,3 +177,23 @@ def test_wildcard_rebind_does_not_reuse_loopback_only_runtime(monkeypatch):
     assert web_launcher._find_api_port(8000, "CLOUDRA_API_PORT", "0.0.0.0") == (8001, False)
     # 具体网卡地址的探测地址就是绑定地址本身，复用判定照旧可信
     assert web_launcher._find_api_port(8000, "CLOUDRA_API_PORT", "192.168.1.5") == (8000, True)
+
+
+@pytest.mark.parametrize("path_separator", [":", ";"])
+def test_launch_preserves_pythonpath_with_platform_separator(tmp_path, monkeypatch, path_separator):
+    frontend = tmp_path / "frontend"
+    frontend.mkdir()
+    captured = {}
+    _patch_launch(monkeypatch, captured)
+    monkeypatch.setattr(web_launcher, "_pinned_runtime", lambda *args: (18999, False))
+    monkeypatch.setattr(web_launcher.os, "pathsep", path_separator)
+    existing = path_separator.join(["existing-first", "existing-second"])
+    monkeypatch.setenv("PYTHONPATH", existing)
+
+    assert web_launcher.launch_browser(frontend, rebuild=False, skip_build=True, port=18999) == 0
+    from pathlib import Path
+
+    root = str(Path(web_launcher.__file__).resolve().parents[1])
+    value = captured["env"]["PYTHONPATH"]
+    assert value.startswith(root)
+    assert value[len(root):] == path_separator + existing

@@ -158,6 +158,9 @@ class RoleProfile(BaseModel):
     role_id: str = Field(min_length=1)
     display_name: str
     description: str = ""
+    #: DAG 存储词表 id（a-0..a-8 / a-supervisor）；唯一映射表在
+    #: ``cloudra.base.role_identity``，这里只做投影，不手抄。空串=无 legacy 身份。
+    legacy_agent_id: str = ""
     permissions: PermissionSet = Field(default_factory=PermissionSet)
     can_spawn: bool = False
     spawn_roles: Optional[list[str]] = None
@@ -180,7 +183,10 @@ class CurrentRun(BaseModel):
 
     run_id: str
     started_at: datetime
-    invocation_protocol: InvocationProtocol = InvocationProtocol.TRADITIONAL
+    # 协议在 run 启动时冻结（_apply_run_started 写入 run.started 的解析值）。
+    # 字段默认值与 RuntimeSettings 保持同一口径：新建 run 的默认协议是
+    # javascript，traditional 是 per-agent 可选设置。
+    invocation_protocol: InvocationProtocol = InvocationProtocol.JAVASCRIPT
 
 
 class AgentSession(BaseModel):

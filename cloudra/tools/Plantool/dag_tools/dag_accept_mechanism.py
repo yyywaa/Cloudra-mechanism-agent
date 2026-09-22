@@ -7,8 +7,8 @@ from typing import Any, Literal
 from pydantic import Field
 
 from cloudra.base.session_class import Session
+from cloudra.base.tool_actor import ToolActorContext
 from cloudra.base.tools_class import input_schema
-from cloudra.core.agent import Agent
 from cloudra.dag.controller import DagController
 from cloudra.dag.models import GraphActor, OrchestrationMode
 from cloudra.tools.Plantool.dag_tools._common import DagToolBase, DagToolOutput, fail
@@ -37,7 +37,7 @@ class DagAcceptMechanism(DagToolBase):
     tool_description: str = (
         "Accept or reject the Coordinator's mechanism draft (Supervisor only "
         "in dag_guided; dag_record auto-accepts on proposal). "
-        "Use for: committing a reviewed draft — accept unlocks compute; "
+        "Use for: committing a reviewed draft as the current working hypothesis; "
         "reject returns it with a mandatory reason. "
         "Do not use for: editing the draft in place (reject with guidance "
         "instead); stage binds (use dag_review_call). "
@@ -45,7 +45,7 @@ class DagAcceptMechanism(DagToolBase):
     )
     input_schema: Any = DagAcceptMechanismInput
     output_schema: Any = DagToolOutput
-    subagent: Agent = None
+    subagent: ToolActorContext | None = None
 
     async def tool_call(
         self, user_input: DagAcceptMechanismInput, session: Session

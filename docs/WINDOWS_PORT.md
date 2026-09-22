@@ -48,3 +48,5 @@ lsof + SIGKILL，两天内就再造了两个 POSIX-only 构件）。
 - run_dirs 进程组终止降级（单进程 terminate → kill 并回收）
 - monitor nice preexec 守卫（`is_posix()`）
 - web_launcher npm `cmd /c`
+
+- 主线同步至 `2b261d6a`：保留兼容层；Web 启动使用平台原生 `PYTHONPATH` 分隔符，回归已纳入 windows-smoke。
