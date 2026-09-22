@@ -71,6 +71,14 @@ class ToolRegistration:
     # are separate mechanisms.
     role_allowlist: frozenset[str] = frozenset()
 
+    # 统一权限闸声明（评审 5.6）：调用前由 PermissionStage 消费——角色
+    # PermissionSet 必须覆盖这里列出的每一位，否则调用被硬拒；工具类内部的
+    # is_* 判断降级为第二道闸（与 config_gate / role_allowlist 的两线形制一致）。
+    # 值域 = {"read","write","manage","script","destructive"}；留空 = 不设闸。
+    # 刻意留空的：bash（风险按命令由 command_analyzer 逐条判定）与 dag_*/直控工具
+    # （闸是 orchestration mode / supervisor_access / invocation_direct_only）。
+    required_permissions: frozenset[str] = frozenset()
+
 
 # 化学/QM 工具的默认使用者：科学计算角色 + Coordinator（benchmark 题面
 # agent 以 coordinator 角色运行，绝不能失去化学工具链）。supervisor 在列
@@ -91,11 +99,13 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         module='cloudra.tools.Browsertool.browser',
         class_name='HeadlessBrowser',
         tool_name='browser',
+        required_permissions=frozenset({'read'}),
     ),
     ToolRegistration(
         module='cloudra.tools.Chemtool.conformer_search',
         class_name='ConformerSearch',
         tool_name='conformer_search',
+        required_permissions=frozenset({'write'}),
         dag_compute_entry=True,
         role_allowlist=_SCIENCE_ROLES,
     ),
@@ -103,6 +113,7 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         module='cloudra.tools.Chemtool.electronic_analysis',
         class_name='ElectronicAnalysis',
         tool_name='electronic_analysis',
+        required_permissions=frozenset({'write'}),
         dag_compute_entry=True,
         role_allowlist=_SCIENCE_ROLES,
     ),
@@ -110,12 +121,14 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         module='cloudra.tools.Chemtool.format_converter',
         class_name='FormatConverter',
         tool_name='format_converter',
+        required_permissions=frozenset({'write'}),
         role_allowlist=_SCIENCE_ROLES,
     ),
     ToolRegistration(
         module='cloudra.tools.Chemtool.qm_input_writer',
         class_name='QmInputWriter',
         tool_name='qm_input_writer',
+        required_permissions=frozenset({'write'}),
         dag_compute_entry=True,
         role_allowlist=_SCIENCE_ROLES,
     ),
@@ -123,24 +136,28 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         module='cloudra.tools.Chemtool.image_to_smiles',
         class_name='ImageToSmiles',
         tool_name='image_to_smiles',
+        required_permissions=frozenset({'read'}),
         role_allowlist=_SCIENCE_ROLES,
     ),
     ToolRegistration(
         module='cloudra.tools.Chemtool.cdxml_to_graph',
         class_name='CdxmlToGraph',
         tool_name='cdxml_to_graph',
+        required_permissions=frozenset({'read'}),
         role_allowlist=_SCIENCE_ROLES,
     ),
     ToolRegistration(
         module='cloudra.tools.Chemtool.internal_coordinates',
         class_name='InternalCoordinates',
         tool_name='internal_coordinates',
+        required_permissions=frozenset({'write'}),
         role_allowlist=_SCIENCE_ROLES,
     ),
     ToolRegistration(
         module='cloudra.tools.Chemtool.ir_processor',
         class_name='IRProcessor',
         tool_name='ir_processor',
+        required_permissions=frozenset({'read'}),
         # 实验谱图处理：experiment 角色专属
         role_allowlist=frozenset({'experiment'}),
     ),
@@ -148,6 +165,7 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         module='cloudra.tools.Chemtool.log_parser',
         class_name='LogParser',
         tool_name='log_parser',
+        required_permissions=frozenset({'read'}),
         evidence_deriver='cloudra.tools.Chemtool.log_parser:derive_delivery_changes',
         dag_fact_adapter='cloudra.dag.fact_adapters:log_parser_facts',
         dag_evidence_producer=True,
@@ -158,12 +176,14 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         module='cloudra.tools.Chemtool.molecule_drawer',
         class_name='MoleculeDrawer',
         tool_name='molecule_drawer',
+        required_permissions=frozenset({'write'}),
         role_allowlist=_SCIENCE_ROLES,
     ),
     ToolRegistration(
         module='cloudra.tools.Chemtool.mechanism_predict',
         class_name='MechanismPredict',
         tool_name='mechanism_predict',
+        required_permissions=frozenset({'write'}),
         # ML 机理假设生成器（FlowER 外部 conda env）：不是计算证据；
         # flower.enabled 默认开（未装环境时调用层引导 setup_flower.sh）。
         config_gate='flower.enabled',
@@ -173,12 +193,14 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         module='cloudra.tools.Chemtool.name_to_structure',
         class_name='NameToStructure',
         tool_name='name_to_structure',
+        required_permissions=frozenset({'write'}),
         role_allowlist=_SCIENCE_ROLES,
     ),
     ToolRegistration(
         module='cloudra.tools.Chemtool.nmr_processor',
         class_name='NMRProcessor',
         tool_name='nmr_processor',
+        required_permissions=frozenset({'read'}),
         # 实验谱图处理：experiment 角色专属
         role_allowlist=frozenset({'experiment'}),
     ),
@@ -186,6 +208,7 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         module='cloudra.tools.Chemtool.pymol_render',
         class_name='PymolRender',
         tool_name='pymol_render',
+        required_permissions=frozenset({'write'}),
         visual=True,
         role_allowlist=_SCIENCE_ROLES,
     ),
@@ -193,18 +216,21 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         module='cloudra.tools.Chemtool.query_compute_job',
         class_name='QueryComputeJob',
         tool_name='query_compute_job',
+        required_permissions=frozenset({'read'}),
         role_allowlist=_SCIENCE_ROLES,
     ),
     ToolRegistration(
         module='cloudra.tools.Chemtool.query_compute_queue',
         class_name='QueryComputeQueue',
         tool_name='query_compute_queue',
+        required_permissions=frozenset({'read'}),
         role_allowlist=_SCIENCE_ROLES,
     ),
     ToolRegistration(
         module='cloudra.tools.Chemtool.mark_compute_job_failed',
         class_name='MarkComputeJobFailed',
         tool_name='mark_compute_job_failed',
+        required_permissions=frozenset({'write'}),
         dag_observe=False,
         role_allowlist=_SCIENCE_ROLES,
     ),
@@ -212,6 +238,7 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         module='cloudra.tools.Chemtool.reaction_mapping',
         class_name='ReactionMapping',
         tool_name='reaction_mapping',
+        required_permissions=frozenset({'read'}),
         evidence_deriver='cloudra.tools.Chemtool.reaction_mapping:derive_delivery_changes',
         dag_fact_adapter='cloudra.dag.fact_adapters:reaction_mapping_facts',
         dag_evidence_producer=True,
@@ -221,22 +248,26 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
     # TS 搜索 SOP 的 agent 可见接口（只有这两个函数；刻意没有 status/查询接口）
     ToolRegistration(
         'cloudra.tools.Chemtool.ts_search_process', 'TsPrepare', tool_name='ts_prepare',
+        required_permissions=frozenset({'write'}),
         role_allowlist=_SCIENCE_ROLES,
     ),
     ToolRegistration(
         'cloudra.tools.Chemtool.ts_search_process', 'TsResume', tool_name='ts_resume',
+        required_permissions=frozenset({'write'}),
         role_allowlist=_SCIENCE_ROLES,
     ),
     ToolRegistration(
         module='cloudra.tools.Chemtool.smiles_to_mol',
         class_name='SmilesToMol',
         tool_name='smiles_to_mol',
+        required_permissions=frozenset({'write'}),
         role_allowlist=_SCIENCE_ROLES,
     ),
     ToolRegistration(
         module='cloudra.tools.Chemtool.submit_compute_job',
         class_name='SubmitComputeJob',
         tool_name='submit_compute_job',
+        required_permissions=frozenset({'write'}),
         dag_compute_entry=True,
         role_allowlist=_SCIENCE_ROLES,
     ),
@@ -244,6 +275,7 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         module='cloudra.tools.Chemtool.thermo_analysis',
         class_name='ThermoAnalysis',
         tool_name='thermo_analysis',
+        required_permissions=frozenset({'read'}),
         evidence_deriver='cloudra.tools.Chemtool.thermo_analysis:derive_delivery_changes',
         dag_evidence_producer=True,
         role_allowlist=_SCIENCE_ROLES,
@@ -252,6 +284,7 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         module='cloudra.tools.Chemtool.ts_guess',
         class_name='TsGuess',
         tool_name='ts_guess',
+        required_permissions=frozenset({'write'}),
         evidence_deriver='cloudra.tools.Chemtool.ts_guess:derive_delivery_changes',
         dag_fact_adapter='cloudra.dag.fact_adapters:ts_guess_facts',
         dag_evidence_producer=True,
@@ -268,18 +301,21 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         module='cloudra.tools.Interactool.email_reader',
         class_name='EmailReader',
         tool_name='email_reader',
+        required_permissions=frozenset({'read'}),
         config_gate='email.enabled',
     ),
     ToolRegistration(
         module='cloudra.tools.Interactool.email_sender',
         class_name='EmailSender',
         tool_name='email_sender',
+        required_permissions=frozenset({'write'}),
         config_gate='email.enabled',
     ),
     ToolRegistration(
         module='cloudra.tools.Managetool.agent_hub',
         class_name='AgentHub',
         tool_name='agent_hub',
+        required_permissions=frozenset({'read'}),
         runtime_profiles=frozenset({'desktop', 'android'}),
         supervisor_access='hub',
     ),
@@ -287,6 +323,7 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         module='cloudra.tools.Managetool.get_subagent_report',
         class_name='GetSubAgentReport',
         tool_name='get_subagent_report',
+        required_permissions=frozenset({'read'}),
         runtime_profiles=frozenset({'desktop', 'android'}),
     ),
     ToolRegistration(
@@ -300,12 +337,14 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         module='cloudra.tools.Managetool.subagent_launcher',
         class_name='SubAgentLauncher',
         tool_name='subagent_launcher',
+        required_permissions=frozenset({'manage'}),
         runtime_profiles=frozenset({'desktop', 'android'}),
     ),
     ToolRegistration(
         module='cloudra.tools.Managetool.subagent_swarm',
         class_name='SubAgentSwarm',
         tool_name='subagent_swarm',
+        required_permissions=frozenset({'manage'}),
     ),
     ToolRegistration('cloudra.tools.Plantool.goal', 'GoalSet'),
     ToolRegistration(
@@ -441,6 +480,7 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         module='cloudra.tools.Searchtool.read',
         class_name='Read',
         tool_name='read',
+        required_permissions=frozenset({'read'}),
         runtime_profiles=frozenset({'desktop', 'android'}),
         supervisor_access='evidence_read',
     ),
@@ -448,12 +488,14 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         module='cloudra.tools.Searchtool.search',
         class_name='Search',
         tool_name='search',
+        required_permissions=frozenset({'read'}),
         runtime_profiles=frozenset({'desktop', 'android'}),
     ),
     ToolRegistration(
         module='cloudra.tools.Skilltool.get_skill',
         class_name='GetSkill',
         tool_name='get_skill',
+        required_permissions=frozenset({'read'}),
         runtime_profiles=frozenset({'desktop', 'android'}),
         dag_observe=False,
         supervisor_access='skill_read',
@@ -469,18 +511,21 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         module='cloudra.tools.Writetool.edit',
         class_name='Edit',
         tool_name='edit',
+        required_permissions=frozenset({'write'}),
         runtime_profiles=frozenset({'desktop', 'android'}),
     ),
     ToolRegistration(
         module='cloudra.tools.Writetool.write',
         class_name='Write',
         tool_name='write',
+        required_permissions=frozenset({'write'}),
         runtime_profiles=frozenset({'desktop', 'android'}),
     ),
     ToolRegistration(
         module='cloudra.tools.Writetool.update_memory',
         class_name='UpdateMemory',
         tool_name='update_memory',
+        required_permissions=frozenset({'write'}),
         runtime_profiles=frozenset({'desktop', 'android'}),
     ),
 )

@@ -10,19 +10,19 @@ description = (
     "Launch a sub-agent to run a specific task. The Coordinator may split a complex job into subtasks.\n"
     "Important guidelines:\n"
     "- **Absolute paths**: you must provide the working directory's absolute path in query or context.\n"
-    "- **Safety**: a security audit is enabled. explorer is read-only; writer may write files but cannot run scripts or destructive operations; the other sub-agents (researcher, small_mol, md, dft, experiment, env) may write/script/delete. Instruct them to spell out intent, blast radius, and rollback in Thought to aid approval.\n"
+    "- **Safety**: a security audit is enabled. explorer is read-only; writer, researcher and experiment may write files but cannot run scripts or destructive operations; small_mol, md and dft may write files and run compute scripts but cannot perform destructive operations; env manages environments (write/script) and destructive operations still require explicit approval. Instruct them to spell out intent, blast radius, and rollback in Thought to aid approval.\n"
     "- **Task definition**: the task description must be extremely specific: name the tools to use, and explicitly forbid tools unrelated to the task.\n"
     "- **AgentHub**: sub-agents can share findings/questions/answers with other parallel Agents via `agent_hub`, and can address someone with to_agent (posts are public; addressees and authors of replied-to posts are notified). When dispatching overlapping work, tell them to check the hub first and post conclusions to the hub.\n"
     "- **agent_id is a stable role id**: pass ids such as a-1, a-2 — not names like explorer or writer; the same role id may be dispatched repeatedly for different tasks to run in parallel; for batch parallelism prefer subagent_swarm.\n"
     "Available sub-agents:\n"
     "1. explorer (a-1): explore + review. Map project structure and locate files; read-only review of code/docs/data with an evidence-backed report. Read-only.\n"
     "2. writer (a-2): papers and documents. Write reports, papers, docs. May write files, but cannot run scripts or destructive operations; must pass the security audit.\n"
-    "3. researcher (a-3): literature. Academic search, method breakdown, literature comparison. Full permissions; dangerous ops need strict review.\n"
+    "3. researcher (a-3): literature. Academic search, method breakdown, literature comparison. Read/search + delivery writes; no scripts or destructive operations.\n"
     "4. small_mol (a-4): small-molecule compute. Gaussian/ORCA molecular/cluster QM: conformers, TS, spectra, energies.\n"
     "5. md (a-5): molecular dynamics. GROMACS/LAMMPS system build, equilibration, sampling, and trajectory analysis.\n"
     "6. dft (a-6): first-principles. VASP/CP2K periodic systems: bulk, surfaces, defects, electronic properties.\n"
     "7. experiment (a-7): experimental design. DOE, controls, characterization matrix, safety assessment, and failure diagnosis.\n"
-    "8. env (a-8): environment management. Dependency install, conda/venvs, build config, HPC job environments. Full permissions; strict review."
+    "8. env (a-8): environment management. Dependency install, conda/venvs, build config, HPC job environments. Manage/script; destructive operations need explicit approval."
 )
 
 

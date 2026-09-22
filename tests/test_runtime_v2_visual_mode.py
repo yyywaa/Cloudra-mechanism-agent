@@ -12,6 +12,7 @@ from cloudra.runtime_v2.commands import CommandBus
 from cloudra.runtime_v2.core import RuntimeCore
 from cloudra.runtime_v2.policies.base import PipelineContext, ToolCall
 from cloudra.runtime_v2.policies.permission import PermissionStage
+from cloudra.runtime_v2.roles import RoleRegistry
 from cloudra.runtime_v2.schemas import (
     AgentCapabilities,
     Command,
@@ -181,7 +182,9 @@ def _ctx(settings: RuntimeSettings) -> PipelineContext:
         agent=SimpleNamespace(id="as_x", role_id="coordinator"),
         run_id="run_1",
         settings_snapshot=settings,
-        capabilities=AgentCapabilities(permissions=PermissionSet(), tools=["*"]),
+        capabilities=AgentCapabilities(
+            permissions=RoleRegistry().require("coordinator").permissions, tools=["*"]
+        ),
         inbox_messages=[],
         emit=lambda *_args, **_kwargs: None,
     )

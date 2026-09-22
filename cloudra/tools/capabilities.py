@@ -114,6 +114,30 @@ def role_hidden_tools(role_id: str | None) -> frozenset[str]:
     )
 
 
+def required_permissions_for(tool_name: str) -> frozenset[str]:
+    """A registered tool's declared permission requirements (评审 5.6).
+
+    Empty for unregistered tools and for deliberately dynamic ones (bash).
+    """
+    reg = _named().get(tool_name)
+    return frozenset(reg.required_permissions) if reg is not None else frozenset()
+
+
+def missing_permissions(granted: Any, tool_name: str) -> frozenset[str]:
+    """Declared permission bits a grant lacks for this tool.
+
+    Consumed by PermissionStage as the unified gate (评审 5.6); unregistered /
+    test-injected tools carry no declaration and are never blocked here (same
+    pass-through rule as ``is_dag_observable``).
+    """
+    reg = _named().get(tool_name)
+    if reg is None:
+        return frozenset()
+    return frozenset(
+        bit for bit in reg.required_permissions if not bool(getattr(granted, bit, False))
+    )
+
+
 def dag_tools() -> frozenset[str]:
     """DAG orchestration tools (the dag_tools package).
 

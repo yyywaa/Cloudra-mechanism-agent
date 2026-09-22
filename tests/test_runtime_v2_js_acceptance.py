@@ -32,7 +32,6 @@ from cloudra.runtime_v2.policies.base import PipelineContext, ToolCall, ToolResu
 from cloudra.runtime_v2.schemas import (
     AgentCapabilities,
     InvocationProtocol,
-    PermissionSet,
     RuntimeSettings,
 )
 from cloudra.runtime_v2.turn_pipeline import LLMResponse, TurnPipeline
@@ -110,7 +109,7 @@ async def _run_turn(core: RuntimeCore, agent, tmp_path, response, tools, *, tool
         agent=agent,
         run_id=run_id,
         settings=RuntimeSettings(),
-        capabilities=AgentCapabilities(permissions=PermissionSet(), tools=tool_names),
+        capabilities=AgentCapabilities(permissions=agent.capabilities.permissions, tools=tool_names),
         inbox_messages=[{"content": "go"}],
         workspace_dir=str(tmp_path),
     )
@@ -121,7 +120,7 @@ def _ctx(agent, tmp_path, *, tool_names) -> PipelineContext:
         agent=agent,
         run_id="run_direct",
         settings_snapshot=RuntimeSettings(),
-        capabilities=AgentCapabilities(permissions=PermissionSet(), tools=tool_names),
+        capabilities=AgentCapabilities(permissions=agent.capabilities.permissions, tools=tool_names),
         inbox_messages=[],
         emit=lambda *args: None,
         workspace_dir=str(tmp_path),

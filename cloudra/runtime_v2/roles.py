@@ -21,6 +21,8 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("coordinator"),
         display_name="Coordinator",
         description="Decomposes objectives and dispatches peer agents.",
+        # 评审 5.6：保留管理能力。destructive 亦保留——顶层角色的清理动作仍会
+        # 发生，审批路径照旧独立；若需一并收紧，改这一行 + tests/test_permission_matrix.py。
         permissions=PermissionSet(read=True, write=True, manage=True, script=True, destructive=True),
         can_spawn=True,
         spawn_roles=None,
@@ -46,7 +48,9 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("researcher"),
         display_name="Researcher",
         description="Literature search and method comparison.",
-        permissions=PermissionSet(read=True, write=True, script=True, destructive=True),
+        # 评审 5.6：read/search + 交付文件写入；脚本与破坏性操作按最小权限收回
+        # （Bash 的 script/destructive 命令硬拒，yolo 不能扩权）。
+        permissions=PermissionSet(read=True, write=True),
         can_spawn=False,
     ),
     RoleProfile(
@@ -54,7 +58,8 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("small_mol"),
         display_name="Small-molecule compute",
         description="Gaussian/ORCA molecular and cluster QM.",
-        permissions=PermissionSet(read=True, write=True, script=True, destructive=True),
+        # 评审 5.6：计算所需 write/script/submit 保留；不可任意删除。
+        permissions=PermissionSet(read=True, write=True, script=True),
         can_spawn=False,
     ),
     RoleProfile(
@@ -62,7 +67,8 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("md"),
         display_name="Molecular dynamics",
         description="Classical and enhanced-sampling MD.",
-        permissions=PermissionSet(read=True, write=True, script=True, destructive=True),
+        # 评审 5.6：计算所需 write/script 保留；不可任意删除。
+        permissions=PermissionSet(read=True, write=True, script=True),
         can_spawn=False,
     ),
     RoleProfile(
@@ -70,7 +76,8 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("dft"),
         display_name="First-principles",
         description="VASP/CP2K periodic systems.",
-        permissions=PermissionSet(read=True, write=True, script=True, destructive=True),
+        # 评审 5.6：计算所需 write/script 保留；不可任意删除。
+        permissions=PermissionSet(read=True, write=True, script=True),
         can_spawn=False,
     ),
     RoleProfile(
@@ -78,7 +85,8 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("experiment"),
         display_name="Experiment design",
         description="Experimental design and data analysis.",
-        permissions=PermissionSet(read=True, write=True, script=True, destructive=True),
+        # 评审 5.6：实验/谱图工具 + 限定写；不默认获得任意脚本与破坏性权限。
+        permissions=PermissionSet(read=True, write=True),
         can_spawn=False,
     ),
     RoleProfile(
@@ -86,7 +94,8 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("env"),
         display_name="Environment",
         description="Scientific software environment setup and debugging.",
-        permissions=PermissionSet(read=True, write=True, script=True, destructive=True),
+        # 评审 5.6：manage/script（环境管理）；破坏性操作仍需明确审批。
+        permissions=PermissionSet(read=True, write=True, manage=True, script=True, destructive=True),
         can_spawn=False,
     ),
     RoleProfile(

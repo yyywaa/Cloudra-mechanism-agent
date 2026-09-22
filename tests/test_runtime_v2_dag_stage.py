@@ -10,10 +10,8 @@ from cloudra.runtime_v2.core import RuntimeCore
 from cloudra.runtime_v2.policies import default_stages
 from cloudra.runtime_v2.policies.base import ToolCall, ToolResult
 from cloudra.runtime_v2.schemas import (
-    AgentCapabilities,
     InvocationProtocol,
     OrchestrationMode,
-    PermissionSet,
 )
 from cloudra.runtime_v2.turn_pipeline import LLMResponse, TurnPipeline
 
@@ -73,7 +71,7 @@ async def test_dag_stage_blocks_compute_before_mechanism_accepted(tmp_path):
         agent=agent,
         run_id="run_dag",
         settings=agent.settings,
-        capabilities=AgentCapabilities(permissions=PermissionSet(), tools=["*"]),
+        capabilities=agent.capabilities,
         inbox_messages=[],
         workspace_dir=str(tmp_path),
     )
@@ -97,7 +95,7 @@ async def test_dag_stage_noop_in_standard_mode(tmp_path):
         agent=agent,
         run_id="run_std",
         settings=agent.settings,
-        capabilities=AgentCapabilities(permissions=PermissionSet(), tools=["*"]),
+        capabilities=agent.capabilities,
         inbox_messages=[],
         workspace_dir=str(tmp_path),
     )
@@ -137,7 +135,7 @@ async def _run_stop(core, agent, tmp_path, stages=None):
         agent=agent,
         run_id="run_stop",
         settings=agent.settings,
-        capabilities=AgentCapabilities(permissions=PermissionSet(), tools=["*"]),
+        capabilities=agent.capabilities,
         inbox_messages=[],
         workspace_dir=str(tmp_path),
     )

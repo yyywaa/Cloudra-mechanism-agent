@@ -9,7 +9,7 @@ builds the tools list.
 from __future__ import annotations
 
 from cloudra.runtime_v2.policies.base import PipelineContext, PolicyResult, ToolCall
-from cloudra.tools.capabilities import role_hidden_tools, visual_tools
+from cloudra.tools.capabilities import missing_permissions, role_hidden_tools, visual_tools
 
 
 class PermissionStage:
@@ -31,6 +31,16 @@ class PermissionStage:
             return PolicyResult.block(
                 f"tool {call.name!r} is restricted to specific roles and is not "
                 f"available to role {ctx.agent.role_id!r}"
+            )
+        # 统一权限闸（评审 5.6）：角色 PermissionSet 必须覆盖工具在
+        # ToolRegistration.required_permissions 里声明的每一位；工具类内部的
+        # is_* 检查是第二道闸。未注册/注入式工具无声明，按原样放行。
+        missing = missing_permissions(ctx.capabilities.permissions, call.name)
+        if missing:
+            return PolicyResult.block(
+                f"tool {call.name!r} requires role permission(s) {sorted(missing)}, "
+                f"which role {ctx.agent.role_id!r} does not grant "
+                "(declared in ToolRegistration.required_permissions)"
             )
         return PolicyResult.allow()
 
