@@ -3,6 +3,31 @@
 Coordinator is one role among peers; nothing in the runtime may special-case
 its role_id.  Agent-to-agent privileges are derived from ``can_spawn`` and
 ``spawn_roles``, never from a hard-coded coordinator id.
+
+权限矩阵按「角色真实需要什么」反推（评审 5.6），不再给领域角色一律发
+``write + script + destructive``：
+
+| role | read | write | manage | script | destructive |
+| :--- | :--: | :--: | :--: | :--: | :--: |
+| coordinator | Y | Y | Y | Y | - |
+| explorer | Y | - | - | - | - |
+| writer | Y | Y | - | - | - |
+| researcher | Y | - | - | - | - |
+| experiment | Y | Y | - | - | - |
+| small_mol / md / dft | Y | Y | - | Y | - |
+| env | Y | Y | Y | Y | - |
+| supervisor | Y | - | - | - | - |
+
+口径（改矩阵先改这几条判据）：
+
+- ``script`` 只给真正要在 shell 里跑程序/脚本的角色：三个计算角色与环境角色。
+  研究/实验角色拿谱图与文献工具，不该获得任意脚本执行；
+- ``destructive`` **谁都不默认给**：删除/覆盖类操作一律走审批通道（工具内
+  ``ensure_safety``），yolo 只影响审批策略、**不扩大**角色本来没有的能力；
+- ``write`` 给需要产出交付文件/输入文件/配置的角色；研究角色按需再授
+  （``role.updated`` 命令可在运行期调整）；
+- ``manage`` 目前只被 launcher/swarm/dag 工具声明（v2 派发链路由
+  ``can_spawn`` / ``role_hidden_tools`` 把关），因此它是声明面而非执行面。
 """
 
 from __future__ import annotations
@@ -21,7 +46,9 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("coordinator"),
         display_name="Coordinator",
         description="Decomposes objectives and dispatches peer agents.",
-        permissions=PermissionSet(read=True, write=True, manage=True, script=True, destructive=True),
+        # 统筹能力集中在编排与派发；破坏性操作与其它角色一样要单独审批——
+        # 「统筹」不自动绕过工具级安全检查（评审 5.6 验收）。
+        permissions=PermissionSet(read=True, write=True, manage=True, script=True),
         can_spawn=True,
         spawn_roles=None,
     ),
@@ -46,7 +73,9 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("researcher"),
         display_name="Researcher",
         description="Literature search and method comparison.",
-        permissions=PermissionSet(read=True, write=True, script=True, destructive=True),
+        # 检索/阅读为主：不跑任意脚本、不删除/覆盖文件。确有交付文件需求时由
+        # 派发方或 role.updated 显式授 write。
+        permissions=PermissionSet(read=True),
         can_spawn=False,
     ),
     RoleProfile(
@@ -54,7 +83,9 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("small_mol"),
         display_name="Small-molecule compute",
         description="Gaussian/ORCA molecular and cluster QM.",
-        permissions=PermissionSet(read=True, write=True, script=True, destructive=True),
+        # 计算所需的 write（输入文件/交付物）+ script（命令行提交与后处理）；
+        # 破坏性文件操作仍走审批，不由角色默认放行。
+        permissions=PermissionSet(read=True, write=True, script=True),
         can_spawn=False,
     ),
     RoleProfile(
@@ -62,7 +93,7 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("md"),
         display_name="Molecular dynamics",
         description="Classical and enhanced-sampling MD.",
-        permissions=PermissionSet(read=True, write=True, script=True, destructive=True),
+        permissions=PermissionSet(read=True, write=True, script=True),
         can_spawn=False,
     ),
     RoleProfile(
@@ -70,7 +101,7 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("dft"),
         display_name="First-principles",
         description="VASP/CP2K periodic systems.",
-        permissions=PermissionSet(read=True, write=True, script=True, destructive=True),
+        permissions=PermissionSet(read=True, write=True, script=True),
         can_spawn=False,
     ),
     RoleProfile(
@@ -78,7 +109,8 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("experiment"),
         display_name="Experiment design",
         description="Experimental design and data analysis.",
-        permissions=PermissionSet(read=True, write=True, script=True, destructive=True),
+        # 实验/谱图工具 + 限定写；不默认获得任意脚本与破坏性权限。
+        permissions=PermissionSet(read=True, write=True),
         can_spawn=False,
     ),
     RoleProfile(
@@ -86,7 +118,9 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("env"),
         display_name="Environment",
         description="Scientific software environment setup and debugging.",
-        permissions=PermissionSet(read=True, write=True, script=True, destructive=True),
+        # 环境搭建需要装/卸软件与跑构建脚本：manage + write + script；
+        # 破坏性操作（删除、覆盖）仍要明确风险与审批。
+        permissions=PermissionSet(read=True, write=True, manage=True, script=True),
         can_spawn=False,
     ),
     RoleProfile(

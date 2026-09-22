@@ -31,6 +31,7 @@ def make_session(
     orchestration_mode: str = "dag_guided",
     protocol: str = "javascript",
     session_id: str | None = None,
+    **settings: object,
 ) -> AgentSession:
     """按 RoleProfile 构造在线 AgentSession（权限/工具面同 AgentHost 派发口径）。
 
@@ -46,7 +47,8 @@ def make_session(
         display_name=role.display_name,
         settings=RuntimeSettings(
             invocation_protocol=InvocationProtocol(protocol),
-            orchestration_mode=OrchestrationMode(orchestration_mode)
+            orchestration_mode=OrchestrationMode(orchestration_mode),
+            **settings,
         ),
         capabilities=AgentCapabilities(
             permissions=role.permissions,
@@ -64,6 +66,7 @@ def make_actor(
     orchestration_mode: str = "dag_guided",
     workspace_dir: str | None = None,
     session_id: str | None = None,
+    **settings: object,
 ) -> _LegacyAgentBridge:
     """按 RoleProfile 构造在线身份并经桥暴露 legacy 工具面。
 
@@ -76,6 +79,7 @@ def make_actor(
             role_id,
             orchestration_mode=orchestration_mode,
             session_id=session_id,
+            **settings,
         ),
         workspace_dir,
     )

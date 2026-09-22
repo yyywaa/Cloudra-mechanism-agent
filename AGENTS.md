@@ -76,6 +76,7 @@ npm --prefix cloudra/runtime_v2/js_host test   # JS 宿主测试；先 npm ci --
 - **事件循环线程禁止同步阻塞调用**：`async` 函数体内不得直接调用同步 SQLite、`time.sleep`、`subprocess.run`、同步网络库——一律 `asyncio.to_thread` 或 `a` 前缀异步变体。护栏 `tests/test_no_sync_on_loop.py` 常驻。
 - **执行面可靠性铁律**：调度器/guard 任何路径不得 kill 计算进程（取消只走显式 `cancel_requested` → Slurm scancel 路径）；进程存活判定一律 `infra/flocks.py` 的 flock 探测，禁止 PID/`ps`//proc 文本判定；核心链路禁止解析计算输入文件。子进程归属链：API/CLI →（detach）scheduler/kg_vec 守护 → guard → calculator.sh → 引擎 → 引擎的 external 子进程（如 MACE 由 ORCA 启动，**Cloudra 从不直接 spawn MACE**）。
 - **禁止引入正则**：`re` 唯一允许的场合是**解析计算引擎输出文件**（`tools/core/*_frames.py`、`log_parser.py`、`ts_guess.py` 等纯解析）。**校验路径一律不准有正则**——尤其是对 agent/LLM 输出：取值与判定走结构化路径（pydantic 校验、`json.loads`、显式 token 扫描、枚举精确比对）或对物理量做确定性比对，一律 fail-loud。常驻护栏 `tests/test_benchmark.py::test_scoring_modules_do_not_import_regex`。
+- **角色权限按最小权限**（评审 5.6）：矩阵唯一事实源是 `runtime_v2/roles.py` 的 `BUILTIN_ROLES`——默认**没有任何角色**握有 `destructive`（删除/覆盖一律走审批，yolo 只影响审批策略、不扩大角色能力），`script` 只给三个计算角色与环境角色，研究/实验角色只有 read(+write)。判据与逐角色允许/拒绝清单钉在 `tests/test_role_permission_matrix.py`；改矩阵必须同时改该测试与 `roles.py` docstring 的口径。权限位的执行消费点在 `tools/Bashtool/bash.py`（命令分类比对），工具级角色门槛另见 `capabilities.role_hidden_tools`。
 - 不引入项目未依赖的库；可选能力走 `pyproject.toml` 的 extras（chem/browser/pdf/visual/dev）。
 - 改了结构、命令或约定时同步更新本文件。
 - 未经明确要求不做 git 提交/推送等变更操作。
