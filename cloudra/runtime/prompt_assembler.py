@@ -90,8 +90,19 @@ _CONTEXT_HANDOFF_GUIDANCE_LIGHT = (
     "Do not paraphrase from memory or fabricate data — read the actual file if uncertain."
 )
 
-# 纯输出型角色名集合（不写 HANDOFF.md，不管理多阶段任务状态）
-_OUTPUT_ONLY_ROLES = frozenset({"researcher", "writer", "explorer", "experiment"})
+def is_output_only_role(prompt_name: Optional[str]) -> bool:
+    """该 prompt 名对应的角色是否纯输出型。
+
+    唯一事实源是 ``RoleProfile.output_only``（``runtime_v2/roles.py``）——以前这里
+    手抄过第二张角色分类表，角色一变就会与运行时权限漂移（评审 5.9）。
+    未知 prompt 名（自定义 prompt）按"非纯输出"处理。
+    """
+    if not prompt_name:
+        return False
+    from cloudra.runtime_v2.roles import BUILTIN_ROLES
+
+    role = next((item for item in BUILTIN_ROLES if item.role_id == prompt_name), None)
+    return bool(role is not None and role.output_only)
 
 
 
@@ -634,7 +645,7 @@ class PromptAssembler:
 
         _handoff = (
             _CONTEXT_HANDOFF_GUIDANCE_LIGHT
-            if self.prompt_name in _OUTPUT_ONLY_ROLES
+            if is_output_only_role(self.prompt_name)
             else _CONTEXT_HANDOFF_GUIDANCE
         )
         identity_sections.append(_handoff)

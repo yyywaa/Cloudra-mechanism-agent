@@ -11,18 +11,15 @@ This skill establishes operational contracts, prompt engineering templates, and 
 
 ## 1. Built-in Sub-Agent Roles & Scope Boundaries
 
-Cloudra provides 8 specialized sub-agent roles (registered as `a-1` through `a-8`). When launching a sub-agent, select the role that strictly matches the task domain:
+Cloudra provides specialized sub-agent roles. Dispatch them by **role id** via
+`subagent_launcher` / `subagent_swarm`; the authoritative roster (each role's domain and
+typical tasks) is generated from the role profiles into those tools' description — read it
+there rather than keeping a second copy here. Historical `a-N` ids are accepted for old data
+only.
 
-| Role Identifier | Role Name | Domain & Tooling Boundary | Primary Use Cases |
-| :--- | :--- | :--- | :--- |
-| **a-1** | `explorer` | Read-only file discovery, codebase grepping, workspace mapping | Quick reconnaissance, locating log files, scanning directory trees |
-| **a-2** | `writer` | Writing/editing documents, formatting reports, Markdown | Drafting research reports, formatting summaries, organizing SI text |
-| **a-3** | `researcher` | Deep literature search (`search` with `source=openalex`/`arxiv`, `read`) | Paper retrieval, DOI extraction, surveying methodology, SI data lookup |
-| **a-4** | `small_mol` | Molecular/cluster QM (Gaussian, ORCA): conformers, TS, reaction mechanisms, spectra | Ligand preparation, atom mapping, TS search, IRC verification, barrier calculations |
-| **a-5** | `md` | Molecular dynamics setup, OpenMM, GROMACS, trajectory parsing | System solvation, topology generation, equilibration, MM-GBSA |
-| **a-6** | `dft` | Periodic first-principles (VASP, CP2K): bulk, surfaces, interfaces, defects | Submitting periodic compute jobs, band structure, adsorption energies |
-| **a-7** | `experiment` | Wet-lab protocols, synthetic routes, reagents, reaction safety | Designing experimental procedures, screening reagents, yield optimization |
-| **a-8** | `env` | Environment inspection, shell commands, dependency installation | Checking CLI binaries (`xtb`, `crest`, `vina`), setting environment paths |
+What matters for *this* skill is the prompt you hand over, not the roster: name the role whose
+domain matches the task, and let the runtime policy decide what it may run (capabilities are
+enforced by policy stages, not by the text you write).
 
 ---
 
@@ -41,7 +38,7 @@ Use when executing homogeneous parallel workloads (e.g. scoring 10 different con
 ### 2.3 Forum Collaboration (`agent_hub`)
 Use for asynchronous communication, sharing intermediate discoveries, and collaborative peer reviews:
 - **`post`**: Publish findings under a designated `topic` with structured tags.
-- **`browse` / `read` / `search`**: Inspect peer agent findings without polluting the current LLM context window with raw conversation histories.
+- **`browser` / `read` / `search`**: Inspect peer agent findings without polluting the current LLM context window with raw conversation histories.
 - **Direct Calling**: Passing `to_agent` or calling by role name wakes the recipient agent via internal mailbox delivery.
 
 ---

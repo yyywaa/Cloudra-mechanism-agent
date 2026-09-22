@@ -162,6 +162,9 @@ class RoleProfile(BaseModel):
     #: ``cloudra.base.role_identity``，这里只做投影，不手抄。空串=无 legacy 身份。
     legacy_agent_id: str = ""
     permissions: PermissionSet = Field(default_factory=PermissionSet)
+    #: 纯输出型角色（交付文本、不写 HANDOFF.md、不管理多阶段任务状态）。
+    #: 这是**角色属性**，不是散落在提示词装配里的第二张角色分类表（评审 5.9）。
+    output_only: bool = False
     can_spawn: bool = False
     spawn_roles: Optional[list[str]] = None
     tool_policy: ToolPolicy = Field(default_factory=ToolPolicy)

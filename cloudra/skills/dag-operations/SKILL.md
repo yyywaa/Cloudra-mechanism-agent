@@ -17,8 +17,8 @@ There is exactly one persistent graph — the delivery (mechanism) graph. There 
 - `dag_remove_edge`: Delete an elementary step (`step`, mandatory `rationale`). Deletions are permanently recorded in the change log.
 - `dag_remove_node`: Delete a species node (`name` or id, mandatory `reason`). A node that still has incoming/outgoing steps is refused with the linked step names — remove those steps first, then delete the node (no implicit cascade).
 - `dag_update_delivery_element`: Update metadata or disposition (`status`, `reason`, `annotations`, `required`). Does not rename elements or change SMILES.
-- `dag_submit_step_evidence`: Explicitly submit finished QM logs for a step (`step`, `ts_log`, `summary`, optional `irc_log`). The harness checks the workspace sandbox, computes sha256, snapshots into `.cloudra/evidence/`, verifies TS mode (exactly 1 imaginary frequency), and enqueues the item for review.
-- `dag_submit_species_evidence`: Explicitly submit finished QM logs for a species (`species`, `log_path`, `summary`). The harness snapshots evidence and verifies ground-state minimum mode (0 imaginary frequencies).
+- `dag_submit_step_evidence`: Explicitly submit finished QM logs for a step (`step_name`, `ts_file`, optional `irc_file`). The harness checks the workspace sandbox, computes sha256, snapshots into `.cloudra/evidence/`, verifies TS mode (exactly 1 imaginary frequency), and enqueues the item for review.
+- `dag_submit_species_evidence`: Explicitly submit finished QM logs for a species (`species_name`, `opt_file`, optional `freq_file`). The harness snapshots evidence and verifies ground-state minimum mode (0 imaginary frequencies).
 - `dag_review_step` / `dag_review_species`: Supervisor only (`dag_guided`): Adjudicate the current active review item with `verdict` (`agree`, `disagree`, `skip`, `not_applicable`, `needs_evidence`) and `reason`.
 - `dag_review_evidence`: Supervisor only (`dag_guided`): Resolve a queued structured review request with a basis-matched decision.
 - `dag_review_call`: Supervisor lower-level review interface (adjudicates a CallReview by `stage_kind` and verdict).
@@ -46,7 +46,7 @@ Advance in this order (the harness blocks compute until draft acceptance):
 1. **User submits a task** → Coordinator is woken.
 2. **Initial research**: read skills, search literature; compute entry points are gated until the mechanism is accepted.
 3. **Propose the mechanism**: `dag_propose_mechanism` with `species`, `steps`, and `rationale`.
-4. **Supervisor review**: Supervisor is woken (`mechanism_proposed`) and calls `dag_accept_mechanism`. Accept unlocks compute; reject returns the draft with a reason for revision.
+4. **Supervisor review**: Supervisor is woken by the runtime when the draft lands and calls `dag_accept_mechanism`. Accept unlocks compute; reject returns the draft with a reason for revision.
 5. **Compute & Advance**: sub-agents run calculations and report outputs.
 6. **Explicit evidence submission**: submit finished outputs with `dag_submit_step_evidence` and `dag_submit_species_evidence`. Only submitted logs enter the Supervisor's active review queue.
 7. **Supervisor adjudication**: Supervisor reviews the active item via `dag_review_step` / `dag_review_species` with `verdict` and `reason`. Verdict notifications arrive in the submitter's mailbox.

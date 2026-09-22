@@ -58,6 +58,8 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         display_name="Explorer",
         description="Read-only project structure and evidence review.",
         permissions=PermissionSet(read=True),
+        # 纯输出型角色：交付文本，不写 HANDOFF、不管理多阶段状态。
+        output_only=True,
         can_spawn=False,
     ),
     RoleProfile(
@@ -66,6 +68,8 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         display_name="Writer",
         description="Writes documents and reports; no script execution.",
         permissions=PermissionSet(read=True, write=True),
+        # 纯输出型角色：交付文本，不写 HANDOFF、不管理多阶段状态。
+        output_only=True,
         can_spawn=False,
     ),
     RoleProfile(
@@ -76,6 +80,8 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         # 检索/阅读为主：不跑任意脚本、不删除/覆盖文件。确有交付文件需求时由
         # 派发方或 role.updated 显式授 write。
         permissions=PermissionSet(read=True),
+        # 纯输出型角色：交付文本，不写 HANDOFF、不管理多阶段状态。
+        output_only=True,
         can_spawn=False,
     ),
     RoleProfile(
@@ -111,6 +117,8 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         description="Experimental design and data analysis.",
         # 实验/谱图工具 + 限定写；不默认获得任意脚本与破坏性权限。
         permissions=PermissionSet(read=True, write=True),
+        # 纯输出型角色：交付文本，不写 HANDOFF、不管理多阶段状态。
+        output_only=True,
         can_spawn=False,
     ),
     RoleProfile(
