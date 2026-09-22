@@ -23,6 +23,8 @@ from cloudra.runtime_v2.schemas import AgentCapabilities, AgentSession, Permissi
 from cloudra.tools import get_tool_load_errors, get_tools_lst
 from cloudra.tools.Bashtool.bash import Bash
 from cloudra.tools.capabilities import missing_permissions, required_permissions_for
+from cloudra.tools.core.command_analyzer import BashCommandClassifier
+from cloudra.tools.core.permission_model import Permission
 from cloudra.tools.registry import TOOL_REGISTRY
 
 _PERMISSION_DOMAIN = {"read", "write", "manage", "script", "destructive"}
@@ -183,3 +185,35 @@ def test_declared_permissions_match_tool_class_projections():
         )
         checked += 1
     assert checked >= 10, f"可核对工具过少（{checked}）：用例可能被静默跳过"
+
+
+# --- 评审验收「每个角色都有允许/必须拒绝的命令测试」：逐角色 × 命令矩阵 ---------
+
+# 探针命令 -> 分类器给出的必需位。分类结果在用例里现算并核对（分类器改变先红），
+# 防止探针悄悄失效。注意「写文件类」命令（touch/mkdir/重定向）按分类器需要
+# write+destructive（防覆盖）——所以能经 bash 写文件的只有管理角色。
+_COMMAND_PROBES = (
+    ("ls -la", ("read",)),
+    ("touch note.txt", ("write", "destructive")),
+    ("python run_analysis.py", ("script",)),
+    ("rm -rf stale/", ("destructive",)),
+)
+
+
+@pytest.mark.parametrize("role_id", sorted(_EXPECTED_MATRIX))
+def test_command_matrix_per_role_matches_permission_bits(role_id):
+    bash = _bash_for(role_id)
+    bits = _EXPECTED_MATRIX[role_id]
+    for command, required in _COMMAND_PROBES:
+        analysis = BashCommandClassifier.classify(command)
+        classified = {
+            permission.name.lower()
+            for permission in Permission
+            if permission != Permission.NONE
+            and (analysis.permissions & permission) == permission
+        }
+        assert classified == set(required), f"{command}: 分类={sorted(classified)} 与探针不符"
+        expected = all(bits[bit] for bit in required)
+        assert bash.has_command_permission(command) is expected, (
+            f"{role_id}: {command!r} 期望 {expected}（需 {sorted(required)}，角色 {bits}）"
+        )
