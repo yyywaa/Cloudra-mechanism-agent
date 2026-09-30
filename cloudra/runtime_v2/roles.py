@@ -30,6 +30,8 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("explorer"),
         display_name="Explorer",
         description="Read-only project structure and evidence review.",
+        roster="explore + review. Map project structure and locate files; read-only review of code/docs/data with an evidence-backed report. Read-only.",
+        output_only=True,
         permissions=PermissionSet(read=True),
         can_spawn=False,
     ),
@@ -38,6 +40,8 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("writer"),
         display_name="Writer",
         description="Writes documents and reports; no script execution.",
+        roster="papers and documents. Write reports, papers, docs. Document delivery writes; command permissions and approvals are enforced by runtime policy.",
+        output_only=True,
         permissions=PermissionSet(read=True, write=True),
         can_spawn=False,
     ),
@@ -46,6 +50,8 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("researcher"),
         display_name="Researcher",
         description="Literature search and method comparison.",
+        roster="literature. Academic search, method breakdown, literature comparison. Academic search, method comparison and delivery; command permissions and approvals are enforced by runtime policy.",
+        output_only=True,
         permissions=PermissionSet(read=True, write=True, script=True, destructive=True),
         can_spawn=False,
     ),
@@ -54,6 +60,7 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("small_mol"),
         display_name="Small-molecule compute",
         description="Gaussian/ORCA molecular and cluster QM.",
+        roster="small-molecule compute. Gaussian/ORCA molecular/cluster QM: conformers, TS, spectra, energies.",
         permissions=PermissionSet(read=True, write=True, script=True, destructive=True),
         can_spawn=False,
     ),
@@ -62,6 +69,7 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("md"),
         display_name="Molecular dynamics",
         description="Classical and enhanced-sampling MD.",
+        roster="molecular dynamics. GROMACS/LAMMPS system build, equilibration, sampling, and trajectory analysis.",
         permissions=PermissionSet(read=True, write=True, script=True, destructive=True),
         can_spawn=False,
     ),
@@ -70,6 +78,7 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("dft"),
         display_name="First-principles",
         description="VASP/CP2K periodic systems.",
+        roster="first-principles. VASP/CP2K periodic systems: bulk, surfaces, defects, electronic properties.",
         permissions=PermissionSet(read=True, write=True, script=True, destructive=True),
         can_spawn=False,
     ),
@@ -78,6 +87,8 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("experiment"),
         display_name="Experiment design",
         description="Experimental design and data analysis.",
+        roster="experimental design. DOE, controls, characterization matrix, safety assessment, and failure diagnosis.",
+        output_only=True,
         permissions=PermissionSet(read=True, write=True, script=True, destructive=True),
         can_spawn=False,
     ),
@@ -86,6 +97,7 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("env"),
         display_name="Environment",
         description="Scientific software environment setup and debugging.",
+        roster="environment management. Dependency install, conda/venvs, build config, HPC job environments; command permissions and approvals are enforced by runtime policy.",
         permissions=PermissionSet(read=True, write=True, script=True, destructive=True),
         can_spawn=False,
     ),
@@ -108,6 +120,16 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         default_settings=RuntimeSettingsPatch(orchestration_mode=OrchestrationMode.DAG_GUIDED),
     ),
 )
+
+
+def dispatch_roster() -> str:
+    """Generate the built-in dispatch roster from role profiles."""
+    return "".join(
+        f"{index}. {role.role_id} ({role.legacy_agent_id}): {role.roster}\n"
+        for index, role in enumerate(
+            (role for role in BUILTIN_ROLES if role.roster), start=1
+        )
+    )
 
 
 class RoleRegistry:

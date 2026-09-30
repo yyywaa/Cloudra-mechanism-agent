@@ -1120,263 +1120,271 @@ cloudra/benchmark/accuracy.py:227	    steps: list,
 cloudra/benchmark/accuracy.py:228	    delivered_graph: Optional[GoldMechanismGraph],
 cloudra/benchmark/accuracy.py:229	    cfg,
 cloudra/benchmark/accuracy.py:230	    match_threshold: float,
-cloudra/benchmark/accuracy.py:231	):
-cloudra/benchmark/accuracy.py:232	    """按**物种对应**找 gold 边的交付步（edge id 是题库内部约定，agent 不可知，
-cloudra/benchmark/accuracy.py:233	    绝不参与匹配）：交付边的 from/to 端点物种与 gold 边**同向**端点分别匹配
-cloudra/benchmark/accuracy.py:234	    （species_substitution_cost ≤ 阈值，与 Layer 1/graph GED 同口径；反向步
-cloudra/benchmark/accuracy.py:235	    能垒口径不同不匹配）。多候选按 bond_changes 对称差最小、端点代价最小、
-cloudra/benchmark/accuracy.py:236	    edge id 字典序取（确定性）。"""
-cloudra/benchmark/accuracy.py:237	    from cloudra.benchmark.graph_similarity import species_substitution_cost
-cloudra/benchmark/accuracy.py:238	
-cloudra/benchmark/accuracy.py:239	    if delivered_graph is None:
+cloudra/benchmark/accuracy.py:231	    require_channel: bool = False,
+cloudra/benchmark/accuracy.py:232	):
+cloudra/benchmark/accuracy.py:233	    """按**物种对应**找 gold 边的交付步（edge id 是题库内部约定，agent 不可知，
+cloudra/benchmark/accuracy.py:234	    绝不参与匹配）：交付边的 from/to 端点物种与 gold 边**同向**端点分别匹配
+cloudra/benchmark/accuracy.py:235	    （species_substitution_cost ≤ 阈值，与 Layer 1/graph GED 同口径；反向步
+cloudra/benchmark/accuracy.py:236	    能垒口径不同不匹配）。多候选按 bond_changes 对称差最小、端点代价最小、
+cloudra/benchmark/accuracy.py:237	    edge id 字典序取（确定性）。"""
+cloudra/benchmark/accuracy.py:238	    from cloudra.benchmark.graph_similarity import species_substitution_cost
+cloudra/benchmark/accuracy.py:239	
 \end{lstlisting}
 \clearpage
 \begin{lstlisting}[firstnumber=240,numbers=left,numberstyle=\tiny\ttfamily,numbersep=5pt]
-cloudra/benchmark/accuracy.py:240	        return None
-cloudra/benchmark/accuracy.py:241	    delivered_nodes = {n.id: n for n in delivered_graph.nodes}
-cloudra/benchmark/accuracy.py:242	    delivered_edges = {e.id: e for e in delivered_graph.edges}
-cloudra/benchmark/accuracy.py:243	    gold_from = gold_nodes.get(gold_edge.from_node)
-cloudra/benchmark/accuracy.py:244	    gold_to = gold_nodes.get(gold_edge.to_node)
-cloudra/benchmark/accuracy.py:245	    if gold_from is None or gold_to is None:
-cloudra/benchmark/accuracy.py:246	        return None
-cloudra/benchmark/accuracy.py:247	    gold_pairs = gold_edge.bond_changes.pairs()
-cloudra/benchmark/accuracy.py:248	    candidates: list[tuple[int, float, str, object]] = []
-cloudra/benchmark/accuracy.py:249	    for step in steps:
-cloudra/benchmark/accuracy.py:250	        d_edge = delivered_edges.get(step.edge_id)
-cloudra/benchmark/accuracy.py:251	        if d_edge is None:
-cloudra/benchmark/accuracy.py:252	            continue
-cloudra/benchmark/accuracy.py:253	        d_from = delivered_nodes.get(d_edge.from_node)
-cloudra/benchmark/accuracy.py:254	        d_to = delivered_nodes.get(d_edge.to_node)
-cloudra/benchmark/accuracy.py:255	        if d_from is None or d_to is None:
-cloudra/benchmark/accuracy.py:256	            continue
-cloudra/benchmark/accuracy.py:257	        cost_from = species_substitution_cost(gold_from.smiles, d_from.smiles, cfg)
-cloudra/benchmark/accuracy.py:258	        cost_to = species_substitution_cost(gold_to.smiles, d_to.smiles, cfg)
-cloudra/benchmark/accuracy.py:259	        if cost_from > match_threshold or cost_to > match_threshold:
-cloudra/benchmark/accuracy.py:260	            continue
-cloudra/benchmark/accuracy.py:261	        symdiff = len(gold_pairs ^ d_edge.bond_changes.pairs())
-cloudra/benchmark/accuracy.py:262	        candidates.append((symdiff, cost_from + cost_to, step.edge_id, step))
-cloudra/benchmark/accuracy.py:263	    if not candidates:
-cloudra/benchmark/accuracy.py:264	        return None
-cloudra/benchmark/accuracy.py:265	    candidates.sort(key=lambda item: (item[0], item[1], item[2]))
-cloudra/benchmark/accuracy.py:266	    return candidates[0][3]
-cloudra/benchmark/accuracy.py:267	
-cloudra/benchmark/accuracy.py:268	
-cloudra/benchmark/accuracy.py:269	def score_accuracy(
-cloudra/benchmark/accuracy.py:270	    *,
-cloudra/benchmark/accuracy.py:271	    evidence: "BarrierEvidence",
-cloudra/benchmark/accuracy.py:272	    gold: GoldSpec,
-cloudra/benchmark/accuracy.py:273	    rubric: AccuracyRubric | None = None,
-cloudra/benchmark/accuracy.py:274	    delivered_graph: Optional[GoldMechanismGraph] = None,
-cloudra/benchmark/accuracy.py:275	    cfg=None,
-cloudra/benchmark/accuracy.py:276	    match_threshold: float = 0.2,
-cloudra/benchmark/accuracy.py:277	) -> AccuracyReport:
-cloudra/benchmark/accuracy.py:278	    """评分边集合 = 全部 gold 边：带参考值的边逐边核对（"声明得到日志支撑"），
-cloudra/benchmark/accuracy.py:279	    再对 gold 比、按 gold 边 weight 加权平均；不带参考值的 accessible 边记 1.0、
-cloudra/benchmark/accuracy.py:280	    不可达边记 0.0。gold.reference_properties 非空时走性质锚点模式（与能垒模式
-cloudra/benchmark/accuracy.py:281	    互斥）。"""
-cloudra/benchmark/accuracy.py:282	    rubric = rubric or AccuracyRubric()
-cloudra/benchmark/accuracy.py:283	    rds = evidence.rds()
-cloudra/benchmark/accuracy.py:284	    rep = AccuracyReport(
-cloudra/benchmark/accuracy.py:285	        enabled=rubric.enabled,
-cloudra/benchmark/accuracy.py:286	        sigma_kcal=rubric.sigma_kcal_mol,
-cloudra/benchmark/accuracy.py:287	        log_barrier_kcal=rds.barrier_kcal_mol if rds is not None else None,
-cloudra/benchmark/accuracy.py:288	        declared_barrier_kcal=rds.declared_kcal_mol if rds is not None else None,
-cloudra/benchmark/accuracy.py:289	        rds_edge_id=rds.edge_id if rds is not None else "",
-cloudra/benchmark/accuracy.py:290	    )
-cloudra/benchmark/accuracy.py:291	
+cloudra/benchmark/accuracy.py:240	    if delivered_graph is None:
+cloudra/benchmark/accuracy.py:241	        return None
+cloudra/benchmark/accuracy.py:242	    delivered_nodes = {n.id: n for n in delivered_graph.nodes}
+cloudra/benchmark/accuracy.py:243	    delivered_edges = {e.id: e for e in delivered_graph.edges}
+cloudra/benchmark/accuracy.py:244	    gold_from = gold_nodes.get(gold_edge.from_node)
+cloudra/benchmark/accuracy.py:245	    gold_to = gold_nodes.get(gold_edge.to_node)
+cloudra/benchmark/accuracy.py:246	    if gold_from is None or gold_to is None:
+cloudra/benchmark/accuracy.py:247	        return None
+cloudra/benchmark/accuracy.py:248	    gold_pairs = gold_edge.bond_changes.pairs()
+cloudra/benchmark/accuracy.py:249	    candidates: list[tuple[int, float, str, object]] = []
+cloudra/benchmark/accuracy.py:250	    for step in steps:
+cloudra/benchmark/accuracy.py:251	        d_edge = delivered_edges.get(step.edge_id)
+cloudra/benchmark/accuracy.py:252	        if d_edge is None:
+cloudra/benchmark/accuracy.py:253	            continue
+cloudra/benchmark/accuracy.py:254	        if require_channel and d_edge.channel != gold_edge.channel:
+cloudra/benchmark/accuracy.py:255	            continue
+cloudra/benchmark/accuracy.py:256	        d_from = delivered_nodes.get(d_edge.from_node)
+cloudra/benchmark/accuracy.py:257	        d_to = delivered_nodes.get(d_edge.to_node)
+cloudra/benchmark/accuracy.py:258	        if d_from is None or d_to is None:
+cloudra/benchmark/accuracy.py:259	            continue
+cloudra/benchmark/accuracy.py:260	        cost_from = species_substitution_cost(gold_from.smiles, d_from.smiles, cfg)
+cloudra/benchmark/accuracy.py:261	        cost_to = species_substitution_cost(gold_to.smiles, d_to.smiles, cfg)
+cloudra/benchmark/accuracy.py:262	        if cost_from > match_threshold or cost_to > match_threshold:
+cloudra/benchmark/accuracy.py:263	            continue
+cloudra/benchmark/accuracy.py:264	        symdiff = len(gold_pairs ^ d_edge.bond_changes.pairs())
+cloudra/benchmark/accuracy.py:265	        candidates.append((symdiff, cost_from + cost_to, step.edge_id, step))
+cloudra/benchmark/accuracy.py:266	    if not candidates:
+cloudra/benchmark/accuracy.py:267	        return None
+cloudra/benchmark/accuracy.py:268	    candidates.sort(key=lambda item: (item[0], item[1], item[2]))
+cloudra/benchmark/accuracy.py:269	    return candidates[0][3]
+cloudra/benchmark/accuracy.py:270	
+cloudra/benchmark/accuracy.py:271	
+cloudra/benchmark/accuracy.py:272	def score_accuracy(
+cloudra/benchmark/accuracy.py:273	    *,
+cloudra/benchmark/accuracy.py:274	    evidence: "BarrierEvidence",
+cloudra/benchmark/accuracy.py:275	    gold: GoldSpec,
+cloudra/benchmark/accuracy.py:276	    rubric: AccuracyRubric | None = None,
+cloudra/benchmark/accuracy.py:277	    delivered_graph: Optional[GoldMechanismGraph] = None,
+cloudra/benchmark/accuracy.py:278	    cfg=None,
+cloudra/benchmark/accuracy.py:279	    match_threshold: float = 0.2,
+cloudra/benchmark/accuracy.py:280	) -> AccuracyReport:
+cloudra/benchmark/accuracy.py:281	    """评分边集合 = 全部 gold 边：带参考值的边逐边核对（"声明得到日志支撑"），
+cloudra/benchmark/accuracy.py:282	    再对 gold 比、按 gold 边 weight 加权平均；不带参考值的 accessible 边记 1.0、
+cloudra/benchmark/accuracy.py:283	    不可达边记 0.0。gold.reference_properties 非空时走性质锚点模式（与能垒模式
+cloudra/benchmark/accuracy.py:284	    互斥）。"""
+cloudra/benchmark/accuracy.py:285	    rubric = rubric or AccuracyRubric()
+cloudra/benchmark/accuracy.py:286	    rds = evidence.rds()
+cloudra/benchmark/accuracy.py:287	    rep = AccuracyReport(
+cloudra/benchmark/accuracy.py:288	        enabled=rubric.enabled,
+cloudra/benchmark/accuracy.py:289	        sigma_kcal=rubric.sigma_kcal_mol,
+cloudra/benchmark/accuracy.py:290	        log_barrier_kcal=rds.barrier_kcal_mol if rds is not None else None,
+cloudra/benchmark/accuracy.py:291	        declared_barrier_kcal=rds.declared_kcal_mol if rds is not None else None,
 \end{lstlisting}
 \clearpage
 \begin{lstlisting}[firstnumber=292,numbers=left,numberstyle=\tiny\ttfamily,numbersep=5pt]
-cloudra/benchmark/accuracy.py:292	    if not rubric.enabled:
-cloudra/benchmark/accuracy.py:293	        rep.gaussian_score = 1.0
-cloudra/benchmark/accuracy.py:294	        rep.final_score = 1.0
-cloudra/benchmark/accuracy.py:295	        rep.notes.append("accuracy disabled for this task; scored 1.0 (computable but not graded)")
-cloudra/benchmark/accuracy.py:296	        return rep
-cloudra/benchmark/accuracy.py:297	    if gold.reference_properties:
-cloudra/benchmark/accuracy.py:298	        return _score_properties(delivered_graph, gold.reference_properties, rep)
-cloudra/benchmark/accuracy.py:299	    scored_edges = list(gold.mechanism_graph.edges)
-cloudra/benchmark/accuracy.py:300	    if not scored_edges:
-cloudra/benchmark/accuracy.py:301	        rep.gaussian_score = 1.0
-cloudra/benchmark/accuracy.py:302	        rep.final_score = 1.0
-cloudra/benchmark/accuracy.py:303	        rep.notes.append("gold mechanism graph carries no edges; accuracy not scored")
-cloudra/benchmark/accuracy.py:304	        return rep
-cloudra/benchmark/accuracy.py:305	
-cloudra/benchmark/accuracy.py:306	    # --- 交付物双来源门禁：逐边核对（任一参考边缺失/不一致 -> fail-loud 标记） ---
-cloudra/benchmark/accuracy.py:307	    from cloudra.benchmark.graph_similarity import GedConfig
+cloudra/benchmark/accuracy.py:292	        rds_edge_id=rds.edge_id if rds is not None else "",
+cloudra/benchmark/accuracy.py:293	    )
+cloudra/benchmark/accuracy.py:294	
+cloudra/benchmark/accuracy.py:295	    if not rubric.enabled:
+cloudra/benchmark/accuracy.py:296	        rep.gaussian_score = 1.0
+cloudra/benchmark/accuracy.py:297	        rep.final_score = 1.0
+cloudra/benchmark/accuracy.py:298	        rep.notes.append("accuracy disabled for this task; scored 1.0 (computable but not graded)")
+cloudra/benchmark/accuracy.py:299	        return rep
+cloudra/benchmark/accuracy.py:300	    if gold.reference_properties:
+cloudra/benchmark/accuracy.py:301	        return _score_properties(delivered_graph, gold.reference_properties, rep)
+cloudra/benchmark/accuracy.py:302	    scored_edges = list(gold.mechanism_graph.edges)
+cloudra/benchmark/accuracy.py:303	    if not scored_edges:
+cloudra/benchmark/accuracy.py:304	        rep.gaussian_score = 1.0
+cloudra/benchmark/accuracy.py:305	        rep.final_score = 1.0
+cloudra/benchmark/accuracy.py:306	        rep.notes.append("gold mechanism graph carries no edges; accuracy not scored")
+cloudra/benchmark/accuracy.py:307	        return rep
 cloudra/benchmark/accuracy.py:308	
-cloudra/benchmark/accuracy.py:309	    cfg = cfg or GedConfig()
-cloudra/benchmark/accuracy.py:310	    gold_nodes = {n.id: n for n in gold.mechanism_graph.nodes}
-cloudra/benchmark/accuracy.py:311	    # 全零权重无法归一：退回逐边等权（避免除零；正常题库不出现）
-cloudra/benchmark/accuracy.py:312	    equal_fallback = sum(e.weight for e in scored_edges) <= 0
-cloudra/benchmark/accuracy.py:313	    if equal_fallback:
-cloudra/benchmark/accuracy.py:314	        rep.notes.append(
-cloudra/benchmark/accuracy.py:315	            "all scored-edge weights are zero; falling back to equal weighting"
-cloudra/benchmark/accuracy.py:316	        )
-cloudra/benchmark/accuracy.py:317	    weights = {e.id: (1.0 if equal_fallback else e.weight) for e in scored_edges}
-cloudra/benchmark/accuracy.py:318	    weight_total = sum(weights.values())
-cloudra/benchmark/accuracy.py:319	
-cloudra/benchmark/accuracy.py:320	    failures: list[str] = []
-cloudra/benchmark/accuracy.py:321	    weighted_sum = 0.0
-cloudra/benchmark/accuracy.py:322	    graded_weight = 0.0        # 带参考值边的权重和（高斯/定义差异罚分只从这里出）
-cloudra/benchmark/accuracy.py:323	    graded_score_sum = 0.0     # Σ w·g（带参考值边）
-cloudra/benchmark/accuracy.py:324	    structural_penalty = 0.0   # Σ w·(1-s)（无参考边的结构记账：可算未给参考 s=1.0，标答不可达 s=0.0）
-cloudra/benchmark/accuracy.py:325	    for edge in scored_edges:
-cloudra/benchmark/accuracy.py:326	        if edge.barrier_kcal_mol is None:
-cloudra/benchmark/accuracy.py:327	            if gold.mechanism_graph.edge_effectively_accessible(edge):
-cloudra/benchmark/accuracy.py:328	                rep.edge_scores[edge.id] = 1.0
-cloudra/benchmark/accuracy.py:329	                weighted_sum += weights[edge.id] * 1.0
-cloudra/benchmark/accuracy.py:330	                rep.notes.append(
-cloudra/benchmark/accuracy.py:331	                    f"edge {edge.id}: accessible but the gold reference carries no "
-cloudra/benchmark/accuracy.py:332	                    "reference barrier; scored 1.0"
-cloudra/benchmark/accuracy.py:333	                )
-cloudra/benchmark/accuracy.py:334	            else:
-cloudra/benchmark/accuracy.py:335	                rep.edge_scores[edge.id] = 0.0
-cloudra/benchmark/accuracy.py:336	                structural_penalty += weights[edge.id]
+cloudra/benchmark/accuracy.py:309	    # --- 交付物双来源门禁：逐边核对（任一参考边缺失/不一致 -> fail-loud 标记） ---
+cloudra/benchmark/accuracy.py:310	    from cloudra.benchmark.graph_similarity import GedConfig
+cloudra/benchmark/accuracy.py:311	
+cloudra/benchmark/accuracy.py:312	    cfg = cfg or GedConfig()
+cloudra/benchmark/accuracy.py:313	    gold_nodes = {n.id: n for n in gold.mechanism_graph.nodes}
+cloudra/benchmark/accuracy.py:314	    # 全零权重无法归一：退回逐边等权（避免除零；正常题库不出现）
+cloudra/benchmark/accuracy.py:315	    equal_fallback = sum(e.weight for e in scored_edges) <= 0
+cloudra/benchmark/accuracy.py:316	    if equal_fallback:
+cloudra/benchmark/accuracy.py:317	        rep.notes.append(
+cloudra/benchmark/accuracy.py:318	            "all scored-edge weights are zero; falling back to equal weighting"
+cloudra/benchmark/accuracy.py:319	        )
+cloudra/benchmark/accuracy.py:320	    weights = {e.id: (1.0 if equal_fallback else e.weight) for e in scored_edges}
+cloudra/benchmark/accuracy.py:321	    weight_total = sum(weights.values())
+cloudra/benchmark/accuracy.py:322	    edge_signatures = [
+cloudra/benchmark/accuracy.py:323	        (e.from_node, e.to_node, frozenset(e.bond_changes.pairs()))
+cloudra/benchmark/accuracy.py:324	        for e in scored_edges
+cloudra/benchmark/accuracy.py:325	    ]
+cloudra/benchmark/accuracy.py:326	
+cloudra/benchmark/accuracy.py:327	    failures: list[str] = []
+cloudra/benchmark/accuracy.py:328	    weighted_sum = 0.0
+cloudra/benchmark/accuracy.py:329	    graded_weight = 0.0        # 带参考值边的权重和（高斯/定义差异罚分只从这里出）
+cloudra/benchmark/accuracy.py:330	    graded_score_sum = 0.0     # Σ w·g（带参考值边）
+cloudra/benchmark/accuracy.py:331	    structural_penalty = 0.0   # Σ w·(1-s)（无参考边的结构记账：可算未给参考 s=1.0，标答不可达 s=0.0）
+cloudra/benchmark/accuracy.py:332	    for edge, signature in zip(scored_edges, edge_signatures):
+cloudra/benchmark/accuracy.py:333	        if edge.barrier_kcal_mol is None:
+cloudra/benchmark/accuracy.py:334	            if gold.mechanism_graph.edge_effectively_accessible(edge):
+cloudra/benchmark/accuracy.py:335	                rep.edge_scores[edge.id] = 1.0
+cloudra/benchmark/accuracy.py:336	                weighted_sum += weights[edge.id] * 1.0
 cloudra/benchmark/accuracy.py:337	                rep.notes.append(
-cloudra/benchmark/accuracy.py:338	                    f"edge {edge.id}: effectively inaccessible in the gold "
-cloudra/benchmark/accuracy.py:339	                    "reference (the edge itself or its via transition state is "
-cloudra/benchmark/accuracy.py:340	                    "declared accessible=false); no accuracy score (0.0)"
-cloudra/benchmark/accuracy.py:341	                )
-cloudra/benchmark/accuracy.py:342	            continue
-cloudra/benchmark/accuracy.py:343	        step = _find_matching_step(
+cloudra/benchmark/accuracy.py:338	                    f"edge {edge.id}: accessible but the gold reference carries no "
+cloudra/benchmark/accuracy.py:339	                    "reference barrier; scored 1.0"
+cloudra/benchmark/accuracy.py:340	                )
+cloudra/benchmark/accuracy.py:341	            else:
+cloudra/benchmark/accuracy.py:342	                rep.edge_scores[edge.id] = 0.0
+cloudra/benchmark/accuracy.py:343	                structural_penalty += weights[edge.id]
 \end{lstlisting}
 \clearpage
 \begin{lstlisting}[firstnumber=344,numbers=left,numberstyle=\tiny\ttfamily,numbersep=5pt]
-cloudra/benchmark/accuracy.py:344	            edge, gold_nodes, evidence.steps, delivered_graph, cfg, match_threshold
-cloudra/benchmark/accuracy.py:345	        )
-cloudra/benchmark/accuracy.py:346	        if step is None:
-cloudra/benchmark/accuracy.py:347	            rep.edge_scores[edge.id] = 0.0
-cloudra/benchmark/accuracy.py:348	            failures.append(
-cloudra/benchmark/accuracy.py:349	                f"gold edge {edge.id} carries a reference barrier but no delivered "
-cloudra/benchmark/accuracy.py:350	                "step matches its endpoint species"
-cloudra/benchmark/accuracy.py:351	            )
-cloudra/benchmark/accuracy.py:352	            continue
-cloudra/benchmark/accuracy.py:353	        graded_weight += weights[edge.id]
-cloudra/benchmark/accuracy.py:354	        if step.edge_id != edge.id:
-cloudra/benchmark/accuracy.py:355	            rep.notes.append(
-cloudra/benchmark/accuracy.py:356	                f"gold edge {edge.id} matched delivered step {step.edge_id} "
-cloudra/benchmark/accuracy.py:357	                "by endpoint species"
-cloudra/benchmark/accuracy.py:358	            )
-cloudra/benchmark/accuracy.py:359	        if step.declared_kcal_mol is None:
-cloudra/benchmark/accuracy.py:360	            rep.edge_scores[edge.id] = 0.0
-cloudra/benchmark/accuracy.py:361	            failures.append(
-cloudra/benchmark/accuracy.py:362	                "delivered mechanism_graph.json declares no barrier_kcal_mol on "
-cloudra/benchmark/accuracy.py:363	                f"step edge {edge.id}"
-cloudra/benchmark/accuracy.py:364	            )
-cloudra/benchmark/accuracy.py:365	            continue
-cloudra/benchmark/accuracy.py:366	        declared = step.declared_kcal_mol
-cloudra/benchmark/accuracy.py:367	        # 该边全部合法组合（TS 日志 × 起点极小值日志；含策略选中的那组）。
-cloudra/benchmark/accuracy.py:368	        # 声明支撑得住哪一组、哪一组能对上参考，决定这条边怎么算分：
-cloudra/benchmark/accuracy.py:369	        # 支撑得住 → 正常数值路径；支撑不住但证据里有能对参考的 → 答案定义/
-cloudra/benchmark/accuracy.py:370	        # 构象指认差异（小扣分，不是科学错误）；两者皆无 → 无据声明 fail-loud。
-cloudra/benchmark/accuracy.py:371	        candidates = evidence.alternatives.get(step.edge_id) or [step]
-cloudra/benchmark/accuracy.py:372	        sigma_eff = _effective_sigma(rubric, edge.barrier_kcal_mol)
-cloudra/benchmark/accuracy.py:373	        supported = [
-cloudra/benchmark/accuracy.py:374	            c for c in candidates
-cloudra/benchmark/accuracy.py:375	            if abs(declared - c.barrier_kcal_mol) <= rubric.sigma_kcal_mol
-cloudra/benchmark/accuracy.py:376	        ]
-cloudra/benchmark/accuracy.py:377	        matches_ref = [
-cloudra/benchmark/accuracy.py:378	            c for c in candidates
-cloudra/benchmark/accuracy.py:379	            if abs(c.barrier_kcal_mol - edge.barrier_kcal_mol) <= sigma_eff
-cloudra/benchmark/accuracy.py:380	        ]
-cloudra/benchmark/accuracy.py:381	
-cloudra/benchmark/accuracy.py:382	        if supported:
-cloudra/benchmark/accuracy.py:383	            same_as_ref = any(
-cloudra/benchmark/accuracy.py:384	                (c.ts_path, c.base_path) in {(m.ts_path, m.base_path) for m in matches_ref}
-cloudra/benchmark/accuracy.py:385	                for c in supported
-cloudra/benchmark/accuracy.py:386	            )
-cloudra/benchmark/accuracy.py:387	            if matches_ref and not same_as_ref:
-cloudra/benchmark/accuracy.py:388	                rep.edge_scores[edge.id] = _DEFINITION_MISMATCH_EDGE_SCORE
-cloudra/benchmark/accuracy.py:389	                weighted_sum += weights[edge.id] * _DEFINITION_MISMATCH_EDGE_SCORE
-cloudra/benchmark/accuracy.py:390	                graded_score_sum += weights[edge.id] * _DEFINITION_MISMATCH_EDGE_SCORE
-cloudra/benchmark/accuracy.py:391	                ref = min(
-cloudra/benchmark/accuracy.py:392	                    matches_ref,
-cloudra/benchmark/accuracy.py:393	                    key=lambda c: (abs(c.barrier_kcal_mol - edge.barrier_kcal_mol),
-cloudra/benchmark/accuracy.py:394	                                   c.ts_path, c.base_path),
-cloudra/benchmark/accuracy.py:395	                )
+cloudra/benchmark/accuracy.py:344	                rep.notes.append(
+cloudra/benchmark/accuracy.py:345	                    f"edge {edge.id}: effectively inaccessible in the gold "
+cloudra/benchmark/accuracy.py:346	                    "reference (the edge itself or its via transition state is "
+cloudra/benchmark/accuracy.py:347	                    "declared accessible=false); no accuracy score (0.0)"
+cloudra/benchmark/accuracy.py:348	                )
+cloudra/benchmark/accuracy.py:349	            continue
+cloudra/benchmark/accuracy.py:350	        step = _find_matching_step(
+cloudra/benchmark/accuracy.py:351	            edge, gold_nodes, evidence.steps, delivered_graph, cfg, match_threshold,
+cloudra/benchmark/accuracy.py:352	            require_channel=edge.channel is not None and edge_signatures.count(signature) > 1,
+cloudra/benchmark/accuracy.py:353	        )
+cloudra/benchmark/accuracy.py:354	        if step is None:
+cloudra/benchmark/accuracy.py:355	            rep.edge_scores[edge.id] = 0.0
+cloudra/benchmark/accuracy.py:356	            failures.append(
+cloudra/benchmark/accuracy.py:357	                f"gold edge {edge.id} carries a reference barrier but no delivered "
+cloudra/benchmark/accuracy.py:358	                "step matches its endpoint species"
+cloudra/benchmark/accuracy.py:359	            )
+cloudra/benchmark/accuracy.py:360	            continue
+cloudra/benchmark/accuracy.py:361	        graded_weight += weights[edge.id]
+cloudra/benchmark/accuracy.py:362	        if step.edge_id != edge.id:
+cloudra/benchmark/accuracy.py:363	            rep.notes.append(
+cloudra/benchmark/accuracy.py:364	                f"gold edge {edge.id} matched delivered step {step.edge_id} "
+cloudra/benchmark/accuracy.py:365	                "by endpoint species"
+cloudra/benchmark/accuracy.py:366	            )
+cloudra/benchmark/accuracy.py:367	        if step.declared_kcal_mol is None:
+cloudra/benchmark/accuracy.py:368	            rep.edge_scores[edge.id] = 0.0
+cloudra/benchmark/accuracy.py:369	            failures.append(
+cloudra/benchmark/accuracy.py:370	                "delivered mechanism_graph.json declares no barrier_kcal_mol on "
+cloudra/benchmark/accuracy.py:371	                f"step edge {edge.id}"
+cloudra/benchmark/accuracy.py:372	            )
+cloudra/benchmark/accuracy.py:373	            continue
+cloudra/benchmark/accuracy.py:374	        declared = step.declared_kcal_mol
+cloudra/benchmark/accuracy.py:375	        # 该边全部合法组合（TS 日志 × 起点极小值日志；含策略选中的那组）。
+cloudra/benchmark/accuracy.py:376	        # 声明支撑得住哪一组、哪一组能对上参考，决定这条边怎么算分：
+cloudra/benchmark/accuracy.py:377	        # 支撑得住 → 正常数值路径；支撑不住但证据里有能对参考的 → 答案定义/
+cloudra/benchmark/accuracy.py:378	        # 构象指认差异（小扣分，不是科学错误）；两者皆无 → 无据声明 fail-loud。
+cloudra/benchmark/accuracy.py:379	        candidates = evidence.alternatives.get(step.edge_id) or [step]
+cloudra/benchmark/accuracy.py:380	        sigma_eff = _effective_sigma(rubric, edge.barrier_kcal_mol)
+cloudra/benchmark/accuracy.py:381	        supported = [
+cloudra/benchmark/accuracy.py:382	            c for c in candidates
+cloudra/benchmark/accuracy.py:383	            if abs(declared - c.barrier_kcal_mol) <= rubric.sigma_kcal_mol
+cloudra/benchmark/accuracy.py:384	        ]
+cloudra/benchmark/accuracy.py:385	        matches_ref = [
+cloudra/benchmark/accuracy.py:386	            c for c in candidates
+cloudra/benchmark/accuracy.py:387	            if abs(c.barrier_kcal_mol - edge.barrier_kcal_mol) <= sigma_eff
+cloudra/benchmark/accuracy.py:388	        ]
+cloudra/benchmark/accuracy.py:389	
+cloudra/benchmark/accuracy.py:390	        if supported:
+cloudra/benchmark/accuracy.py:391	            same_as_ref = any(
+cloudra/benchmark/accuracy.py:392	                (c.ts_path, c.base_path) in {(m.ts_path, m.base_path) for m in matches_ref}
+cloudra/benchmark/accuracy.py:393	                for c in supported
+cloudra/benchmark/accuracy.py:394	            )
+cloudra/benchmark/accuracy.py:395	            if matches_ref and not same_as_ref:
 \end{lstlisting}
 \clearpage
 \begin{lstlisting}[firstnumber=396,numbers=left,numberstyle=\tiny\ttfamily,numbersep=5pt]
-cloudra/benchmark/accuracy.py:396	                rep.notes.append(
-cloudra/benchmark/accuracy.py:397	                    f"edge {edge.id}: declared {declared:.3f} is supported by "
-cloudra/benchmark/accuracy.py:398	                    f"{supported[0].ts_path} / {supported[0].base_path}, but the "
-cloudra/benchmark/accuracy.py:399	                    f"delivered evidence also contains a combination consistent "
-cloudra/benchmark/accuracy.py:400	                    f"with the reference ({ref.barrier_kcal_mol:.3f} vs gold "
-cloudra/benchmark/accuracy.py:401	                    f"{edge.barrier_kcal_mol:.3f}, {ref.ts_path} / {ref.base_path}) "
-cloudra/benchmark/accuracy.py:402	                    "-> answer-definition mismatch, scored "
-cloudra/benchmark/accuracy.py:403	                    f"{_DEFINITION_MISMATCH_EDGE_SCORE}"
-cloudra/benchmark/accuracy.py:404	                )
-cloudra/benchmark/accuracy.py:405	                continue
-cloudra/benchmark/accuracy.py:406	            chosen = step if step in supported else min(
-cloudra/benchmark/accuracy.py:407	                supported,
-cloudra/benchmark/accuracy.py:408	                key=lambda c: (abs(declared - c.barrier_kcal_mol), c.ts_path, c.base_path),
-cloudra/benchmark/accuracy.py:409	            )
-cloudra/benchmark/accuracy.py:410	            g = gaussian_barrier_score(chosen.barrier_kcal_mol, edge.barrier_kcal_mol, sigma_eff)
-cloudra/benchmark/accuracy.py:411	            rep.edge_scores[edge.id] = g
-cloudra/benchmark/accuracy.py:412	            weighted_sum += weights[edge.id] * g
-cloudra/benchmark/accuracy.py:413	            graded_score_sum += weights[edge.id] * g
-cloudra/benchmark/accuracy.py:414	            rep.notes.append(
-cloudra/benchmark/accuracy.py:415	                f"edge {edge.id}: log-derived {chosen.barrier_kcal_mol:.3f} vs gold "
-cloudra/benchmark/accuracy.py:416	                f"{edge.barrier_kcal_mol:.3f} (sigma {sigma_eff:.1f}) -> {g:.4f} "
-cloudra/benchmark/accuracy.py:417	                f"(weight {weights[edge.id]})"
-cloudra/benchmark/accuracy.py:418	            )
-cloudra/benchmark/accuracy.py:419	            continue
-cloudra/benchmark/accuracy.py:420	
-cloudra/benchmark/accuracy.py:421	        if matches_ref:
-cloudra/benchmark/accuracy.py:422	            ref = min(
-cloudra/benchmark/accuracy.py:423	                matches_ref,
-cloudra/benchmark/accuracy.py:424	                key=lambda c: (abs(c.barrier_kcal_mol - edge.barrier_kcal_mol),
-cloudra/benchmark/accuracy.py:425	                               c.ts_path, c.base_path),
+cloudra/benchmark/accuracy.py:396	                rep.edge_scores[edge.id] = _DEFINITION_MISMATCH_EDGE_SCORE
+cloudra/benchmark/accuracy.py:397	                weighted_sum += weights[edge.id] * _DEFINITION_MISMATCH_EDGE_SCORE
+cloudra/benchmark/accuracy.py:398	                graded_score_sum += weights[edge.id] * _DEFINITION_MISMATCH_EDGE_SCORE
+cloudra/benchmark/accuracy.py:399	                ref = min(
+cloudra/benchmark/accuracy.py:400	                    matches_ref,
+cloudra/benchmark/accuracy.py:401	                    key=lambda c: (abs(c.barrier_kcal_mol - edge.barrier_kcal_mol),
+cloudra/benchmark/accuracy.py:402	                                   c.ts_path, c.base_path),
+cloudra/benchmark/accuracy.py:403	                )
+cloudra/benchmark/accuracy.py:404	                rep.notes.append(
+cloudra/benchmark/accuracy.py:405	                    f"edge {edge.id}: declared {declared:.3f} is supported by "
+cloudra/benchmark/accuracy.py:406	                    f"{supported[0].ts_path} / {supported[0].base_path}, but the "
+cloudra/benchmark/accuracy.py:407	                    f"delivered evidence also contains a combination consistent "
+cloudra/benchmark/accuracy.py:408	                    f"with the reference ({ref.barrier_kcal_mol:.3f} vs gold "
+cloudra/benchmark/accuracy.py:409	                    f"{edge.barrier_kcal_mol:.3f}, {ref.ts_path} / {ref.base_path}) "
+cloudra/benchmark/accuracy.py:410	                    "-> answer-definition mismatch, scored "
+cloudra/benchmark/accuracy.py:411	                    f"{_DEFINITION_MISMATCH_EDGE_SCORE}"
+cloudra/benchmark/accuracy.py:412	                )
+cloudra/benchmark/accuracy.py:413	                continue
+cloudra/benchmark/accuracy.py:414	            chosen = step if step in supported else min(
+cloudra/benchmark/accuracy.py:415	                supported,
+cloudra/benchmark/accuracy.py:416	                key=lambda c: (abs(declared - c.barrier_kcal_mol), c.ts_path, c.base_path),
+cloudra/benchmark/accuracy.py:417	            )
+cloudra/benchmark/accuracy.py:418	            g = gaussian_barrier_score(chosen.barrier_kcal_mol, edge.barrier_kcal_mol, sigma_eff)
+cloudra/benchmark/accuracy.py:419	            rep.edge_scores[edge.id] = g
+cloudra/benchmark/accuracy.py:420	            weighted_sum += weights[edge.id] * g
+cloudra/benchmark/accuracy.py:421	            graded_score_sum += weights[edge.id] * g
+cloudra/benchmark/accuracy.py:422	            rep.notes.append(
+cloudra/benchmark/accuracy.py:423	                f"edge {edge.id}: log-derived {chosen.barrier_kcal_mol:.3f} vs gold "
+cloudra/benchmark/accuracy.py:424	                f"{edge.barrier_kcal_mol:.3f} (sigma {sigma_eff:.1f}) -> {g:.4f} "
+cloudra/benchmark/accuracy.py:425	                f"(weight {weights[edge.id]})"
 cloudra/benchmark/accuracy.py:426	            )
-cloudra/benchmark/accuracy.py:427	            rep.edge_scores[edge.id] = _DEFINITION_MISMATCH_EDGE_SCORE
-cloudra/benchmark/accuracy.py:428	            weighted_sum += weights[edge.id] * _DEFINITION_MISMATCH_EDGE_SCORE
-cloudra/benchmark/accuracy.py:429	            graded_score_sum += weights[edge.id] * _DEFINITION_MISMATCH_EDGE_SCORE
-cloudra/benchmark/accuracy.py:430	            rep.notes.append(
-cloudra/benchmark/accuracy.py:431	                f"edge {edge.id}: declared {declared:.3f} is not supported by any "
-cloudra/benchmark/accuracy.py:432	                "delivered log combination, but the evidence contains one "
-cloudra/benchmark/accuracy.py:433	                f"consistent with the reference ({ref.barrier_kcal_mol:.3f} vs gold "
-cloudra/benchmark/accuracy.py:434	                f"{edge.barrier_kcal_mol:.3f}, {ref.ts_path} / {ref.base_path}) "
-cloudra/benchmark/accuracy.py:435	                "-> answer-definition mismatch, scored "
-cloudra/benchmark/accuracy.py:436	                f"{_DEFINITION_MISMATCH_EDGE_SCORE}"
-cloudra/benchmark/accuracy.py:437	            )
-cloudra/benchmark/accuracy.py:438	            continue
-cloudra/benchmark/accuracy.py:439	
-cloudra/benchmark/accuracy.py:440	        rep.edge_scores[edge.id] = 0.0
-cloudra/benchmark/accuracy.py:441	        failures.append(
-cloudra/benchmark/accuracy.py:442	            "declared vs log-derived barrier disagreement on edge "
-cloudra/benchmark/accuracy.py:443	            f"{edge.id} beyond sigma {rubric.sigma_kcal_mol}: declared "
-cloudra/benchmark/accuracy.py:444	            f"{declared:.3f} vs logs {step.barrier_kcal_mol:.3f}"
-cloudra/benchmark/accuracy.py:445	        )
-cloudra/benchmark/accuracy.py:446	
-cloudra/benchmark/accuracy.py:447	    if failures:
+cloudra/benchmark/accuracy.py:427	            continue
+cloudra/benchmark/accuracy.py:428	
+cloudra/benchmark/accuracy.py:429	        if matches_ref:
+cloudra/benchmark/accuracy.py:430	            ref = min(
+cloudra/benchmark/accuracy.py:431	                matches_ref,
+cloudra/benchmark/accuracy.py:432	                key=lambda c: (abs(c.barrier_kcal_mol - edge.barrier_kcal_mol),
+cloudra/benchmark/accuracy.py:433	                               c.ts_path, c.base_path),
+cloudra/benchmark/accuracy.py:434	            )
+cloudra/benchmark/accuracy.py:435	            rep.edge_scores[edge.id] = _DEFINITION_MISMATCH_EDGE_SCORE
+cloudra/benchmark/accuracy.py:436	            weighted_sum += weights[edge.id] * _DEFINITION_MISMATCH_EDGE_SCORE
+cloudra/benchmark/accuracy.py:437	            graded_score_sum += weights[edge.id] * _DEFINITION_MISMATCH_EDGE_SCORE
+cloudra/benchmark/accuracy.py:438	            rep.notes.append(
+cloudra/benchmark/accuracy.py:439	                f"edge {edge.id}: declared {declared:.3f} is not supported by any "
+cloudra/benchmark/accuracy.py:440	                "delivered log combination, but the evidence contains one "
+cloudra/benchmark/accuracy.py:441	                f"consistent with the reference ({ref.barrier_kcal_mol:.3f} vs gold "
+cloudra/benchmark/accuracy.py:442	                f"{edge.barrier_kcal_mol:.3f}, {ref.ts_path} / {ref.base_path}) "
+cloudra/benchmark/accuracy.py:443	                "-> answer-definition mismatch, scored "
+cloudra/benchmark/accuracy.py:444	                f"{_DEFINITION_MISMATCH_EDGE_SCORE}"
+cloudra/benchmark/accuracy.py:445	            )
+cloudra/benchmark/accuracy.py:446	            continue
+cloudra/benchmark/accuracy.py:447	
 \end{lstlisting}
 \clearpage
 \begin{lstlisting}[firstnumber=448,numbers=left,numberstyle=\tiny\ttfamily,numbersep=5pt]
-cloudra/benchmark/accuracy.py:448	        # fail-loud：任一参考边的声明/推算缺失或不一致 -> 置结构化标记、本层
-cloudra/benchmark/accuracy.py:449	        # accuracy 记 0（不给部分分，也不套 max_penalty_fraction 封顶），
-cloudra/benchmark/accuracy.py:450	        # composite 的短路由 runner 按 fail_loud 执行。
-cloudra/benchmark/accuracy.py:451	        rep.notes.extend(f"{note}; scored 0" for note in failures)
-cloudra/benchmark/accuracy.py:452	        rep.fail_loud = True
-cloudra/benchmark/accuracy.py:453	        rep.gaussian_score = 0.0
-cloudra/benchmark/accuracy.py:454	        rep.capped_penalty = 1.0
-cloudra/benchmark/accuracy.py:455	        rep.final_score = 0.0
-cloudra/benchmark/accuracy.py:456	        return rep
-cloudra/benchmark/accuracy.py:457	
-cloudra/benchmark/accuracy.py:458	    rep.gaussian_score = weighted_sum / weight_total
-cloudra/benchmark/accuracy.py:459	    # max_penalty_fraction 只封顶带参考值边的罚分（高斯偏离/定义差异——兜合法的
-cloudra/benchmark/accuracy.py:460	    # 方法学差异）；无参考边的结构记账（可算未给参考=1.0、标答不可达=0.0）是题面
-cloudra/benchmark/accuracy.py:461	    # 口径的直接后果，按面值计、不参与封顶——否则 impossible 题的不可达边会被
-cloudra/benchmark/accuracy.py:462	    # 封顶救回（0.7），设计上限（I 题满分 = 图 + 自洽）失守。
-cloudra/benchmark/accuracy.py:463	    raw_penalty = 1.0 - rep.gaussian_score
-cloudra/benchmark/accuracy.py:464	    graded_penalty = (graded_weight - graded_score_sum) / weight_total
-cloudra/benchmark/accuracy.py:465	    capped_graded = min(graded_penalty, rubric.max_penalty_fraction)
-cloudra/benchmark/accuracy.py:466	    rep.capped_penalty = capped_graded + structural_penalty / weight_total
-cloudra/benchmark/accuracy.py:467	    rep.final_score = 1.0 - rep.capped_penalty
-cloudra/benchmark/accuracy.py:468	    if graded_penalty > rubric.max_penalty_fraction:
-cloudra/benchmark/accuracy.py:469	        rep.notes.append(
-cloudra/benchmark/accuracy.py:470	            f"raw penalty {raw_penalty:.3f} capped at {rubric.max_penalty_fraction}"
-cloudra/benchmark/accuracy.py:471	        )
-cloudra/benchmark/accuracy.py:472	    return rep
+cloudra/benchmark/accuracy.py:448	        rep.edge_scores[edge.id] = 0.0
+cloudra/benchmark/accuracy.py:449	        failures.append(
+cloudra/benchmark/accuracy.py:450	            "declared vs log-derived barrier disagreement on edge "
+cloudra/benchmark/accuracy.py:451	            f"{edge.id} beyond sigma {rubric.sigma_kcal_mol}: declared "
+cloudra/benchmark/accuracy.py:452	            f"{declared:.3f} vs logs {step.barrier_kcal_mol:.3f}"
+cloudra/benchmark/accuracy.py:453	        )
+cloudra/benchmark/accuracy.py:454	
+cloudra/benchmark/accuracy.py:455	    if failures:
+cloudra/benchmark/accuracy.py:456	        # fail-loud：任一参考边的声明/推算缺失或不一致 -> 置结构化标记、本层
+cloudra/benchmark/accuracy.py:457	        # accuracy 记 0（不给部分分，也不套 max_penalty_fraction 封顶），
+cloudra/benchmark/accuracy.py:458	        # composite 的短路由 runner 按 fail_loud 执行。
+cloudra/benchmark/accuracy.py:459	        rep.notes.extend(f"{note}; scored 0" for note in failures)
+cloudra/benchmark/accuracy.py:460	        rep.fail_loud = True
+cloudra/benchmark/accuracy.py:461	        rep.gaussian_score = 0.0
+cloudra/benchmark/accuracy.py:462	        rep.capped_penalty = 1.0
+cloudra/benchmark/accuracy.py:463	        rep.final_score = 0.0
+cloudra/benchmark/accuracy.py:464	        return rep
+cloudra/benchmark/accuracy.py:465	
+cloudra/benchmark/accuracy.py:466	    rep.gaussian_score = weighted_sum / weight_total
+cloudra/benchmark/accuracy.py:467	    # max_penalty_fraction 只封顶带参考值边的罚分（高斯偏离/定义差异——兜合法的
+cloudra/benchmark/accuracy.py:468	    # 方法学差异）；无参考边的结构记账（可算未给参考=1.0、标答不可达=0.0）是题面
+cloudra/benchmark/accuracy.py:469	    # 口径的直接后果，按面值计、不参与封顶——否则 impossible 题的不可达边会被
+cloudra/benchmark/accuracy.py:470	    # 封顶救回（0.7），设计上限（I 题满分 = 图 + 自洽）失守。
+cloudra/benchmark/accuracy.py:471	    raw_penalty = 1.0 - rep.gaussian_score
+cloudra/benchmark/accuracy.py:472	    graded_penalty = (graded_weight - graded_score_sum) / weight_total
+cloudra/benchmark/accuracy.py:473	    capped_graded = min(graded_penalty, rubric.max_penalty_fraction)
+cloudra/benchmark/accuracy.py:474	    rep.capped_penalty = capped_graded + structural_penalty / weight_total
+cloudra/benchmark/accuracy.py:475	    rep.final_score = 1.0 - rep.capped_penalty
+cloudra/benchmark/accuracy.py:476	    if graded_penalty > rubric.max_penalty_fraction:
+cloudra/benchmark/accuracy.py:477	        rep.notes.append(
+cloudra/benchmark/accuracy.py:478	            f"raw penalty {raw_penalty:.3f} capped at {rubric.max_penalty_fraction}"
+cloudra/benchmark/accuracy.py:479	        )
+cloudra/benchmark/accuracy.py:480	    return rep
 cloudra/benchmark/api_pool.py:1	"""API endpoint pool for benchmark runs.
 cloudra/benchmark/api_pool.py:2	
 cloudra/benchmark/api_pool.py:3	Anti-429 for parallel benchmark execution: every LLM call picks a random
@@ -1396,6 +1404,9 @@ cloudra/benchmark/api_pool.py:16
 cloudra/benchmark/api_pool.py:17	import contextvars
 cloudra/benchmark/api_pool.py:18	import json
 cloudra/benchmark/api_pool.py:19	import logging
+\end{lstlisting}
+\clearpage
+\begin{lstlisting}[firstnumber=20,numbers=left,numberstyle=\tiny\ttfamily,numbersep=5pt]
 cloudra/benchmark/api_pool.py:20	import random
 cloudra/benchmark/api_pool.py:21	from dataclasses import dataclass
 cloudra/benchmark/api_pool.py:22	from pathlib import Path
@@ -1404,9 +1415,6 @@ cloudra/benchmark/api_pool.py:24
 cloudra/benchmark/api_pool.py:25	from cloudra.runtime_v2.adapters import LegacyLLMProvider
 cloudra/benchmark/api_pool.py:26	
 cloudra/benchmark/api_pool.py:27	logger = logging.getLogger(__name__)
-\end{lstlisting}
-\clearpage
-\begin{lstlisting}[firstnumber=28,numbers=left,numberstyle=\tiny\ttfamily,numbersep=5pt]
 cloudra/benchmark/api_pool.py:28	
 cloudra/benchmark/api_pool.py:29	
 cloudra/benchmark/api_pool.py:30	@dataclass(frozen=True)
@@ -1451,6 +1459,9 @@ cloudra/benchmark/api_pool.py:68	def _is_rate_limit(exc: BaseException) -> bool:
 cloudra/benchmark/api_pool.py:69	    try:
 cloudra/benchmark/api_pool.py:70	        import openai
 cloudra/benchmark/api_pool.py:71	    except Exception:  # pragma: no cover - openai 是核心依赖
+\end{lstlisting}
+\clearpage
+\begin{lstlisting}[firstnumber=72,numbers=left,numberstyle=\tiny\ttfamily,numbersep=5pt]
 cloudra/benchmark/api_pool.py:72	        return False
 cloudra/benchmark/api_pool.py:73	    return isinstance(exc, openai.RateLimitError)
 cloudra/benchmark/api_pool.py:74	
@@ -1459,9 +1470,6 @@ cloudra/benchmark/api_pool.py:76	class PooledLLMProvider(LegacyLLMProvider):
 cloudra/benchmark/api_pool.py:77	    """LegacyLLMProvider whose transport endpoint is pinned per call from a pool."""
 cloudra/benchmark/api_pool.py:78	
 cloudra/benchmark/api_pool.py:79	    def __init__(self, endpoints: list[Endpoint], *, rng: Any = None) -> None:
-\end{lstlisting}
-\clearpage
-\begin{lstlisting}[firstnumber=80,numbers=left,numberstyle=\tiny\ttfamily,numbersep=5pt]
 cloudra/benchmark/api_pool.py:80	        super().__init__()
 cloudra/benchmark/api_pool.py:81	        self._endpoints = list(endpoints)
 cloudra/benchmark/api_pool.py:82	        # rng 可注入（测试用固定顺序）；生产默认 Random()
@@ -1506,6 +1514,9 @@ cloudra/benchmark/backend.py:5	query against the per-task sandbox as the project
 cloudra/benchmark/backend.py:6	task to genuinely finish (see ``watch.py`` for the wait_background /
 cloudra/benchmark/backend.py:7	wait_review state machine, GH #30). The method whitelist is enforced by
 cloudra/benchmark/backend.py:8	appending `MethodPolicyStage` to the pipeline; compute jobs submitted via
+\end{lstlisting}
+\clearpage
+\begin{lstlisting}[firstnumber=9,numbers=left,numberstyle=\tiny\ttfamily,numbersep=5pt]
 cloudra/benchmark/backend.py:9	`submit_compute_job` are claimed and executed by a per-task in-process
 cloudra/benchmark/backend.py:10	`SchedulerDaemon` (production runs it as a separate `cloudra scheduler`
 cloudra/benchmark/backend.py:11	process instead).
@@ -1514,9 +1525,6 @@ cloudra/benchmark/backend.py:13	Process-wide isolation is the caller's job: the 
 cloudra/benchmark/backend.py:14	global config's `data_dir` at the benchmark data dir before any tool runs, so
 cloudra/benchmark/backend.py:15	session stores, compute jobs and MEMORY.md never touch the live conversation
 cloudra/benchmark/backend.py:16	data dir. LLM credentials still come from the normal global config slots
-\end{lstlisting}
-\clearpage
-\begin{lstlisting}[firstnumber=17,numbers=left,numberstyle=\tiny\ttfamily,numbersep=5pt]
 cloudra/benchmark/backend.py:17	(coordinator/follower), unchanged.
 cloudra/benchmark/backend.py:18	"""
 cloudra/benchmark/backend.py:19	
@@ -1561,6 +1569,9 @@ cloudra/benchmark/backend.py:57	        self.tools = tools
 cloudra/benchmark/backend.py:58	        self.start_scheduler = start_scheduler
 cloudra/benchmark/backend.py:59	        # 事件级持久化（可选但 CLI 默认开）：全战役共享一个 runtime-v2.db，
 cloudra/benchmark/backend.py:60	        # 只 append 不 restore——benchmark core 是一次性的，恢复语义无意义；
+\end{lstlisting}
+\clearpage
+\begin{lstlisting}[firstnumber=61,numbers=left,numberstyle=\tiny\ttfamily,numbersep=5pt]
 cloudra/benchmark/backend.py:61	        # 崩溃后事件历史与 token 遥测（cloudra stats tokens）仍可查。
 cloudra/benchmark/backend.py:62	        self.store_path = Path(store_path) if store_path is not None else None
 cloudra/benchmark/backend.py:63	        # 每次任务的 RuntimeCore 按 task_id 留存，供测试与调试内省事件日志；
@@ -1569,9 +1580,6 @@ cloudra/benchmark/backend.py:65	        self._cores: dict[str, Any] = {}
 cloudra/benchmark/backend.py:66	        self._cores_lock = threading.Lock()
 cloudra/benchmark/backend.py:67	
 cloudra/benchmark/backend.py:68	    @property
-\end{lstlisting}
-\clearpage
-\begin{lstlisting}[firstnumber=69,numbers=left,numberstyle=\tiny\ttfamily,numbersep=5pt]
 cloudra/benchmark/backend.py:69	    def last_core(self) -> Any:
 cloudra/benchmark/backend.py:70	        """最近一次任务的 core（串行调试便利）；并行时用 core_by_task()。"""
 cloudra/benchmark/backend.py:71	        with self._cores_lock:
@@ -1616,6 +1624,9 @@ cloudra/benchmark/backend.py:109	            async def persist_event(envelope) -
 cloudra/benchmark/backend.py:110	                # llm.chunk deltas 是瞬时 hub 事件：无回放价值，落库会灌爆事件表。
 cloudra/benchmark/backend.py:111	                if envelope.type == "llm.chunk":
 cloudra/benchmark/backend.py:112	                    return
+\end{lstlisting}
+\clearpage
+\begin{lstlisting}[firstnumber=113,numbers=left,numberstyle=\tiny\ttfamily,numbersep=5pt]
 cloudra/benchmark/backend.py:113	                await asyncio.to_thread(core.store.append_event, envelope)
 cloudra/benchmark/backend.py:114	
 cloudra/benchmark/backend.py:115	            core.event_hub.subscribe(persist_event)
@@ -1624,9 +1635,6 @@ cloudra/benchmark/backend.py:117	        stage = MethodPolicyStage(task.method_p
 cloudra/benchmark/backend.py:118	        stages = [*default_stages(core), stage]
 cloudra/benchmark/backend.py:119	        executor = self.tools or LegacyToolExecutor(core)
 cloudra/benchmark/backend.py:120	        from cloudra.runtime_v2.invocation import InvocationService
-\end{lstlisting}
-\clearpage
-\begin{lstlisting}[firstnumber=121,numbers=left,numberstyle=\tiny\ttfamily,numbersep=5pt]
 cloudra/benchmark/backend.py:121	
 cloudra/benchmark/backend.py:122	        invocations = InvocationService(
 cloudra/benchmark/backend.py:123	            event_writer=core.event_writer, stages=stages, tools=executor, agents=core.agents
@@ -1671,14 +1679,6 @@ cloudra/benchmark/backend.py:161	                await bus.execute(
 cloudra/benchmark/backend.py:162	                    Command(
 cloudra/benchmark/backend.py:163	                        type="agent.spawn",
 cloudra/benchmark/backend.py:164	                        target={"project_id": project.id},
-cloudra/benchmark/backend.py:165	                        payload={
-cloudra/benchmark/backend.py:166	                            "role_id": task.prompt.role,
-cloudra/benchmark/backend.py:167	                            "query": task.prompt.query,
-cloudra/benchmark/backend.py:168	                            "settings": {
-cloudra/benchmark/backend.py:169	                                "orchestration_mode": task.prompt.orchestration_mode.value,
-cloudra/benchmark/backend.py:170	                                # 无人值守：破坏性工具审批走 yolo 自动通道
-cloudra/benchmark/backend.py:171	                                "yolo": True,
-cloudra/benchmark/backend.py:172	                                # 无人值守（GH #31）：隐藏并 fail-closed 拦截
 \end{lstlisting}
 \clearpage
 \end{document}

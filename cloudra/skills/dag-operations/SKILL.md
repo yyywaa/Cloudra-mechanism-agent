@@ -14,9 +14,9 @@ There is exactly one persistent graph — the delivery (mechanism) graph. A guid
 - `dag_accept_mechanism`: Supervisor only (`dag_guided`): accept records the proposal as the current working hypothesis; computation is available before and after review. Reject returns it with a mandatory reason. In `dag_record` the harness auto-accepts on proposal.
 - `dag_add_species`: Add a new complex species (`name`, `smiles`). Species name must be unique within the graph.
 - `dag_add_step`: Add a new elementary step (`name`, `from`, `to`). Step name must be unique; `from` and `to` refer to existing species names.
-- `dag_remove_edge`: Delete an elementary step (`step`, mandatory `rationale`). Deletions are permanently recorded in the change log.
+- `dag_remove_edge`: Delete an elementary step (`name` or id, mandatory `reason`). Deletions are permanently recorded in the change log.
 - `dag_remove_node`: Delete a species node (`name` or id, mandatory `reason`). A node that still has incoming/outgoing steps is refused with the linked step names — remove those steps first, then delete the node (no implicit cascade).
-- `dag_update_delivery_element`: Update metadata or disposition (`status`, `reason`, `annotations`, `required`). Does not rename elements or change SMILES.
+- `dag_update_delivery_element`: Update metadata or disposition (`name`, `status`, `reason`). Does not rename elements or change SMILES.
 - `dag_submit_step_evidence`: Explicitly submit finished QM logs for a step (`step_name`, `ts_file`, optional IRC files, `reaction_coordinate_description`). The harness snapshots the files into `.cloudra/evidence/`, checks TS frequencies when available, attaches every submitted file to the step, and queues a guided review.
 - `dag_submit_species_evidence`: Explicitly submit finished QM logs for a species (`species_name`, `opt_file`, optional `freq_file`, `description`). The harness snapshots both files, checks minimum frequencies when available, and queues a guided review.
 - `dag_review_step` / `dag_review_species`: Supervisor only (`dag_guided`): adjudicate the active item with `step_name` or `species_name`, `verdict` (`supported` or `rejected`), and `rationale`.
@@ -38,7 +38,7 @@ Advance through these activities as evidence becomes available:
 1. **User submits a task** → Coordinator is woken.
 2. **Initial research**: read skills, search literature, and run exploratory calculations as needed.
 3. **Propose candidates and scope**: `dag_propose_mechanism` with `species`, `steps`, `rationale`, and `delivery_targets` when declaring the work to deliver. Candidate graph changes take effect immediately.
-4. **Supervisor review**: Supervisor is woken (`mechanism_proposed`) and calls `dag_accept_mechanism`. Accept records the draft review state; computation and branching do not wait for that decision. Reject returns the draft with a reason for revision.
+4. **Supervisor review**: Supervisor is woken by the runtime and calls `dag_accept_mechanism`. Accept records the draft review state; computation and branching do not wait for that decision. Reject returns the draft with a reason for revision.
 5. **Compute & Advance**: sub-agents run calculations and report outputs.
 6. **Explicit evidence submission**: submit finished outputs with `dag_submit_step_evidence` and `dag_submit_species_evidence`. Only submitted logs enter the Supervisor's active review queue.
 7. **Supervisor adjudication**: Supervisor reviews the active item via `dag_review_step` / `dag_review_species` with `verdict` and `reason`. Verdict notifications arrive in the submitter's mailbox.
@@ -80,9 +80,9 @@ Step stage contracts may include `ts_guess`, but it is an advisory stage: never 
 
 - `dag_add_species`: Add a new species (`name`, `smiles`).
 - `dag_add_step`: Add a new elementary step (`name`, `from`, `to`).
-- `dag_remove_edge`: Delete a step (`step`, `rationale`). Mandatory scientific rationale explaining the removal.
+- `dag_remove_edge`: Delete a step (`name` or id, `reason`). Mandatory scientific rationale explaining the removal.
 - `dag_remove_node`: Delete a species node (`name` or id, `reason`). If the node still has steps attached, the call is refused with those step names — delete the steps first, then the node.
-- `dag_update_delivery_element`: Update metadata (`status`, `reason`, `annotations`, `required`).
+- `dag_update_delivery_element`: Update metadata (`name`, `status`, `reason`).
 
 ## File Evidence Submission
 

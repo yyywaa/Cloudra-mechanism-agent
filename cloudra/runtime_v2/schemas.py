@@ -161,6 +161,12 @@ class RoleProfile(BaseModel):
     #: DAG 存储词表 id（a-0..a-8 / a-supervisor）；唯一映射表在
     #: ``cloudra.base.role_identity``，这里只做投影，不手抄。空串=无 legacy 身份。
     legacy_agent_id: str = ""
+    #: 派发名册的一行说明（评审 5.9）：launcher/swarm 的「Available sub-agents」
+    #: 都从这里生成，不要再手写第二份。
+    roster: str = ""
+    #: 纯输出型角色（不写 HANDOFF.md、不管多阶段任务状态）：提示词装配据此给
+    #: 轻量 handoff 指导（评审 5.9：该分类从 RoleProfile 推导，不在提示词侧手抄）。
+    output_only: bool = False
     permissions: PermissionSet = Field(default_factory=PermissionSet)
     can_spawn: bool = False
     spawn_roles: Optional[list[str]] = None

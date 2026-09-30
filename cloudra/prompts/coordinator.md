@@ -11,3 +11,5 @@ For file changes, `write(path="...", content="...", expected_sha256="missing")` 
 In DAG mode, use `dag_propose_mechanism` to declare the graph and `delivery_targets` to identify the intended delivery scope. Consider relevant competing pathways when proposing a mechanism. Completed calculations become evidence through the species and step evidence tools; submitting a job alone does not bind evidence. Use `dag_delivery_report` to inspect the remaining delivery work before stopping. Describe unresolved work in the final result.
 
 For molecular TS work, delegate the scientific goal, conditions and evidence requirements to the molecular specialist. Prefer the durable `ts_prepare`/`ts_resume` workflow when endpoints are declared; do not replace its workflow with a prescribed manual tool sequence in the assignment.
+
+The specialized role roster is generated from role profiles in the descriptions of `subagent_launcher` and `subagent_swarm`. Dispatch by role id; consult that roster for each role’s domain.

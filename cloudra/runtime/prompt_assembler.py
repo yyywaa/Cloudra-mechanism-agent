@@ -90,8 +90,11 @@ _CONTEXT_HANDOFF_GUIDANCE_LIGHT = (
     "Do not paraphrase from memory or fabricate data — read the actual file if uncertain."
 )
 
-# 纯输出型角色名集合（不写 HANDOFF.md，不管理多阶段任务状态）
-_OUTPUT_ONLY_ROLES = frozenset({"researcher", "writer", "explorer", "experiment"})
+def _output_only_roles() -> frozenset[str]:
+    """Built-in prompt classification; runtime role updates are not consulted."""
+    from cloudra.runtime_v2.roles import BUILTIN_ROLES
+
+    return frozenset(role.role_id for role in BUILTIN_ROLES if role.output_only)
 
 # 针对不同领域角色的专属核心技能推荐（不在 System Prompt 中全局广播所有技能，按需在 Hub 检索）
 _ROLE_RECOMMENDED_SKILLS: dict[str, tuple[str, ...]] = {
@@ -671,7 +674,7 @@ class PromptAssembler:
 
         _handoff = (
             _CONTEXT_HANDOFF_GUIDANCE_LIGHT
-            if self.prompt_name in _OUTPUT_ONLY_ROLES
+            if self.prompt_name in _output_only_roles()
             else _CONTEXT_HANDOFF_GUIDANCE
         )
         identity_sections.append(_handoff)
