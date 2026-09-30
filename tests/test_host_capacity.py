@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import pytest
 
+# 这些测试依赖 POSIX flock；在导入依赖前跳过，避免非 POSIX 平台收集失败。
+pytest.importorskip("fcntl", reason="cloudra.infra.flocks 依赖 POSIX fcntl")
+
 from cloudra import scheduler
 from cloudra.scheduler import daemon
 from cloudra.services import host_capacity as hc

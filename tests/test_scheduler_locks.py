@@ -10,6 +10,9 @@ import time
 
 import pytest
 
+# 这些测试依赖 POSIX flock；在导入依赖前跳过，避免非 POSIX 平台收集失败。
+pytest.importorskip("fcntl", reason="cloudra.infra.flocks 依赖 POSIX fcntl")
+
 from cloudra.infra.flocks import is_lock_held, try_acquire_lock
 from cloudra.persistence.database import ComputeDB
 

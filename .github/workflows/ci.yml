@@ -37,7 +37,7 @@ jobs:
 
       - name: Run Windows-sensitive smoke tests
         run: |
-          pytest tests/test_config_mutate.py -q
+          pytest tests/test_config_mutate.py tests/test_compute_lease_reap.py tests/test_host_capacity.py tests/test_scheduler_locks.py -q
           pytest tests/test_runtime_v2_js_runtime.py -q -k host_env
           pytest tests/test_web_launcher.py -q -k platform_separator
 
