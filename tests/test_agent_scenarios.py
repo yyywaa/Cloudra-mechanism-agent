@@ -901,9 +901,14 @@ async def test_unattended_never_enters_waiting_input(tmp_path):
 
 @pytest.mark.asyncio
 async def test_restart_repeats_no_side_effect_and_keeps_unconsumed_message(tmp_path):
-    """重启：不重复工具副作用、不重复 spawn、不丢已持久化但未消费的消息。
+    """重启：不重复工具副作用、不重复 spawn、不丢消息。
 
     杠杆：恢复语义（restore 只重建投影、不重放副作用）+ dispatcher 的落库先于可见。
+
+    注意 ``wait_terminal`` 不等于「不会再有 run」：runner 在 finish 之后还有一段
+    收尾复查（``_inbox_has_pending`` → ``wake``），可能在本用例观察到终态之后才把
+    pending 唤醒开新一轮；那一轮的 turn-start 会 drain 整个 inbox。因此断言口径是
+    「不丢」（在信箱 **或** 已进上下文），不是「必须仍未被消费」。
     """
     provider = ScriptedProvider(
         by_role={
@@ -937,16 +942,18 @@ async def test_restart_repeats_no_side_effect_and_keeps_unconsumed_message(tmp_p
             encoding="utf-8"
         )
 
-        # 先等父 Agent 终态，排除消息被下一轮正常消费的竞态；再造一条
-        # 「已落库但未消费」的消息（重启后必须仍在信箱里）。
+        # 先等父 Agent 终态；终态≠不会再有 run（见 docstring 的收尾复查竞态）。
+        # 再造一条「已落库但不唤醒」的消息——它只保证不主动开 run。
         await harness.wait_terminal(parent)
-        await harness.core.dispatcher.commit_and_deliver(
+        notice = await harness.core.dispatcher.commit_and_deliver(
             to_session_id=parent.id,
             project_id=harness.project.id,
             content="unconsumed notice",
             sender="system",
             wake=WakePolicy.NEVER,
         )
+        notice_id = str((notice.data or {}).get("message_id") or "")
+        assert notice_id
     finally:
         await harness.aclose()
 
@@ -964,12 +971,28 @@ async def test_restart_repeats_no_side_effect_and_keeps_unconsumed_message(tmp_p
         assert payload_after == payload_before
         # 不重复 spawn：child 列表逐字相同，且没有新的派发尝试。
         assert [child.id for child in restored.children_of(parent2)] == children_before
-        # 未消费消息仍在信箱里（重启不丢信）。
+        # 落库先于可见：注入事件必须在恢复后的日志里（durability 杠杆）。
+        persisted = [
+            envelope
+            for envelope in restored.core.event_log
+            if envelope.type == "agent.message_injected"
+            and (envelope.data or {}).get("message_id") == notice_id
+        ]
+        assert persisted, "注入事件未持久化"
+        # 「不丢信」：消息或在信箱，或已进上下文投影（见 docstring 的竞态说明）。
         inbox = restored.core.mailbox.inbox(parent2.id)
         pending = []
         while inbox is not None and not inbox.empty():
             pending.append(inbox.get_nowait()["content"])
-        assert "unconsumed notice" in pending
+        ctx = restored.core.session_contexts.get(parent2.id)
+        ctx_ids = (
+            {str(message.get("message_id")) for message in ctx.messages}
+            if ctx is not None
+            else set()
+        )
+        assert "unconsumed notice" in pending or notice_id in ctx_ids, (
+            f"消息在重启后丢失：pending={pending} ctx_ids={sorted(ctx_ids)}"
+        )
     finally:
         await restored.aclose()
 # ------------------------------------------------------- 5. context overflow 压缩
@@ -1031,3 +1054,75 @@ async def test_context_overflow_compacts_at_most_once_and_continues(tmp_path, mo
         assert agent.id in contexts
     finally:
         await harness.aclose()
+
+
+@pytest.mark.asyncio
+async def test_wake_run_drains_injected_message_into_context_without_loss(tmp_path):
+    """终态后 wake 开的新 run 会把 inbox（含 wake=NEVER 的消息）drain 进上下文。
+
+    这就是收尾复查（agent_runner：finish 后 ``_inbox_has_pending`` → ``wake``）走的
+    那条机制：任何新 run 的 turn-start 无条件 drain inbox。消息被消费（consumed）但
+    **不丢**——重启后不再回信箱，内容仍在会话上下文投影里。
+
+    用显式 wake 触发同一机制（时序可控），把语义钉死：
+    drain 后消息在上下文中（按 message_id 判定）；重启后不在信箱、上下文里仍在。
+    """
+
+    provider = ScriptedProvider(
+        by_role={
+            "coordinator": [
+                Step(text="first run done", stop=True),
+                Step(text="drained", stop=True),
+            ]
+        }
+    )
+    harness = await ScenarioHarness.start(tmp_path, provider=provider)
+    try:
+        parent = await harness.spawn("coordinator", protocol="traditional")
+        await harness.wait_terminal(parent)
+        # 终态事件早于 runner 收尾；等当前 task 退出后再投递，排除自动复查唤醒。
+        await harness.wait_for(
+            lambda: harness.runner.task_for(parent.id) is None,
+            "first runner task finishes before injecting the notice",
+        )
+        notice = await harness.core.dispatcher.commit_and_deliver(
+            to_session_id=parent.id,
+            project_id=harness.project.id,
+            content="pending notice",
+            sender="system",
+            wake=WakePolicy.NEVER,
+        )
+        notice_id = str((notice.data or {}).get("message_id") or "")
+        assert notice_id
+        # wake=NEVER 不唤醒：消息此刻只是驻留信箱。
+        inbox = harness.core.mailbox.inbox(parent.id)
+        assert inbox is not None and not inbox.empty()
+        # 显式 wake（收尾复查同款：SUCCEEDED → 开新 run → turn-start drain）。
+        harness.core.agent_host.wake(parent, runner=harness.core.runner)
+        await harness.wait_for(
+            lambda: harness.core.mailbox.inbox(parent.id) is None
+            or harness.core.mailbox.inbox(parent.id).empty(),
+            "wake-run drains the inbox",
+        )
+        await harness.wait_terminal(parent)
+        ctx = harness.core.session_contexts.get(parent.id)
+        assert ctx is not None and any(
+            str(message.get("message_id")) == notice_id for message in ctx.messages
+        ), "drain 后消息必须进上下文投影"
+    finally:
+        await harness.aclose()
+
+    restored = await ScenarioHarness.restore(tmp_path, provider=provider)
+    try:
+        parent2 = restored.core.agents[parent.id]
+        inbox2 = restored.core.mailbox.inbox(parent2.id)
+        pending = []
+        while inbox2 is not None and not inbox2.empty():
+            pending.append(inbox2.get_nowait()["content"])
+        assert "pending notice" not in pending, "已消费的消息不应在重启后回信箱"
+        ctx2 = restored.core.session_contexts.get(parent2.id)
+        assert ctx2 is not None and any(
+            str(message.get("message_id")) == notice_id for message in ctx2.messages
+        ), "重启后上下文里的消息不能丢"
+    finally:
+        await restored.aclose()
