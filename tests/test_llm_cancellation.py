@@ -27,6 +27,7 @@ import asyncio
 import json
 import sys
 import threading
+import time
 from collections import Counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -34,7 +35,10 @@ import pytest
 
 from cloudra.infra.llm_client import LLMClient
 
-_WRITE_FAILURES = (BrokenPipeError, ConnectionResetError)
+# Windows 上对端中止抛 ConnectionAbortedError（WinError 10053「你的主机中的软件中止了一个
+# 已建立的连接」/ 管道 232），POSIX 侧才是 BrokenPipe/ConnectionReset；分类不全时取消用例
+# 会假红：socket 确实被中止了，但服务端写失败没被记录（本机探针实证）。
+_WRITE_FAILURES = (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)
 
 
 def _sse_block(payload: dict) -> bytes:
@@ -179,8 +183,25 @@ class _Handler(BaseHTTPRequestHandler):
             self.wfile.write(_sse_block(event))
         self.wfile.write(b"data: [DONE]\n\n")
         self.wfile.flush()
+        if server.sse_gate is not None:
+            self._probe_until_deadline()
         with server.lock:
             server.tail_done.append(self.path)
+
+    def _probe_until_deadline(self) -> None:
+        """取消场景的收尾探针写：让「写必须失败」的判据与 RST 赛跑时不被尾写抢先。
+
+        实测（Windows，全量负载）：尾写的单次 write 可能先把数据塞进本地缓冲并
+        成功返回，RST 稍后才落地——于是 write_failures 为空、用例假红（隔离跑则
+        绿）。这里在尾写后做有界重试：取消确实中止了连接 → 某次探针写以
+        BrokenPipe/ConnectionReset/ConnectionAborted 失败（由 do_POST 的 except
+        记录）。探针只验证取消后连接最终关闭，不独立区分 RST 与 FIN。
+        """
+        deadline = time.monotonic() + 1.5
+        while time.monotonic() < deadline:
+            time.sleep(0.05)
+            self.wfile.write(b": probe\n\n")
+            self.wfile.flush()
 
 
 class _FakeLLMServer:

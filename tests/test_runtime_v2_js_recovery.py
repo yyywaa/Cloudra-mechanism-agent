@@ -156,3 +156,41 @@ def test_planner_ignores_complete_history():
         "duration_ms": 1, "error": None, "calls": [],
     })
     assert plan_interrupted_invocations(list(core.event_log)) == []
+
+@pytest.mark.asyncio
+async def test_send_classifies_windows_pipe_abort_as_host_died():
+    """Windows 上写已关闭的宿主 stdin 抛 ConnectionAbortedError（WinError 232/10053）。
+
+    语义与 BrokenPipe/ConnectionReset 相同：宿主已死，必须归为 ``_HostDied``
+    （→ runtime_unavailable），不能被当成管线内部错误。
+    """
+    from cloudra.runtime_v2.js_runtime import JavaScriptRuntime, _HostDied
+
+    # 不构造完整运行时：``_send`` 只碰入参 proc，不读 self 的其它状态。
+
+    class _AbortStdin:
+        def write(self, payload: bytes) -> None:
+            raise ConnectionAbortedError(232, "The pipe is being closed")
+
+        async def drain(self) -> None:
+            return None
+
+    class _AbortProc:
+        stdin = _AbortStdin()
+
+    with pytest.raises(_HostDied):
+        await JavaScriptRuntime._send(None, _AbortProc(), b"frame")
+
+    class _OtherStdin:
+        def write(self, payload: bytes) -> None:
+            raise ValueError("unexpected, must not be swallowed")
+
+        async def drain(self) -> None:
+            return None
+
+    class _OtherProc:
+        stdin = _OtherStdin()
+
+    # 负向判据：非中止类异常不被吞掉
+    with pytest.raises(ValueError):
+        await JavaScriptRuntime._send(None, _OtherProc(), b"frame")

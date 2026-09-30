@@ -361,7 +361,11 @@ class JavaScriptRuntime:
         try:
             proc.stdin.write(payload + b"\n")
             await proc.stdin.drain()
-        except (BrokenPipeError, ConnectionResetError) as exc:
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError) as exc:
+            # Windows 上写已关闭的宿主管道抛 ConnectionAbortedError
+            # （WinError 232「管道正在被关闭」在 CPython 里映射为它；POSIX 是
+            # BrokenPipe/ConnectionReset）——语义同样是「宿主已死」，
+            # 必须归为 _HostDied（→ runtime_unavailable），不能漏成管线内部错误。
             raise _HostDied("host stdin is closed") from exc
 
     async def _converse(

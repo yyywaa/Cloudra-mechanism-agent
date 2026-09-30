@@ -1,5 +1,9 @@
 Cloudra V2.0                                             第 1623 页
 ----------------------------------------------------------------------
+cloudra/tools/core/xtb_path_runner.py:25	  因此本模块把两者**分别标注**（``rel_energy_kcal`` / ``ts_candidate_energy_eh``），
+cloudra/tools/core/xtb_path_runner.py:26	  绝不放进同一个字段。
+cloudra/tools/core/xtb_path_runner.py:27	
+cloudra/tools/core/xtb_path_runner.py:28	**这个结果只是初猜**：``xtbpath_ts.xyz`` 是 MTD 采到的最高点附近结构，不是鞍点，
 cloudra/tools/core/xtb_path_runner.py:29	更不是"已验证"。验证仍归频率/IRC 判定。
 cloudra/tools/core/xtb_path_runner.py:30	
 cloudra/tools/core/xtb_path_runner.py:31	**随机性**：MTD 是随机的，同一次输入重跑路径不同。因此结果按**采样**看待，命令与
@@ -48,12 +52,12 @@ cloudra/tools/core/xtb_path_runner.py:73	MARKER_NORMAL_TERMINATION = "normal ter
 cloudra/tools/core/xtb_path_runner.py:74	MARKER_FINISHED_RUN = " * finished run on"
 cloudra/tools/core/xtb_path_runner.py:75	MARKER_PATH_FINDER = " path finder:"
 cloudra/tools/core/xtb_path_runner.py:76	#: 路径精修的两句终止语。前者是引擎判的收敛，后者是**触到轮数上限被截断**，二者绝不等价。
+Cloudra V2.0                                             第 1624 页
+----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:77	MARKER_PATH_CONVERGED = "terminated because grad at TS <threshold"
 cloudra/tools/core/xtb_path_runner.py:78	MARKER_PATH_CYCLES_EXHAUSTED = "terminated because max. # cycles reached"
 cloudra/tools/core/xtb_path_runner.py:79	#: 每轮精修打印的 barrier（第一列是空格对齐，逐字保留）
 cloudra/tools/core/xtb_path_runner.py:80	MARKER_FORWARD_BARRIER = "forward  barrier (kcal)"
-Cloudra V2.0                                             第 1624 页
-----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:81	MARKER_BACKWARD_BARRIER = "backward barrier (kcal)"
 cloudra/tools/core/xtb_path_runner.py:82	
 cloudra/tools/core/xtb_path_runner.py:83	#: 路径精修的轮数上限（``$path nrun``）。这**不是**收敛判据，只是机时上限：收敛由引擎自己判
@@ -102,12 +106,12 @@ cloudra/tools/core/xtb_path_runner.py:125	    product_xyz: str = Field(descripti
 cloudra/tools/core/xtb_path_runner.py:126	    output_dir: str = Field(description="持久运行目录的父目录；每次运行在其 xtb_path_runs/ 下新建")
 cloudra/tools/core/xtb_path_runner.py:127	    charge: int = Field(default=0, description="总电荷（--chrg）")
 cloudra/tools/core/xtb_path_runner.py:128	    multiplicity: int = Field(default=1, description="自旋多重度 2S+1，透传为 --uhf = multiplicity-1")
+Cloudra V2.0                                             第 1625 页
+----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:129	    timeout: int = Field(default=900, description="子进程耗时上限（秒）；超时只终止本次运行自己的进程组")
 cloudra/tools/core/xtb_path_runner.py:130	    refinement_runs: int = Field(
 cloudra/tools/core/xtb_path_runner.py:131	        default=DEFAULT_REFINEMENT_RUNS, ge=1,
 cloudra/tools/core/xtb_path_runner.py:132	        description="路径精修的轮数上限（$path nrun）。**只是机时上限**：收敛由引擎自己判，"
-Cloudra V2.0                                             第 1625 页
-----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:133	                    "触到这个上限即报 path_not_converged。实测内建默认 3 轮远不够收敛，"
 cloudra/tools/core/xtb_path_runner.py:134	                    "不要把它调小",
 cloudra/tools/core/xtb_path_runner.py:135	    )
@@ -156,12 +160,12 @@ cloudra/tools/core/xtb_path_runner.py:177	    ts_candidate_energy_eh: Optional[f
 cloudra/tools/core/xtb_path_runner.py:178	        default=None, description="TS 候选的**绝对**能量（Eh）；与路径帧的相对 kcal/mol 不是一个字段"
 cloudra/tools/core/xtb_path_runner.py:179	    )
 cloudra/tools/core/xtb_path_runner.py:180	    ts_candidate_positions: list[list[float]] = Field(default_factory=list)
+Cloudra V2.0                                             第 1626 页
+----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:181	    reactant_path: str = ""
 cloudra/tools/core/xtb_path_runner.py:182	    product_path: str = ""
 cloudra/tools/core/xtb_path_runner.py:183	    command_path: str = ""
 cloudra/tools/core/xtb_path_runner.py:184	    path_input_path: str = ""
-Cloudra V2.0                                             第 1626 页
-----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:185	    versions_path: str = ""
 cloudra/tools/core/xtb_path_runner.py:186	    stdout_path: str = ""
 cloudra/tools/core/xtb_path_runner.py:187	    stderr_path: str = ""
@@ -210,12 +214,12 @@ cloudra/tools/core/xtb_path_runner.py:229	    """
 cloudra/tools/core/xtb_path_runner.py:230	    if not os.path.isdir(run_dir):
 cloudra/tools/core/xtb_path_runner.py:231	        return []
 cloudra/tools/core/xtb_path_runner.py:232	    found: list[tuple[int, str]] = []
+Cloudra V2.0                                             第 1627 页
+----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:233	    for name in os.listdir(run_dir):
 cloudra/tools/core/xtb_path_runner.py:234	        if not (name.startswith(PARTIAL_FRAME_PREFIX) and name.endswith(PARTIAL_FRAME_SUFFIX)):
 cloudra/tools/core/xtb_path_runner.py:235	            continue
 cloudra/tools/core/xtb_path_runner.py:236	        middle = name[len(PARTIAL_FRAME_PREFIX):-len(PARTIAL_FRAME_SUFFIX)]
-Cloudra V2.0                                             第 1627 页
-----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:237	        if not middle.isdigit():
 cloudra/tools/core/xtb_path_runner.py:238	            continue
 cloudra/tools/core/xtb_path_runner.py:239	        found.append((int(middle), os.path.join(run_dir, name)))
@@ -264,12 +268,12 @@ cloudra/tools/core/xtb_path_runner.py:281
 cloudra/tools/core/xtb_path_runner.py:282	
 cloudra/tools/core/xtb_path_runner.py:283	def _parse_path_frames(path: str) -> list[PathFrame]:
 cloudra/tools/core/xtb_path_runner.py:284	    """解析 ``xtbpath.xyz``。注释里的能量是**相对 kcal/mol**，取不到就留 None，不猜。"""
+Cloudra V2.0                                             第 1628 页
+----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:285	    with open(path, encoding="utf-8", errors="replace") as handle:
 cloudra/tools/core/xtb_path_runner.py:286	        lines = handle.read().splitlines()
 cloudra/tools/core/xtb_path_runner.py:287	    frames: list[PathFrame] = []
 cloudra/tools/core/xtb_path_runner.py:288	    index = 0
-Cloudra V2.0                                             第 1628 页
-----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:289	    while index < len(lines):
 cloudra/tools/core/xtb_path_runner.py:290	        if not lines[index].strip():
 cloudra/tools/core/xtb_path_runner.py:291	            index += 1
@@ -318,12 +322,12 @@ cloudra/tools/core/xtb_path_runner.py:333	        )
 cloudra/tools/core/xtb_path_runner.py:334	    energy = float(tokens[1])
 cloudra/tools/core/xtb_path_runner.py:335	    block = lines[2: 2 + count]
 cloudra/tools/core/xtb_path_runner.py:336	    if len(block) != count:
+Cloudra V2.0                                             第 1629 页
+----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:337	        raise ValueError(f"{path}: declares {count} atoms but only {len(block)} coordinates follow")
 cloudra/tools/core/xtb_path_runner.py:338	    positions = []
 cloudra/tools/core/xtb_path_runner.py:339	    for line in block:
 cloudra/tools/core/xtb_path_runner.py:340	        parts = line.split()
-Cloudra V2.0                                             第 1629 页
-----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:341	        if len(parts) < 4:
 cloudra/tools/core/xtb_path_runner.py:342	            raise ValueError(f"{path}: malformed coordinate line {line!r}")
 cloudra/tools/core/xtb_path_runner.py:343	        positions.append([float(parts[1]), float(parts[2]), float(parts[3])])
@@ -372,12 +376,12 @@ cloudra/tools/core/xtb_path_runner.py:385	        if extra:
 cloudra/tools/core/xtb_path_runner.py:386	            markers.evidence.append(extra)
 cloudra/tools/core/xtb_path_runner.py:387	    markers.evidence = markers.evidence[:MAX_EVIDENCE_LINES]
 cloudra/tools/core/xtb_path_runner.py:388	    return markers
+Cloudra V2.0                                             第 1630 页
+----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:389	
 cloudra/tools/core/xtb_path_runner.py:390	
 cloudra/tools/core/xtb_path_runner.py:391	def run_xtb_path(request: XtbPathRequest) -> XtbPathResult:
 cloudra/tools/core/xtb_path_runner.py:392	    """在持久运行目录里跑一次 MTD 路径搜索。
-Cloudra V2.0                                             第 1630 页
-----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:393	
 cloudra/tools/core/xtb_path_runner.py:394	    同步函数（子进程 + 文件 IO）；异步调用方必须经 ``asyncio.to_thread`` 卸载。
 cloudra/tools/core/xtb_path_runner.py:395	    """
@@ -426,12 +430,12 @@ cloudra/tools/core/xtb_path_runner.py:437	        result.termination_reason = "i
 cloudra/tools/core/xtb_path_runner.py:438	        result.diagnostics.append(
 cloudra/tools/core/xtb_path_runner.py:439	            f"reactant and product element sequences differ ({reactant_symbols} vs "
 cloudra/tools/core/xtb_path_runner.py:440	            f"{product_symbols}); the path search needs one consistent atom set"
+Cloudra V2.0                                             第 1631 页
+----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:441	        )
 cloudra/tools/core/xtb_path_runner.py:442	        result.message = "Endpoints rejected: the element sequences differ."
 cloudra/tools/core/xtb_path_runner.py:443	        result.artifacts = [
 cloudra/tools/core/xtb_path_runner.py:444	            XtbArtifact(name=name, path=path, size_bytes=size)
-Cloudra V2.0                                             第 1631 页
-----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:445	            for name, path, size in list_artifact_files(run_dir)
 cloudra/tools/core/xtb_path_runner.py:446	        ]
 cloudra/tools/core/xtb_path_runner.py:447	        return result
@@ -480,12 +484,12 @@ cloudra/tools/core/xtb_path_runner.py:489	        for name, path, size in list_a
 cloudra/tools/core/xtb_path_runner.py:490	    ]
 cloudra/tools/core/xtb_path_runner.py:491	
 cloudra/tools/core/xtb_path_runner.py:492	    # 实测（本机 xtb 6.7.1）：``normal termination of xtb`` 落在 **stderr**，而计时块落在
+Cloudra V2.0                                             第 1632 页
+----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:493	    # stdout。因此标记必须在两个流上一起扫——只看 stdout 会把正常的运行判成失败。
 cloudra/tools/core/xtb_path_runner.py:494	    markers = _scan_markers(
 cloudra/tools/core/xtb_path_runner.py:495	        (stdout or "").splitlines() + (stderr or "").splitlines()
 cloudra/tools/core/xtb_path_runner.py:496	    )
-Cloudra V2.0                                             第 1632 页
-----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:497	    result.evidence = markers.evidence
 cloudra/tools/core/xtb_path_runner.py:498	    result.refinement_termination = markers.refinement_termination
 cloudra/tools/core/xtb_path_runner.py:499	
@@ -534,12 +538,12 @@ cloudra/tools/core/xtb_path_runner.py:541	        frames = _parse_path_frames(re
 cloudra/tools/core/xtb_path_runner.py:542	        ts_energy, ts_positions = _parse_ts_candidate(result.ts_xyz_path)
 cloudra/tools/core/xtb_path_runner.py:543	    except (OSError, ValueError) as exc:
 cloudra/tools/core/xtb_path_runner.py:544	        result.termination_reason = "incomplete_artifacts"
+Cloudra V2.0                                             第 1633 页
+----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:545	        result.diagnostics.append(f"path artifacts are unusable: {exc}")
 cloudra/tools/core/xtb_path_runner.py:546	        _record_partial_frames(result)
 cloudra/tools/core/xtb_path_runner.py:547	        result.message = (
 cloudra/tools/core/xtb_path_runner.py:548	            f"xtb reported normal termination but its path artifacts are unusable ({exc}). "
-Cloudra V2.0                                             第 1633 页
-----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:549	            f"Full log: {stdout_path}"
 cloudra/tools/core/xtb_path_runner.py:550	        )
 cloudra/tools/core/xtb_path_runner.py:551	        return result
@@ -588,12 +592,12 @@ cloudra/tools/core/xtb_path_runner.py:593	            "sits in the reactant's ow
 cloudra/tools/core/xtb_path_runner.py:594	            "from it never converged (56 cycles, slid back to the minimum). Raise "
 cloudra/tools/core/xtb_path_runner.py:595	            "`refinement_runs` and rerun"
 cloudra/tools/core/xtb_path_runner.py:596	        )
+Cloudra V2.0                                             第 1634 页
+----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:597	        result.message = (
 cloudra/tools/core/xtb_path_runner.py:598	            f"the xTB path refinement hit its {request.refinement_runs}-run cap before the engine "
 cloudra/tools/core/xtb_path_runner.py:599	            f"declared convergence, so no usable TS guess was produced. Raise `refinement_runs` and "
 cloudra/tools/core/xtb_path_runner.py:600	            f"rerun. Run directory (truncated path kept for inspection): {run_dir}"
-Cloudra V2.0                                             第 1634 页
-----------------------------------------------------------------------
 cloudra/tools/core/xtb_path_runner.py:601	        )
 cloudra/tools/core/xtb_path_runner.py:602	        return result
 cloudra/tools/core/xtb_path_runner.py:603	
@@ -642,12 +646,12 @@ cloudra/tools/name_hints.py:7	    "pdf2image": "read",
 cloudra/tools/name_hints.py:8	    "read_file": "read",
 cloudra/tools/name_hints.py:9	    "web_search": "search (source=web)",
 cloudra/tools/name_hints.py:10	    "paper_searcher": "search (source=arxiv)",
+Cloudra V2.0                                             第 1635 页
+----------------------------------------------------------------------
 cloudra/tools/name_hints.py:11	    "openalex_searcher": "search (source=openalex)",
 cloudra/tools/name_hints.py:12	    "bashtools": "bash",
 cloudra/tools/name_hints.py:13	    "shell": "bash",
 cloudra/tools/name_hints.py:14	    "text_writer": "write",
-Cloudra V2.0                                             第 1635 页
-----------------------------------------------------------------------
 cloudra/tools/name_hints.py:15	    "write_file": "write",
 cloudra/tools/name_hints.py:16	    "edit_file": "edit",
 cloudra/tools/name_hints.py:17	    "str_replace": "edit",
@@ -696,12 +700,12 @@ cloudra/tools/registry.py:18	@dataclass(frozen=True)
 cloudra/tools/registry.py:19	class ToolRegistration:
 cloudra/tools/registry.py:20	    module: str
 cloudra/tools/registry.py:21	    class_name: str
+Cloudra V2.0                                             第 1636 页
+----------------------------------------------------------------------
 cloudra/tools/registry.py:22	
 cloudra/tools/registry.py:23	    # Declared wire name. Only needed when the tool has non-default semantics
 cloudra/tools/registry.py:24	    # (or a tool_name that differs from class_name); capabilities only projects
 cloudra/tools/registry.py:25	    # entries that carry it.
-Cloudra V2.0                                             第 1636 页
-----------------------------------------------------------------------
 cloudra/tools/registry.py:26	    tool_name: str = ""
 cloudra/tools/registry.py:27	
 cloudra/tools/registry.py:28	    # DAG semantics. All flags default to the conservative/plain behavior.
@@ -750,12 +754,12 @@ cloudra/tools/registry.py:70	    # gates (invocation_direct_only / orchestration
 cloudra/tools/registry.py:71	    # are separate mechanisms.
 cloudra/tools/registry.py:72	    role_allowlist: frozenset[str] = frozenset()
 cloudra/tools/registry.py:73	
+Cloudra V2.0                                             第 1637 页
+----------------------------------------------------------------------
 cloudra/tools/registry.py:74	
 cloudra/tools/registry.py:75	# 化学/QM 工具的默认使用者：科学计算角色 + Coordinator（benchmark 题面
 cloudra/tools/registry.py:76	# agent 以 coordinator 角色运行，绝不能失去化学工具链）。supervisor 在列
 cloudra/tools/registry.py:77	# 仅为保住其 evidence_read 投影面（log_parser/reaction_mapping）——它的
-Cloudra V2.0                                             第 1637 页
-----------------------------------------------------------------------
 cloudra/tools/registry.py:78	# 实际可见面仍由 supervisor_access 收窄，allowlist 对它是只减不增。
 cloudra/tools/registry.py:79	_SCIENCE_ROLES = frozenset(
 cloudra/tools/registry.py:80	    {"coordinator", "small_mol", "md", "dft", "experiment", "supervisor"}
@@ -804,12 +808,12 @@ cloudra/tools/registry.py:122	    ToolRegistration(
 cloudra/tools/registry.py:123	        module='cloudra.tools.Chemtool.image_to_smiles',
 cloudra/tools/registry.py:124	        class_name='ImageToSmiles',
 cloudra/tools/registry.py:125	        tool_name='image_to_smiles',
+Cloudra V2.0                                             第 1638 页
+----------------------------------------------------------------------
 cloudra/tools/registry.py:126	        role_allowlist=_SCIENCE_ROLES,
 cloudra/tools/registry.py:127	    ),
 cloudra/tools/registry.py:128	    ToolRegistration(
 cloudra/tools/registry.py:129	        module='cloudra.tools.Chemtool.cdxml_to_graph',
-Cloudra V2.0                                             第 1638 页
-----------------------------------------------------------------------
 cloudra/tools/registry.py:130	        class_name='CdxmlToGraph',
 cloudra/tools/registry.py:131	        tool_name='cdxml_to_graph',
 cloudra/tools/registry.py:132	        role_allowlist=_SCIENCE_ROLES,
@@ -858,12 +862,12 @@ cloudra/tools/registry.py:174	        class_name='NameToStructure',
 cloudra/tools/registry.py:175	        tool_name='name_to_structure',
 cloudra/tools/registry.py:176	        role_allowlist=_SCIENCE_ROLES,
 cloudra/tools/registry.py:177	    ),
+Cloudra V2.0                                             第 1639 页
+----------------------------------------------------------------------
 cloudra/tools/registry.py:178	    ToolRegistration(
 cloudra/tools/registry.py:179	        module='cloudra.tools.Chemtool.nmr_processor',
 cloudra/tools/registry.py:180	        class_name='NMRProcessor',
 cloudra/tools/registry.py:181	        tool_name='nmr_processor',
-Cloudra V2.0                                             第 1639 页
-----------------------------------------------------------------------
 cloudra/tools/registry.py:182	        # 实验谱图处理：experiment 角色专属
 cloudra/tools/registry.py:183	        role_allowlist=frozenset({'experiment'}),
 cloudra/tools/registry.py:184	    ),
@@ -912,12 +916,12 @@ cloudra/tools/registry.py:226	    ToolRegistration(
 cloudra/tools/registry.py:227	        'cloudra.tools.Chemtool.ts_search_process', 'TsResume', tool_name='ts_resume',
 cloudra/tools/registry.py:228	        role_allowlist=_SCIENCE_ROLES,
 cloudra/tools/registry.py:229	    ),
+Cloudra V2.0                                             第 1640 页
+----------------------------------------------------------------------
 cloudra/tools/registry.py:230	    ToolRegistration(
 cloudra/tools/registry.py:231	        module='cloudra.tools.Chemtool.smiles_to_mol',
 cloudra/tools/registry.py:232	        class_name='SmilesToMol',
 cloudra/tools/registry.py:233	        tool_name='smiles_to_mol',
-Cloudra V2.0                                             第 1640 页
-----------------------------------------------------------------------
 cloudra/tools/registry.py:234	        role_allowlist=_SCIENCE_ROLES,
 cloudra/tools/registry.py:235	    ),
 cloudra/tools/registry.py:236	    ToolRegistration(
@@ -966,12 +970,12 @@ cloudra/tools/registry.py:278	    ),
 cloudra/tools/registry.py:279	    ToolRegistration(
 cloudra/tools/registry.py:280	        module='cloudra.tools.Managetool.agent_hub',
 cloudra/tools/registry.py:281	        class_name='AgentHub',
+Cloudra V2.0                                             第 1641 页
+----------------------------------------------------------------------
 cloudra/tools/registry.py:282	        tool_name='agent_hub',
 cloudra/tools/registry.py:283	        runtime_profiles=frozenset({'desktop', 'android'}),
 cloudra/tools/registry.py:284	        supervisor_access='hub',
 cloudra/tools/registry.py:285	    ),
-Cloudra V2.0                                             第 1641 页
-----------------------------------------------------------------------
 cloudra/tools/registry.py:286	    ToolRegistration(
 cloudra/tools/registry.py:287	        module='cloudra.tools.Managetool.get_subagent_report',
 cloudra/tools/registry.py:288	        class_name='GetSubAgentReport',
@@ -1020,12 +1024,12 @@ cloudra/tools/registry.py:330	    ),
 cloudra/tools/registry.py:331	    ToolRegistration(
 cloudra/tools/registry.py:332	        module='cloudra.tools.Plantool.dag_tools.dag_add_step',
 cloudra/tools/registry.py:333	        class_name='DagAddStep',
+Cloudra V2.0                                             第 1642 页
+----------------------------------------------------------------------
 cloudra/tools/registry.py:334	        tool_name='dag_add_step',
 cloudra/tools/registry.py:335	        dag_observe=False,
 cloudra/tools/registry.py:336	    ),
 cloudra/tools/registry.py:337	    ToolRegistration(
-Cloudra V2.0                                             第 1642 页
-----------------------------------------------------------------------
 cloudra/tools/registry.py:338	        module='cloudra.tools.Plantool.dag_tools.dag_update_delivery_element',
 cloudra/tools/registry.py:339	        class_name='DagUpdateDeliveryElement',
 cloudra/tools/registry.py:340	        tool_name='dag_update_delivery_element',
@@ -1074,12 +1078,12 @@ cloudra/tools/registry.py:382	        module='cloudra.tools.Plantool.dag_tools.d
 cloudra/tools/registry.py:383	        class_name='DagReviewStep',
 cloudra/tools/registry.py:384	        tool_name='dag_review_step',
 cloudra/tools/registry.py:385	        dag_observe=False,
+Cloudra V2.0                                             第 1643 页
+----------------------------------------------------------------------
 cloudra/tools/registry.py:386	        supervisor_access='review_decision',
 cloudra/tools/registry.py:387	    ),
 cloudra/tools/registry.py:388	    ToolRegistration(
 cloudra/tools/registry.py:389	        module='cloudra.tools.Plantool.dag_tools.dag_review_species',
-Cloudra V2.0                                             第 1643 页
-----------------------------------------------------------------------
 cloudra/tools/registry.py:390	        class_name='DagReviewSpecies',
 cloudra/tools/registry.py:391	        tool_name='dag_review_species',
 cloudra/tools/registry.py:392	        dag_observe=False,
@@ -1128,12 +1132,12 @@ cloudra/tools/registry.py:434	        dag_observe=False,
 cloudra/tools/registry.py:435	        # 无 supervisor_access：这是研究 Agent/Coordinator → Supervisor 的
 cloudra/tools/registry.py:436	        # 请求入口，工具本身硬拒 Supervisor 调用；督导的回复路径是
 cloudra/tools/registry.py:437	        # dag_review_* 裁决工具与运行结束报告。
+Cloudra V2.0                                             第 1644 页
+----------------------------------------------------------------------
 cloudra/tools/registry.py:438	    ),
 cloudra/tools/registry.py:439	    ToolRegistration('cloudra.tools.Plantool.todo', 'TodoWrite'),
 cloudra/tools/registry.py:440	    ToolRegistration(
 cloudra/tools/registry.py:441	        module='cloudra.tools.Searchtool.read',
-Cloudra V2.0                                             第 1644 页
-----------------------------------------------------------------------
 cloudra/tools/registry.py:442	        class_name='Read',
 cloudra/tools/registry.py:443	        tool_name='read',
 cloudra/tools/registry.py:444	        runtime_profiles=frozenset({'desktop', 'android'}),
@@ -1182,12 +1186,12 @@ cloudra/tools/registry.py:486	)
 cloudra/web_launcher.py:1	"""Web frontend launcher used by the `cloudra` command.
 cloudra/web_launcher.py:2	
 cloudra/web_launcher.py:3	Keeps Node/npm knowledge out of the CLI module.  The launcher works for source
+Cloudra V2.0                                             第 1645 页
+----------------------------------------------------------------------
 cloudra/web_launcher.py:4	checkouts and editable installs; packaged wheels can point CLOUDRA_FRONTEND_DIR
 cloudra/web_launcher.py:5	at an unpacked frontend directory.
 cloudra/web_launcher.py:6	"""
 cloudra/web_launcher.py:7	
-Cloudra V2.0                                             第 1645 页
-----------------------------------------------------------------------
 cloudra/web_launcher.py:8	from __future__ import annotations
 cloudra/web_launcher.py:9	
 cloudra/web_launcher.py:10	import logging
@@ -1236,12 +1240,12 @@ cloudra/web_launcher.py:52	        "directory containing frontend/package.json"
 cloudra/web_launcher.py:53	    )
 cloudra/web_launcher.py:54	
 cloudra/web_launcher.py:55	
+Cloudra V2.0                                             第 1646 页
+----------------------------------------------------------------------
 cloudra/web_launcher.py:56	def _check_node(frontend: Path) -> None:
 cloudra/web_launcher.py:57	    npm = shutil.which("npm")
 cloudra/web_launcher.py:58	    node = shutil.which("node")
 cloudra/web_launcher.py:59	    if npm is None or node is None:
-Cloudra V2.0                                             第 1646 页
-----------------------------------------------------------------------
 cloudra/web_launcher.py:60	        raise RuntimeError(
 cloudra/web_launcher.py:61	            "Node.js >= 18 and npm are required for the Cloudra web frontend. "
 cloudra/web_launcher.py:62	            f"Frontend found at {frontend}. Install from https://nodejs.org/"
@@ -1290,12 +1294,12 @@ cloudra/web_launcher.py:104	    dist = frontend / "dist"
 cloudra/web_launcher.py:105	    if skip_build:
 cloudra/web_launcher.py:106	        if not (dist / "index.html").is_file():
 cloudra/web_launcher.py:107	            raise RuntimeError("--skip-build was requested but frontend/dist is missing")
+Cloudra V2.0                                             第 1647 页
+----------------------------------------------------------------------
 cloudra/web_launcher.py:108	        return
 cloudra/web_launcher.py:109	    _check_node(frontend)
 cloudra/web_launcher.py:110	    if not (frontend / "node_modules").is_dir():
 cloudra/web_launcher.py:111	        print("[cloudra] installing frontend dependencies...", flush=True)
-Cloudra V2.0                                             第 1647 页
-----------------------------------------------------------------------
 cloudra/web_launcher.py:112	        subprocess.run(_npm_argv() + ["install", "--no-audit", "--no-fund"], cwd=frontend, check=True)
 cloudra/web_launcher.py:113	    stale = _frontend_source_newer_than_dist(frontend)
 cloudra/web_launcher.py:114	    if rebuild or not (dist / "index.html").is_file() or stale:
@@ -1344,12 +1348,12 @@ cloudra/web_launcher.py:156	        return True
 cloudra/web_launcher.py:157	
 cloudra/web_launcher.py:158	
 cloudra/web_launcher.py:159	def _runtime_is_healthy(probe_host: str, port: int) -> bool:
+Cloudra V2.0                                             第 1648 页
+----------------------------------------------------------------------
 cloudra/web_launcher.py:160	    try:
 cloudra/web_launcher.py:161	        with urllib.request.urlopen(
 cloudra/web_launcher.py:162	            f"http://{probe_host}:{port}/api/v2/runtime/health", timeout=1.0
 cloudra/web_launcher.py:163	        ) as resp:
-Cloudra V2.0                                             第 1648 页
-----------------------------------------------------------------------
 cloudra/web_launcher.py:164	            return 200 <= resp.status < 300
 cloudra/web_launcher.py:165	    except Exception:
 cloudra/web_launcher.py:166	        return False
@@ -1398,12 +1402,12 @@ cloudra/web_launcher.py:208	    for port in range(preferred + 1, preferred + 100
 cloudra/web_launcher.py:209	        if _port_is_bindable(bind_host, port):
 cloudra/web_launcher.py:210	            return port, False
 cloudra/web_launcher.py:211	    raise RuntimeError(f"no free port near {preferred}; set {env_name} explicitly")
+Cloudra V2.0                                             第 1649 页
+----------------------------------------------------------------------
 cloudra/web_launcher.py:212	
 cloudra/web_launcher.py:213	
 cloudra/web_launcher.py:214	def _wait_healthy(url: str, timeout: float = 30.0) -> None:
 cloudra/web_launcher.py:215	    deadline = time.monotonic() + timeout
-Cloudra V2.0                                             第 1649 页
-----------------------------------------------------------------------
 cloudra/web_launcher.py:216	    while time.monotonic() < deadline:
 cloudra/web_launcher.py:217	        try:
 cloudra/web_launcher.py:218	            with urllib.request.urlopen(url, timeout=1.0) as resp:
@@ -1452,12 +1456,12 @@ cloudra/web_launcher.py:260	            return sock.getsockname()[0]
 cloudra/web_launcher.py:261	    except OSError:
 cloudra/web_launcher.py:262	        return None
 cloudra/web_launcher.py:263	
+Cloudra V2.0                                             第 1650 页
+----------------------------------------------------------------------
 cloudra/web_launcher.py:264	
 cloudra/web_launcher.py:265	def _ui_url(url_host: str, api_port: int, token: str | None) -> str:
 cloudra/web_launcher.py:266	    """访问 URL；认证开启时把 token 放 fragment 里（fragment 不进 HTTP 请求，
 cloudra/web_launcher.py:267	    前端启动时读入 sessionStorage 后从地址栏抹掉）。"""
-Cloudra V2.0                                             第 1650 页
-----------------------------------------------------------------------
 cloudra/web_launcher.py:268	    url = f"http://{url_host}:{api_port}"
 cloudra/web_launcher.py:269	    return f"{url}/#token={token}" if token is not None else url
 cloudra/web_launcher.py:270	
@@ -1506,12 +1510,12 @@ cloudra/web_launcher.py:312	) -> int:
 cloudra/web_launcher.py:313	    _ensure_fd_limit()
 cloudra/web_launcher.py:314	    bind_host = (host or "").strip() or _DEFAULT_BIND_HOST
 cloudra/web_launcher.py:315	    from cloudra.services.api_token import require_token_for_bind
+Cloudra V2.0                                             第 1651 页
+----------------------------------------------------------------------
 cloudra/web_launcher.py:316	
 cloudra/web_launcher.py:317	    require_token_for_bind(bind_host)
 cloudra/web_launcher.py:318	    probe_host = _probe_host(bind_host)
 cloudra/web_launcher.py:319	    if port is not None:
-Cloudra V2.0                                             第 1651 页
-----------------------------------------------------------------------
 cloudra/web_launcher.py:320	        api_port, reused_runtime = _pinned_runtime(bind_host, port)
 cloudra/web_launcher.py:321	    else:
 cloudra/web_launcher.py:322	        api_port, reused_runtime = _find_api_port(8000, "CLOUDRA_API_PORT", bind_host)
@@ -1560,12 +1564,12 @@ cloudra/web_launcher.py:364	    try:
 cloudra/web_launcher.py:365	        _wait_healthy(f"http://{probe_host}:{api_port}/api/v2/runtime/health")
 cloudra/web_launcher.py:366	        from cloudra.services.api_token import resolve_api_token
 cloudra/web_launcher.py:367	
+Cloudra V2.0                                             第 1652 页
+----------------------------------------------------------------------
 cloudra/web_launcher.py:368	        token = resolve_api_token()
 cloudra/web_launcher.py:369	        shown_url = _ui_url(probe_host, api_port, token)
 cloudra/web_launcher.py:370	        print(f"[cloudra] web UI: {shown_url}", flush=True)
 cloudra/web_launcher.py:371	        if bind_host in _WILDCARD_BIND_HOSTS:
-Cloudra V2.0                                             第 1652 页
-----------------------------------------------------------------------
 cloudra/web_launcher.py:372	            # 通配绑定常常是「服务在远端、浏览器在别处」（SSH/局域网）：
 cloudra/web_launcher.py:373	            # 控制台里的回环 URL 在那台机器上打不开，把对外地址一并给出。
 cloudra/web_launcher.py:374	            reachable = _primary_address()

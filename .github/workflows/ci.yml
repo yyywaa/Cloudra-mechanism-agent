@@ -39,6 +39,7 @@ jobs:
         run: |
           pytest tests/test_config_mutate.py -q
           pytest tests/test_runtime_v2_js_runtime.py -q -k host_env
+          pytest tests/test_llm_cancellation.py tests/test_runtime_v2_js_recovery.py -q
           pytest tests/test_web_launcher.py -q -k platform_separator
 
   test:
