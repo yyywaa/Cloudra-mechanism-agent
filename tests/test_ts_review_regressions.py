@@ -298,6 +298,7 @@ def test_gaussian_external_path_parentheses_are_not_task_options():
     assert result.provider=='xtb'
 
 
+@pytest.mark.usefixtures('rdkit_chemistry')
 @pytest.mark.parametrize('field,value,accepted', [('coord_type', 'angle', True), ('atoms', [0, 2], True), ('scan_end', 3.0, True), ('scan_steps', 8, False), ('atoms', [0, 9], False)])
 def test_failed_scan_accepts_bound_coordinate_change_on_same_run(tmp_path, field, value, accepted):
     from cloudra.services.ts_pipeline_context import use_pipeline_database
