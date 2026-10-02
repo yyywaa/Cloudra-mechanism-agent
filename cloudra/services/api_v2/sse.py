@@ -18,12 +18,28 @@ async def _sse_replay(core, project, cursor: int):
     from cloudra.runtime_v2.schemas import EventEnvelope
 
     replayed_through = cursor
-    events = await asyncio.to_thread(
-        lambda: list(core.event_log.query_project(project.id, after_seq=cursor, limit=None))
-    )
-    for event in events:
-        replayed_through = max(replayed_through, event.seq)
-        yield _sse(event)
+    # Keep each database/in-memory query bounded. A long-running project can
+    # have millions of events; loading the whole tail before yielding would
+    # otherwise create a large latency and memory spike on every reconnect.
+    page_size = 500
+    while True:
+        events = await asyncio.to_thread(
+            lambda: list(
+                core.event_log.query_project(
+                    project.id,
+                    after_seq=replayed_through,
+                    limit=page_size,
+                    tail=False,
+                )
+            )
+        )
+        if not events:
+            break
+        for event in events:
+            replayed_through = max(replayed_through, event.seq)
+            yield _sse(event)
+        if len(events) < page_size:
+            break
     # seq=0 不影响客户端 cursor
     yield _sse(
         EventEnvelope(
