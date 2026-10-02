@@ -5,12 +5,27 @@ import pytest
 from cloudra.infra.slurm import (
     SlurmError,
     _engine_success_from_log,
+    _is_environment_name,
+    _is_job_id,
+    _is_memory,
+    _is_time_limit,
     build_batch_script,
     cancel_job,
     query_job,
     query_job_by_name,
     submit_batch,
 )
+
+
+def test_slurm_validators_use_explicit_token_rules():
+    assert _is_environment_name("OMPI_MCA_slots")
+    assert not _is_environment_name("9BAD")
+    assert _is_job_id("12345_7")
+    assert not _is_job_id("123;rm")
+    assert _is_memory("32G")
+    assert not _is_memory("0G")
+    assert _is_time_limit("1-02:03:04")
+    assert not _is_time_limit("1-2:3:4")
 
 
 def test_batch_script_uses_validated_directives_and_shell_quoting(
