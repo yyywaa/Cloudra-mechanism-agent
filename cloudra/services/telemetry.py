@@ -882,11 +882,18 @@ def build_project_zip_bytes(db_path: Path | str, project_id: str) -> bytes:
 
 def write_project_zip(db_path: Path | str, project_id: str, out_path: Path | str) -> dict[str, int]:
     """导出一个 project 下所有 session 的包（每 session 一个 JSONL，打成 zip）。"""
-    payload = build_project_zip_bytes(db_path, project_id)
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_bytes(payload)
-    return {"sessions": len(list_session_ids(db_path, project_id=project_id))}
+    if not _project_exists(db_path, project_id):
+        raise TelemetryError(f"unknown project: {project_id}")
+    session_ids = list_session_ids(db_path, project_id=project_id)
+    with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for session_id in session_ids:
+            records = build_session_export(db_path, session_id)
+            with zf.open(f"{session_id}.jsonl", "w") as stream:
+                for record in records:
+                    stream.write((json.dumps(record, ensure_ascii=False) + "\n").encode("utf-8"))
+    return {"sessions": len(session_ids)}
 
 
 def resolve_export_target(db_path: Path | str, ident: str) -> str:

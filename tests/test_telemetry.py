@@ -346,6 +346,22 @@ def test_project_export_zip_roundtrip(store, tmp_path):
     assert records[0]["type"] == "meta" and records[0]["session_id"] == "s1"
 
 
+def test_project_export_writes_zip_without_building_bytes(store, tmp_path, monkeypatch):
+    store.append_event(_envelope(1, "llm.completed", {
+        "model": "m1", "usage": {"prompt_tokens": 10, "completion_tokens": 1},
+    }))
+    monkeypatch.setattr(
+        telemetry,
+        "build_project_zip_bytes",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("byte builder called")),
+    )
+
+    out = tmp_path / "streamed.zip"
+    assert telemetry.write_project_zip(store.path, "p1", out) == {"sessions": 1}
+    with zipfile.ZipFile(out) as archive:
+        assert archive.namelist() == ["s1.jsonl"]
+
+
 def test_export_unknown_ids_raise(store, tmp_path):
     with pytest.raises(telemetry.TelemetryError):
         telemetry.build_session_export(store.path, "nope")
