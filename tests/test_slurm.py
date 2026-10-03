@@ -219,3 +219,31 @@ def test_engine_success_from_log_uses_xtb_and_vasp_markers(tmp_path):
         encoding="utf-8",
     )
     assert _engine_success_from_log("vasp", str(poscar)) is True
+
+@pytest.mark.parametrize("time_limit", ["02:03:04", "2:03:04", "1-02:03:04"])
+def test_time_limit_accepts_clock_with_optional_days(tmp_path, time_limit):
+    script = build_batch_script(
+        tmp_path / "h2.gjf", "gaussian", 1,
+        {"time_limit": time_limit}, calculator_cmd=["true"],
+    )
+    assert f"#SBATCH --time={time_limit}" in script
+
+
+@pytest.mark.parametrize(
+    ("validator", "value"),
+    [
+        (_is_memory, "٣٢G"),
+        (_is_memory, "０G"),
+        (_is_time_limit, "١-02:03:04"),
+        (_is_time_limit, "1-٠٢:03:04"),
+        (_is_time_limit, "1-02:٠٣:04"),
+        (_is_time_limit, "1-02:03:٠٤"),
+        (_is_job_id, "١٢٣"),
+        (_is_job_id, "123_٧"),
+        (_is_environment_name, "ÉNV"),
+        (_is_environment_name, "ENVé"),
+        (_is_environment_name, "ENV²"),
+    ],
+)
+def test_slurm_validators_reject_non_ascii_tokens(validator, value):
+    assert not validator(value)

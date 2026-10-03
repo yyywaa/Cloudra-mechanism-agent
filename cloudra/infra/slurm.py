@@ -21,7 +21,7 @@ from cloudra.services.compute_store import (
 )
 
 _SBATCH_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.:@+/%-")
-_MEMORY_SUFFIXES = frozenset("KMGTPkmg tp".replace(" ", ""))
+_MEMORY_SUFFIXES = frozenset("KMGTPkmgtp")
 
 SLURM_TERMINAL_SUCCESS = frozenset({"COMPLETED"})
 SLURM_TERMINAL_FAILURE = frozenset(
@@ -49,14 +49,16 @@ def _is_sbatch_value(text: str) -> bool:
 
 def _is_memory(text: str) -> bool:
     number = text[:-1] if text and text[-1] in _MEMORY_SUFFIXES else text
-    return 1 <= len(number) <= 7 and number[0] != "0" and number.isdecimal()
+    return 1 <= len(number) <= 7 and number[0] != "0" and number.isascii() and number.isdecimal()
 
 
 def _is_time_limit(text: str) -> bool:
+    if not text.isascii():
+        return False
     day, separator, clock = text.partition("-")
     if separator and (not day.isdecimal() or not 1 <= len(day) <= 3):
         return False
-    parts = clock.split(":")
+    parts = (clock if separator else text).split(":")
     return (
         len(parts) == 3
         and 1 <= len(parts[0]) <= 2
@@ -70,11 +72,11 @@ def _is_time_limit(text: str) -> bool:
 
 def _is_job_id(text: str) -> bool:
     base, separator, array = text.partition("_")
-    return bool(base) and base.isdecimal() and (not separator or (bool(array) and array.isdecimal()))
+    return text.isascii() and bool(base) and base.isdecimal() and (not separator or (bool(array) and array.isdecimal()))
 
 
 def _is_environment_name(text: str) -> bool:
-    return bool(text) and (text[0].isalpha() or text[0] == "_") and all(
+    return text.isascii() and bool(text) and (text[0].isalpha() or text[0] == "_") and all(
         char.isalnum() or char == "_" for char in text[1:]
     )
 
