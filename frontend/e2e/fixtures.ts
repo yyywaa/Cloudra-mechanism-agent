@@ -182,7 +182,7 @@ export async function installApiMocks(page: Page, opts: MockOpts = {}) {
 
 export async function openSpa(page: Page, hash = '') {
   await page.goto(`/${hash}`);
-  await page.getByPlaceholder('新建项目名…').waitFor({
+  await page.getByRole('button', { name: '新聊天', exact: true }).waitFor({
     state: 'visible',
     timeout: 15_000,
   });
