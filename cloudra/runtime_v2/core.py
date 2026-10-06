@@ -71,16 +71,12 @@ class ContextBroker:
     def filter_pending_input(
         self, session_id: str, inbox_messages: list[dict]
     ) -> list[dict]:
-        """剔除已进入投影的输入消息（按 message_id）：LLM 重试/重启恢复后
+        """剔除已提交过的输入消息（按 message_id，含已压缩历史）：LLM 重试/重启恢复后
         同一条 inbox 消息不重复进上下文；无 message_id 的条目（测试）原样保留。"""
         ctx = self.core.session_contexts.get(session_id)
         if ctx is None:
             return list(inbox_messages)
-        known = {
-            str(message.get("message_id"))
-            for message in ctx.messages
-            if message.get("role") == "user" and message.get("message_id")
-        }
+        known = ctx.consumed_message_ids
         return [
             item
             for item in inbox_messages

@@ -246,9 +246,13 @@ class SessionContext(BaseModel):
     消息序列（文本、工具配对、reasoning、稳定媒体引用 image_ref——不是
     base64 重嵌），``prefix_meta`` 是前缀安装元数据（ContextPrefix owner
     跨 run/重启回灌用）。run 只是执行生命周期，不再各自重建对话。
+    ``consumed_message_ids`` 是输入已提交的独立账本；compact 只替换文本，
+    不清除账本，避免重启后把已压缩的旧输入当成未读消息重新执行。
     """
 
     messages: list[dict[str, Any]] = Field(default_factory=list)
+    # Delivery acknowledgements survive replacement of message text by a summary.
+    consumed_message_ids: set[str] = Field(default_factory=set)
     prefix_meta: Optional[dict[str, Any]] = None
 
 

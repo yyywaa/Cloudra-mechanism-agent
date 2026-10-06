@@ -23,6 +23,45 @@ from tests.agent_scenarios import (
 )
 
 
+@pytest.mark.asyncio
+async def test_compact_then_restart_keeps_consumed_instruction_out_of_inbox(tmp_path):
+    """压缩/恢复杠杆：已消费输入不复活，未消费通知在连续重启后只恢复一份。"""
+    harness = await ScenarioHarness.start(tmp_path)
+    try:
+        agent = await harness.spawn("coordinator", query="original instruction")
+        await harness.wait_terminal(agent)
+        context = harness.core.session_contexts[agent.id]
+        consumed_ids = {
+            message["message_id"] for message in context.messages
+            if message.get("role") == "user" and message.get("message_id")
+        }
+        assert consumed_ids
+        assert await harness.core.contexts.install_compacted(
+            agent=agent, run_id=harness.events(agent)[-1].run_id,
+            messages=[{"role": "assistant", "content": "structured handoff"}],
+            prefix_meta=None, expected_version=len(context.messages), trigger="manual",
+        )
+        notice = await harness.core.dispatcher.commit_and_deliver(
+            to_session_id=agent.id, project_id=harness.project.id,
+            content="unconsumed notice", sender="system", wake=WakePolicy.NEVER,
+        )
+        await harness.bus.flush_snapshot()
+        for _ in range(2):
+            restored = await ScenarioHarness.restore(tmp_path)
+            try:
+                restored_agent = restored.core.agents[agent.id]
+                inbox = restored.core.mailbox.inbox(agent.id)
+                assert inbox.qsize() == 1
+                assert inbox.get_nowait()["message_id"] == notice.data["message_id"]
+                assert restored.core.session_contexts[agent.id].consumed_message_ids == consumed_ids
+                assert restored_agent.state == agent.state
+                assert restored.provider.calls == []
+            finally:
+                await restored.aclose()
+    finally:
+        await harness.aclose()
+
+
 def _todo_store_file(project_id: str, session_id: str) -> Path:
     """todo_write 的 per-agent 存储文件（副作用观测点）。"""
     from cloudra.persistence.paths import data_dir

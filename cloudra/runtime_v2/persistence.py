@@ -730,18 +730,15 @@ def _rebuild_inboxes_from_events(core: RuntimeCore) -> None:
     """从已持久化但尚未进入 session_contexts 的 agent.message_injected 重建信箱。
 
     解决二次崩溃/休眠 agent 丢信问题：给休眠父的子完成通知、提醒唤醒、未读用户消息，
-    只要尚未进入 LLM 上下文投影（按 message_id 判重），重启后重新入队 inbox。
+    只要尚未提交到 LLM 上下文（按独立消费账本判重），重启后重新入队 inbox；
+    已压缩掉的历史输入仍属于已消费，不能重新入队。
     """
     from cloudra.runtime_v2.mailbox import Mailbox
     from cloudra.runtime_v2.schemas import AgentState
 
     known_by_session: dict[str, set[str]] = {}
     for sid, ctx in core.session_contexts.items():
-        known_by_session[sid] = {
-            str(m.get("message_id"))
-            for m in ctx.messages
-            if m.get("role") == "user" and m.get("message_id")
-        }
+        known_by_session[sid] = ctx.consumed_message_ids
 
     seen_enqueued: dict[str, set[str]] = {}
     for envelope in core.event_log:

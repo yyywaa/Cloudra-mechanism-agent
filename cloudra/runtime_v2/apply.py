@@ -226,7 +226,13 @@ def _apply_context_appended(core: RuntimeCore, envelope: EventEnvelope) -> None:
         return
     ctx = _context_of(core, envelope.session_id)
     data = envelope.data or {}
-    ctx.messages.extend(dict(message) for message in data.get("messages") or [])
+    messages = [dict(message) for message in data.get("messages") or []]
+    ctx.messages.extend(messages)
+    ctx.consumed_message_ids.update(
+        str(message["message_id"])
+        for message in messages
+        if message.get("role") == "user" and message.get("message_id")
+    )
     if data.get("notices_through") is not None:
         core.notices.apply_consumed(envelope.session_id, int(data["notices_through"]))
 
