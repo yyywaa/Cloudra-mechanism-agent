@@ -77,6 +77,9 @@ def test_snapshot_qm_log_water_minimum(tmp_path):
     assert snap.imaginary_frequencies is not None
     assert len(snap.imaginary_frequencies) == 0
     assert snap.final_energy_hartree is not None
+    assert snap.final_energy_hartree == pytest.approx(
+        -74.9659011806, rel=0, abs=1e-7,
+    )
 
 
 def test_validate_ts_mode():
@@ -109,3 +112,10 @@ def test_validate_species_minimum():
     res_imag = validate_species_minimum(freqs=[-50.0, 100.0, 1500.0])
     assert res_imag.is_valid is False
     assert res_imag.n_imag == 1
+
+    # A stale empty imaginary list must not override a negative full spectrum.
+    inconsistent = validate_species_minimum(
+        freqs=[-74.94, 108.03, 250.68], imaginary_freqs=[]
+    )
+    assert inconsistent.is_valid is False
+    assert inconsistent.imaginary_frequencies == [-74.94]

@@ -1,8 +1,11 @@
-"""R 族 + U 族登记（v3 缩减后）：R1 pinacol、U3 磷叶立德+甲醛（新收）、U5 Passerini、U6 Staudinger。
+"""R 族 + U 族登记：R1 pinacol、
+U3 磷叶立德+甲醛、U5 Passerini、U6 Staudinger。
 
 v3（2026-09-09）收窄为四条多步/中间体网络；R2/R3/U1/U7 剔出定稿名单留档池
-（条目见 normal.md）。竞争通道（R1 分步碳正离子路径、U6 协同 [2+2] 等）按
-normal.md 约定不进 gold，由 agent 自行探索。
+（条目见 normal.md）。v4（2026-09-25）换血：R4/U8 入正选替 A5/O3 槽——两条
+构建期各边暂不写 barrier；R4 于 2026-09-27 移入 impossible B10。U8 于 2026-09-26
+移入 impossible B9。U6 协同 [2+2] 竞争通道按 normal.md 约定不进 gold，
+由 agent 自行探索。
 """
 
 TASKS = {
@@ -18,14 +21,17 @@ TASKS = {
                 # PT：H3O+ 质子化 4 号碳上的 OH
                 "out": "[OH2:1].[CH3:3][C:4]([CH3:5])([OH+:6][H:2])[C:7]([CH3:8])([CH3:9])[O:10][H:11]",
                 "type": "proton transfer from H3O+ to one pinacol OH (leaving-group activation)",
-                "barrier": 0.0,
             },
             {
-                # 决速：脱水与 1,2-甲基迁移协同（半频哪醇式），断 C4-O6/C7-C8，
-                # 成 C4-C8 与 C7=O10 π → 质子化频哪酮 + H2O
+                # 脱水形成碳正离子/水离子对；未找到独立鞍点，参考垒缺测。
+                "out": "[OH2:1].[OH:6][H:2].[CH3:3][C+:4]([CH3:5])[C:7]([CH3:8])([CH3:9])[O:10][H:11]",
+                "type": "water departure from protonated pinacol -> tertiary carbocation/water ion pair",
+            },
+            {
+                # 1,2-甲基迁移：断 C7-C8，成 C4-C8 与 C7=O10 π。
                 "out": "[OH2:1].[OH:6][H:2].[CH3:3][C:4]([CH3:5])([CH3:8])[C:7](=[O+:10][H:11])[CH3:9]",
-                "type": "concerted semipinacol rearrangement (rate-determining): C-OH2+ cleavage with simultaneous 1,2-methyl shift and C=O pi formation; no free carbocation",
-                "barrier": 26.2,
+                "type": "1,2-methyl migration from the carbocation/water ion pair with C=O pi formation -> protonated pinacolone",
+                "barrier": 5.16,
                 "weight": 0.5,
             },
             {
@@ -43,31 +49,23 @@ TASKS = {
     # 映射：1=OH- 的 O，7=其 H；2=受体醛 C，3=其 O，6=转移的氢负 H；
     # C=O.O=CO.C[N+]#[C-]>>CNC(=O)COC=O  (0/1)  Passerini
     # 映射：1=醛 C，2=醛 O；3=甲酸羰基 C，4=其羰基 O，5=其羟基 O，6=酸性 H；
-    # 7=异腈甲基，8=N，9=异腈 C。
+    # 7=异腈甲基，8=N，9=异腈 C。首步把酸质子转移与异腈加成合并。
     "U5": {
         "name_en": "Passerini reaction: formaldehyde + formic acid + methyl isocyanide -> N-methyl-alpha-formyloxyacetamide",
-        "conditions_en": "nonpolar solvent, room temperature, high concentration",
+        "conditions_en": "dichloromethane (DCM), room temperature, high concentration",
         "mapped_reactants": "[CH2:1]=[O:2].[O:4]=[CH:3][O:5][H:6].[CH3:7][N+:8]#[C-:9]",
         "steps": [
             {
-                # PT：甲酸向甲醛质子转移 → 质子化甲醛 + 甲酸根
-                # 本机仅约束扫描上界 11.9、未定位鞍点 → 无可信锚点，撤回旧 0.0（无垒无证据；沿用 A2/A5 缺省 None 约定）
-                "out": "[CH2:1]=[O+:2][H:6].[O-:5][CH:3]=[O:4].[CH3:7][N+:8]#[C-:9]",
-                "type": "proton transfer from formic acid to formaldehyde -> protonated formaldehyde + formate",
-            },
-            {
-                # 异腈 C α-加成醛碳：成 C9-C1，断 C1=O2 π → nitrilium
+                # 联合：甲酸 O5-H6 断裂、O2-H6/C1-C9 成键、C1=O2 π 回落 → nitrilium/formate
                 "out": "[CH2:1]([O:2][H:6])[C:9]#[N+:8][CH3:7].[O-:5][CH:3]=[O:4]",
-                "type": "alpha-addition of the isocyanide carbon to the aldehyde carbon -> nitrilium ion",
-                "barrier": 8.2,
+                "type": "concerted formic-acid proton transfer and isocyanide C attack on formaldehyde -> nitrilium/formate contact ion pair",
+                "barrier": 8.21,
                 "weight": 0.5,
             },
             {
                 # 甲酸根 O 捕获 nitrilium C：成 O5-C9，断一根 C≡N π → 亚氨酸酯
                 "out": "[CH2:1]([O:2][H:6])[C:9](=[N:8][CH3:7])[O:5][CH:3]=[O:4]",
                 "type": "formate oxygen capture of the nitrilium carbon -> imidate (acyloxyimine) intermediate",
-                "barrier": 0.0,
-                "weight": 0.5,
             },
             {
                 # Mumm 重排：断 C3-O5，成 O2-C3，断 N=C π，成 C9=O5 π，O2-H 迁到 N8

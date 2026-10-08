@@ -97,17 +97,26 @@ class DagReviewSpecies(DagToolBase):
                 != review_target_identity(snapshot.delivery, "species", species.node_id)
             ):
                 return fail("dag_review_species", "the reviewed species changed after submission", accepted=False)
+            from cloudra.dag.file_science import file_scientific_checks
+            scientific_checks = await asyncio.to_thread(
+                file_scientific_checks, ctx.store, snapshot.delivery, species.node_id, evidence_refs=request.supporting_refs)
+            pending = {stage.kind.value for stage in species.stages if stage.required and stage.status.value == "pending"}
+            repairs = [check["next_action"] for stage, check in scientific_checks.items()
+                       if stage in pending and check["status"] != "passed"]
             decision = ReviewDecision(
                 request_id=request.request_id,
                 basis_fingerprint=request.basis_fingerprint,
                 verdict="accept" if user_input.verdict == "supported" else "reject",
                 reason=user_input.rationale.strip(),
                 evidence_refs=request.supporting_refs,
+                next_action=" ".join(dict.fromkeys(repairs)) or None,
             )
+            current_basis = await asyncio.to_thread(ctx.store.review_basis, request)
             reviewed = await asyncio.to_thread(
                 ctx.store.resolve_review,
                 decision,
                 expected_basis=request.basis_fingerprint,
+                current_basis=current_basis,
             )
         except Exception as exc:
             return fail("dag_review_species", str(exc), accepted=False)
@@ -124,10 +133,7 @@ class DagReviewSpecies(DagToolBase):
             result={
                 "species_name": user_input.species_name,
                 "verdict": user_input.verdict,
+                "scientific_checks": scientific_checks,
                 **reviewed,
             },
         )
-
-
-def get_class():
-    return DagReviewSpecies

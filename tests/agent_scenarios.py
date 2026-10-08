@@ -18,11 +18,18 @@
 | 杠杆 | 受影响的场景 |
 | :--- | :--- |
 | 默认 invocation protocol | 普通问答（默认协议下的纯文本收尾） |
+| Benchmark 方法策略作用域 | 普通项目残留白名单仍能生成用户指定的计算输入 |
 | 角色权限矩阵 | small_mol 技能→计算入口、unattended 拒批 |
 | 重试预算与 fail-fast 分类 | provider 暂态重试 / 永久 4xx |
 | 压缩阈值与摘要 | context overflow |
-| 结题门禁 + 编排模式 | dag_guided 证据门与督导裁决 |
+| 结题门禁 + 编排模式 | dag_guided 证据门与督导裁决、仅修订论证后清除旧拒绝 |
 | 消息投递/恢复语义 | 异步子 Agent 回传、重启 |
+| 督导反馈通知 + 后台等待 | 只读督导反馈唤醒协调员，消费消息后仍保护运行中的计算 |
+| 计算完成通知 + 后台等待 | 高通量仍在运行时消费单个结果，再回到等待状态 |
+| 工具进度持久化 | 阶段记录落盘失败立即终止 Agent，不重试工具副作用 |
+| YOLO 审批结构校验 | 非布尔结论不得写入文件 |
+| TS 故障检查点 + 干预预算 | 重复相同 scan 续接保留原故障、不耗尽预算 |
+| TS fixture 频率门禁 + 终态事件 | 真实零虚频日志阻止 IRC，重复 resume 保留故障与预算 |
 """
 
 from __future__ import annotations
@@ -30,6 +37,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from cloudra.runtime_v2.adapters import LegacyToolExecutor
@@ -170,6 +178,36 @@ def _summary_json(messages: list[dict[str, Any]]) -> str:
     )
 
 
+def ordinary_method_input_steps(source: Path, output: Path) -> list[Step]:
+    """普通项目生成不在旧白名单里的方法/基组；无需启动 QM。"""
+    return [Step(tools=[("qm_input_writer", {
+        "engine": "orca", "source_type": "xyz_file", "source_value": str(source),
+        "method": "PBE0", "basis_set": "def2-TZVP", "output_path": str(output),
+    })]), Step(stop=True)]
+
+
+def malformed_shell_steps() -> list[Step]:
+    """非法 shell 必须终结为被拦工具调用，后续 Agent 回合仍能继续。"""
+    return [
+        Step(tools=[("bash", {"command": 'echo "unfinished'})]),
+        Step(tools=[("todo_write", {"todos": [{"content": "Recovered after invalid input", "status": "done"}]})]),
+        Step(stop=True),
+    ]
+
+
+def compute_result_recovery_steps() -> list[Step]:
+    """已完成计算唤醒后处理结果，其他作业继续运行时再次挂起。"""
+    return [
+        Step(tools=[("todo_write", {"todos": [{"content": "Review completed calculation", "status": "done"}]})]),
+        Step(stop=True),
+    ]
+
+
+def supervisor_feedback_recovery_steps() -> list[Step]:
+    """协调员收到督导反馈后重新进入一轮，未完成计算仍受结题门禁保护。"""
+    return [Step(tools=[("agent_hub", {"action": "browse"})]), Step(stop=True)]
+
+
 class ScenarioHarness:
     """一次场景的完整运行时。"""
 
@@ -218,9 +256,14 @@ class ScenarioHarness:
         self.project = None
 
     @classmethod
-    async def start(cls, tmp_path, **kwargs: Any) -> "ScenarioHarness":
+    async def start(
+        cls, tmp_path, *, workspace_dir: str | Path | None = None, **kwargs: Any
+    ) -> "ScenarioHarness":
         harness = await asyncio.to_thread(cls, tmp_path, **kwargs)
-        await harness.bus.execute(Command(type="project.create", payload={"name": "scenario"}))
+        payload = {"name": "scenario"}
+        if workspace_dir is not None:
+            payload["workspace_dir"] = str(workspace_dir)
+        await harness.bus.execute(Command(type="project.create", payload=payload))
         harness.project = next(iter(harness.core.projects.values()))
         return harness
 
@@ -385,3 +428,41 @@ class ScenarioHarness:
             f"agent={agent.id} state={agent.state.value} "
             f"runs={self.run_rows(agent)} tools={self.tool_events(agent)}"
         )
+
+
+# Names shared by the zero-key TS state-machine regressions.
+TS_SCENARIOS = ('ts_prepare_once_auto_complete', 'ts_failed_scan_repair_same_run', 'ts_readonly_inspection',
+                'ts_resume_scan_without_freeze', 'ts_d1_atom_binding_native_scan_recovery')
+
+
+def d1_component_order_files(workspace: Path) -> tuple[Path, Path]:
+    """Isolated 16-atom D1 reactant-order fixture; no live Gold or compute data."""
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+
+    fragments = []
+    for fragment in Chem.GetMolFrags(Chem.MolFromSmiles('C=CC=C.C=C'), asMols=True):
+        molecule = Chem.AddHs(fragment)
+        if AllChem.EmbedMolecule(molecule, randomSeed=42) != 0:
+            raise ValueError('D1 fixture embedding failed')
+        fragments.append(molecule)
+    combined = Chem.CombineMols(*fragments)
+    geometry = Chem.Conformer(combined.GetNumAtoms())
+    offset = 0
+    for index, molecule in enumerate(fragments):
+        for atom in range(molecule.GetNumAtoms()):
+            point = molecule.GetConformer().GetAtomPosition(atom)
+            geometry.SetAtomPosition(offset + atom, (point.x + (7 if index else 0), point.y, point.z))
+        offset += molecule.GetNumAtoms()
+    combined.RemoveAllConformers()
+    combined.AddConformer(geometry)
+    xyz, graph = workspace / 'd1_component_order.xyz', workspace / 'd1_component_order.mol'
+    xyz.write_text(Chem.MolToXYZBlock(combined))
+    graph.write_text(Chem.MolToMolBlock(combined))
+    return xyz, graph
+
+
+def scope_review_completion_steps() -> list[Step]:
+    """Read authoritative delivery, then request completion after scoped re-review."""
+    return [Step(tools=[("dag_delivery_report", {})]),
+            Step(tools=[("stop", {"delivery_disposition": "complete"})])]

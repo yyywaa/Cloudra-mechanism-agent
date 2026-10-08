@@ -5,7 +5,7 @@
 
 [![CI](https://github.com/yyywaa/Cloudra-mechanism-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/yyywaa/Cloudra-mechanism-agent/actions/workflows/ci.yml)
 [![Python ≥ 3.11](https://img.shields.io/badge/python-%E2%89%A53.11-blue)](pyproject.toml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
 [中文文档](README_CN.md) · [Documentation Hub](docs/README.md) · [Core Novelty](docs/novelty.md) · [DAG Orchestration Spec](docs/DAG_ORCHESTRATION.md) · [TS Process SOP](docs/TS_PROCESS_SOP.md) · [Plugin Guide](docs/PLUGINS.md)
 
@@ -66,6 +66,29 @@ export CLOUDRA_COORDINATOR__NATIVE_SEARCH_PARAMS='{}' # Custom provider paramete
 ```
 
 When native search is not enabled, the system automatically falls back to external search tools (Tavily, Brave, Bing, or DuckDuckGo).
+
+### 5. ChatGPT / Codex OAuth
+
+Select **OpenAI Codex (ChatGPT account)** in Global Settings, click the ChatGPT / Codex login button, open the authorization page and enter the displayed device code. After authorization, save the coordinator and/or follower model configuration. Both slots share the Cloudra account login.
+
+The same flow is available from the CLI:
+
+```bash
+cloudra auth codex login
+cloudra config set coordinator.provider openai-codex
+cloudra config set coordinator.model gpt-6-sol
+cloudra config set follower.provider openai-codex
+cloudra config set follower.model gpt-6-sol
+cloudra auth codex status
+# Sign out of the Cloudra account session:
+cloudra auth codex logout
+```
+
+The provider accepts the aliases `codex` and `openai_codex`. Model access depends on your ChatGPT account. Device authorization may need to be enabled in your ChatGPT account or workspace security settings; see [OpenAI authentication guidance](https://developers.openai.com/codex/auth/).
+
+Cloudra stores its independent OAuth session in `.codex_oauth.json` under its configured data directory, with owner-only permissions. It refreshes expiring access tokens and saves rotated refresh tokens under a process lock. Status queries are read-only. Login credentials are never returned to the Web UI or saved as model API keys.
+
+Codex requests use the dedicated `https://chatgpt.com/backend-api/codex/responses` endpoint with `store=false`. Agent, compaction and auxiliary calls share this transport. The endpoint requires streaming; Cloudra also assembles a normal response for callers using `stream=false`. Generic sampling parameters (`temperature`, `top_p`) and output-token limits are omitted on this route.
 
 ---
 
@@ -211,23 +234,22 @@ Cloudra seamlessly bridges local exploratory modeling and remote cluster computi
 ## Repository Layout
 
 ```text
-cloudra/
-├── core/                        Agent base types and scientific supervision (Supervisor)
-├── services/                    Control plane API service (api_v2 package: app/routers/context/models)
-├── persistence/                 SQLite store, immutable artifacts, long-term memory, paths
-├── base/                        Data classes and tool/skill loading contracts
-├── infra/                       Config (disk-YAML source of truth), LLM transports, flock primitives, unified logging
-├── dag/                         Mechanism evidence graph subsystem (Engine, Store, Controller)
-├── runtime/                     Deterministic prompt assembly, workspace observer, compute guard & monitoring
-├── scheduler/                   Process-isolated compute scheduler daemon (queueing, capacity accounting, flock-based crash reconciliation)
-├── runtime_v2/                  Event-driven reasoning kernel (Pipeline, Commands, PolicyStages, Bridges)
-├── benchmark/                   Task generators, 3-layer evidence scoring, and batch evaluation runner
-├── tools/, subagents/           Perception toolboxes and specialized domain roles (dft, md, explorer, etc.)
-├── skills/, prompts/            Domain methodology skills and version-controlled role prompts
-└── frontend/                    Modern React + TypeScript + Vite web console
-docs/                            System architecture specs, SOPs, experimental gates, benchmark surveys
-paper/                           Academic paper manuscripts, literature gap analysis, and benchmark construction
+cloudra/                         Python package: runtime, services, tools, benchmark, prompts and skills
+frontend/                        React + TypeScript + Vite web console
+scripts/                         Setup, runtime/data helpers and application_docs/ one-off editors
+deploy/                          Deployment and remote-compute guides
+tests/                           Regression tests and scientific fixtures
+docs/                            Current architecture/SOPs, evidence, licenses, assets and archive/
+paper/                           Manuscripts, literature/ sources and archive/ research snapshots
+ideapool/                        Versioned task sources, generated tasks and historical research
+gold_compute/                    Gold methodology, scientific records and archived handoffs
+kg_data/, vector_store/          Knowledge graph inputs and vector metadata
+知识卡片/                       Knowledge-card source archive
+申请材料/, 软著申请材料/        External application deliverables (existing paths preserved)
+archive/                         Local experiment remnants (ignored; tracked README exception)
 ```
+
+See the [documentation hub](docs/README.md), [script index](scripts/README.md) and [literature index](paper/literature/README.md) for details. Root configuration, license/citation files, `install.sh` and `web.sh` remain in place; temporary runtime and build outputs are ignored.
 
 ---
 
@@ -260,4 +282,22 @@ If you use or reference Cloudra in your scientific research, please cite the rep
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+Copyright (C) 2026 Cloudra Team.
+
+Cloudra is free software: you can redistribute it and/or modify it under the terms of the
+[GNU Affero General Public License](LICENSE) as published by the Free Software Foundation,
+either version 3 of the License, or (at your option) any later version.
+
+Cloudra is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+[GNU Affero General Public License](LICENSE) for more details.
+
+Third-party components bundled in this repository keep their own licenses — see
+[docs/licenses/](docs/licenses/README.md).
+
+The skills under `cloudra/skills/` are a deliberate exception: each declares `license: MIT`
+and is MIT licensed, so the knowledge stays portable across agent harnesses. The engine,
+the DAG, the tools and the scheduler remain AGPL.
+
+Contributions are accepted under the Developer Certificate of Origin; sign your commits with
+`git commit -s`. See [CONTRIBUTING.md](CONTRIBUTING.md).

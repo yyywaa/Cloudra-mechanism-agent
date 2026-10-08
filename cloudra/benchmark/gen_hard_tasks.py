@@ -3,7 +3,7 @@
 Reads the curated hard-tier markdown (stereochemistry tier) and emits one
 TaskSpec JSON per task into ideapool/tasks/hard/H<id>.json for the finalized
 10-task list (TASK_IDS; the pool keeps 51 entries but only the finalized list
-is generated — 见 hard.md "定稿圈定"段)。v3（2026-09-09）将 20 条缩至 10 条并为
+is generated — 见 hard.md "定稿圈定"段)。2026-09-30 以 B1 替换 E2；v3（2026-09-09）将 20 条缩至 10 条并为
 hard 开放 DFT（B3LYP-D3(BJ)/def2-SVP）白名单。The markdown is the
 human-curated source of truth for SMILES / charges / anchors; this generator
 is deterministic and re-runnable.
@@ -16,7 +16,7 @@ Hard-tier specifics vs normal (gen_normal_tasks):
   承载**在 gold 边 `barrier_kcal_mol` 上（来源为 registry 各步 `barrier` 键），
   accuracy 逐边加权评分（σ=2.0，同 normal）。题级锚点路由由登记表 `anchor` 键给：
   "selectivity" / "barrier" / None（"barrier" 仅用于校验题源格锚点与 registry
-  逐边最大能垒一致；不再写任何题级 reference_computation）。
+  对应能垒一致；同端点竞争路径以主路径为锚；不再写题级 reference_computation）。
 - gold 机理图带竞争立体化学通道：主写出线照旧为主线边列，登记表
   `competing` 列出副通道（默认从反应物络合物出发到副产物/副中间体节点），
   子图打分据此要求 agent 两条 TS 都交付才算覆盖。立体专一题（副通道被
@@ -79,7 +79,6 @@ from cloudra.benchmark.schema import (
     GoldMechanismGraph,
     GoldSpec,
     GraphSimilarityRubric,
-    IntegrityRubric,
     MechanismEdge,
     MechanismNode,
     MethodPolicy,
@@ -99,14 +98,13 @@ DEFAULT_SRC = REPO_ROOT / "ideapool" / "reaction_candidates" / "hard.md"
 DEFAULT_OUT = REPO_ROOT / "ideapool" / "tasks" / "hard"
 
 # hard.md "定稿圈定"段的权威名单（v3 缩减：20 → 10；池子其余条目留档不生成）。
-# v3 保留：A1 torqueselection / A6 WH×torqueselection / D2 Fürst–Plattner /
-# E2 轴向进攻 / E3 CBS / F1 Henbest / G2 Claisen 椅-船 / H1 联萘消旋 /
-# I1 脯氨酸 aldol / L1 肟 Beckmann（全 ≤20 重原子，开放 B3LYP-D3(BJ)/def2-SVP）。
+# 2026-10-01：A8/H6PI 替换 E3，B10/HDA_CN 替换 G2；旧源与证据留档。
+# 正选：A1/A6/A8 电环化，B1/B10 DA，D2 环氧开环，F1 环氧化，H1 联萘，I1 aldol，L1 Beckmann。
 TASK_IDS = (
-    "A1 A6 D2 E2 E3 F1 G2 H1 I1 L1"
+    "A1 A6 B1 D2 A8 F1 B10 H1 I1 L1"
 ).split()
 
-# 绝对能垒逐边承载在 gold 边 barrier_kcal_mol（H1 消旋阻垒 ΔG‡ 23.5 等），
+# 绝对能垒逐边承载在 gold 边 barrier_kcal_mol（H1 两条自算 ΔE‡ 等），
 # accuracy 逐边加权评分（σ=2.0 同 normal）；有参考边才 enabled（selectivity 题
 # 的 accuracy 槽位由定性选择性评分占用）。
 _BARRIER_SIGMA = 2.0
@@ -205,12 +203,17 @@ def _validate_task(pid: str, entry: dict, pool_reactants: list[str], pool_produc
                 f"末步产物去映射后与池内产物不一致: "
                 f"{sorted(_unmap_canonical(steps[-1]['out']))} != {pool_p}"
             )
-        # 副通道：守恒规则相同；副产物/副中间体必须与主线节点立体/连接性可区分
+        # 副通道：通常须有不同产物；阻转异构的两条路径可共享同一端点。
         for k, step in enumerate(entry.get("competing", []), 1):
             origin = entry["mapped_reactants"] if step.get("from_step", 0) == 0 else steps[step["from_step"] - 1]["out"]
             errors.extend(_validate_step_conservation(f"副通道 {k}", origin, step))
             minor = sorted(_unmap_canonical(step["out"]))
-            if minor in main_outs or minor == pool_p:
+            if step.get("same_endpoint"):
+                if step.get("from_step", 0) != 0 or minor != pool_p or not step.get("conformational"):
+                    errors.append(f"副通道 {k} same_endpoint 仅适用于从反应物出发、与主产物相同的构象路径")
+                if not step.get("channel") or step["channel"] == steps[-1].get("channel"):
+                    errors.append(f"副通道 {k} same_endpoint 必须有不同的 channel")
+            elif minor in main_outs or minor == pool_p:
                 errors.append(f"副通道 {k} 产物与主线节点不可区分（立体或连接性必须不同）")
     except ValueError as e:
         errors.append(str(e))
@@ -278,7 +281,8 @@ def _build_graph(pid: str, reactants: list[str], products: list[str], entry: dic
         origin_mapped = entry["mapped_reactants"] if from_step == 0 else steps[from_step - 1]["out"]
         is_product = step.get("is_product", True)
         default_label = f"minor {'product' if is_product else 'intermediate'} {k}"
-        minor = MechanismNode(
+        same_endpoint = bool(step.get("same_endpoint"))
+        minor = None if same_endpoint else MechanismNode(
             id=f"{tid}_M{k}",
             role=NodeRole.PRODUCT if is_product else NodeRole.INTERMEDIATE,
             smiles=_unmap_canonical(step["out"]),
@@ -290,7 +294,7 @@ def _build_graph(pid: str, reactants: list[str], products: list[str], entry: dic
         edges.append(
             MechanismEdge(
                 id=f"{tid}_EM{k}",
-                **{"from": origin_id, "to": minor.id},
+                **{"from": origin_id, "to": f"{tid}_P" if same_endpoint else minor.id},
                 via=ts.id,
                 step_type=step["type"],
                 bond_changes=BondChangeSet(**{"break": breaks}, form=forms),
@@ -302,7 +306,9 @@ def _build_graph(pid: str, reactants: list[str], products: list[str], entry: dic
                 favored=_step_favored(step, main=False),
             )
         )
-        nodes.extend([ts, minor])
+        nodes.append(ts)
+        if minor is not None:
+            nodes.append(minor)
     return GoldMechanismGraph(nodes=nodes, edges=edges)
 
 
@@ -317,6 +323,7 @@ def _query(
     mapped: str,
     allowed_methods: Sequence[str] | None = None,
     require_node_energies: bool = True,
+    score_selectivity: bool = True,
 ) -> str:
     rs = ".".join(reactants)
     ps = ".".join(products)
@@ -335,9 +342,15 @@ def _query(
         "The 1-based map numbers in it are the indexing convention for `bond_changes` "
         "(keep using the plain SMILES above for graph nodes and evidence annotations). "
         "The product SMILES above state connectivity only: resolving the stereochemical "
-        "outcome is part of the deliverable. Investigate the competing stereochemical "
-        "channels (not only the major one), and make sure the stereochemistry of every "
-        "product and intermediate node is stated in its SMILES. "
+        "outcome is part of the deliverable. "
+        + (
+            "Investigate the competing stereochemical channels (not only the major one), and make sure "
+            "the stereochemistry of every product and intermediate node is stated in its SMILES. "
+            if score_selectivity else
+            "Investigate the stereochemical pathways compatible with the stated conditions; "
+            "a forbidden counterfactual pathway is not required. Make sure the stereochemistry "
+            "of every product and intermediate node is stated in its SMILES. "
+        ) +
         "The reaction may proceed through a multi-step network: represent each intermediate "
         "you identify as a node and each elementary step as an edge; competing pathways you "
         "investigate deserve their own edges. "
@@ -361,13 +374,18 @@ def _query(
         "can bind each graph element to concrete evidence. "
         + barrier_declaration_clause(require_node_energies)
         + TS_EVIDENCE_CLAUSE +
-        "For each competing stereochemical channel, declare on that channel's edge a "
-        "`channel` field (a short label identifying the channel) and `favored: true` on "
-        "exactly the one channel your computed barriers favor (`favored: false` on the "
-        "other channels); the favored-channel assignment is scored qualitatively (right "
-        "or wrong). Also record the barrier difference (minor-channel TS minus "
-        "major-channel TS) in kcal/mol in your report; the numeric difference is "
-        "recorded but not scored numerically. "
+        (
+            "For each competing stereochemical channel, declare on that channel's edge a "
+            "`channel` field (a short label identifying the channel) and `favored: true` on "
+            "exactly the one channel your computed barriers favor (`favored: false` on the "
+            "other channels); the favored-channel assignment is scored qualitatively (right "
+            "or wrong). Also record the barrier difference (minor-channel TS minus "
+            "major-channel TS) in kcal/mol in your report; the numeric difference is "
+            "recorded but not scored numerically. "
+            if score_selectivity else
+            "For each stereochemical channel you investigate, state its identity and barrier. "
+            "Report any energy difference and its uncertainty; no favored-channel assignment is scored for this task. "
+        ) +
         "Run the computations with ORCA or Gaussian: the scorer parses only these two "
         f"programs' log formats, so output from any other program cannot count as evidence.{methods_part}"
     )
@@ -428,14 +446,16 @@ def parse_hard_md(src: Path, only: set[str] | None = None) -> list[TaskSpec]:
             e.barrier_kcal_mol for e in graph.edges if e.barrier_kcal_mol is not None
         ]
         if anchor == "barrier":
-            # 题源格的绝对能垒锚点必须与 registry 逐边值一致（决速步 = 最大逐边值）
+            # 独立竞争通道共用端点时，题源格锚定主路径，其余逐边承载。
             if not edge_barriers:
                 all_errors[pid] = ["anchor='barrier' 但 registry 未给出任何逐边能垒"]
                 continue
-            if abs(max(edge_barriers) - anchor_val) > 1e-9:
+            parallel = any(s.get("same_endpoint") for s in entry.get("competing", []))
+            anchor_barrier = entry["steps"][-1].get("barrier") if parallel else max(edge_barriers)
+            if anchor_barrier is None or abs(anchor_barrier - anchor_val) > 1e-9:
                 all_errors[pid] = [
-                    f"题源能垒锚点 {anchor_val} 与 registry 逐边最大能垒 "
-                    f"{max(edge_barriers)} 不一致"
+                    f"题源能垒锚点 {anchor_val} 与 registry 对应能垒 "
+                    f"{anchor_barrier} 不一致"
                 ]
                 continue
 
@@ -479,6 +499,7 @@ def parse_hard_md(src: Path, only: set[str] | None = None) -> list[TaskSpec]:
                         entry["mapped_reactants"],
                         allowed_methods=policy.allowed_methods,
                         require_node_energies=require_node_energies,
+                        score_selectivity=entry.get("score_selectivity", True),
                     )
                 ),
                 method_policy=policy,
@@ -499,7 +520,6 @@ def parse_hard_md(src: Path, only: set[str] | None = None) -> list[TaskSpec]:
                 ),
                 rubric=RubricSpec(
                     graph_similarity=GraphSimilarityRubric(stereo_tier_rule="hard_stereo_costly"),
-                    integrity=IntegrityRubric(require_node_energies=require_node_energies),
                     accuracy=accuracy,
                 ),
             )

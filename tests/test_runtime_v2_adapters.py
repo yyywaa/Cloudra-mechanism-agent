@@ -11,13 +11,22 @@ from cloudra.runtime_v2.adapters import (
     LegacyLLMProvider,
     LegacyPromptProvider,
     LegacyToolExecutor,
-    _parse_tool_calls,
+    _parse_merged_tool_calls,
     _to_api_message,
     legacy_tool_schemas,
 )
 from cloudra.runtime_v2.commands import CommandBus
 from cloudra.runtime_v2.core import RuntimeCore
 from cloudra.runtime_v2.schemas import Command, RuntimeSettings
+
+
+@pytest.fixture(autouse=True)
+def isolated_model_accounting(monkeypatch):
+    # Provider-shape unit tests use minimal agents; scoped accounting is covered
+    # separately with real process/budget rows.
+    async def no_process(*args):
+        return None
+    monkeypatch.setattr('cloudra.services.conformer_model_budget.ModelRequestAccounting.for_agent', no_process)
 
 
 def test_legacy_tool_schemas_filters_by_name():
@@ -349,18 +358,11 @@ def test_extract_delta_reasoning_compatibility():
     assert _extract_delta_reasoning(d7) is None
 
 
-def test_parse_tool_calls_handles_json_args():
-    raw = SimpleNamespace(
-        message=SimpleNamespace(
-            tool_calls=[
-                SimpleNamespace(
-                    id="tc1",
-                    function=SimpleNamespace(name="stop", arguments='{"reason": "done"}'),
-                )
-            ]
-        )
-    )
-    calls = _parse_tool_calls(raw)
+def test_parse_merged_tool_calls_handles_json_args():
+    calls = _parse_merged_tool_calls([{
+        "id": "tc1", "function": {"name": "stop", "arguments": '{"reason": "done"}'},
+    }])
+    assert calls[0].id == "tc1"
     assert calls[0].name == "stop"
     assert calls[0].arguments == {"reason": "done"}
 
@@ -611,7 +613,7 @@ async def test_legacy_tool_executor_runs_stop_tool():
 
     output = await executor.execute(agent, ToolCall(id="tc1", name="stop", arguments={"reason": "done"}))
     assert output.is_success is True
-    assert "Task stopped" in output.summary
+    assert output.data["stopped"] is True
 
 
 @pytest.mark.asyncio
@@ -638,7 +640,9 @@ async def test_legacy_tool_executor_attaches_bridge_to_narrowed_tools():
         result.data, ToolCall(id="tc1", name="goal_set", arguments={"objective": "hold the line"})
     )
     assert output.is_success is True, output.summary
-    assert "Goal anchor set" in output.summary
+    assert output.data["goal"] == {
+        "objective": "hold the line", "completion_criteria": "", "current_focus": "",
+    }
 
 
 @pytest.mark.asyncio
@@ -667,6 +671,58 @@ async def test_legacy_tool_executor_reports_unknown_tool():
     )
     assert retired.is_success is False
     assert "read" in retired.summary
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool_name", ["write", "edit"])
+@pytest.mark.parametrize("status,successful", [
+    ("conflict", False), ("failed", False), ("declined", False), ("applied", True),
+])
+async def test_file_mutation_executor_reports_actual_write_result(
+    tmp_path, monkeypatch, tool_name, status, successful,
+):
+    """A rejected file change must not become successful at the runtime boundary."""
+    from hashlib import sha256
+
+    from cloudra.base.tools_class import Tool
+    from cloudra.runtime_v2.policies.base import ToolCall
+
+    target = tmp_path / "exists.txt"
+    await asyncio.to_thread(target.write_text, "keep\n", encoding="utf-8")
+    expected_sha256 = "0" * 64 if status == "conflict" else sha256(b"keep\n").hexdigest()
+    if tool_name == "write":
+        arguments = {
+            "path": "exists.txt", "expected_sha256": expected_sha256,
+            "content": "keep\n" if status == "failed" else "replace\n",
+        }
+    else:
+        arguments = {
+            "path": "exists.txt", "expected_sha256": expected_sha256,
+            "edits": [{"old_text": "" if status == "failed" else "keep", "new_text": "replace"}],
+        }
+    if status in {"declined", "applied"}:
+        async def user_decision(self, session, details, tool_args=None):
+            return (False, "User declined") if status == "declined" else (True, "")
+
+        monkeypatch.setattr(Tool, "ensure_safety", user_decision)
+
+    core = RuntimeCore(strict_events=True)
+    bus = CommandBus(core)
+    await bus.execute(Command(type="project.create", payload={"name": "p", "workspace_dir": str(tmp_path)}))
+    project = next(iter(core.projects.values()))
+    spawned = await bus.execute(Command(
+        type="agent.spawn", target={"project_id": project.id},
+        payload={"role_id": "coordinator", "query": "Edit a file"},
+    ))
+    output = await LegacyToolExecutor(core).execute(
+        spawned.data, ToolCall(id="tc_file_change", name=tool_name, arguments=arguments),
+    )
+
+    assert output.data["status"] == status
+    assert output.data["is_written"] is successful
+    assert await asyncio.to_thread(target.read_text, encoding="utf-8") == ("replace\n" if successful else "keep\n")
+    assert output.is_success is successful
+    assert output.error is None
 
 
 def _chunk(content=None, finish_reason=None, tool_calls=None):
@@ -902,3 +958,24 @@ async def test_usage_cache_details_pass_through_to_response():
     response = await provider.complete(_js_agent("traditional"), [{"role": "user", "content": "hi"}], ["stop"])
     assert response.usage["prompt_tokens_details"]["cached_tokens"] == 80
     assert response.usage["prompt_tokens"] == 100
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('failure_at', ['lookup', 'finish'])
+async def test_provider_closes_client_when_model_accounting_fails(monkeypatch, failure_at):
+    from unittest.mock import AsyncMock
+
+    from cloudra.runtime_v2.schemas import InvocationProtocol
+
+    client = _recording_client({})
+    client.aclose = AsyncMock()
+    accounting = SimpleNamespace(finish=AsyncMock(side_effect=RuntimeError('accounting failed')))
+    async def lookup(*args):
+        if failure_at == 'lookup':
+            raise RuntimeError('accounting failed')
+        return accounting
+    monkeypatch.setattr('cloudra.services.conformer_model_budget.ModelRequestAccounting.for_agent', lookup)
+    provider = LegacyLLMProvider(client_factory=lambda settings: client)
+    with pytest.raises(RuntimeError, match='accounting failed'):
+        await provider.complete(_js_agent(InvocationProtocol.JAVASCRIPT), [{'role': 'user', 'content': 'hi'}], [])
+    client.aclose.assert_awaited_once()

@@ -38,7 +38,7 @@ class DagSubmitStepEvidenceInput(input_schema):
     )
     irc_file: Optional[str] = Field(
         default=None,
-        description="Optional path to combined IRC calculation output file.",
+        description="Optional original combined IRC output path. Keep native ORCA endpoint/trajectory files in the job directory; this tool archives them together. Do not submit a renamed standalone copy.",
     )
     irc_forward_file: Optional[str] = Field(
         default=None,
@@ -55,13 +55,22 @@ class DagSubmitStepEvidenceInput(input_schema):
 
 
 class DagSubmitStepEvidence(DagToolBase):
+    def is_manage(self) -> bool:
+        return False
+
+    def is_write(self) -> bool:
+        return True
+
     tool_id: str = "t-dag-submit-step-evidence"
     tool_name: str = "dag_submit_step_evidence"
     tool_description: str = (
         "Submit calculation output files as evidence for an elementary step in the delivery graph. "
         "Automatically validates that the TS calculation contains exactly one imaginary frequency. "
         "In dag_record mode, attach validated evidence snapshots. "
-        "In dag_guided mode, submits the evidence to the Supervisor for review."
+        "In dag_guided mode, submits the evidence to the Supervisor for review. "
+        "Default steps also require short_irc direction proof for final delivery: "
+        "supply irc_file or both directional IRC files when available. "
+        "Submitting only the TS log leaves the IRC stage pending."
     )
     input_schema: Any = DagSubmitStepEvidenceInput
     output_schema: Any = DagToolOutput
@@ -221,13 +230,18 @@ class DagSubmitStepEvidence(DagToolBase):
                 accepted=False,
             )
 
+        from cloudra.dag.file_science import file_scientific_checks
+        graph = await asyncio.to_thread(ctx.store.load_snapshot)
+        scientific_checks = await asyncio.to_thread(file_scientific_checks, ctx.store, graph.delivery, step.edge_id, irc_files=irc_snaps, workspace_root=workspace_root, evidence_refs=[ref, *irc_refs])
+
         review = ActiveReview(
             review_id=f"rev_{uuid.uuid4().hex}",
             kind="step",
             target_name=user_input.step_name,
             target_id=step.edge_id,
-            requester=getattr(self.subagent, "agent_id", "coordinator") or "coordinator",
+            requester=session.id,
             details={
+                "scientific_checks": scientific_checks,
                 "element_type": "step",
                 "step_name": user_input.step_name,
                 "target_identity": review_target_identity(snapshot.delivery, "step", step.edge_id),
@@ -256,13 +270,10 @@ class DagSubmitStepEvidence(DagToolBase):
             result={
                 "step_name": user_input.step_name,
                 "status": "submitted_for_review",
+                "scientific_checks": scientific_checks,
                 "ts_validation": ts_val.model_dump(),
                 "review_id": review.review_id,
                 "enqueued": enqueued,
                 "message": f"Step '{user_input.step_name}' evidence submitted for Supervisor review.",
             },
         )
-
-
-def get_class():
-    return DagSubmitStepEvidence

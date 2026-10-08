@@ -11,7 +11,7 @@
 片间解离判据（vdW 接触倍数）              1.5        最近片间原子对距离 > 1.5×两原子 vdW 半径和即
                                                     判为已解离（不是复合物），丢弃不交付
 反应中心引导保留的放置数                  8          经反应中心距离打分后取最优（仅反应模式）
-反应中心距离窗口                          1.8–2.6 Å  反应物/产物映射得到的反应中心对的预组织窗口
+反应中心距离窗口                          1.6–3.0 Å  反应物/产物映射得到的反应中心对的预组织窗口
 能量窗                                    6.0 kcal/mol 沿用 conformer_search 的既有默认值
 重原子 RMSD 聚类阈值                      0.5 Å      沿用 conformer_search 的既有默认值
 ======================================  =========  ==================================================
@@ -88,7 +88,7 @@ class AssemblyParameters(BaseModel):
         default=1.0, description="片间碰撞判据：任意两碎片原子间距必须 ≥ 此值（Å）"
     )
     max_interfragment_vdw_factor: float = Field(
-        default=1.5,
+        default=1.7,
         description="片间解离判据：弛豫后最近片间原子对的距离超过其 vdW 接触距离（两原子 "
                     "vdW 半径之和）的此倍数，即判为已解离——碎片只是被推开而没有相互作用，"
                     "丢弃不交付",
@@ -97,7 +97,7 @@ class AssemblyParameters(BaseModel):
         default=8, description="反应模式下按反应中心距离打分后保留的放置数"
     )
     reaction_center_window: tuple[float, float] = Field(
-        default=(1.8, 2.6), description="反应中心距离的预组织窗口（Å）：约束目标与释放条件"
+        default=(1.6, 3.0), description="反应中心距离的预组织窗口（Å）：约束目标与释放条件"
     )
     energy_window_kcal: float = Field(default=6.0, description="候选保留的相对能量窗（kcal/mol）")
     rmsd_threshold: float = Field(default=0.5, description="重原子 RMSD 聚类阈值（Å）")
@@ -272,6 +272,38 @@ def _separate_along_axis(positions, groups, required_gap: float):
     return positions
 
 
+def interfragment_clusters(positions, groups, atomic_numbers, *, factor=1.7):
+    """Connected fragment groups using each pair's closest atoms (all indices internal)."""
+    import math
+
+    table = Chem.GetPeriodicTable()
+    neighbors = [set() for _ in groups]
+    for left in range(len(groups)):
+        for right in range(left + 1, len(groups)):
+            distance, a, b = min(
+                (math.dist(positions[a], positions[b]), a, b)
+                for a in groups[left] for b in groups[right]
+            )
+            contact = factor * (table.GetRvdw(atomic_numbers[a]) + table.GetRvdw(atomic_numbers[b]))
+            if distance <= contact:
+                neighbors[left].add(right)
+                neighbors[right].add(left)
+    remaining = set(range(len(groups)))
+    clusters = []
+    while remaining:
+        stack = [min(remaining)]
+        cluster = set()
+        while stack:
+            node = stack.pop()
+            if node in cluster:
+                continue
+            cluster.add(node)
+            stack.extend(neighbors[node] - cluster)
+        remaining -= cluster
+        clusters.append(sorted(cluster))
+    return clusters
+
+
 def _sample_placements(mol, groups, parameters: AssemblyParameters):
     """枚举刚性放置：对每个非首碎片按 Fibonacci 方向做刚体旋转 + 确定性绕轴扭转，再平移满足碰撞判据。
 
@@ -329,7 +361,9 @@ def _mmff_force_field(mol, conf_id: int):
 
 def _relax_with_trajectory(mol, conf_id: int, writer: TrajectoryWriter,
                            parameters: AssemblyParameters, constraints: list[tuple[int, int]],
-                           release_when_in_window: Optional[tuple[float, float]]) -> tuple[bool, bool, str]:
+                           release_when_in_window: Optional[tuple[float, float]],
+                           guided_windows: Optional[list[tuple[int, int, float, float]]] = None,
+                           ) -> tuple[bool, bool, str]:
     """弛豫一个放置；可选加反应中心距离约束并按批准窗口条件释放。
 
     返回 ``(converged, constraint_released, failure)``。
@@ -344,10 +378,13 @@ def _relax_with_trajectory(mol, conf_id: int, writer: TrajectoryWriter,
         ff = _mmff_force_field(mol, conf_id)
         if ff is None:
             return False, False, "MMFF94 could not be constructed for the assembled complex"
-        for left, right in constraints:
+        windows = guided_windows if guided_windows is not None else [
+            (left, right, *release_when_in_window) for left, right in constraints
+        ]
+        for left, right, low, high in windows:
             ff.MMFFAddDistanceConstraint(
                 left, right, False,
-                float(release_when_in_window[0]), float(release_when_in_window[1]),
+                float(low), float(high),
                 MMFF_CONSTRAINT_FORCE_CONSTANT,
             )
         ff.Initialize()
@@ -358,7 +395,7 @@ def _relax_with_trajectory(mol, conf_id: int, writer: TrajectoryWriter,
         if code != 0:
             return False, False, ""
 
-        if constraints and release_when_in_window is not None:
+        if constraints and release_when_in_window is not None and guided_windows is None:
             low, high = release_when_in_window
             distances = [_distance(mol, conf_id, a, b) for a, b in constraints]
             if not all(low <= d <= high for d in distances):
@@ -448,7 +485,8 @@ def _greedy_heavy_atom_clusters(kept_positions, heavy_indices, threshold: float)
 
 def assemble(*, components, output_dir: str, parameters: Optional[AssemblyParameters] = None,
              reaction_center: Optional[list[tuple[int, int]]] = None,
-             seed: int = 42) -> AssemblyResult:
+             guided_windows: Optional[list[tuple[int, int, float, float]]] = None,
+             seed: int = 42, candidate_sink=None) -> AssemblyResult:
     """组装反应复合物/普通复合物。
 
     ``components``：``(mol, conf_id)`` 序列（来自 ``structure_builder`` 的逐组分构建）。
@@ -471,7 +509,7 @@ def assemble(*, components, output_dir: str, parameters: Optional[AssemblyParame
     groups = _component_atom_groups(components)
     mol = combine_components(components)
     conf_id = mol.GetConformer().GetId()
-    mode: Literal["reaction", "complex"] = "reaction" if reaction_center else "complex"
+    mode: Literal["reaction", "complex"] = "reaction" if reaction_center or guided_windows else "complex"
     diagnostics: list[str] = []
     if mode == "reaction":
         diagnostics.append(
@@ -489,6 +527,11 @@ def assemble(*, components, output_dir: str, parameters: Optional[AssemblyParame
     placements = _sample_placements(mol, groups, params)
     collision_rejected = 0
     scored: list[tuple[float, int, list[list[float]]]] = []
+    captured_parents = {}
+    if candidate_sink:
+        for placement_index, positions in placements:
+            _set_positions(mol, conf_id, positions)
+            captured_parents[placement_index] = candidate_sink.capture(mol, conf_id, generator="rigid_placement", seed=seed)
     for placement_index, positions in placements:
         worst = min(
             min_distance(positions, groups[i], groups[j])
@@ -496,13 +539,21 @@ def assemble(*, components, output_dir: str, parameters: Optional[AssemblyParame
         )
         if worst < params.min_interfragment_distance:
             collision_rejected += 1
+            if candidate_sink:
+                from cloudra.tools.core.conformer_catalog import Qualification
+                _set_positions(mol,conf_id,positions)
+                candidate_sink.capture(mol,conf_id,generator='placement_qualification',parent_id=captured_parents[placement_index].candidate_id,
+                    state='rejected',qualification=Qualification(status='rejected',reasons=['interfragment_collision']))
             continue
-        if reaction_center:
+        if guided_windows or reaction_center:
             _set_positions(mol, conf_id, positions)
             deviations = []
-            for left, right in reaction_center:
+            windows = guided_windows if guided_windows is not None else [
+                (left, right, *params.reaction_center_window)
+                for left, right in reaction_center or []
+            ]
+            for left, right, low, high in windows:
                 distance = _distance(mol, conf_id, left, right)
-                low, high = params.reaction_center_window
                 if distance < low:
                     deviations.append(low - distance)
                 elif distance > high:
@@ -513,12 +564,12 @@ def assemble(*, components, output_dir: str, parameters: Optional[AssemblyParame
         else:
             scored.append((0.0, placement_index, positions))
 
-    if reaction_center:
+    if guided_windows or reaction_center:
         scored.sort(key=lambda item: (item[0], item[1]))
         scored = scored[: params.reaction_center_candidates]
         diagnostics.append(
-            f"kept the best {len(scored)} of {len(placements)} sampled placements by reaction-center "
-            f"distance deviation from the approved window {params.reaction_center_window} Å"
+            f"kept the best {len(scored)} of {len(placements)} sampled placements by "
+            f"maximum distance-window deviation; windows={windows}"
         )
 
     artifacts: list[TrajectoryArtifact] = []
@@ -539,7 +590,23 @@ def assemble(*, components, output_dir: str, parameters: Optional[AssemblyParame
             mol, conf_id, writer, params,
             constraints=list(reaction_center or []),
             release_when_in_window=(params.reaction_center_window if reaction_center else None),
+            guided_windows=guided_windows,
         )
+        if candidate_sink:
+            from cloudra.tools.core.conformer_catalog import Qualification
+            optimized_capture = candidate_sink.capture(mol, conf_id, generator="assembly_MMFF94", parent_id=captured_parents[placement_index].candidate_id,
+                state="failed" if failure or not converged else "optimized",
+                qualification=Qualification(status="rejected" if failure or not converged else "unknown",
+                reasons=[failure or "optimization_not_converged"] if failure or not converged else []))
+        def archive_outcome(reason=None, energy=None):
+            if candidate_sink:
+                from cloudra.tools.core.conformer_catalog import EnergyObservation, Qualification
+                energies=[EnergyObservation(value=energy,unit='kcal/mol',method_fingerprint='MMFF94/unconstrained_potential',
+                    species_key=optimized_capture.species_key,charge=Chem.GetFormalCharge(mol),
+                    multiplicity=candidate_sink.multiplicity,convergence='converged',artifact_ref=output_dir)] if energy is not None else []
+                candidate_sink.capture(mol,conf_id,generator='assembly_qualification',parent_id=optimized_capture.candidate_id,
+                    state='rejected' if reason else 'optimized',
+                    qualification=Qualification(status='rejected' if reason else 'unknown',reasons=[reason] if reason else ['assembly checks passed; reaction geometry qualification remains separate']),energies=energies)
         if failure:
             if writer.frame_count == 0:
                 # 力场构造失败时一帧都没写：先补上刚性放置这一帧，失败轨迹才有内容可查
@@ -548,11 +615,14 @@ def assemble(*, components, output_dir: str, parameters: Optional[AssemblyParame
             artifacts.append(trajectory_artifact(record))
             diagnostics.append(f"placement {placement_index}: relaxation raised {failure}")
             continue
-        note = (
-            "reaction-center constraint "
-            + ("released and re-relaxed unconstrained" if released else "kept")
-            if reaction_center else "no reaction-center constraint (complex mode)"
-        )
+        if guided_windows is not None:
+            note = "guided distance constraints kept during relaxation"
+        elif reaction_center:
+            note = "reaction-center constraint " + (
+                "released and re-relaxed unconstrained" if released else "kept"
+            )
+        else:
+            note = "no reaction-center constraint (complex mode)"
         note += (
             f"; frames are phase boundaries only (maxIts={params.relaxation_steps} per phase), "
             "full per-iteration trajectories live in the per-component builds"
@@ -575,32 +645,33 @@ def assemble(*, components, output_dir: str, parameters: Optional[AssemblyParame
             mol.GetConformer(conf_id).GetPositions(), groups,
         )
         if min_gap < params.min_interfragment_distance:
+            archive_outcome('interfragment_collision_after_relaxation')
             collapsed += 1
             diagnostics.append(
                 f"placement {placement_index}: relaxation collapsed the components to {min_gap:.3f} A "
                 f"(< {params.min_interfragment_distance} A) - discarded, never delivered as a complex"
             )
             continue
-        periodic_table = Chem.GetPeriodicTable()
-        contact = (
-            periodic_table.GetRvdw(mol.GetAtomWithIdx(closest_pair[0]).GetAtomicNum())
-            + periodic_table.GetRvdw(mol.GetAtomWithIdx(closest_pair[1]).GetAtomicNum())
+        clusters = interfragment_clusters(
+            mol.GetConformer(conf_id).GetPositions(), groups,
+            [atom.GetAtomicNum() for atom in mol.GetAtoms()],
+            factor=params.max_interfragment_vdw_factor,
         )
-        if min_gap > params.max_interfragment_vdw_factor * contact:
+        if len(clusters) > 1:
+            archive_outcome('disconnected_fragment_clusters_after_relaxation')
             dissociated += 1
             diagnostics.append(
-                f"placement {placement_index}: relaxation left the closest inter-fragment pair "
-                f"({closest_pair[0]}-{closest_pair[1]}) {min_gap:.3f} A apart, beyond "
-                f"{params.max_interfragment_vdw_factor}x its vdW contact distance ({contact:.3f} A) - "
-                "the fragments are dissociated, not a complex; discarded, never delivered as a complex"
+                f"placement {placement_index}: disconnected fragment clusters (0-based) {clusters}; "
+                f"contact limit is {params.max_interfragment_vdw_factor}x vdW contact radii sum; discarded"
             )
             continue
 
-        if reaction_center and not released:
+        if (reaction_center or guided_windows) and not released:
             # 约束未释放的候选 final_frame.energy 含约束惩罚项（k=100 的距离约束），与已释放
             # 候选的无约束能量不可直接相减比较；先用无约束力场对最终几何做单点重估再进排序。
             ff_free = _mmff_force_field(mol, conf_id)
             if ff_free is None:
+                archive_outcome('unconstrained_energy_unavailable')
                 diagnostics.append(
                     f"placement {placement_index}: the constraint was not released and an "
                     "unconstrained MMFF94 single point could not be constructed, so its "
@@ -621,7 +692,10 @@ def assemble(*, components, output_dir: str, parameters: Optional[AssemblyParame
             f"{left}-{right}": _distance(mol, conf_id, left, right)
             for left, right in (reaction_center or [])
         }
-        low, high = params.reaction_center_window
+        checked_windows = guided_windows if guided_windows is not None else [
+            (left, right, *params.reaction_center_window) for left, right in reaction_center or []
+        ]
+        archive_outcome(energy=energy_kcal)
         candidates.append(AssemblyCandidate(
             candidate_id=len(candidates),
             placement_index=placement_index,
@@ -629,8 +703,10 @@ def assemble(*, components, output_dir: str, parameters: Optional[AssemblyParame
             rel_energy_kcal=0.0,
             min_interfragment_distance=min_gap,
             reaction_center_distances=distances,
-            reaction_center_in_window=(all(low <= d <= high for d in distances.values())
-                                       if distances else None),
+            reaction_center_in_window=(all(
+                low <= _distance(mol, conf_id, left, right) <= high
+                for left, right, low, high in checked_windows
+            ) if checked_windows else None),
             constraint_released=released,
             cluster_id=-1,
             xyz_path="",
@@ -669,7 +745,7 @@ def assemble(*, components, output_dir: str, parameters: Optional[AssemblyParame
     kept = [
         (candidate, positions)
         for candidate, positions in zip(candidates, candidate_positions)
-        if candidate.rel_energy_kcal <= params.energy_window_kcal
+        if guided_windows is not None or candidate.rel_energy_kcal <= params.energy_window_kcal
     ]
     dropped = len(candidates) - len(kept)
     if dropped:
@@ -685,17 +761,30 @@ def assemble(*, components, output_dir: str, parameters: Optional[AssemblyParame
         index for index in range(mol.GetNumAtoms())
         if mol.GetAtomWithIdx(index).GetAtomicNum() > 1
     ]
-    cluster_ids, cluster_representatives = _greedy_heavy_atom_clusters(
-        [positions for _candidate, positions in kept], heavy_indices, params.rmsd_threshold,
-    )
+    if guided_windows is not None:
+        # A lower-energy heavy-atom representative may fail an H-involving
+        # window while another member passes. The caller qualifies all frames
+        # first and clusters only the qualified subset.
+        cluster_ids = list(range(len(kept)))
+        cluster_representatives = list(range(len(kept)))
+    else:
+        cluster_ids, cluster_representatives = _greedy_heavy_atom_clusters(
+            [positions for _candidate, positions in kept], heavy_indices, params.rmsd_threshold,
+        )
     for index, cluster_id in enumerate(cluster_ids):
         kept[index][0].cluster_id = cluster_id
 
-    diagnostics.append(
-        f"{len(kept)} candidate(s) after the energy window collapsed to "
-        f"{len(cluster_representatives)} cluster representative(s) at {params.rmsd_threshold} A "
-        "heavy-atom RMSD"
-    )
+    if guided_windows is not None:
+        diagnostics.append(
+            f"{len(kept)} guided placement(s) retained for strict qualification before "
+            f"{params.rmsd_threshold} A heavy-atom RMSD clustering"
+        )
+    else:
+        diagnostics.append(
+            f"{len(kept)} candidate(s) after the energy window collapsed to "
+            f"{len(cluster_representatives)} cluster representative(s) at {params.rmsd_threshold} A "
+            "heavy-atom RMSD"
+        )
 
     representatives = [kept[index][0] for index in cluster_representatives]
     paths: list[str] = []
@@ -710,14 +799,20 @@ def assemble(*, components, output_dir: str, parameters: Optional[AssemblyParame
         candidate.mol_path = mol_path
         paths.append(xyz_path)
 
+    selection_detail = (
+        "guided relaxation; strict qualification and clustering follow"
+        if guided_windows is not None else
+        f"the {params.energy_window_kcal} kcal/mol energy window and "
+        f"{params.rmsd_threshold} A heavy-atom RMSD clustering"
+    )
     result = AssemblyResult(
         status="ok",
         message=(
             f"{len(representatives)} complex candidate(s) from {len(placements)} sampled placements "
             f"({mode} mode). Candidates satisfy the {params.min_interfragment_distance} A inter-fragment "
             f"collision criterion, the dissociation limit ({params.max_interfragment_vdw_factor}x the "
-            f"vdW contact distance), the {params.energy_window_kcal} kcal/mol energy window and the "
-            f"{params.rmsd_threshold} A heavy-atom RMSD clustering."
+            f"vdW contact distance), "
+            f"{selection_detail}."
         ),
         parameters=params, mode=mode, components=len(components),
         sampled_placements=len(placements), collision_rejected=collision_rejected,
@@ -754,3 +849,41 @@ def _finalize(result: AssemblyResult, output_dir: str) -> AssemblyResult:
     result.artifact_path = os.path.join(output_dir, ASSEMBLY_JSON_NAME)
     atomic_write_text(result.artifact_path, result.model_dump_json(indent=2) + "\n")
     return result
+
+
+class Placement(BaseModel):
+    positions: list[list[float]]
+    fragment_transforms: list[dict]
+    seed: int
+    sampling_method: str = "independent_rigid_fragments"
+
+
+def sample_independent_placements(mol, groups: list[list[int]], *, seed: int, count: int,
+                                  parameters: AssemblyParameters, conformer_id: int = -1) -> list[Placement]:
+    """Supplemental seeded sampling; first fragment fixed, intrafragment geometry preserved."""
+    import numpy as np
+
+    if count < 1 or not groups or sorted(i for g in groups for i in g) != list(range(mol.GetNumAtoms())):
+        raise ValueError("positive count and complete nonoverlapping fragment groups required")
+    random = np.random.default_rng(seed)
+    base = mol.GetConformer(conformer_id).GetPositions()
+    placements = []
+    for _ in range(count):
+        positions = base.copy()
+        transforms = [{"axis": [0.,0.,1.], "angle_rad": 0., "translation_ang": [0.,0.,0.]}]
+        for group in groups[1:]:
+            axis = random.normal(size=3)
+            axis /= np.linalg.norm(axis)
+            angle = float(random.uniform(-np.pi, np.pi))
+            cross = np.array([[0.,-axis[2],axis[1]],[axis[2],0.,-axis[0]],[-axis[1],axis[0],0.]])
+            rotation = np.eye(3) * np.cos(angle) + (1-np.cos(angle))*np.outer(axis,axis) + np.sin(angle)*cross
+            center = positions[group].mean(axis=0)
+            shift = random.normal(size=3)
+            positions[group] = (positions[group]-center) @ rotation.T + center + shift
+            transforms.append({"axis": axis.tolist(), "angle_rad": angle, "translation_ang": shift.tolist()})
+        separated = _separate_along_axis(positions, groups, parameters.min_interfragment_distance)
+        for group, transform in zip(groups, transforms):
+            delta = separated[group].mean(axis=0) - positions[group].mean(axis=0)
+            transform["translation_ang"] = (np.asarray(transform["translation_ang"])+delta).tolist()
+        placements.append(Placement(positions=separated.tolist(),fragment_transforms=transforms,seed=seed))
+    return placements

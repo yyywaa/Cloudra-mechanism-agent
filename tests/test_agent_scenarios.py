@@ -20,6 +20,7 @@ from tests.agent_scenarios import (
     ScenarioHarness,
     ScriptedProvider,
     Step,
+    malformed_shell_steps,
 )
 
 
@@ -41,6 +42,72 @@ def _workspace(project_id: str) -> Path:
 
 
 # ------------------------------------------------------ harness 自身契约
+
+
+@pytest.mark.asyncio
+async def test_compute_result_wakes_agent_during_high_throughput_batch(tmp_path):
+    """逐作业通知应触发结果处理；剩余作业仍须阻止最终交付。"""
+    from cloudra.persistence.database import ComputeDB
+    from cloudra.runtime_v2.compute_notify import ComputeNotifyBroker
+    from tests.agent_scenarios import compute_result_recovery_steps
+    from tests.test_runtime_v2_compute_notify import _insert_terminal_job
+
+    release = asyncio.Event()
+    provider = ScriptedProvider(default=[Step(wait_for=release, stop=True)])
+    harness = await ScenarioHarness.start(tmp_path, provider=provider)
+    try:
+        agent = await harness.spawn("small_mol", protocol="traditional")
+        finished = await asyncio.to_thread(
+            _insert_terminal_job, harness.project.id, session_id=agent.id, state="failed", path="",
+        )
+        running = await asyncio.to_thread(
+            _insert_terminal_job, harness.project.id, session_id=agent.id, state="running", path="",
+        )
+        release.set()
+        await harness.wait_terminal(agent)
+        assert any(e.type == "agent.completion_gate" and e.data.get("action") == "wait_background"
+                   for e in harness.events(agent)), harness.describe(agent)
+        provider.script_default(*compute_result_recovery_steps())
+
+        broker = ComputeNotifyBroker(harness.core)
+        await broker._poll_project(harness.project.id)
+        await harness.wait_for(lambda: len(harness.run_rows(agent)) == 2, "result processing run")
+
+        assert any(call["tool_name"] == "todo_write" and call["is_success"]
+                   for call in harness.tool_events(agent)), harness.describe(agent)
+        gates = [e for e in harness.events(agent) if e.type == "agent.completion_gate"]
+        assert gates[-1].data["action"] == "wait_background"
+        notices = [e for e in harness.events(agent)
+                   if e.type == "agent.message_injected" and (e.data.get("manifest") or {}).get("kind") == "compute_completion"]
+        assert [e.data["manifest"]["task_id"] for e in notices] == [finished]
+        async with ComputeDB().aconnect() as con:
+            row = await (await con.execute("SELECT state FROM compute_jobs WHERE id=?", (running,))).fetchone()
+        assert row[0] == "running"
+    finally:
+        release.set()
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+async def test_malformed_shell_is_blocked_without_crashing_agent(tmp_path):
+    """Shell 校验失败需落 requested/blocked/finished，且后续回合可执行。"""
+    harness = await ScenarioHarness.start(
+        tmp_path, provider=ScriptedProvider(default=malformed_shell_steps()),
+    )
+    try:
+        agent = await harness.spawn("coordinator", protocol="traditional")
+        await harness.wait_terminal(agent)
+        calls = harness.tool_events(agent)
+        shell = next((call for call in calls if call["tool_name"] == "bash"), None)
+        assert shell is not None, harness.describe(agent)
+        assert shell["status"] == "blocked"
+        assert shell["effect_state"] == "not_started"
+        assert shell["block_stage"] == "permission"
+        assert shell["started"] is False
+        assert any(call["tool_name"] == "todo_write" and call["is_success"] for call in calls)
+        assert agent.state.value == "succeeded"
+    finally:
+        await harness.aclose()
 
 
 @pytest.mark.asyncio
@@ -88,6 +155,59 @@ async def test_snapshot_restore_keeps_invocations_on_the_live_agent_registry(tmp
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("rdkit_chemistry")
+async def test_ordinary_project_method_input_survives_stored_policy(tmp_path):
+    from cloudra.runtime_v2.schemas import AgentState, Command, InvocationProtocol
+    from tests.agent_scenarios import ordinary_method_input_steps
+
+    source = tmp_path / "source.xyz"
+    source.write_text("2\nfixture\nH 0 0 0\nH 0 0 0.74\n")
+    output = tmp_path / "ordinary.inp"
+    provider = ScriptedProvider(default=ordinary_method_input_steps(source, output))
+    harness = await ScenarioHarness.start(tmp_path, provider=provider, workspace_dir=tmp_path)
+    try:
+        await harness.bus.execute(Command(type="project.update", target={"project_id": harness.project.id},
+            payload={"settings": {"method_policy": {"allowed_methods": ["xtb"]}}}))
+        agent = await harness.spawn("small_mol", protocol=InvocationProtocol.TRADITIONAL)
+        await harness.wait_terminal(agent)
+        assert agent.state == AgentState.SUCCEEDED
+        assert output.is_file()
+        assert "PBE0" in output.read_text() and "def2-TZVP" in output.read_text()
+        assert not any(e.type == "tool.blocked" and e.data.get("stage") == "method_policy" for e in harness.events(agent))
+        assert any(e.type == "tool.result_recorded" for e in harness.events(agent))
+    finally:
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+async def test_tool_progress_persistence_failure_fails_run_without_retry(tmp_path, monkeypatch):
+    """杠杆：真实工具适配器、进度事件落盘、Agent fail-fast 分类。"""
+    provider = ScriptedProvider(default=[Step(tools=[("stop", {"reason": "done"})])])
+    harness = await ScenarioHarness.start(tmp_path, provider=provider)
+    original = harness.store.append_event
+
+    def append(event):
+        if event.type == "tool.progress":
+            raise OSError("fixture disk full")
+        original(event)
+
+    monkeypatch.setattr(harness.store, "append_event", append)
+    try:
+        agent = await harness.spawn("coordinator", protocol="traditional")
+        await harness.wait_terminal(agent)
+        rows = harness.run_rows(agent)
+        assert len(rows) == 1
+        assert rows[0]["outcome"] == "failed", harness.describe(agent)
+        assert rows[0]["failure_kind"] == "event_persistence"
+        events = harness.events(agent)
+        assert len([e for e in events if e.type == "tool.requested"]) == 1
+        assert not any(e.type == "run.retry" for e in events)
+        assert not any(e.type == "tool.result_recorded" for e in events)
+    finally:
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
 async def test_plain_qa_ends_with_declared_basis(tmp_path):
     """普通问答：纯文本收尾（**默认 invocation protocol**），完成依据 = declared。
 
@@ -114,6 +234,371 @@ async def test_plain_qa_ends_with_declared_basis(tmp_path):
 
 
 # -------------------------------------------------- DAG：候选、逐文件审查、门禁
+
+
+def _seed_selected_step_endpoints(project_id: str) -> None:
+    """只预置有结构支持的两端；步骤和交付范围仍由真实 proposal 工具创建。"""
+    from cloudra.dag.engine import DagEngine
+    from cloudra.dag.models import AddNode, GraphActor, MutationBatch, OccurrenceNode
+    from cloudra.dag.store import DagStore
+    from cloudra.persistence.database import ConversationDB
+
+    store = DagStore(ConversationDB(project_id).init())
+    store.ensure_bundle("scenario-endpoints")
+    result = DagEngine(store).apply_batch(MutationBatch(
+        session_id="scenario-endpoints", actor=GraphActor.HARNESS,
+        actor_id="scenario-endpoints", base_revisions=store.load_bundle().revisions,
+        rationale="the two endpoint structures are available",
+        operations=[
+            AddNode(op="add_node", graph="delivery", node=OccurrenceNode(
+                node_id="r", label="R", role="reactant",
+                evidence_level="structure_supported")),
+            AddNode(op="add_node", graph="delivery", node=OccurrenceNode(
+                node_id="p", label="P", role="product",
+                evidence_level="structure_supported")),
+        ],
+    ))
+    assert result.accepted
+
+
+def _propose_selected_ab() -> Step:
+    return Step(tools=[("dag_propose_mechanism", {
+        "rationale": "selected R to P transformation",
+        "steps": [{"name": "AB", "from": "R", "to": "P"}],
+        "delivery_targets": ["AB"],
+    })])
+
+
+@pytest.mark.asyncio
+async def test_guided_complete_waits_for_selected_step_review_and_evidence(tmp_path):
+    """A selected step with a live pending draft and stages cannot claim complete."""
+    attempt_complete = asyncio.Event()
+    hold_after_gate = asyncio.Event()
+    provider = ScriptedProvider(by_role={
+        "coordinator": [
+            _propose_selected_ab(),
+            # Drain the Supervisor's earlier draft notification in a normal turn
+            # before the explicit stop is audited.
+            Step(wait_for=attempt_complete, text="review status received"),
+            Step(tools=[("stop", {
+                "delivery_disposition": "complete",
+            })]),
+            Step(wait_for=hold_after_gate, text="continue work"),
+        ],
+        "supervisor": [Step(text="review pending", stop=True)],
+    })
+    harness = await ScenarioHarness.start(tmp_path, provider=provider)
+    try:
+        await asyncio.to_thread(_seed_selected_step_endpoints, harness.project.id)
+        agent = await harness.spawn(
+            "coordinator", protocol="traditional", orchestration_mode="dag_guided"
+        )
+        await harness.wait_for(
+            lambda: any(t["tool_name"] == "dag_propose_mechanism" and t["status"] == "completed"
+                        for t in harness.tool_events(agent)),
+            "selected AB proposal",
+        )
+        await harness.wait_for(
+            lambda: any(a.role_id == "supervisor" and a.state.value == "succeeded"
+                        for a in harness.core.agents.values()),
+            "Supervisor idle after the proposal",
+        )
+        from cloudra.dag.controller import DagController
+        from cloudra.persistence.database import ConversationDB
+
+        db = await asyncio.to_thread(lambda: ConversationDB(harness.project.id).init())
+        report = await asyncio.to_thread(
+            DagController(db, agent.id, "dag_guided", conversation_id=harness.project.id).delivery_report
+        )
+        assert report.complete is False
+        codes = {gap.code for gap in report.unresolved}
+        assert {"pending_scope_review", "missing_stage_evidence"} <= codes
+
+        attempt_complete.set()
+        await harness.wait_for(
+            lambda: any(e.type == "agent.completion_gate" and e.data.get("explicit_stop")
+                        for e in harness.events(agent)),
+            "explicit complete gate for selected AB",
+        )
+        gate = next(e.data for e in harness.events(agent)
+                    if e.type == "agent.completion_gate" and e.data.get("explicit_stop"))
+        assert gate["action"] == "continue_work", (gate, harness.describe(agent))
+        assert gate["basis"] is None
+        assert agent.state.value != "succeeded"
+    finally:
+        attempt_complete.set()
+        hold_after_gate.set()
+        await harness.aclose()
+
+
+def _seed_synthetic_step_science(project_id: str) -> None:
+    """Parser/gate contract data, not computed chemistry; keep all checks real.
+
+    The toy geometries match test_irc_evidence_semantics: each IRC endpoint
+    lies between the TS and its frequency-verified reference minimum.
+    """
+    from cloudra.dag.engine import DagEngine
+    from cloudra.dag.evidence_ingest import snapshot_evidence_file
+    from cloudra.dag.models import AttachRef, GraphActor, MutationBatch
+    from cloudra.dag.store import DagStore
+    from cloudra.persistence.database import ConversationDB
+
+    workspace = _workspace(project_id)
+    store = DagStore(ConversationDB(project_id).init())
+    operations = []
+    for name, z, frequency in [("ts", 1.0, -300.0), ("r", 0.1, 100.0), ("p", 1.9, 100.0)]:
+        path = workspace / f"{name}.out"
+        path.write_text(
+            "* O   R   C   A *\n# Synthetic scenario contract data\n"
+            "FINAL SINGLE POINT ENERGY -100.0\n"
+            "CARTESIAN COORDINATES (ANGSTROEM)\n-----------------------------\n"
+            f"C 0 0 0\nN 0 0 2\nH 0 0 {z}\n\n"
+            f"VIBRATIONAL FREQUENCIES\n0: {frequency} cm**-1\n1: 200.0 cm**-1\n"
+            "ORCA TERMINATED NORMALLY\n"
+        )
+        if name != "ts":
+            snapshot = snapshot_evidence_file(path, workspace)
+            ref = store.register_evidence(
+                "scenario-endpoints", path.name, snapshot.model_dump(mode="json"), source_type="file",
+            )
+            operations.append(AttachRef(
+                op="attach_ref", graph="delivery", target_type="node", target_id=name, ref=ref,
+            ))
+    result = DagEngine(store).apply_batch(MutationBatch(
+        session_id="scenario-endpoints", actor=GraphActor.HARNESS,
+        actor_id="scenario-endpoints", base_revisions=store.load_bundle().revisions,
+        rationale="bind synthetic reference minimum logs", operations=operations,
+    ))
+    assert result.accepted
+    irc = Path(__file__).parent / "fixtures" / "orca" / "hcn_irc_orca60.out"
+    shutil.copy2(irc, workspace / "irc.out")
+    for suffix, z in [("F", 0.7), ("B", 1.3)]:
+        (workspace / f"irc_IRC_{suffix}.xyz").write_text(
+            f"3\nsynthetic scenario endpoint\nC 0 0 0\nN 0 0 2\nH 0 0 {z}\n"
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("complete_evidence", [False, True], ids=["missing-irc", "scientific-evidence"])
+async def test_guided_file_verdict_wakes_coordinator_and_enforces_scientific_completion(
+    tmp_path, monkeypatch, complete_evidence
+):
+    """A verdict wakes once; only scientifically supported files permit complete."""
+    submit_evidence = asyncio.Event()
+    attempt_partial = asyncio.Event()
+    review_file = asyncio.Event()
+    finish_supervisor = asyncio.Event()
+    attempt_complete = asyncio.Event()
+    hold_after_gate = asyncio.Event()
+    ts = Path(__file__).parent / "fixtures" / "xtb" / "ts_hess_xtb.out"
+    files = {"ts_file": "ts.out", "irc_file": "irc.out"} if complete_evidence else {"ts_file": ts.name}
+    provider = ScriptedProvider(by_role={
+        "coordinator": [
+            _propose_selected_ab(),
+            Step(wait_for=submit_evidence, tools=[("dag_submit_step_evidence", {
+                "step_name": "AB", **files,
+                "reaction_coordinate_description": "selected transition",
+            })]),
+            Step(wait_for=attempt_partial, tools=[("stop", {
+                "delivery_disposition": "partial",
+            })]),
+            Step(wait_for=attempt_complete, tools=[("dag_delivery_report", {})]),
+            Step(tools=[("stop", {"delivery_disposition": "complete"})]),
+            Step(tools=[("dag_delivery_report", {})]),
+            Step(wait_for=hold_after_gate, text="collect missing IRC direction evidence"),
+        ],
+        "supervisor": [
+            Step(tools=[("dag_accept_mechanism", {"verdict": "accept"})]),
+            Step(text="draft reviewed", stop=True),
+            Step(text="file review queued", stop=True),
+            Step(wait_for=review_file, tools=[("dag_review_step", {
+                "step_name": "AB", "verdict": "supported",
+                "rationale": "the submitted file supports the selected transition",
+            })]),
+            Step(wait_for=finish_supervisor, text="file reviewed", stop=True),
+        ],
+    })
+    harness = await ScenarioHarness.start(tmp_path, provider=provider)
+    try:
+        await _set_supervisor_traditional(harness)
+        await asyncio.to_thread(_seed_selected_step_endpoints, harness.project.id)
+        workspace = _workspace(harness.project.id)
+        workspace.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ts, workspace / ts.name)
+        if complete_evidence:
+            await asyncio.to_thread(_seed_synthetic_step_science, harness.project.id)
+        coordinator = await harness.spawn(
+            "coordinator", protocol="traditional", orchestration_mode="dag_guided"
+        )
+        await harness.wait_for(
+            lambda: any(t["tool_name"] == "dag_accept_mechanism" and t["status"] == "completed"
+                        for a in harness.core.agents.values() if a.role_id == "supervisor"
+                        for t in harness.tool_events(a)),
+            "Supervisor acceptance of the selected draft",
+        )
+        await harness.wait_for(
+            lambda: any(a.role_id == "supervisor" and a.state.value == "succeeded"
+                        for a in harness.core.agents.values()),
+            "Supervisor idle after draft review",
+        )
+        submit_evidence.set()
+        await harness.wait_for(
+            lambda: any(t["tool_name"] == "dag_submit_step_evidence" and t["status"] == "completed"
+                        for t in harness.tool_events(coordinator)),
+            "AB evidence submission",
+        )
+        submitted = next(t for t in harness.tool_events(coordinator)
+                         if t["tool_name"] == "dag_submit_step_evidence")
+        assert submitted["is_success"], harness.describe(coordinator)
+        checks = submitted["result_data"]["result"]["scientific_checks"]
+        assert checks["ts_opt"]["status"] == checks["frequency"]["status"] == "passed"
+        assert checks["short_irc"]["status"] == ("passed" if complete_evidence else "incomplete")
+        review_id = submitted["result_data"]["result"]["review_id"]
+        await harness.wait_for(
+            lambda: any(a.role_id == "supervisor" and a.state.value == "succeeded"
+                        and len(harness.run_rows(a)) >= 2
+                        for a in harness.core.agents.values()),
+            "Supervisor idle after file submission",
+        )
+        attempt_partial.set()
+        await harness.wait_for(
+            lambda: coordinator.state.value == "waiting_approval",
+            "Coordinator parked on the partial exit request",
+        )
+        parked = [e for e in harness.events(coordinator) if e.type == "agent.state_changed"]
+        assert parked[-1].data["reason"] == "wait_review"
+        assert not any(row["outcome"] == "succeeded" for row in harness.run_rows(coordinator))
+        child_reports_at_park = len(harness.child_reports(coordinator))
+
+        from cloudra.runtime_v2 import supervision
+
+        actual_flush = supervision.flush_review_notifications
+        flush_counts: list[int] = []
+
+        async def observed_flush(core, project_id, **kwargs):
+            count = await actual_flush(core, project_id, **kwargs)
+            flush_counts.append(count)
+            return count
+
+        monkeypatch.setattr(supervision, "flush_review_notifications", observed_flush)
+        review_file.set()
+        await harness.wait_for(
+            lambda: any(t["tool_name"] == "dag_review_step" and t["status"] == "completed"
+                        for a in harness.core.agents.values() if a.role_id == "supervisor"
+                        for t in harness.tool_events(a)),
+            "per-file Supervisor verdict",
+        )
+        await harness.wait_for(
+            lambda: coordinator.state.value == "running" and provider.call_count("coordinator") >= 4,
+            "Coordinator resumed on the verdict and entered a new provider turn",
+        )
+        from cloudra.dag.controller import DagController
+        from cloudra.dag.store import DagStore
+        from cloudra.persistence.database import ConversationDB
+        db = await asyncio.to_thread(lambda: ConversationDB(harness.project.id).init())
+        store = DagStore(db)
+        request = await asyncio.to_thread(store.get_review_request, review_id)
+        assert request is not None and request.state == "resolved"
+        snapshot = await asyncio.to_thread(store.load_snapshot)
+        edge = next(edge for edge in snapshot.delivery.edges if edge.name == "AB")
+        assert {stage.kind.value for stage in edge.stages if stage.required} == {
+            "ts_opt", "frequency", "short_irc",
+        }
+        decision = await asyncio.to_thread(store.get_review_decision_for_request, review_id)
+        assert decision is not None and decision.verdict == "accept"
+        assert flush_counts == [1]
+        assert await actual_flush(harness.core, harness.project.id) == 0
+        delivered = [data for data in harness.messages(coordinator)
+                     if data.get("sender") == "supervisor"
+                     and review_id in str(data.get("content") or "")]
+        assert len(delivered) == 1, harness.describe(coordinator)
+        def _notification_rows():
+            with db.connect() as con:
+                return con.execute(
+                    "SELECT recipient_session_id, state FROM dag_review_notifications "
+                    "WHERE request_id = ?", (review_id,),
+                ).fetchall()
+
+        assert await asyncio.to_thread(_notification_rows) == [(coordinator.id, "sent")]
+        assert len(harness.child_reports(coordinator)) == child_reports_at_park
+        states = [e.data.get("to") for e in harness.events(coordinator)
+                  if e.type == "agent.state_changed"]
+        assert "running" in states[states.index("waiting_approval") + 1:]
+        report = await asyncio.to_thread(
+            DagController(db, coordinator.id, "dag_guided", conversation_id=harness.project.id).delivery_report
+        )
+        assert report.complete is complete_evidence
+        if complete_evidence:
+            assert any(gate.code == "supervisor_evidence_accepted" for gate in report.satisfied)
+        else:
+            assert {"missing_stage_evidence", "scientific_check_incomplete"} <= {
+                gap.code for gap in report.unresolved
+            }
+            assert any(gap.code == "scientific_check_incomplete" and gap.target_id == edge.edge_id
+                       and gap.detail.startswith("short_irc:")
+                       for gap in report.unresolved)
+            accepted = next(gate for gate in report.satisfied
+                            if gate.code == "supervisor_evidence_accepted"
+                            and gate.target_id == edge.edge_id)
+            assert "ts_opt" in accepted.detail and "frequency" in accepted.detail
+            assert "short_irc" not in accepted.detail
+            pending = next(gap for gap in report.unresolved
+                           if gap.code == "missing_stage_evidence"
+                           and gap.target_id == edge.edge_id)
+            assert "short_irc" in pending.detail
+            assert "ts_opt" not in pending.detail and "frequency" not in pending.detail
+            assert decision.next_action
+
+        finish_supervisor.set()
+        await harness.wait_for(
+            lambda: any(a.role_id == "supervisor" and a.state.value == "succeeded"
+                        and len(harness.run_rows(a)) >= 3
+                        for a in harness.core.agents.values()),
+            "Supervisor idle before the final delivery attempt",
+        )
+        attempt_complete.set()
+        from cloudra.runtime_v2.completion import completion_summary
+
+        if complete_evidence:
+            await harness.wait_terminal(coordinator)
+            completion = completion_summary(harness.events(coordinator))
+            assert completion["completion_basis"] == "supervisor_supported"
+            assert completion["verification_label"] == "supervisor_reviewed"
+        else:
+            await harness.wait_for(
+                lambda: any(e.type == "agent.completion_gate" and e.data.get("explicit_stop")
+                            and e.data.get("action") == "continue_work" for e in harness.events(coordinator)),
+                "scientific gap blocks explicit complete after Supervisor acceptance",
+            )
+            gate = next(e for e in harness.events(coordinator)
+                        if e.type == "agent.completion_gate" and e.data.get("explicit_stop")
+                        and e.data.get("action") == "continue_work")
+            assert gate.data["basis"] is None
+            await harness.wait_for(
+                lambda: len([t for t in harness.tool_events(coordinator)
+                             if t["tool_name"] == "dag_delivery_report" and t["status"] == "completed"]) == 2,
+                "Coordinator rechecks scientific gaps after the rejected exit",
+            )
+            repair_request = [e for e in harness.events(coordinator)
+                              if e.type == "tool.requested"
+                              and e.data.get("tool_name") == "dag_delivery_report"][-1]
+            assert repair_request.seq > gate.seq
+            repair_report = [t for t in harness.tool_events(coordinator)
+                             if t["tool_name"] == "dag_delivery_report"][-1]["result_data"]["result"]
+            assert repair_report["complete"] is False
+            assert any(gap["code"] == "scientific_check_incomplete" and "short_irc" in gap["detail"]
+                       for gap in repair_report["unresolved"])
+            assert coordinator.state.value == "running"
+            assert not any(row["outcome"] == "succeeded" for row in harness.run_rows(coordinator))
+            assert completion_summary(harness.events(coordinator)) is None
+    finally:
+        submit_evidence.set()
+        attempt_partial.set()
+        review_file.set()
+        finish_supervisor.set()
+        attempt_complete.set()
+        hold_after_gate.set()
+        await harness.aclose()
 
 
 @pytest.mark.asyncio
@@ -517,7 +1002,7 @@ async def test_async_subagent_reports_once_and_wakes_parent(tmp_path):
     provider = ScriptedProvider(
         by_role={
             "coordinator": [
-                Step(tools=[("subagent_launcher", {"agent_id": "explorer", "query": "look around", "is_wait": False})]),
+                Step(tools=[("subagent_launcher", {"role_id": "explorer", "query": "look around", "is_wait": False})]),
                 Step(text="continuing on the main line", stop=True),
             ],
             "explorer": [Step(text="explored the workspace", stop=True)],
@@ -641,7 +1126,10 @@ async def test_unattended_never_enters_waiting_input(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_restart_repeats_no_side_effect_and_keeps_unconsumed_message(tmp_path):
+@pytest.mark.parametrize("delay_child_delivery", [False, True], ids=["normal", "late-child-wake"])
+async def test_restart_repeats_no_side_effect_and_keeps_unconsumed_message(
+    tmp_path, monkeypatch, delay_child_delivery
+):
     """重启：不重复工具副作用、不重复 spawn、不丢已持久化但未消费的消息。
 
     杠杆：恢复语义（restore 只重建投影、不重放副作用）+ dispatcher 的落库先于可见。
@@ -654,7 +1142,7 @@ async def test_restart_repeats_no_side_effect_and_keeps_unconsumed_message(tmp_p
                         # todo_write 的副作用是 per-agent 存储文件，不需要人工审批：
                         # 这样场景专测「重启是否重放副作用」，不掺审批状态机。
                         ("todo_write", {"todos": [{"content": "note once", "status": "in_progress"}]}),
-                        ("subagent_launcher", {"agent_id": "explorer", "query": "look", "is_wait": False}),
+                        ("subagent_launcher", {"role_id": "explorer", "query": "look", "is_wait": False}),
                     ]
                 ),
                 Step(text="did the work", stop=True),
@@ -663,11 +1151,27 @@ async def test_restart_repeats_no_side_effect_and_keeps_unconsumed_message(tmp_p
         }
     )
     harness = await ScenarioHarness.start(tmp_path, provider=provider)
+    child_report_committed = asyncio.Event()
+    release_child_delivery = asyncio.Event()
+    if delay_child_delivery:
+        commit = harness.core.event_writer.commit
+
+        async def commit_with_delayed_child_delivery(draft):
+            envelope = await commit(draft)
+            if draft.type == "agent.message_injected" and draft.data.get("manifest"):
+                # Force the event-visible but not-yet-enqueued child report window.
+                child_report_committed.set()
+                await release_child_delivery.wait()
+            return envelope
+
+        monkeypatch.setattr(harness.core.event_writer, "commit", commit_with_delayed_child_delivery)
     try:
         parent = await harness.spawn("coordinator", protocol="traditional")
         await harness.wait_for(
             lambda: len(harness.child_reports(parent)) == 1, "child report before restart"
         )
+        if delay_child_delivery:
+            await harness.wait_for(child_report_committed.is_set, "child report delivery paused")
         children_before = [child.id for child in harness.children_of(parent)]
         effects_before = [
             tool for tool in harness.tool_events(parent) if tool["tool_name"] == "todo_write"
@@ -678,17 +1182,32 @@ async def test_restart_repeats_no_side_effect_and_keeps_unconsumed_message(tmp_p
             encoding="utf-8"
         )
 
-        # 先等父 Agent 终态，排除消息被下一轮正常消费的竞态；再造一条
+        # child_reports 只说明回传事件已追加，子任务仍可能在落库/入队/唤醒中。
+        # 父任务结束也不能排除这次迟到的唤醒；先停准入并等全部任务收尾，再造
         # 「已落库但未消费」的消息（重启后必须仍在信箱里）。
         await harness.wait_terminal(parent)
-        await harness.core.dispatcher.commit_and_deliver(
+        await harness.runner.cancel_all()
+        notice = await harness.core.dispatcher.commit_and_deliver(
             to_session_id=parent.id,
             project_id=harness.project.id,
             content="unconsumed notice",
             sender="system",
             wake=WakePolicy.NEVER,
         )
+        if delay_child_delivery:
+            release_child_delivery.set()
+            await harness.wait_for(
+                lambda: all(harness.runner.task_for(agent.id) is None
+                            for agent in harness.core.agents.values()),
+                "delayed child delivery and any resulting parent wake finished",
+            )
+        assert await asyncio.to_thread(harness.store.has_event, notice.event_id)
+        assert all(
+            message.get("message_id") != notice.data["message_id"]
+            for message in harness.core.contexts.current_messages(parent.id)
+        ), "restart fixture notice was consumed before shutdown"
     finally:
+        release_child_delivery.set()
         await harness.aclose()
 
     restored = await ScenarioHarness.restore(tmp_path, provider=provider)
@@ -717,8 +1236,8 @@ async def test_restart_repeats_no_side_effect_and_keeps_unconsumed_message(tmp_p
 
 
 @pytest.mark.asyncio
-async def test_context_overflow_compacts_at_most_once_and_continues(tmp_path, monkeypatch):
-    """上下文超预算：**最多一次**压缩（摘要输入来自真实投影），随后继续原任务。
+async def test_context_budget_compacts_once_then_short_turns_continue(tmp_path, monkeypatch):
+    """上下文超预算：压缩真实投影一次，随后短轮次继续原任务且不重复压缩。
 
     杠杆：容量口径 + 压缩触发（budget/overflow）+ 摘要替换。
     """
@@ -731,7 +1250,7 @@ async def test_context_overflow_compacts_at_most_once_and_continues(tmp_path, mo
                 tools=[("todo_write", {"todos": [{"content": "keep going", "status": "in_progress"}]})],
             ),
             Step(
-                text="second turn after compaction " + ("more padding " * 300),
+                text="second turn after compaction",
                 tools=[("todo_write", {"todos": [{"content": "still going", "status": "in_progress"}]})],
             ),
             Step(text="finished after compaction", stop=True),
@@ -759,9 +1278,9 @@ async def test_context_overflow_compacts_at_most_once_and_continues(tmp_path, mo
         await harness.wait_terminal(agent)
 
         compacted = [e for e in harness.events(agent) if e.type == "context.compacted"]
-        # 「最多一次」指压缩**安装**次数：一次 run 里不得反复压缩（阈值抖动会
-        # 让轨迹被反复摘要，成本与信息损失都翻倍）。摘要调用次数本身会因
-        # 分段/合并而 >1（容量越小段越多），故只要求发生了摘要调用。
+        # 第一轮超过预算，压缩后的短轮次仍在预算内，不应重复安装摘要。
+        # 新增长轨迹允许再次压缩；不能把“一次 run 只能压缩一次”当成契约。
+        # 摘要调用次数本身会因分段/合并而 >1，故只要求发生了摘要调用。
         assert len(compacted) == 1, harness.describe(agent)
         assert provider.summary_calls >= 1, "压缩安装成功却没调用摘要器"
         # 压缩之后任务继续并正常收尾（不是靠压缩把 run 掐断）。
@@ -771,4 +1290,178 @@ async def test_context_overflow_compacts_at_most_once_and_continues(tmp_path, mo
         contexts = harness.core.session_contexts
         assert agent.id in contexts
     finally:
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('ts_producer_authority')
+async def test_failed_ts_scan_unchanged_resume_keeps_failure_without_budget_exhaustion(tmp_path, monkeypatch):
+    """Real grouped resume preserves a fixture-driven failed scan and its budget."""
+    from cloudra.services.compute_admission import AdmissionOutcome
+    from cloudra.tools.core.ts_process import load_record
+    from tests.test_ts_fixture_pipeline import finish, install_log, job_count, waiting_fixture_stage
+
+    monkeypatch.setattr('cloudra.services.compute_admission.admit_job',lambda **_:AdmissionOutcome(ok=True,node_id='fixture',scheduler='local'))
+    ready=asyncio.Event()
+    steps=[Step(wait_for=ready) for _ in range(3)]
+    provider=ScriptedProvider(by_role={'small_mol':[*steps,Step(stop=True)]})
+    harness=await ScenarioHarness.start(tmp_path,workspace_dir=tmp_path,provider=provider)
+    try:
+        agent=await harness.spawn('small_mol',protocol='traditional')
+        db,record,step=await asyncio.to_thread(waiting_fixture_stage,tmp_path,purpose='scan',project_id=harness.project.id,owner_id=agent.id)
+        await asyncio.to_thread(install_log,record,step,'orca/segfault_mid_opt/dvb_opt_truncated_no_termination.out')
+        await asyncio.to_thread(finish,db,step.job_id,'failed')
+        before=await asyncio.to_thread(load_record,str(tmp_path),record.run_id)
+        for index,item in enumerate(steps):
+            item.tools=[('ts_resume',{'run_id':record.run_id,'changes':{'guess':before.input.guess.model_dump()},'reason':'retain accepted scan','expected_revision':before.revision})]
+        ready.set()
+        await harness.wait_terminal(agent)
+        calls=harness.tool_events(agent)
+        assert [call['tool_name'] for call in calls]==['ts_resume']*3
+        assert all(call['is_success'] for call in calls),harness.describe(agent)
+        for call in calls:
+            result=call['result_data']
+            assert result['blocked']['failure_class']=='scan_job_failed'
+            assert result['usage']['interventions']==0 and result['result'] is None
+        after=await asyncio.to_thread(load_record,str(tmp_path),record.run_id)
+        assert after.model_dump()==before.model_dump()
+        assert await asyncio.to_thread(job_count,db)==1
+    finally:
+        ready.set()
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+async def test_yolo_invalid_boolean_never_applies_agent_file_write(tmp_path, monkeypatch):
+    """An invalid approval is rejected within the real Agent/tool/file mutation path."""
+    from unittest.mock import AsyncMock
+
+    from cloudra.infra.yolo_guard import YoloGuard
+    from tests.test_yolo_guard import _approval_response
+
+    monkeypatch.setenv("CLOUDRA_YOLO_MODE", "true")
+    client = SimpleNamespace(create=AsyncMock(return_value=_approval_response({"approved": "false"})))
+    monkeypatch.setattr(YoloGuard, "_client", lambda _: client)
+    provider = ScriptedProvider(default=[
+        Step(tools=[("write", {"path": "blocked.txt", "content": "must not be applied"})]),
+        Step(stop=True),
+    ])
+    harness = await ScenarioHarness.start(tmp_path, provider=provider)
+    try:
+        agent = await harness.spawn("coordinator", protocol="traditional")
+        await harness.wait_terminal(agent)
+        calls = harness.tool_events(agent)
+        assert [call["tool_name"] for call in calls] == ["write"]
+        assert calls[0]["started"] is True, harness.describe(agent)
+        result = calls[0]["result_data"]
+        assert result["status"] == "declined"
+        assert result["is_written"] is False
+        assert client.create.call_count == 3
+        target = _workspace(harness.project.id) / "blocked.txt"
+        assert not await asyncio.to_thread(target.exists)
+    finally:
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+async def test_old_launcher_role_field_is_rejected_without_orphan_child(tmp_path):
+    provider = ScriptedProvider(by_role={
+        "coordinator": [
+            Step(tools=[("subagent_launcher", {"agent_id": "a-1", "query": "inspect workspace", "is_wait": False})]),
+            Step(stop=True),
+        ],
+    })
+    harness = await ScenarioHarness.start(tmp_path, provider=provider)
+    try:
+        parent = await harness.spawn("coordinator", protocol="traditional")
+        await harness.wait_terminal(parent)
+        dispatched = [event for event in harness.tool_events(parent) if event["tool_name"] == "subagent_launcher"]
+        assert len(dispatched) == 1
+        assert dispatched[0]["is_success"] is False
+        assert harness.children_of(parent) == []
+        assert harness.child_reports(parent) == []
+    finally:
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+async def test_scope_only_reapproval_clears_stale_completion_debt(tmp_path):
+    from cloudra.dag.drafts import MechanismDraft
+    from cloudra.dag.models import AddEdge, ClaimSpec, ElementaryStepEdge
+    from tests.agent_scenarios import scope_review_completion_steps
+    from tests.test_dag_async_evidence_review import _seed_simple_complete_graph
+
+    harness = await ScenarioHarness.start(tmp_path, provider=ScriptedProvider(by_role={
+        "coordinator": scope_review_completion_steps(),
+        "supervisor": [Step(stop=True)],
+    }))
+    def seed():
+        _, _, store = _seed_simple_complete_graph(tmp_path, harness.project.id)
+        store.save_draft(MechanismDraft(operations=[AddEdge(op="add_edge", graph="delivery",
+            edge=ElementaryStepEdge(edge_id="step1", name="step1", source_node_id="r", target_node_id="p"))],
+            rationale="initial reasoning rejected", state="rejected"), actor_id="coordinator")
+        store.save_draft(MechanismDraft(operations=[], rationale="revised reasoning accepted",
+            state="accepted", claim_spec=ClaimSpec(kind="mechanism", scope={"targets": ["r", "p", "step1"]})),
+            actor_id="harness:auto")
+    try:
+        await asyncio.to_thread(seed)
+        agent = await harness.spawn("coordinator", protocol="traditional", orchestration_mode="dag_guided")
+        await harness.wait_terminal(agent)
+        reports = [call for call in harness.tool_events(agent) if call["tool_name"] == "dag_delivery_report"]
+        assert reports and reports[0]["result_data"]["result"]["complete"] is True
+        assert agent.state.value == "succeeded", harness.describe(agent)
+        assert any(event.type == "agent.completion_gate" and event.data.get("explicit_stop")
+                   for event in harness.events(agent))
+    finally:
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+async def test_supervisor_feedback_resumes_background_waiting_coordinator(tmp_path):
+    """Permission + mailbox + completion gate: review feedback must start a new run."""
+    from cloudra.runtime_v2.hub_bridge import handle_hub_tool
+    from cloudra.runtime_v2.policies.base import ToolCall
+    from cloudra.runtime_v2.supervision import _spawn_supervisor
+    from tests.agent_scenarios import supervisor_feedback_recovery_steps
+    from tests.test_runtime_v2_compute_notify import _insert_terminal_job
+
+    release = asyncio.Event()
+    provider = ScriptedProvider(by_role={"coordinator": [Step(wait_for=release, stop=True)]})
+    harness = await ScenarioHarness.start(tmp_path, provider=provider)
+    try:
+        coordinator = await harness.spawn("coordinator", protocol="traditional", orchestration_mode="dag_guided")
+        await asyncio.to_thread(
+            _insert_terminal_job, harness.project.id, session_id=coordinator.id, state="running", path="",
+        )
+        release.set()
+        await harness.wait_terminal(coordinator)
+        gates = [e for e in harness.events(coordinator) if e.type == "agent.completion_gate"]
+        assert gates[-1].data["action"] == "wait_background"
+        supervisor = await _spawn_supervisor(harness.core, harness.project.id)
+        assert supervisor is not None
+        provider.script("coordinator", *supervisor_feedback_recovery_steps())
+        result = await handle_hub_tool(harness.core, supervisor, ToolCall(
+            id="review-feedback", name="agent_hub", arguments={
+                "action": "post", "topic": "review", "content": "Revise the pending evidence",
+                "to_agent": coordinator.id,
+            },
+        ))
+        assert result.is_success
+        await harness.wait_for(
+            lambda: harness.types(coordinator).count("run.started") == 2, "feedback recovery run",
+        )
+        await harness.wait_terminal(coordinator)
+        events = harness.events(coordinator)
+        injected = next(e for e in events if e.type == "agent.message_injected"
+                        and e.data.get("post_id") == result.data["post_id"])
+        resumed = [e for e in events if e.type == "run.started"][-1]
+        consumed = next(e for e in events if e.type == "hub.notification_consumed"
+                        and e.data.get("post_id") == result.data["post_id"])
+        assert gates[-1].seq < injected.seq < resumed.seq < consumed.seq
+        assert [e for e in events if e.type == "agent.completion_gate"][-1].data["action"] == "wait_background"
+        assert any(e["tool_name"] == "agent_hub" and e["is_success"] for e in harness.tool_events(coordinator))
+        saved = await asyncio.to_thread(harness.store.events_after, {})
+        assert any(e["event_id"] == injected.event_id for e in saved)
+    finally:
+        release.set()
         await harness.aclose()

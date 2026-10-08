@@ -14,6 +14,8 @@ export interface RuntimeSettings {
   reasoning_effort?: string | null;
   orchestration_mode: 'standard' | 'dag_record' | 'dag_guided';
   invocation_protocol?: 'traditional' | 'javascript';
+  unattended?: boolean;
+  clean_context?: boolean;
 }
 
 export interface PermissionSet {
@@ -49,6 +51,7 @@ export interface Agent {
   settings_revision: number;
   capabilities: AgentCapabilities;
   current_run: { run_id: string; started_at: string; invocation_protocol?: string } | null;
+  current_task?: string | null;
   // 运行期投影（服务端从收尾事件算出）：该 agent 最近一次已结束 run 的完成
   // 依据；正在跑/挂起或从未收尾时为 null。
   completion?: CompletionSummary | null;
@@ -82,6 +85,20 @@ export interface EventEnvelope {
   created_at: string;
 }
 
+// AgentHub 论坛帖（hub.posted 事件的投影，见 cloudra/runtime_v2/hub_bridge.py）。
+export interface HubPost {
+  id: string;
+  seq: number;
+  created_at: string;
+  topic: string;
+  kind: string;
+  author_agent: string;
+  author_session: string | null;
+  to_agent: string | null;
+  parent_id: string | null;
+  content: string;
+}
+
 export interface ProviderPreset {
   id: string;
   name: string;
@@ -110,6 +127,20 @@ export interface RuntimeConfig {
   config_file: string;
   coordinator: RuntimeConfigSlot;
   follower: RuntimeConfigSlot;
+}
+
+export interface CodexAuthStatus {
+  authenticated: boolean;
+  expires_at: number | null;
+  account_id: string | null;
+}
+
+export interface CodexDeviceLogin {
+  login_id: string;
+  user_code: string;
+  verification_uri: string;
+  interval: number;
+  expires_at: number;
 }
 
 export interface KgOverview {
@@ -212,9 +243,13 @@ export interface ComputeNode {
   node_id: string;
   display_name: string;
   scheduler: string;
+  // transport: 'local' runs on this host; 'ssh' stages jobs to a remote server
+  // (remote = user@host of the SSH target, null for local nodes).
+  connection: string;
+  remote: string | null;
   state: string;
-  // effective = min(registered, os_available) for a node running on this host;
-  // remote/cluster nodes report their registered quota as-is.
+  // effective = registered scheduling quota; OS availability is observational only.
+  // free = quota minus in-flight reservations.
   capacity: {
     registered: NodeResources;
     os_available: { memory_mb: number | null; cpus: number | null };

@@ -80,15 +80,16 @@ async def test_batch_runs_task_scores_and_persists(tmp_path):
     core, bus, service = _service(tmp_path)
     tasks_dir = _write_tasks(tmp_path / "tasks", "T1")
 
-    snap = await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1, timeout=60.0)
+    snap = await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1)
     assert snap["status"] == "running" and snap["batch_id"]
+    assert "run_timeout_s" not in snap["config"]
     batch = service._batch
     await _wait_until(lambda: batch.task_states[0].agent_id)
 
     st = batch.task_states[0]
     agent = core.require_agent(st.agent_id)
     assert st.project_id.startswith("prj")
-    core.agent_host.start_run(agent)  # finish_run 需要 current_run
+    await core.agent_host.start_run(agent)  # finish_run 需要 current_run
     core.event_log.append(
         "agent.message_emitted",
         stream="agent",
@@ -96,18 +97,21 @@ async def test_batch_runs_task_scores_and_persists(tmp_path):
         session_id=agent.id,
         data={"content": "Done. The computed barrier is 5.0 kcal/mol."},
     )
-    core.agent_host.finish_run(agent, outcome="succeeded")
+    await core.agent_host.finish_run(agent, outcome="succeeded")
 
     await asyncio.wait_for(batch._task, timeout=5.0)
     final = service.status()
     assert final["status"] == "done"
     assert final["tasks"][0]["status"] == "scored"
     assert final["tasks"][0]["final_score"] == -1.0  # 空沙箱无图 → 零证据倒扣
-    assert final["tasks"][0]["outcome"] == "failed"
+    assert any(
+        "no parseable mechanism graph" in n for n in final["tasks"][0]["notes"]
+    )
 
     db = BenchmarkDB(tmp_path / "bench" / "benchmark.db")
     batches = db.list_batches()
     assert len(batches) == 1 and batches[0]["status"] == "done"
+    assert "run_timeout_s" not in batches[0]["config"]
     runs = db.list_runs_for(final["batch_id"])
     assert [r["task_id"] for r in runs] == ["T1"]
 
@@ -119,12 +123,12 @@ async def test_batch_runs_task_scores_and_persists(tmp_path):
 async def test_batch_stop_cancels_running_tasks(tmp_path):
     core, bus, service = _service(tmp_path)
     tasks_dir = _write_tasks(tmp_path / "tasks", "T1", "T2")
-    await service.start(tasks_dirs=[tasks_dir], only="", concurrency=2, timeout=60.0)
+    await service.start(tasks_dirs=[tasks_dir], only="", concurrency=2)
     batch = service._batch
     await _wait_until(lambda: all(st.agent_id for st in batch.task_states))
 
     for st in batch.task_states:
-        core.agent_host.transition(
+        await core.agent_host.transition(
             core.require_agent(st.agent_id), AgentState.RUNNING, reason="run_started"
         )
 
@@ -142,12 +146,52 @@ async def test_batch_stop_cancels_running_tasks(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("gate_action", ["wait_background", "allow_final"])
+async def test_batch_stop_converges_with_succeeded_agent_and_live_compute(
+    tmp_path, gate_action
+):
+    from cloudra.persistence.database import ComputeDB
+    from cloudra.services.compute_store import aget_compute_job, ainsert_compute_job
+
+    core, _bus, service = _service(tmp_path)
+    tasks_dir = _write_tasks(tmp_path / "tasks", "T1")
+    await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1)
+    batch = service._batch
+    await _wait_until(lambda: batch.task_states[0].agent_id)
+    agent = core.require_agent(batch.task_states[0].agent_id)
+    run_id = await core.agent_host.start_run(agent)
+    core.event_log.append(
+        "agent.completion_gate", stream="agent", project_id=agent.project_id,
+        session_id=agent.id, run_id=run_id,
+        data={"action": gate_action, "source": "schedule"},
+    )
+    await core.agent_host.finish_run(agent, outcome="succeeded")
+    db = await ComputeDB().ainit()
+    job_id = await ainsert_compute_job(
+        db, node_id="node-local", conversation_id=agent.project_id,
+        session_id=agent.id, path=str(tmp_path / "input.gjf"),
+        state="ready", jobtype="gaussian", scheduler="local", scheduler_options="{}",
+    )
+
+    await service.stop()
+    await asyncio.wait_for(batch._task, timeout=1.0)
+
+    task = service.status()["tasks"][0]
+    assert service.status()["status"] == "stopped"
+    assert task["status"] == "cancelled"
+    assert agent.state is (
+        AgentState.CANCELLED if gate_action == "wait_background" else AgentState.SUCCEEDED
+    )
+    assert (await aget_compute_job(db, job_id))["state"] == "ready"
+
+
+@pytest.mark.asyncio
 async def test_service_rejects_second_start_and_unknown_dir(tmp_path):
     core, bus, service = _service(tmp_path)
     tasks_dir = _write_tasks(tmp_path / "tasks", "T1")
-    await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1, timeout=60.0)
+    await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1)
     with pytest.raises(CommandRejected) as exc:
-        await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1, timeout=60.0)
+        await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1)
     assert exc.value.code == "state_conflict"
 
     with pytest.raises(CommandRejected):
@@ -155,7 +199,7 @@ async def test_service_rejects_second_start_and_unknown_dir(tmp_path):
         bus2 = CommandBus(core2)
         svc2 = BenchmarkService(core2, bus2, data_dir=tmp_path / "bench2")
         await svc2.start(
-            tasks_dirs=[str(tmp_path / "missing")], only="", concurrency=1, timeout=60.0
+            tasks_dirs=[str(tmp_path / "missing")], only="", concurrency=1
         )
 
 
@@ -174,7 +218,7 @@ async def test_router_status_start_stop_history(tmp_path):
         running = (
             await client.post(
                 "/api/v2/benchmark/start",
-                json={"tasks_dirs": [tasks_dir], "concurrency": 1, "timeout": 60.0},
+                json={"tasks_dirs": [tasks_dir], "concurrency": 1},
             )
         ).json()
         assert running["status"] == "running"
@@ -232,7 +276,7 @@ async def test_status_and_runs_agree_the_moment_a_batch_reaches_terminal(
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
         await client.post(
             "/api/v2/benchmark/start",
-            json={"tasks_dirs": [tasks_dir], "concurrency": 1, "timeout": 60.0},
+            json={"tasks_dirs": [tasks_dir], "concurrency": 1},
         )
         await client.post("/api/v2/benchmark/stop")
 
@@ -267,6 +311,76 @@ async def _insert_job(path, state="running", conversation_id="prj_old"):
 
 
 @pytest.mark.asyncio
+async def test_pending_background_includes_terminal_job_awaiting_notice(tmp_path):
+    from cloudra.benchmark.batch import BenchmarkBatch
+    from cloudra.persistence.database import ComputeDB
+    from cloudra.runtime_v2.schemas import Command
+    from cloudra.services.compute_store import ainsert_compute_job, mark_notified
+
+    core = RuntimeCore(strict_events=True)
+    bus = CommandBus(core)
+    project = (await bus.execute(Command(type="project.create", payload={"name": "notice"}))).data
+    agent = (await bus.execute(Command(
+        type="agent.spawn", target={"project_id": project.id},
+        payload={"role_id": "coordinator"},
+    ))).data
+    batch = BenchmarkBatch(
+        core, bus, data_dir=tmp_path, tasks=[], tasks_dirs=[], concurrency=1,
+        stuck_grace_s=5.0, poll_interval_s=0.01,
+        emit=lambda *_args: None,
+    )
+    db = await ComputeDB().ainit()
+    job_id = await ainsert_compute_job(
+        db, node_id="node-local", conversation_id=project.id, session_id=agent.id,
+        path=str(tmp_path / "input.gjf"), state="done", jobtype="gaussian",
+        scheduler="local", scheduler_options="{}",
+    )
+    pending = batch._pending_background_factory(project.id, agent.id)
+    assert await pending() is True
+    mark_notified(db, job_id)
+    assert await pending() is False
+
+    child = (await bus.execute(Command(
+        type="agent.spawn", target={"project_id": project.id},
+        payload={"role_id": "explorer", "parent_session_id": agent.id},
+    ))).data
+    child_job = await ainsert_compute_job(
+        db, node_id="node-local", conversation_id=project.id, session_id=child.id,
+        path=str(tmp_path / "child.gjf"), state="done", jobtype="gaussian",
+        scheduler="local", scheduler_options="{}",
+    )
+    assert await pending() is True
+    mark_notified(db, child_job)
+    assert await pending() is False
+
+
+@pytest.mark.asyncio
+async def test_watcher_stuck_wait_never_scores_parked_succeeded_agent(tmp_path, monkeypatch):
+    from cloudra.benchmark.watch import RunWatcher
+
+    async def stuck_wait(self, core, agent, cancel):
+        await core.agent_host.start_run(agent)
+        await core.agent_host.finish_run(agent, outcome="succeeded")
+        await cancel("agent stuck in waiting_approval with no live supervisor to decide wait_review")
+        return "agent stuck in waiting_approval with no live supervisor to decide wait_review"
+
+    monkeypatch.setattr(RunWatcher, "wait", stuck_wait)
+    core, _bus, service = _service(tmp_path)
+    tasks_dir = _write_tasks(tmp_path / "tasks", "T1")
+    await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1)
+    await asyncio.wait_for(service._batch._task, timeout=5.0)
+
+    task = service.status()["tasks"][0]
+    assert task["status"] == "error"
+    assert "no live supervisor" in task["error"]
+    db = BenchmarkDB(tmp_path / "bench" / "benchmark.db")
+    runs = db.list_runs_for(service.status()["batch_id"])
+    assert len(runs) == 1
+    assert runs[0]["final_score"] == 0.0  # watcher 无人应答：基建失败 0 分行
+    assert any("watcher" in note for note in runs[0]["notes"])
+
+
+@pytest.mark.asyncio
 async def test_batch_sandbox_reset_failure_is_infrastructure_error(tmp_path, monkeypatch):
     """沙箱创建失败必须落明确的基建失败：不 spawn、不评分。"""
     core, bus, service = _service(tmp_path)
@@ -278,7 +392,7 @@ async def test_batch_sandbox_reset_failure_is_infrastructure_error(tmp_path, mon
         raise OSError("sandbox is not creatable")
 
     monkeypatch.setattr(batch_mod.BenchmarkBatch, "_prepare_sandbox", _boom)
-    await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1, timeout=30.0)
+    await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1)
     batch = service._batch
     await asyncio.wait_for(batch._task, timeout=10.0)
 
@@ -290,7 +404,7 @@ async def test_batch_sandbox_reset_failure_is_infrastructure_error(tmp_path, mon
     assert not task["agent_id"] and not task["project_id"], task
     db = BenchmarkDB(tmp_path / "bench" / "benchmark.db")
     runs = db.list_runs_for(final["batch_id"])
-    assert len(runs) == 1 and runs[0]["outcome"] == "failed"
+    assert len(runs) == 1 and runs[0]["final_score"] == 0.0  # 基建失败 0 分行
     assert any("sandbox" in note.lower() for note in runs[0]["notes"]), runs[0]["notes"]
 
 
@@ -312,7 +426,7 @@ async def test_batch_refuses_sandbox_with_live_compute(tmp_path, monkeypatch):
     monkeypatch.setattr(batch_mod.BenchmarkBatch, "_sandbox_for", lambda self, task_id: sandbox)
 
     tasks_dir = _write_tasks(tmp_path / "tasks", "T1")
-    await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1, timeout=30.0)
+    await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1)
     batch = service._batch
     await asyncio.wait_for(batch._task, timeout=10.0)
 
@@ -401,7 +515,7 @@ async def test_service_start_by_tiers(tmp_path, monkeypatch):
     custom = _write_tasks(tmp_path / "custom", "X9")
 
     snap = await service.start(
-        tasks_dirs=[custom], only="", concurrency=1, timeout=60.0,
+        tasks_dirs=[custom], only="", concurrency=1,
         tiers=["impossible", "hard"],
     )
     assert [(t["task_id"], t["tier"]) for t in snap["tasks"]] == [
@@ -417,7 +531,7 @@ async def test_service_start_by_tiers(tmp_path, monkeypatch):
     core2 = RuntimeCore(strict_events=True)
     svc2 = BenchmarkService(core2, CommandBus(core2), data_dir=tmp_path / "bench2")
     with pytest.raises(CommandRejected) as exc:
-        await svc2.start(tasks_dirs=None, only="", concurrency=1, timeout=60.0,
+        await svc2.start(tasks_dirs=None, only="", concurrency=1,
                          tiers=["easyy"])
     assert exc.value.code == "invalid_request"
     assert svc2.status()["batch_id"] is None
@@ -442,7 +556,7 @@ async def test_router_catalog_and_tiers(tmp_path, monkeypatch):
         running = (
             await client.post(
                 "/api/v2/benchmark/start",
-                json={"tiers": ["hard"], "concurrency": 1, "timeout": 60.0},
+                json={"tiers": ["hard"], "concurrency": 1},
             )
         ).json()
         assert [t["task_id"] for t in running["tasks"]] == ["H1"]

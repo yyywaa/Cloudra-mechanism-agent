@@ -2,8 +2,7 @@
 v3（2026-09-09）由 20 条缩至 10 条：I4（硫脲 Strecker）剔出定稿名单留档池（条目见 hard.md）。
 
 H1：池 SMILES 左右相同（消旋体表示，轴手性由 query 文本与 gold 3D 锚定），20 个碳全部
-映射、无键变化——登记为单步纯构象过程（conformational: True）；两条 peri-H 对穿路径
-键变化相同，不写 competing，差异（~1 kcal/mol）写进 step type 文本。
+映射、无键变化。两条 peri-H 对穿路径共享 P/M 端点，以独立 TS 和 channel 区分。
 
 I1：三步网络（① 烯胺生成 ② C–C 加成（立体决定步）③ 水解）。粒度判断：N–C 成键与
 C–O 断键并成一条边（羟胺/亚铵不单独成节点，同 normal A4 直接缩合的处理），脯氨酸
@@ -24,19 +23,31 @@ I4：单基元步协同氰基转移（C–C 成、N–H 成、C–H 断、C=N π
 
 TASKS = {
     # C1=CC=C2C(=C1)C=CC=C2C3=CC=CC4=CC=CC=C43>>同左  (0/1)
-    # 1,1′-联萘消旋化：无键变化的纯构象步，anchor="barrier"（ΔG‡ ≈ 23.5 逐边承载）
+    # 1,1′-联萘消旋化：无键变化的两条纯构象路径，电子能垒逐边承载
     "H1": {
         "name_en": "1,1'-binaphthyl thermal racemization",
-        "conditions_en": "thermal racemization, ~50 degC, polar solvent",
+        "conditions_en": "thermal racemization, ~50 degC, DMF",
         "anchor": "barrier",
         "mapped_reactants": "[cH:1]1[cH:2][cH:3][c:4]2[c:5]([cH:6]1)[cH:7][cH:8][cH:9][c:10]2-[c:11]1[cH:12][cH:13][cH:14][c:15]2[cH:16][cH:17][cH:18][cH:19][c:20]12",
         "steps": [
             {
                 "out": "[cH:1]1[cH:2][cH:3][c:4]2[c:5]([cH:6]1)[cH:7][cH:8][cH:9][c:10]2-[c:11]1[cH:12][cH:13][cH:14][c:15]2[cH:16][cH:17][cH:18][cH:19][c:20]12",
-                "type": "atropisomerization via peri-H squeeze through a double-leaf flip TS (syn/anti peri-H paths differ by ~1 kcal/mol)",
-                "barrier": 23.5,
+                "type": "atropisomerization through the lower syn peri-H crossing (torsion near 0 deg)",
+                "barrier": 23.01,
                 "weight": 0.5,
                 "conformational": True,
+                "channel": "syn",
+            },
+        ],
+        "competing": [
+            {
+                "out": "[cH:1]1[cH:2][cH:3][c:4]2[c:5]([cH:6]1)[cH:7][cH:8][cH:9][c:10]2-[c:11]1[cH:12][cH:13][cH:14][c:15]2[cH:16][cH:17][cH:18][cH:19][c:20]12",
+                "type": "atropisomerization through the higher anti peri-H crossing (torsion near 180 deg)",
+                "barrier": 32.36,
+                "weight": 0.5,
+                "conformational": True,
+                "same_endpoint": True,
+                "channel": "anti",
             },
         ],
     },
@@ -55,7 +66,7 @@ TASKS = {
                 # 成 C2=C3 pi，两质子经羧基接力转到离去的 O4 成水 → 烯胺 + H2O（苯甲醛旁观）
                 "out": "[CH3:1][C:2](=[CH2:3])[N:20]2[CH2:19][CH2:18][CH2:17][C@@H:16]2[C:14](=[O:13])[OH:15].[O:4]([H:21])([H:22]).[O:5]=[CH:6][c:7]1[cH:8][cH:9][cH:10][cH:11][cH:12]1",
                 "type": "enamine condensation (merged edge): proline N attacks the acetone carbonyl, C-O cleaves and the N-H/alpha-C-H protons are relayed onto the departing oxygen by the carboxyl shuttle -> enamine + water (carbinolamine/iminium not separate nodes)",
-                "barrier": 19.2,
+                "barrier": None,
                 "weight": 0.5,
             },
             {
@@ -63,7 +74,7 @@ TASKS = {
                 # 成 C3-C6，断 C2=C3 pi、断 C6=O5 pi，成 C2=N20 pi → (S)-构型亚铵-醇盐
                 "out": "[CH3:1][C:2](=[N+:20]2[CH2:19][CH2:18][CH2:17][C@@H:16]2[C:14](=[O:13])[OH:15])[CH2:3][C@H:6]([O-:5])[c:7]1[cH:8][cH:9][cH:10][cH:11][cH:12]1.[O:4]([H:21])([H:22])",
                 "type": "stereo-determining C-C addition: enamine beta-carbon attacks benzaldehyde through the major-face Houk-List chair TS (carboxyl H-bond network positions the aldehyde) -> (S)-configured iminium-aldolate",
-                "barrier": 9.1,
+                "barrier": 13.36,
                 "weight": 0.5,
                 "channel": "major_face",
             },
@@ -72,7 +83,7 @@ TASKS = {
                 # 成 N20-H21（脯氨酸再生）、成 O5-H22（醇盐质子化）→ (S)-aldol + (S)-脯氨酸
                 "out": "[CH3:1][C:2](=[O:4])[CH2:3][C@H:6]([O:5][H:22])[c:7]1[cH:8][cH:9][cH:10][cH:11][cH:12]1.[O:13]=[C:14]([OH:15])[C@@H:16]1[CH2:17][CH2:18][CH2:19][N:20]1([H:21])",
                 "type": "hydrolysis: water cleaves the iminium (C=O restored, C-N breaks), one water proton regenerates the proline N-H and the other protonates the aldolate -> (S)-aldol + (S)-proline",
-                "barrier": 16.9,
+                "barrier": None,
                 "weight": 0.5,
             },
         ],
@@ -82,7 +93,7 @@ TASKS = {
                 # (R)-构型亚铵-醇盐副中间体（is_product=false，仅 C6 构型相反）
                 "out": "[CH3:1][C:2](=[N+:20]2[CH2:19][CH2:18][CH2:17][C@@H:16]2[C:14](=[O:13])[OH:15])[CH2:3][C@@H:6]([O-:5])[c:7]1[cH:8][cH:9][cH:10][cH:11][cH:12]1.[O:4]([H:21])([H:22])",
                 "type": "opposite-face enamine attack via the minor Houk-List chair TS -> (R)-configured iminium-aldolate (minor intermediate, hydrolysis not traced in the reference graph)",
-                "barrier": 11.5,
+                "barrier": 15.52,
                 "weight": 0.5,
                 "from_step": 1,
                 "is_product": False,

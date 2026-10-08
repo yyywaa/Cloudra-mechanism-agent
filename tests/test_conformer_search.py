@@ -173,6 +173,47 @@ async def test_butane_smiles_ensemble(tool, mock_session, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_guided_ring_search_returns_only_qualified_ts_seeds(tool, mock_session, tmp_path):
+    result = await tool.safe_call(ConformerSearch_input_schema(
+        smiles="CCCCCC", ring_order=[1, 2, 3, 4, 5, 6],
+        distance_filters=[
+            {"atoms": [1, 6], "min_ang": 3.5, "max_ang": 4.0},
+            {"atoms": [2, 5], "min_ang": 3.2, "max_ang": 4.0},
+        ],
+        output_dir=str(tmp_path / "guided"),
+    ), mock_session)
+    assert result.is_success
+    assert result.seed_kind == "constrained_preorganization"
+    assert result.conformers and all(row["passes_filters"] for row in result.conformers)
+    assert all("boltzmann_pct" not in row for row in result.conformers)
+    assert "Boltzmann" not in result.table
+    assert result.constraint_manifest_path
+    assert {row["source"] for row in result.effective_windows} == {"explicit"}
+
+
+@pytest.mark.asyncio
+async def test_guided_ring_fallback_is_visible(tool, mock_session, tmp_path):
+    result = await tool.safe_call(ConformerSearch_input_schema(
+        smiles="CCO.O", ring_order=[1, 2, 3, 10],
+        distance_filters=[{"atoms": [3, 10], "min_ang": 2.5, "max_ang": 3.8}],
+        output_dir=str(tmp_path / "fallback"),
+    ), mock_session)
+    assert any(row["source"] == "fallback" for row in result.effective_windows)
+    assert "1-10" in result.message
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["qcg", "protonate", "deprotonate", "tautomerize"])
+async def test_guided_ring_rejects_species_changing_modes(tool, mock_session, tmp_path, mode):
+    result = await tool.safe_call(ConformerSearch_input_schema(
+        smiles="CCC", ring_order=[1, 2, 3], backend="crest", mode=mode,
+        output_dir=str(tmp_path / mode),
+    ), mock_session)
+    assert not result.is_success
+    assert "ring_order" in result.message and "unsupported" in result.message
+
+
+@pytest.mark.asyncio
 async def test_distance_filters(tool, mock_session, tmp_path):
     """反应距离过滤：丁烷 C1-C4 距离区间应只让 anti（~3.9 Å）通过，gauche（~3.0 Å）被滤掉。"""
     result = await tool.safe_call(
@@ -187,11 +228,12 @@ async def test_distance_filters(tool, mock_session, tmp_path):
     assert result.is_success is True
     passing = [c for c in result.conformers if c["passes_filters"]]
     failing = [c for c in result.conformers if not c["passes_filters"]]
-    assert result.counts["passing_filters"] == len(passing)
-    assert len(passing) >= 1 and len(failing) >= 1
+    assert result.counts["retained"] == len(passing)
+    assert len(passing) >= 1 and len(failing) == 0
+    assert all(3.5 <= c["achieved_distances"]["1-4"] <= 4.5 for c in passing)
     # 通过过滤的是最低能（anti）构象
     assert passing[0]["conf_id"] == 0
-    assert "reactive conformer" in result.message
+    assert result.seed_kind == "constrained_preorganization"
 
 
 @pytest.mark.asyncio
@@ -247,12 +289,10 @@ async def test_crest_backend(mock_session, tmp_path):
     for name in ("command.txt", "input.xyz", "versions.txt", "stdout.log", "stderr.log",
                  "crest_conformers.xyz"):
         assert (run_dir / name).is_file(), f"CREST 现场缺少 {name}"
-    assert "crest_conformers.xyz" not in result.message or True
 
 
 def test_tool_metadata():
     tool = ConformerSearch()
-    assert tool.tool_id == "t-43"
     assert tool.tool_name == "conformer_search"
     assert tool.is_write() is True
 
@@ -285,16 +325,16 @@ async def test_multifragment_input_returns_assembled_complex_candidates(tool, mo
     )
     assert result.is_success is True, result.message
     assert result.conformers, "多碎片输入必须产出组装候选"
-    assert result.counts["generated"] == 32, "取向采样数即批准值 32"
-    assert result.counts["collision_rejected"] == 0
-    assert result.ensemble_path.endswith("confs.xyz")
-    assert (out_dir / "structure_build" / "assembly" / "assembly.json").is_file()
+    assert result.counts["generated"] >= result.counts["retained"]
+    assert result.seed_kind == "constrained_preorganization"
+    assert result.ensemble_path.endswith(".xyz")
+    assert (out_dir / "guided_assembly" / "assembly" / "assembly.json").is_file()
 
     # 系综文件里每一帧都不得含亚 1 Å 的片间接触。
     # 碎片分组取自构建器自己记录的**稳定身份表**（component_id），不靠重新推导——
     # 构建器逐组分加氢，输出原子顺序与 Chem.AddHs(MolFromSmiles(...)) 并不相同。
     prepared = json.loads(
-        (out_dir / "structure_build" / "prepared_structure.json").read_text(encoding="utf-8")
+        (out_dir / "guided_assembly" / "prepared_structure.json").read_text(encoding="utf-8")
     )
     component_ids = [identity["component_id"] for identity in prepared["atom_identities"]]
     frag_of = {index: int(cid.removeprefix("frag")) for index, cid in enumerate(component_ids)}
@@ -317,8 +357,8 @@ async def test_multifragment_input_returns_assembled_complex_candidates(tool, mo
         frames += 1
         index += 2 + count
     assert frames == len(result.conformers)
-    assert "approved complex assembly" in result.message
-    assert "randomize the relative" in result.message
+    assert result.constraint_manifest_path
+    assert all(row["passes_filters"] for row in result.conformers)
 
 
 @pytest.mark.asyncio

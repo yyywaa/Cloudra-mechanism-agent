@@ -1,35 +1,109 @@
-"""v2-native execution for the legacy Managetool dispatch tools.
+"""Native sub-agent launcher, swarm and report execution on the v2 kernel.
 
-``subagent_launcher`` / ``subagent_swarm`` / ``get_subagent_report``
-(legacy classes ``SubAgentLauncher`` / ``SubAgentSwarm``) are
-intercepted by LegacyToolExecutor and reimplemented on the v2 kernel:
-children become first-class v2 agents (streaming, cancel, message injection,
-DAG policy stage) instead of legacy executor sessions in the conversation DB.
-The legacy dispatch module is untouched — CLI/Flet keep using it.
-
-Role mapping mirrors the launcher prompt (a-1..a-8 → role names); passing a
-role name directly is also accepted.
+Dispatch accepts semantic role_id values and checks the live role registry.
+Children are first-class v2 agents with streaming, cancellation, mailbox
+injection and DAG policy stages.
 """
 
 from __future__ import annotations
 
 import asyncio
 import uuid
+from dataclasses import dataclass
 from typing import Any
 
-from cloudra.base.role_identity import role_id_for_legacy_agent_id
+from pydantic import ValidationError
+
+from cloudra.infra.tool_errors import validation_feedback
 from cloudra.runtime_v2.child_manifest import build_child_manifest, render_child_report
 from cloudra.runtime_v2.child_settings import resolve_child_settings
 from cloudra.runtime_v2.commands import CommandBus
 from cloudra.runtime_v2.dispatcher import WakePolicy
 from cloudra.runtime_v2.policies.base import ToolCall, ToolResult
-from cloudra.runtime_v2.schemas import AgentSession, AgentState, Command, CommandRejected
+from cloudra.runtime_v2.schemas import AgentSession, AgentState, Command, CommandRejected, EventEnvelope, RoleProfile
 
 _TERMINAL_STATES = {AgentState.SUCCEEDED, AgentState.FAILED, AgentState.CANCELLED}
 _LAUNCHER = "subagent_launcher"
 _SWARM = "subagent_swarm"
 _REPORT = "get_subagent_report"
 NATIVE_TOOL_NAMES = {_LAUNCHER, _SWARM, _REPORT}
+_CHILD_REPORT_KIND = "child_completion"
+
+
+@dataclass(slots=True)
+class ChildCompletionIndex:
+    """First final transition and durable delivery markers, built in one log pass."""
+
+    terminal_by_session: dict[str, EventEnvelope]
+    events_by_session: dict[str, list[EventEnvelope]]
+    reported: set[tuple[str, str]]
+
+
+def build_child_completion_index(core) -> ChildCompletionIndex:
+    """A background wait is a parked run, even though its state is SUCCEEDED.
+
+    The parent's first durable ``agent.message_injected`` manifest is the
+    one-shot marker.  A later unrelated run cannot generate another report.
+    """
+    child_ids = {
+        agent.id for agent in core.agents.values() if agent.parent_session_id
+    }
+    terminal_by_session: dict[str, EventEnvelope] = {}
+    events_by_session: dict[str, list[EventEnvelope]] = {}
+    reported: set[tuple[str, str]] = set()
+    legacy_reports: set[tuple[str, str, str]] = set()
+    latest_gate_by_run: dict[tuple[str, str], str] = {}
+    relevant = {
+        "run.started", "run.finished", "agent.message_emitted",
+        "agent.completion_gate", "agent.state_changed", "agent.cancelled",
+    }
+    for event in core.event_log:
+        session_id = event.session_id
+        if event.type == "agent.message_injected" and session_id:
+            manifest = event.data.get("manifest")
+            if isinstance(manifest, dict):
+                child_id = manifest.get("session_id")
+                child = core.agents.get(child_id) if isinstance(child_id, str) else None
+                if child is not None and child.parent_session_id == session_id:
+                    if manifest.get("kind") == _CHILD_REPORT_KIND:
+                        reported.add((session_id, child_id))
+                    elif manifest.get("parent_session_id") == session_id:
+                        # Reports written before the marker was added still
+                        # count if they describe the first genuine final run.
+                        # An old false report for a parked run must not erase
+                        # the obligation for a later final run.
+                        run = manifest.get("last_run")
+                        run_id = run.get("run_id") if isinstance(run, dict) else None
+                        if isinstance(run_id, str) and run_id:
+                            legacy_reports.add((session_id, child_id, run_id))
+        if session_id not in child_ids or event.type not in relevant:
+            continue
+        events_by_session.setdefault(session_id, []).append(event)
+        run_key = (session_id, event.run_id or "")
+        if event.type == "agent.completion_gate":
+            latest_gate_by_run[run_key] = str(event.data.get("action") or "")
+        elif event.type == "agent.state_changed" and session_id not in terminal_by_session:
+            state = event.data.get("to")
+            if state not in {s.value for s in _TERMINAL_STATES}:
+                continue
+            if state == AgentState.SUCCEEDED.value and latest_gate_by_run.get(run_key) == "wait_background":
+                continue
+            terminal_by_session[session_id] = event
+    for child_id, terminal in terminal_by_session.items():
+        parent_id = core.agents[child_id].parent_session_id
+        if parent_id and (parent_id, child_id, terminal.run_id or "") in legacy_reports:
+            reported.add((parent_id, child_id))
+    return ChildCompletionIndex(terminal_by_session, events_by_session, reported)
+
+
+def child_final_event(
+    core, child: AgentSession, *, index: ChildCompletionIndex | None = None
+) -> EventEnvelope | None:
+    """The child's first genuine result, irrespective of later wakeups."""
+    if not child.parent_session_id:
+        return None
+    index = index or build_child_completion_index(core)
+    return index.terminal_by_session.get(child.id)
 
 
 def _combined_query(query: str, context: list[Any]) -> str:
@@ -51,14 +125,22 @@ def _render_settings_receipt(receipt: dict[str, Any]) -> str:
     )
 
 
-async def _spawn_child(
-    bus: CommandBus, parent: AgentSession, *, role_id: str, query: str, context: list[Any]
-) -> tuple[AgentSession, dict[str, Any]]:
-    parent_role = bus.core.roles.require(parent.role_id)
+def _require_spawn_role(core, parent: AgentSession, role_id: str) -> RoleProfile:
+    """Resolve current identities and dispatch authority before creating work."""
+    role = core.roles.require(role_id)
+    parent_role = core.roles.require(parent.role_id)
     if not parent_role.can_spawn:
         raise CommandRejected("forbidden", f"role {parent.role_id!r} cannot spawn sub-agents")
     if parent_role.spawn_roles is not None and role_id not in parent_role.spawn_roles:
         raise CommandRejected("forbidden", f"role {parent.role_id!r} cannot spawn {role_id!r}")
+    return role
+
+
+async def _spawn_child(
+    bus: CommandBus, parent: AgentSession, *, role_id: str, query: str,
+    context: list[Any], defer_schedule: bool = False,
+) -> tuple[AgentSession, dict[str, Any]]:
+    role = _require_spawn_role(bus.core, parent, role_id)
     # 空任务字段绝不发送：空 query 的 spawn 只会产出永不调度的僵尸子 agent
     # （只落 agent.spawned，无 run、无 prompt 注入），上层轮询无果即挂死。
     # 响亮拒绝并留反馈给模型重试，而不是静默造一个空壳。
@@ -72,7 +154,7 @@ async def _spawn_child(
     plan = resolve_child_settings(
         parent,
         project=bus.core.require_project(parent.project_id),
-        role=bus.core.roles.require(role_id),
+        role=role,
     )
     result = await bus.execute(
         Command(
@@ -83,6 +165,7 @@ async def _spawn_child(
                 "parent_session_id": parent.id,
                 "query": query,
                 "settings": plan.spawn_payload_settings(),
+                "defer_schedule": defer_schedule,
             },
         )
     )
@@ -92,7 +175,7 @@ async def _spawn_child(
 
 async def _await_terminal(core, session_id: str) -> AgentSession:
     agent = core.require_agent(session_id)
-    if agent.state in _TERMINAL_STATES:
+    if child_final_event(core, agent) is not None:
         return agent
     done = asyncio.Event()
 
@@ -101,11 +184,15 @@ async def _await_terminal(core, session_id: str) -> AgentSession:
             envelope.type == "agent.state_changed"
             and envelope.session_id == session_id
             and envelope.data.get("to") in {s.value for s in _TERMINAL_STATES}
+            and child_final_event(core, core.require_agent(session_id)) is not None
         ):
             done.set()
 
     core.event_hub.subscribe(on_event)
     try:
+        # The transition may have landed between the first check and subscribe.
+        if child_final_event(core, core.require_agent(session_id)) is not None:
+            return core.require_agent(session_id)
         await done.wait()
     finally:
         core.event_hub.unsubscribe(on_event)
@@ -118,7 +205,7 @@ def _manifest_payload(core, child: AgentSession) -> dict[str, Any]:
 
 
 def child_completion_message(
-    core, child: AgentSession
+    core, child: AgentSession, *, index: ChildCompletionIndex | None = None
 ) -> tuple[str, str, dict[str, Any]] | None:
     """父信箱的完成回报：``(parent_session_id, content, manifest)``。
 
@@ -131,7 +218,16 @@ def child_completion_message(
         return None
     if core.agents.get(parent_id) is None:
         return None
-    manifest = build_child_manifest(core, child)
+    index = index or build_child_completion_index(core)
+    terminal = child_final_event(core, child, index=index)
+    if terminal is None or (parent_id, child.id) in index.reported:
+        return None
+    manifest = build_child_manifest(
+        core, child, terminal_event=terminal,
+        session_events=index.events_by_session.get(child.id, []),
+    )
+    manifest["kind"] = _CHILD_REPORT_KIND
+    manifest["terminal_event_id"] = terminal.event_id
     return parent_id, render_child_report(manifest), manifest
 
 
@@ -190,9 +286,9 @@ async def _cancel_child(core, session_id: str) -> None:
 
 async def _handle_launcher(core, parent: AgentSession, args: dict[str, Any]) -> ToolResult:
     bus = CommandBus(core)
-    role_id = role_id_for_legacy_agent_id(str(args.get("agent_id") or ""))
+    role_id = args["role_id"]
     child, settings_receipt = await _spawn_child(
-        bus, parent, role_id=role_id, query=str(args.get("query") or ""), context=args.get("context") or []
+        bus, parent, role_id=role_id, query=args["query"], context=args["context"]
     )
     data = {"session_id": child.id, "act_agent": child.role_id, "settings": settings_receipt}
     if not args.get("is_wait"):
@@ -204,18 +300,25 @@ async def _handle_launcher(core, parent: AgentSession, args: dict[str, Any]) -> 
         )
         return ToolResult(is_success=True, summary=data["result"], data=data)
     try:
+        from cloudra.runtime_v2.invocation_context import report_tool_progress
+        from cloudra.runtime_v2.schemas import ToolProgress, ToolWaitTarget
+
+        await report_tool_progress(ToolProgress(
+            phase="waiting", message="Waiting for child agent",
+            waits=[ToolWaitTarget(kind="agent", target_id=child.id)],
+        ))
         child = await _await_terminal(core, child.id)
     except asyncio.CancelledError:
         await _cancel_child(core, child.id)
         raise
-    manifest = build_child_manifest(core, child)
+    manifest = build_child_manifest(core, child, terminal_event=child_final_event(core, child))
     data["result"] = (
         f"[{_render_settings_receipt(settings_receipt)}]\n\n{render_child_report(manifest)}"
     )
     data["settings"] = settings_receipt
     data["manifest"] = manifest
     return ToolResult(
-        is_success=child.state is AgentState.SUCCEEDED,
+        is_success=manifest["state"] == AgentState.SUCCEEDED.value,
         summary=data["result"],
         data=data,
     )
@@ -236,16 +339,13 @@ def _launch_group_manager(core):
 
 async def _handle_swarm(core, parent: AgentSession, args: dict[str, Any]) -> ToolResult:
     bus = CommandBus(core)
-    role_id = role_id_for_legacy_agent_id(str(args.get("agent_id") or ""))
-    template = str(args.get("prompt_template") or "")
-    items = [str(item) for item in args.get("items") or []]
-    context = args.get("context") or []
-    is_wait = bool(args.get("is_wait", True))
-    max_concurrency = int(args.get("max_concurrency") or 0)
-    if "{{item}}" not in template:
-        return ToolResult(is_success=False, summary="prompt_template must contain the {{item}} placeholder")
-    if not items:
-        return ToolResult(is_success=False, summary="items must be a non-empty list")
+    role_id = args["role_id"]
+    _require_spawn_role(core, parent, role_id)
+    template = args["prompt_template"]
+    items = args["items"]
+    context = args.get("context", [])
+    is_wait = args.get("is_wait", True)
+    max_concurrency = args.get("max_concurrency", 0)
 
     # New non-blocking + capped path uses LaunchGroupManager.  The semaphore
     # covers child lifetime (not just spawn), unlike the legacy is_wait=false
@@ -253,7 +353,10 @@ async def _handle_swarm(core, parent: AgentSession, args: dict[str, Any]) -> Too
     if not is_wait and max_concurrency > 0:
         manager = _launch_group_manager(core)
         async def spawner(query):
-            child, _receipt = await _spawn_child(bus, parent, role_id=role_id, query=query, context=context)
+            child, _receipt = await _spawn_child(
+                bus, parent, role_id=role_id, query=query,
+                context=context, defer_schedule=True,
+            )
             return child
         group_id = "grp_" + uuid.uuid4().hex
         # 组清单先落 durable 事件再启动 worker（评审 5.2：重启可重建组清单）。
@@ -275,6 +378,24 @@ async def _handle_swarm(core, parent: AgentSession, args: dict[str, Any]) -> Too
     semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency > 0 else None
 
     spawned: list[str] = []
+    waiting: set[str] = set()
+
+    async def wait_for_child(child):
+        from cloudra.runtime_v2.invocation_context import report_tool_progress
+        from cloudra.runtime_v2.schemas import ToolProgress, ToolWaitTarget
+
+        waiting.add(child.id)
+        await report_tool_progress(ToolProgress(
+            phase="waiting", message="Waiting for child agents",
+            waits=[ToolWaitTarget(kind="agent", target_id=sid) for sid in sorted(waiting)],
+        ))
+        child = await _await_terminal(core, child.id)
+        waiting.discard(child.id)
+        await report_tool_progress(ToolProgress(
+            phase="waiting" if waiting else "executing", message="Child agent returned",
+            waits=[ToolWaitTarget(kind="agent", target_id=sid) for sid in sorted(waiting)],
+        ))
+        return child
 
     async def run_one(item: str) -> tuple[str, AgentSession]:
         query = template.replace("{{item}}", item)
@@ -282,13 +403,13 @@ async def _handle_swarm(core, parent: AgentSession, args: dict[str, Any]) -> Too
             child, _receipt = await _spawn_child(bus, parent, role_id=role_id, query=query, context=context)
             spawned.append(child.id)
             if is_wait:
-                child = await _await_terminal(core, child.id)
+                child = await wait_for_child(child)
             return item, child
         async with semaphore:
             child, _receipt = await _spawn_child(bus, parent, role_id=role_id, query=query, context=context)
             spawned.append(child.id)
             if is_wait:
-                child = await _await_terminal(core, child.id)
+                child = await wait_for_child(child)
         return item, child
 
     try:
@@ -310,9 +431,9 @@ async def _handle_swarm(core, parent: AgentSession, args: dict[str, Any]) -> Too
     manifests: list[dict[str, Any]] = []
     ok = True
     for item, child in results:
-        manifest = build_child_manifest(core, child)
+        manifest = build_child_manifest(core, child, terminal_event=child_final_event(core, child))
         manifests.append(manifest)
-        ok = ok and child.state is AgentState.SUCCEEDED
+        ok = ok and manifest["state"] == AgentState.SUCCEEDED.value
         sections.append(f"## {item[:40]}\n{render_child_report(manifest)}")
     summary = "\n\n".join(sections)
     return ToolResult(
@@ -343,16 +464,16 @@ async def _handle_report(core, args: dict[str, Any]) -> ToolResult:
             is_success=False,
             summary=f"Unknown v2 session {session_id!r}. Sessions dispatched before this migration live in the legacy store and are not queryable here.",
         )
-    if agent.state not in _TERMINAL_STATES:
+    if child_final_event(core, agent) is None:
         return ToolResult(
             is_success=True,
-            summary=f"Sub-agent {session_id} is still {agent.state.value}; ask again later.",
+            summary=f"Sub-agent {session_id} has no final result yet (state={agent.state.value}); ask again later.",
             data={"session_id": session_id, "state": agent.state.value},
         )
-    manifest = build_child_manifest(core, agent)
+    manifest = build_child_manifest(core, agent, terminal_event=child_final_event(core, agent))
     text = render_child_report(manifest)
     return ToolResult(
-        is_success=agent.state is AgentState.SUCCEEDED,
+        is_success=manifest["state"] == AgentState.SUCCEEDED.value,
         summary=text,
         data={
             "session_id": session_id,
@@ -366,9 +487,20 @@ async def _handle_report(core, args: dict[str, Any]) -> ToolResult:
 async def handle_native_tool(core, parent: AgentSession, call: ToolCall) -> ToolResult:
     try:
         if call.name == _LAUNCHER:
-            return await _handle_launcher(core, parent, call.arguments)
+            from cloudra.tools.Managetool.subagent_launcher import SubAgentLauncher_input_schema
+
+            args = SubAgentLauncher_input_schema.model_validate(call.arguments)
+            return await _handle_launcher(core, parent, args.model_dump())
         if call.name == _SWARM:
-            return await _handle_swarm(core, parent, call.arguments)
-        return await _handle_report(core, call.arguments)
+            from cloudra.tools.Managetool.subagent_swarm import SubAgentSwarm_input_schema
+
+            args = SubAgentSwarm_input_schema.model_validate(call.arguments)
+            return await _handle_swarm(core, parent, args.model_dump())
+        from cloudra.tools.Managetool.get_subagent_report import GetSubAgentReport_input_schema
+
+        args = GetSubAgentReport_input_schema.model_validate(call.arguments)
+        return await _handle_report(core, args.model_dump())
+    except ValidationError as exc:
+        return ToolResult(is_success=False, summary=validation_feedback(exc))
     except CommandRejected as exc:
         return ToolResult(is_success=False, summary=f"[dispatch rejected] {exc.message}")

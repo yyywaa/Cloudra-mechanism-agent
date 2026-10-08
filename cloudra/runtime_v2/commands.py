@@ -40,7 +40,13 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from cloudra.persistence.paths import conversation_db_path, conversation_dir, data_dir, project_workspace_dir
-from cloudra.runtime_v2.agent_host import _CONTEXT_RESET_NOTE, plan_cancel, plan_restart, plan_wake
+from cloudra.runtime_v2.agent_host import (
+    _CONTEXT_RESET_NOTE,
+    is_background_parked,
+    plan_cancel,
+    plan_restart,
+    plan_wake,
+)
 from cloudra.runtime_v2.apply import apply_event
 from cloudra.runtime_v2.core import RuntimeCore
 from cloudra.runtime_v2.effects import (
@@ -113,6 +119,7 @@ def _message_drafts(
     run_id: str | None = None,
     images: list[str] | None = None,
     image_artifact_ids: list[str | None] | None = None,
+    language: str | None = None,
 ) -> tuple[EventDraft, DeliverMessage]:
     """一条投递 = message_injected 草稿 + DeliverMessage 效果（message_id 一致）。
 
@@ -132,6 +139,7 @@ def _message_drafts(
                 content=content,
                 images=images,
                 image_artifact_ids=image_artifact_ids,
+                language=language,
             ),
         ),
         DeliverMessage(
@@ -200,13 +208,21 @@ def _decide_update_project(core: RuntimeCore, command: Command) -> Decision:
         )
     if "settings" in payload:
         # decide 侧校验：非法 settings 必须在事件落日志之前抛错。
-        new_settings = ProjectSettings.model_validate(payload["settings"])
+        settings_changes = dict(payload["settings"])
+        benchmark_task_id = project.settings.benchmark_task_id
+        if benchmark_task_id is not None:
+            if settings_changes.get("benchmark_task_id", benchmark_task_id) != benchmark_task_id:
+                raise CommandRejected("invalid_request", "Benchmark task identity cannot be changed")
+            settings_changes["benchmark_task_id"] = benchmark_task_id
+            settings_changes.setdefault("method_policy", project.settings.method_policy.model_dump(mode="json")
+                if project.settings.method_policy is not None else None)
+        new_settings = ProjectSettings.model_validate(settings_changes)
         drafts.append(
             EventDraft(
                 "project.settings_changed",
                 stream="project",
                 project_id=project.id,
-                data={"changes": payload["settings"], "actor": command.actor},
+                data={"changes": settings_changes, "actor": command.actor},
             )
         )
         # 事件驱动督导（Task 4）：切回 dag_guided 沿补一次待办通知——退出
@@ -263,6 +279,7 @@ def _decide_spawn_agent(core: RuntimeCore, command: Command) -> Decision:
     payload = command.payload
     role_id = str(payload.get("role_id") or "")
     parent_session_id = payload.get("parent_session_id")
+    requested_by_session_id = payload.get("requested_by_session_id")
     requested = EventDraft(
         "agent.spawn_requested",
         stream="project",
@@ -270,21 +287,40 @@ def _decide_spawn_agent(core: RuntimeCore, command: Command) -> Decision:
         data={
             "role_id": role_id,
             "parent_session_id": parent_session_id,
+            "requested_by_session_id": requested_by_session_id,
             "actor": command.actor,
         },
     )
     try:
+        if parent_session_id is not None and requested_by_session_id is not None:
+            raise CommandRejected(
+                "invalid_request", "a peer requester and a child parent cannot both be set"
+            )
         role = core.roles.require(role_id)
+        query_sender = "system"
+        if requested_by_session_id is not None:
+            requester = core.require_agent(requested_by_session_id)
+            if requester.project_id != project_id:
+                raise CommandRejected("invalid_request", "requesting agent belongs to another project")
+            query_sender = requester.role_id
         if parent_session_id is not None:
             parent = core.require_agent(parent_session_id)
             if parent.project_id != project_id:
                 raise CommandRejected("invalid_request", "parent agent belongs to another project")
+        from cloudra.runtime_v2.policies.permission import require_delegation_permissions
+        caller_id = parent_session_id or requested_by_session_id
+        if caller_id is not None:
+            caller = core.require_agent(caller_id)
+            require_delegation_permissions(caller.capabilities.permissions, role.permissions)
+        elif command.actor == "agent":
+            raise CommandRejected("forbidden", "Agent delegation requires a bound requester identity")
         settings_patch = RuntimeSettingsPatch.model_validate(payload.get("settings") or {})
         settings = core.agent_host.effective_settings(project, role, settings_patch)
         agent = core.agent_host.build(
             project=project,
             role=role,
             parent_session_id=parent_session_id,
+            requested_by_session_id=requested_by_session_id,
             display_name=payload.get("display_name"),
             settings=settings,
         )
@@ -321,11 +357,18 @@ def _decide_spawn_agent(core: RuntimeCore, command: Command) -> Decision:
     query = str(payload.get("query") or "").strip()
     if query:
         message_draft, deliver = _message_drafts(
-            project_id=project_id, session_id=agent.id, sender="system", content=query
+            project_id=project_id,
+            session_id=agent.id,
+            sender=query_sender,
+            content=query,
+            language=payload.get("language"),
         )
         drafts.append(message_draft)
         effects.append(deliver)
-        effects.append(ScheduleAgent(agent.id))
+        # A capped launch group commits item_dispatched before it starts this
+        # child, so its run permit is installed before the first LLM call.
+        if payload.get("defer_schedule") is not True:
+            effects.append(ScheduleAgent(agent.id))
     return Decision(events=tuple(drafts), effects=tuple(effects), result=ResultRef("agent", agent.id))
 
 
@@ -390,6 +433,7 @@ def _decide_inject_agent_message(core: RuntimeCore, command: Command) -> Decisio
         run_id=agent.current_run.run_id if agent.current_run else None,
         images=images or None,
         image_artifact_ids=image_artifact_ids or None,
+        language=command.payload.get("language"),
     )
     # A message to a sleeping or terminal agent is a fresh instruction to the
     # same identity: wake it (reopening a new run) instead of making the user
@@ -438,7 +482,10 @@ def _live_descendants(core: RuntimeCore, session_id: str) -> list[AgentSession]:
     while queue:
         current = queue.pop(0)
         for child in by_parent.get(current, ()):
-            if child.id in visited or child.state in _CANCEL_TERMINAL_STATES:
+            if child.id in visited or (
+                child.state in _CANCEL_TERMINAL_STATES
+                and not is_background_parked(core, child)
+            ):
                 continue
             visited.add(child.id)
             descendants.append(child)
@@ -453,6 +500,7 @@ def _cancel_agent_drafts(
     message: str | None,
     cause: str,
     parent_session_id: str | None = None,
+    allow_parked: bool = False,
 ) -> list[EventDraft]:
     """一个 agent 的取消事件组：cancel_requested → state_changed → cancelled。
 
@@ -471,7 +519,7 @@ def _cancel_agent_drafts(
             data=data,
         )
     ]
-    drafts.extend(plan_cancel(agent))
+    drafts.extend(plan_cancel(agent, allow_parked=allow_parked))
     drafts.append(
         EventDraft(
             "agent.cancelled",
@@ -486,7 +534,12 @@ def _cancel_agent_drafts(
 
 def _decide_cancel_agent(core: RuntimeCore, command: Command) -> Decision:
     agent = core.require_agent(command.target.get("session_id", ""))
-    cancel_drafts = plan_cancel(agent)  # succeeded/failed 抛错；cancelled 幂等空计划
+    # background parked 判定只求值一次：它要扫事件日志，而且下面「拒绝」与「级联」
+    # 两条路径必须看同一个值，否则两处判据会被分别编辑而漂移。
+    parked = is_background_parked(core, agent)
+    cancel_drafts = plan_cancel(
+        agent, allow_parked=parked
+    )  # genuine succeeded/failed reject; parked succeeded is still live
     if not cancel_drafts:
         return Decision(result=ResultRef("agent", agent.id))
     message = command.payload.get("message")
@@ -495,7 +548,8 @@ def _decide_cancel_agent(core: RuntimeCore, command: Command) -> Decision:
     # park-don't-wake 纪律投递信箱驻留，绝不唤醒已取消的父。
     descendants = _live_descendants(core, agent.id)
     drafts: list[EventDraft] = _cancel_agent_drafts(
-        agent, actor=command.actor, message=message, cause="explicit"
+        agent, actor=command.actor, message=message, cause="explicit",
+        allow_parked=parked,
     )
     effects: list[Effect] = []
     if message:
@@ -517,6 +571,7 @@ def _decide_cancel_agent(core: RuntimeCore, command: Command) -> Decision:
                 message=None,
                 cause="parent_cancelled",
                 parent_session_id=agent.id,
+                allow_parked=is_background_parked(core, child),
             )
         )
     # 效果顺序：先停 launch group（不再 spawn 新子 agent），再取消父的
@@ -812,6 +867,21 @@ async def _execute_effect(core: RuntimeCore, effect: Effect) -> None:
     elif isinstance(effect, CancelRunner):
         if core.runner is not None:
             await core.runner.cancel(effect.session_id)
+        from cloudra.runtime_v2.peer_completion import deliver_peer_completion
+
+        for attempt in range(2):
+            try:
+                await deliver_peer_completion(core, core.require_agent(effect.session_id))
+                break
+            except EventPersistenceError:
+                if attempt:
+                    # Cancellation is already durable. Recovery reconstructs
+                    # the pending peer report from that terminal event.
+                    logger.warning(
+                        "peer completion notice failed after durable cancel of %s",
+                        effect.session_id,
+                        exc_info=True,
+                    )
     elif isinstance(effect, CancelLaunchGroups):
         # 组管理器随 core 装配（组清单是事件投影）——不再是可选接线。
         await core.launch_groups.cancel_for_parent(effect.session_id)

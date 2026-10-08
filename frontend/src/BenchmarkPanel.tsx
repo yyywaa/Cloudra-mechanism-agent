@@ -5,9 +5,9 @@
  * selector driven by the built-in task catalog (`/api/v2/benchmark/catalog`,
  * so no directory typing is needed), optional custom task dirs, batch
  * start/stop controls, a live task matrix (per-tier filter, per-layer scores,
- * refusal outcome, duration), the cross-tier refusal confusion matrix, and
- * recent batch history. Live updates ride the /api/v2/benchmark/stream SSE
- * feed (snapshot on connect + batch events); a slow status poll backs it up.
+ * duration), and recent batch history. Live updates ride the
+ * /api/v2/benchmark/stream SSE feed (snapshot on connect + batch events); a
+ * slow status poll backs it up.
  * Each scored task row links into the task's standard project view — the
  * existing timeline/DagPanel components are the drill-down, so nothing here
  * re-renders agent internals.
@@ -19,7 +19,6 @@ import {
   type BenchmarkCatalog,
   type BenchmarkCatalogTier,
   type BenchmarkHistory,
-  type BenchmarkRefusalStats,
   type BenchmarkStatus,
   type BenchmarkTaskRow,
 } from './api';
@@ -38,7 +37,7 @@ const TIER_INFO: Record<string, string> = {
   easy: 'single elementary step (R → TS → P)',
   normal: 'multi-step network with intermediates',
   hard: 'competing stereochemical channels',
-  impossible: 'unanswerable — must be refused',
+  impossible: 'uncomputable elements must be flagged accessible=false',
 };
 
 const STATUS_BADGES: Record<string, { glyph: string; label: string; cls: string }> = {
@@ -50,9 +49,6 @@ const STATUS_BADGES: Record<string, { glyph: string; label: string; cls: string 
 };
 
 function badge(row: BenchmarkTaskRow): { glyph: string; label: string; cls: string } {
-  if (row.status === 'scored' && row.outcome === 'refused') {
-    return { glyph: '—', label: 'Refused', cls: 'cancelled' };
-  }
   return STATUS_BADGES[row.status] ?? { glyph: '·', label: row.status, cls: 'queued' };
 }
 
@@ -69,27 +65,6 @@ function fmtDuration(started: number | null, finished: number | null): string {
   return `${Math.floor(s / 60)}m${String(s % 60).padStart(2, '0')}s`;
 }
 
-function RefusalCard({ stats }: { stats: BenchmarkRefusalStats | Record<string, never> }) {
-  const r = stats as BenchmarkRefusalStats;
-  const has = typeof r.tp === 'number';
-  return (
-    <div className="bm-card bm-refusal">
-      <div className="bm-card-title">Refusal (cross-tier)</div>
-      <div className="bm-refusal-grid">
-        <span title="correct refusals (impossible tier answered with refusal)">TP {has ? r.tp : '—'}</span>
-        <span title="wrong refusals (solvable tier refused)">FP {has ? r.fp : '—'}</span>
-        <span title="missed refusals (impossible tier answered)">FN {has ? r.fn : '—'}</span>
-        <span title="correct answers (solvable tier answered)">TN {has ? r.tn : '—'}</span>
-      </div>
-      <div className="bm-refusal-metrics">
-        <span>precision {has ? fmtNum(r.precision) : '—'}</span>
-        <span>recall {has ? fmtNum(r.recall) : '—'}</span>
-        <span>F1 {has ? fmtNum(r.f1) : '—'}</span>
-      </div>
-    </div>
-  );
-}
-
 export default function BenchmarkPanel({ onClose, onOpenProject, onToast }: BenchmarkPanelProps) {
   const [status, setStatus] = useState<BenchmarkStatus | null>(null);
   const [history, setHistory] = useState<BenchmarkHistory | null>(null);
@@ -100,7 +75,6 @@ export default function BenchmarkPanel({ onClose, onOpenProject, onToast }: Benc
   const [dirPickerOpen, setDirPickerOpen] = useState(false);
   const [only, setOnly] = useState('');
   const [concurrency, setConcurrency] = useState('1');
-  const [timeout, setTimeoutS] = useState('7200');
   const [busy, setBusy] = useState(false);
   const sourceRef = useRef<EventSource | null>(null);
 
@@ -157,7 +131,6 @@ export default function BenchmarkPanel({ onClose, onOpenProject, onToast }: Benc
           .filter(Boolean),
         only: only.trim(),
         concurrency: Math.max(1, Number(concurrency) || 1),
-        timeout: Math.max(60, Number(timeout) || 7200),
       };
       const snap = await api.benchmarkStart(body);
       setStatus(snap);
@@ -230,8 +203,9 @@ export default function BenchmarkPanel({ onClose, onOpenProject, onToast }: Benc
           <div className="bm-guide">
             <strong>Pick the tiers to run, then press Start.</strong> Every task becomes its own
             project (open ↗) with a live agent, DAG and compute; scores land in the matrix below as
-            each one finishes. <em>Impossible</em> tasks are paired with solvable siblings, so keep
-            both kinds in the same batch for the refusal statistics to mean anything. Start sends
+            each one finishes. <em>Impossible</em> tasks contain elements that the allowed methods
+            cannot compute — the correct delivery still submits the graph and flags those elements
+            accessible=false. Start sends
             compute jobs to the ordinary scheduler (it never launches QM processes itself), and
             Stop only cancels the task agents — running calculations are left alone.
             <div className="bm-legend">
@@ -292,15 +266,6 @@ export default function BenchmarkPanel({ onClose, onOpenProject, onToast }: Benc
                 disabled={running}
               />
             </label>
-            <label className="bm-field" title="per-task run timeout, seconds">
-              timeout s
-              <input
-                className="input bm-num"
-                value={timeout}
-                onChange={(e) => setTimeoutS(e.target.value)}
-                disabled={running}
-              />
-            </label>
             {running ? (
               <button className="btn danger sm" type="button" onClick={() => void stop()} disabled={busy}>
                 Stop
@@ -338,7 +303,7 @@ export default function BenchmarkPanel({ onClose, onOpenProject, onToast }: Benc
                   disabled={running}
                   onClick={() => setDirPickerOpen(true)}
                 >
-                  📁
+                  浏览
                 </button>
               </div>
               <input
@@ -373,8 +338,6 @@ export default function BenchmarkPanel({ onClose, onOpenProject, onToast }: Benc
                   {t} ({tierCounts[t] ?? 0})
                 </button>
               ))}
-              <div className="bm-filter-spacer" />
-              <RefusalCard stats={status?.refusal ?? {}} />
             </div>
           )}
 
@@ -385,12 +348,10 @@ export default function BenchmarkPanel({ onClose, onOpenProject, onToast }: Benc
                   <th>Task</th>
                   <th>Tier</th>
                   <th>Status</th>
-                  <th>Integrity</th>
                   <th>Graph</th>
                   <th>Self-cons.</th>
                   <th>Accuracy</th>
                   <th>Final</th>
-                  <th>Outcome</th>
                   <th>Duration</th>
                   <th />
                 </tr>
@@ -398,7 +359,7 @@ export default function BenchmarkPanel({ onClose, onOpenProject, onToast }: Benc
               <tbody>
                 {tasks.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="empty-hint">
+                    <td colSpan={9} className="empty-hint">
                       {hasBatch
                         ? 'No task matches this tier filter.'
                         : selectedTaskCount > 0 || customDirs.trim()
@@ -421,14 +382,12 @@ export default function BenchmarkPanel({ onClose, onOpenProject, onToast }: Benc
                       <td>
                         <span className={`bm-badge ${b.cls}`}>{b.glyph} {b.label}</span>
                       </td>
-                      <td>{row.integrity_passed == null ? '—' : row.integrity_passed ? '✓' : '✗'}</td>
                       <td>{fmtNum(row.graph_score)}</td>
                       <td>{row.selfconsistency_passed == null ? '—' : row.selfconsistency_passed ? '✓' : '✗'}</td>
                       <td>{fmtNum(row.accuracy_score)}</td>
                       <td className={`bm-final ${row.final_score != null && row.final_score < 0 ? 'neg' : ''}`}>
                         {fmtNum(row.final_score)}
                       </td>
-                      <td>{row.outcome ?? '—'}</td>
                       <td>{fmtDuration(row.started_at, row.finished_at)}</td>
                       <td>
                         {row.project_id ? (
@@ -465,7 +424,7 @@ export default function BenchmarkPanel({ onClose, onOpenProject, onToast }: Benc
                 <div className="bm-history-runs">
                   {batch.runs.map((run) => (
                     <span key={run.task_id} className="bm-history-run">
-                      {run.task_id}: {fmtNum(run.final_score)} ({run.outcome})
+                      {run.task_id}: {fmtNum(run.final_score)}
                     </span>
                   ))}
                 </div>

@@ -48,7 +48,7 @@ def _writer(tmp_path, **overrides):
         "engine": "orca",
         "source_type": "xyz_file",
         "source_value": str(xyz),
-        "output_dir": str(tmp_path / "job.inp"),
+        "output_path": str(tmp_path / "job.inp"),
     }
     args.update(overrides)
     return QmInputWriter().tool_call(QmInputWriter_input_schema(**args), session=None)
@@ -131,6 +131,7 @@ def test_unknown_task_key_error_lists_both_sp_spellings():
     assert "unknown_task_key" in _codes(entries)
     assert "single_point" in entries[0]["message"]
     assert "'sp'" in entries[0]["message"]
+    assert "Did you mean 'single_point'?" in entries[0]["message"]
 
 
 def test_sp_and_single_point_spelling_conflict_detected():
@@ -154,6 +155,19 @@ async def test_writer_refusal_writes_no_file(tmp_path):
     assert result.is_success is False
     assert result.unapplied_options
     assert not (tmp_path / "job.inp").exists()
+
+
+@pytest.mark.asyncio
+async def test_writer_rejects_invalid_options_before_building_coordinates(tmp_path, monkeypatch):
+    def unexpected_build(*_args, **_kwargs):
+        raise AssertionError("invalid request must not start coordinate generation")
+
+    monkeypatch.setattr(QmInputWriter, "_get_coordinates", staticmethod(unexpected_build))
+    result = await _writer(tmp_path, task_type=[{"opt": "ts,calcfc,noeigen"}])
+
+    assert result.is_success is False
+    assert result.unapplied_options
+    assert "gaussian_only_suboption" in result.message
 
 
 @pytest.mark.asyncio
@@ -271,6 +285,16 @@ def test_inspect_orca_reads_constraints_and_charge():
     assert intent.certainty == "known"
 
 
+def test_inspect_orca_relaxed_scan_uses_geom_block_instead_of_opt_keyword():
+    text = (
+        "! Opt B3LYP def2-SVP\n"
+        "%geom\n  Scan B 0 1 = 2.0, 3.0, 10 end\nend\n"
+        "* xyz 0 1\nH 0 0 0\nH 0 0 2\n*\n"
+    )
+    intent = inspect_input(text, engine="orca")
+    assert intent.tasks == {"relaxed_scan"}
+
+
 def test_inspect_incomplete_input_is_not_guessed():
     intent = inspect_input("# nothing recognizable here\n", engine="orca")
     assert intent.tasks == set()
@@ -309,7 +333,7 @@ async def test_smiles_provenance_comment_is_unverified(tmp_path):
             source_type="smiles",
             source_value="O",
             task_type=[{"opt": None}],
-            output_dir=str(tmp_path / "w.inp"),
+            output_path=str(tmp_path / "w.inp"),
         ),
         session=None,
     )

@@ -1,83 +1,230 @@
-# AGENTS.md — Cloudra 项目指南
+# AGENTS.md — Cloudra 项目开发者与 AI 协作指南
 
-给 AI 助手与新贡献者的仓库导航。项目定位与三层架构见 `README.md`。本文件是**地图不是手册**：每个模块只记职责与坑点，细节读代码。
+> **一句话定位**：Cloudra 是一个面向化学反应机理自主探索的多 Agent 系统。
+> 本文件是仓库的**人话版全景地图与工程交规**，旨在让新开发者和 AI 助手能瞬间看懂架构、少踩深坑。
+> 架构设计背景请参考 [README.md](file:///Users/cloudrayyy/Desktop/Desktop_Archive/Projects/Cloudra-mechanism-agent-master/README.md)；本文档是**地图而非实现手册**，各模块细节以代码为准。
 
-## 命令
+---
+
+## 🛑 开发与协作 7 大铁律（绝不能踩的红线）
+
+无论你是人类开发者还是编写代码的 AI Agent，修改代码时必须死守以下底线：
+
+1. **禁止过度工程（YAGNI）**：
+   只做当前被明确要求的事。严禁脑补“未来可能会用到”的中间抽象层、复杂配置项、通用插件点或冗余分支。每写一个新的公开接口或抽象类，先问自己：“**现在有谁在调它？**” 答不上来就不许加。
+2. **化学与科学决策严禁擅自拍板**：
+   涉及化学科学层面的设计（包括但不限于：反应能垒合格线、量子化学方法/泛函/基组选择、构象打分阈值、Benchmark 评分权重、不可达判定标准等），**必须向人类用户询问并确认，禁止 Agent 自行决定**。
+3. **校验路径绝对禁止使用正则表达式 (`re`)**：
+   `re` 模块唯一允许出现的场景是**解析量子化学软件（如 ORCA、Gaussian）的原始文本输出日志**。
+   所有针对 Agent 响应、工具入参、结构化数据、状态转换的校验，**一律使用 Pydantic、`json.loads`、显式 Token 匹配或枚举比对**，发现问题直接 Fail-Loud（报错终止），绝不许用正则“模糊猜测匹配”！
+4. **异步事件循环 (`async`) 严禁同步阻塞**：
+   在 `async` 函数体内，**绝对禁止**直接执行同步的 SQLite 查询、`time.sleep()`、`subprocess.run()` 或同步网络请求！凡是可能阻塞的操作，必须封装至 `asyncio.to_thread` 或改用异步库。常驻守护测试：`tests/test_no_sync_on_loop.py`。
+5. **计算进程绝对保活，严禁随意 Kill**：
+   调度器（Scheduler）和任务守卫（Guard）在任何异常或失败路径下，**绝不能擅自杀掉正在跑的量子化学计算进程**。
+   - 作业取消只能通过数据库账本设置 `cancel_requested` 标志，由远端轮询收尾；
+   - 进程存活与否**唯一认准文件排他锁**（见 `infra/flocks.py`），持有锁的作业绝对不能被标记为 failed。
+6. **架构级根治，不留历史包袱**：
+   项目目前处于活跃演进期，**不考虑向下兼容**。遇到架构坏味道请彻底重构根治——不留 legacy 回退垫片（shim）、不加冗余兼容开关、不保留死代码。修复 Bug 必须附带能精准重现该问题的单测。
+7. **本地测试只跑改动模块，不跑全套**：
+   全套测试非常耗时，交由 CI 运行。本地开发规范流程：
+   `compileall`（语法检查） → `ruff`（代码规范） → 运行相关模块测试（按前缀选跑）。除非用户明确要求，否则不要在本地运行 `pytest tests/` 全集。
+
+---
+
+## 🛠️ 常用开发命令速查 (Cheat Sheet)
 
 ```bash
-uv run pytest -q tests/test_dag_engine.py   # 按文件名前缀聚焦改动子系统（默认只跑这个粒度）
-uv run pytest -q tests/                     # 全套测试由 CI 跑，本地不跑（除非用户明确要求），见"工作约定"
-                                            # ⚠ 别把 pytest 管道进 tail/grep：$? 会被管道掩盖。
-                                            #   全套验收用 `uv run pytest -q tests/ > /tmp/pytest.log 2>&1; echo EXIT=$?`
-                                            #   或 `set -o pipefail`，退出码非 0 即失败，别只看尾部输出。
-uv run ruff check cloudra tests             # lint（select E/F/W/I，E501 不强制）
-uv run python -m compileall -q <改动文件>   # 改完先做语法检查
-cloudra                                     # 构建并启动 Web 前端（顺带 detach 拉起 scheduler/kg_vec 守护）
-cloudra web --host 0.0.0.0 [--port N]       # 自定义绑定地址/端口（默认仅 127.0.0.1:8000）
-                                            # ⚠ 访问控制只验 bearer token；非回环绑定禁止 token=off
-cloudra scheduler                           # 前台跑调度守护（单实例 flock；CLOUDRA_SCHEDULER=off 禁止自动拉起）
-cloudra stats tokens|cache|agents|export <id> -o <path>   # LLM 遥测：token 聚合 / 缓存分析 / Agent 行为聚合 / 全量 context 导出（只读 runtime-v2.db）
-cloudra stop                                # 显式全停（不 kill 计算进程）
-npm --prefix cloudra/runtime_v2/js_host test   # JS 宿主测试；先 npm ci --ignore-scripts --no-audit --no-fund
+# 1. 语法检查与代码风格检查（改完代码必跑）
+uv run python -m compileall -q cloudra tests
+uv run ruff check cloudra tests
+
+# 2. 聚焦运行测试（按改动的子系统挑选，只跑相关单测）
+uv run pytest -q tests/test_dag_engine.py       # DAG 引擎单测
+uv run pytest -q tests/test_runtime_v2_*        # Agent 新内核单测
+uv run pytest -q tests/test_compute*            # 计算执行与调度单测
+
+# 3. 验收全套测试（仅在用户明确要求或发版前跑；注意：千万不要管道给 tail/grep，会掩盖退出码！）
+uv run pytest -q tests/ > /tmp/pytest.log 2>&1; echo EXIT=$?
+
+# 4. 服务启停与调度器
+cloudra                                         # 构建前端并启动 Web 服务（后台自动拉起 scheduler 守护）
+cloudra web --host 0.0.0.0 --port 8000          # 绑定公网/局域网（注意：非 127.0.0.1 时绝对禁止关 token）
+cloudra scheduler                               # 在前台运行计算调度守护进程（依赖单实例 flock 锁）
+cloudra stop                                    # 显式安全停止所有服务（安全终止，不误杀 QM 计算）
+
+# 5. LLM 遥测数据导出与观测
+cloudra stats tokens|cache|agents|export <id> -o <path>
+
+# 6. JS 宿主环境测试
+npm --prefix cloudra/runtime_v2/js_host test    # 运行 QuickJS 宿主测试
 ```
 
-入口：`cloudra` CLI（`cloudra/cli.py`；执行面已收敛到 runtime_v2，CLI 不直接跑任务）。Python >= 3.11，POSIX-only。**Windows 政策（2026-09-20 定）**：master 是纯 POSIX 目标——不接收 Windows 兼容补丁，存量容忍补丁（flocks msvcrt 后端、js_runtime/run_dirs 进程组降级、monitor nice 守卫、web_launcher `cmd /c`）已整体清除；Windows 兼容层归 `windows` 分支独有（移植清单与同步节奏见该分支的 `docs/WINDOWS_PORT.md`，配 windows-smoke CI），Windows 相关 PR 一律以 `windows` 为 base。`infra/platform_utils.py` 的 `get_bash_path` 等保留——那是 POSIX bash 发现逻辑，不是平台兼容。
+> [!IMPORTANT]
+> **平台支持政策**：本项目为 **纯 POSIX 目标（Linux / macOS）**，要求 Python >= 3.11。
+> 主分支（`master`）不接受任何 Windows 兼容补丁。Windows 专属代码统一在 `windows` 分支维护，相关 PR 请以 `windows` 分支为 base。
 
-**停止语义边界**：取消单个 agent（`POST /api/v2/agents/{id}/cancel`）级联取消其存活后代，**永不触碰 scheduler/guard/QM 计算**；计算作业的一键取消是 `POST /api/v2/compute/cancel-all`（账本级：ready 直接落 cancelled、Slurm 置 `cancel_requested` 由既有 poll 循环走 scancel、本地不杀进程只落 cancelled），全停只能 `cloudra stop`；只终止有明确归属的任务/进程，禁止按进程名宽匹配杀进程，子进程必须 wait/reap；已发给 provider 的请求远端不可撤销。
+> [!NOTE]
+> **双远端同步（windows 分支日常开发，2026-09-20 起）**：本仓同时托管 GitHub（remote `github`，经本地代理）与 Gitee（remote `origin`，直连）；日常 pull/push 两个远端都做，保持镜像一致。
+> GitHub 侧代理端口随 VPN 变动，用环境变量动态指定（`$env:HTTPS_PROXY`），**不要把代理端口硬编码进 `.git/config`**（`remote.github.proxy` 已因此事故移除一次）。
 
-**v1 已删除**：旧 `services/api*.py`、旧 `runtime/` 执行核心、`core/react.py`、Flet `ui/`、legacy 会话表等均已移除，无兼容回退，别再引用这些名字。
+---
 
-## 模块地图（cloudra/ 包）
+## 🗺️ 仓库架构与模块“人话”地图
 
-- `core/` — `Agent`/`Coordinator`/`Follower` 基类与权限模型宿主；`message_history.py` JSONL 消息历史。
-- `runtime/` — 执行面共享件：`prompt_assembler.py`（身份=静态前缀；AGENTS.md 仅注入 Coordinator；MEMORY/AGENTS.md/工作区观察是带来源的动态快照消息（observation 侧 + `observation_sources` 对齐 revision），跨轮变化只追加替代消息、绝不重写旧前缀）、`monitor.py`（guard 进程：持 flock 拉起 calculator、解析日志写终态；**终态按引擎文本终止标记判定，cclib 只取数据不定成败**；Gaussian/ORCA/xTB/CP2K/VASP 各有文本闸门，未知引擎不标成功；**先 CAS 再写 `state_*.json`/入 compute review**，账本已是终态则两者都跳过）、`compute_executor.py`（`run_compute`，认领方只有 scheduler 与 benchmark）、`compute_notify.py`。
-- `scheduler/` — `cloudra scheduler` 守护（与 API 分家，状态只走中央 `compute.db`）：**按节点分池的容量感知认领**（每个作业带 `node_id`，只在自己节点的额度内放行——本地额度不被云端作业吃掉，反之亦然；作业归属节点不在注册表里则跳过不认领，**绝不改投别的机器**）、对账器（探 guard 锁；adopt guard 重拉起按作业 60s 节流，时间戳落 `<guard锁>.adopt_last_spawn`；**同步提交写入 running 后 60s 内不对账 adopt**；Slurm `running`/`cancel_requested` 都重挂 poller，无 `scheduler_job_id` 时按 job-name `cloudra-{id}` 找回（只认非终态 sacct 行；`cancel_requested` 过 60s 仍无句柄则账本收口 cancelled）、孤儿 reap（**租约耗尽仍先探 calc/guard flock，持锁作业不标 failed**）；单实例 flock。资源由 agent 提交时显式申请（`cpus`/`memory_mb`），超容拒收；**生效容量 = min(注册声明, OS 实时余量)**（`services/host_capacity.py`：剩余内存 = free+inactive+speculative+purgeable、可用核数 = 全核 − 1min loadavg；**只有本机 local 节点受 OS 侧约束**，远端/集群节点用注册声明；容量视图口径唯一实现 `services/node_capacity.py`），作业成本仍按声明记账——OS 侧涵盖绕过 submit 直调引擎的占用；读数只用于放行与展示，不参与存活/终态判定，探针失效回落声明容量，**核心链路零输入文件解析**。完成通知 `ComputeNotifyBroker`（`runtime_v2/compute_notify.py`）纯 DB 轮询投递，宕机窗口不丢；每 tick 按已加载项目取数，未打开项目的积压不占 LIMIT。
-- `services/` — `api_v2/`（HTTP 控制面唯一实现；薄路由，写操作一律走 CommandBus——例外：`routers/compute.py` 的 `POST /api/v2/compute/cancel-all` 直写中央 compute.db（账本级取消，不走命令）与只读 `GET /api/v2/compute/nodes`（节点容量视图），`DELETE /api/v2/projects/{id}?hard=true` 是项目硬删除（`project.delete` 命令先数中央库非终态作业再 decide，tombstone 事件 + 清 conversations 整树/artifact 文件，workspace 与 compute.db 历史不动）；**API 访问控制只验 token**：`api_token.py` 是唯一解析点——`CLOUDRA_API_TOKEN` 非空用它，否则读/生成 `data_dir/.api_token`（0600，过宽就地修好）；`Authorization: Bearer` 与 `?token=` 等价，不限方法、不验 Host。`=off` 显式关认证（测试/CI，conftest 默认；**非回环绑定拒绝 off**，`require_token_for_bind` 在 `create_v2_app` 与 `web_launcher` 入口闸门；**off 时只放行回环 ASGI client + Host 回环白名单**，挡 DNS rebinding / `Host: 127.0.0.1` 打穿）、`daemon_supervisor.py`（守护拉起判定链唯一事实源；崩溃循环节流为指数退避 `min(60*2^n, 1800)`，连续失败计数落 `<lock>.spawn_fail_count`，健康观测归零；spawn 抛异常也落时间戳计入退避）、`shutdown.py`（`cloudra stop`：协作关停（POST shutdown → 优雅 lifespan）优先，**失败或进程滞留则升级信号路径**——关停前用「端口 LISTEN + 健康验明」锁定归属 PID（优雅关停会先关监听，事后反查不到挂死进程），端口不答后给足优雅排空窗口再 SIGTERM→SIGKILL；`api_stopped` 要求进程真的死，绝不只按端口不答谎报）、`session_store.py`/`compute_store.py`（SQL 入口）、`nodes.py`（多节点/Slurm 注册表；工作区路由解析作业归属节点）、`node_capacity.py`（多节点容量视图唯一实现：按节点生效容量 + 在用量 + 余量，供调度守护/`query_compute_queue`/`GET /api/v2/compute/nodes` 共用）、`host_capacity.py`（OS 实时余量探针唯一实现：`vm_stat`/`MemAvailable` 可回收内存 + `cpu_count − 1min loadavg` 可用核数，5s TTL 缓存、子进程走 `to_thread`；只供调度放行与 `query_compute_queue` 展示）、`telemetry.py`（LLM 遥测唯一实现：runtime-v2.db 只读（mode=ro）聚合 + 全量 context 导出；聚合核心纯函数吃 events 列表，`cli stats` 与 `routers/telemetry.py`（纯只读 GET，不走 CommandBus）都只是薄壳；`llm.*` 事件的 model 由 provider 钩子 `resolve_effective_settings` 解析生效值——agent.settings 是 spawn 快照、未覆盖时 model 为空）。
-- `persistence/` — `database.py`（`ConversationDB` 会话级 + `ComputeDB` 中央计算库 `data_dir/compute.db`；`compute_jobs.node_id` 是容量分池记账依据，补列走 `ComputeDB.init()` 的幂等 `ALTER`——旧库升级不重建表）、`artifacts.py`、`memory.py`、`paths.py`（**data_dir 下所有路径唯一事实来源**）、`fs_utils.py`（原子写）、`workspace.py`（`resolve_tool_path` 路径收口原语；`resolve_existing_tool_path` 输入路径存在性兜底——相对路径同时试工作目录与进程 cwd，失败列出全部候选，吃外部输入路径的工具一律走它）。
-- `knowledge/` — chem-kb 存储与检索：`store.py`（**读路径只读、缺库返回空绝不建库**；实体 props 挂 `label_en`，英文查询自动可搜图谱）、`plugin.py`（语义+图谱+模糊三通道混合 provider）、`health.py`、`installer.py`。
-- `base/` — skill/tools 加载器与基类；审批钩子 `use_approval_handler`（ContextVar），未设置时 `request_approval` 直接抛错（ask_user 同理走 `use_input_handler`）；`role_identity.py` 是 **v2 role_id ↔ DAG 存储词表（a-0..a-8、a-supervisor）唯一映射**（`RoleProfile.legacy_agent_id` 与工具/DAG 侧都取自它，反向查询在输入边界把历史 a-N 归一为语义 role_id，别处不得再抄第二张表——`tests/test_role_identity.py` 常驻守卫）。
-- `infra/` — `config.py`（**磁盘 YAML 唯一事实源**，唯一写入口 `mutate_config(fn)`；测试重建单例用 `_reset_for_tests()`；`flower` section 是 FlowER 外部环境的路径与总开关；`email.enabled` 是邮件工具（email_reader/email_sender）与收件监听器（email_listener）的总开关（默认关：wire 投影隐藏 + 执行层硬失败 + 监听器不启动）；`compute.allow_local_calculator` 是工作目录 calculator.sh 通道总开关（默认关，关闭时只用内置脚本））、`llm_client.py`（取消走 `abort_event` + socket 层 RST；**禁止高层 `resp.close()` 跨线程**，会卡锁）、`flocks.py`（**执行面唯一进程存活/互斥判定手段**）、`compute_utils.py`（guard 命令构建、`resolve_log_path`）、`slurm.py`（`COMPLETED` 后复用 monitor 文本闸门核 Gaussian/ORCA/xTB/CP2K/VASP，缺日志保持 sacct）、`operations.py` 等。
-- `benchmark/` — 基准评测（独立于会话运行时）：`schema.py`（`TaskSpec` 唯一 schema；交付边逐条声明 `barrier_kcal_mol`（电子能差 ΔE‡ 口径）、hard 竞争通道边加 `channel`/`favored`（favored 归属定性计分）、性质/态序交付物挂物种节点 `properties` 字典（键带单位），可选 `refusal` 结构化拒答）、`gen_*_tasks.py`（四档确定性生成器；**改题源必须重跑生成器**，`test_*_tasks_regenerate_identically` 守卫同步；方法白名单的内容源是全局 config `method_policy.allowed_methods`（easy/normal/hard 默认 `["xtb","b3lyp/def2svp"]`，组合条目把基组钉进许可）与 `method_policy.allowed_methods_impossible`（默认 `["xtb"]`），生成器从 config 读、拦截仍只在 benchmark 强制，改 config 后必须重跑生成器）、`graph_similarity.py`（子图覆盖打分，多出不罚）、`integrity`/`selfconsistency`/`barrier_evidence`/`accuracy`（三层取证评分；**selfconsistency 是逐图元素覆盖判定**：只查 Layer 1 绑定到该节点/边的证据、任一合格即覆盖（物种=经验证极小值，TS 边=一阶鞍点+IRC 方向区间证明（ts_guess strict 同口径，唯一实现在 `tools/core/irc_path.py`：不要求收敛，但双侧端点几何须各自位于 TS 与端点极小值之间；未收敛方向取轨迹末帧作部分端点，收敛与否不做闸门；**监测对是化学分类器选的**——键图 diff（rdDetermineBonds 主通道，失败回退距离 top5）为 A 层硬闸门（中间体端共价的对出区间即硬失败；氢键/弱接触出区间降级为 warning——IRC 不需要保真这类键）、ΔEN+重原子+|Δd| 经 MAD 过滤的提名为 B 层记录项，floppy 非键接触进不了判据；原子对应走距离指纹+Hungarian（同序谱系恒等优先），原子序无关），各按 rubric 开关），`accessible=false` 声明豁免，未绑定的试错残留不参与判定；**能垒评分只读交付物**，绝不用最终消息散文兜底；gold 边与交付步**按端点物种对应匹配**（species_substitution_cost，gold 的 `<任务>_E<n>` 边 id 是题库内部约定、agent 不可知，绝不参与匹配；多候选按 bond_changes 对称差+端点代价+id 字典序确定性取）；每个 accessible 节点**必须声明 `properties.energy_hartree` + `properties.evidence_log`**（`IntegrityRubric.require_node_energies`，只对走逐边能垒评分的题必填；声明值只用于**指认交付的是哪份日志**——同物种多构象时——数值仍从日志解析；缺声明 integrity 不通过，不归零）；**verification=unverified 的锚点不参与 accuracy 评分**（走 disabled 直通并注明）；性质锚点按 `ReferenceComputation.properties` 逐键比对——数值键高斯 σ 查显式常量表 `_PROPERTY_SIGMAS`（表外 fail-loud）、字符串键规范化精确相等；hard 题带 `selectivity.favored_channel` 时**定性选择性分占 accuracy 槽位**（恰好一条 favored 边且 channel 命中 → 1.0）、spread 数值不评分）、`refusal.py`（纯结构化拒答分类 + 理由的电子结构类 token 识别）、`impossible.py`（**impossible 档专门算分器**：I 题 = 0.7·决策分 + 0.3·理由质量分，S 题走标准 composite + 错误拒答 ×0.2 闸门，runner 按 tier 路由）、`runner.py`（composite = (0.5·graph + 0.2·selfconsistency + 0.3·accuracy) × binding_quality；**持久化 append-only**：runs 只增不删、CLI/Web 每次运行都是一个带溯源快照（backend/orchestration_modes/models/plugins，绝不记 key）的 batches 行、沙箱按 `sandboxes/<task_id>/<batch_id>/` 分目录，复跑永不覆写历史，清理由用户显式执行）、`watch.py`（**SUCCEEDED ≠ 题目完成**）、`batch.py`（Web 批次跑在 live RuntimeCore 上；**题集选择 = 内置档位 `tiers`（`task_catalog()` 供选题器读、`resolve_tasks_dirs()` 解析，目录 `ideapool/tasks/<tier>`，与 `--tasks-dir` 自定义目录并存）**；stop 只取消题目 agent，不碰计算）。
-- `runtime_v2/` — 事件驱动内核（推理循环唯一实现）。骨架：`schemas.py`/`roles.py`/`events.py`/`core.py`（含 `session_contexts` 会话级 LLM 上下文投影与唯一写口 `ContextBroker`：`commit_input`/`append_output`/`install_compacted` 与 runner 的 `start_run`/`finish_run` 都是 persist-then-apply，落库失败丢未持久化尾巴、不投影）/`apply.py`（**`apply_event` 唯一状态应用器，禁止在别处写状态**）/`effects.py`/`commands.py`（CommandBus 四拍：纯 decider → 逐事件 persist-then-apply（落库失败丢未持久化尾巴）→ effect；**`agent.spawned` 已落盘后 `message_injected` 失败仍返回该 agent 并调度，不 500 以免 HTTP 重试双开**；**`project.delete` 先数中央库非终态作业再 decide**；包装路径 apply 后再扫尾 flush，失败不丢）。`agent_host.py`（AgentSession 状态机）、`agent_runner.py`（每 Agent 一个 async task；后台任务一律经 `track_background` 登记，裸 create_task 取消/shutdown 碰不到；**统一运行结束门禁 `_evaluate_completion_gate`**，同缺口指纹无进展退出有界计数，耗尽落 failed 不伪报完成；**LLM 上下文是 session 级事件溯源投影，跨 run/重启连续**——run 只是执行生命周期：发送前输入经 `context.prefix_installed`/`context.appended` 落投影并持久化、响应后 assistant/tool 输出恰好一次落投影；per-run 自动摘要/handover 管线已删除，显式 restart 命令才重置上下文）。`child_settings.py`（**子 Agent 设置继承唯一解析点**：只继承任务授权/运行边界（yolo/unattended/schedule/编排模式/clean context），model/协议/采样由 child 的 role 与项目默认决定、秘密永不继承；派发回执带 effective settings 摘要与逐字段来源）、`child_manifest.py`（**子 Agent 完成回报结构化 manifest 唯一来源**：终态/runs 计数/最后 run 的 outcome+failure_kind/最终摘要及其来源/门禁 reason/未解决项与下一步；文本由它确定性渲染，结构化数据随 `agent.message_injected` 事件留存、父上下文只注入渲染文本；api_key 与工具原始输出永不进回报）、`supervision.py`（督导运行时；**待办唯一事实来源是 DAG store**；failed/cancelled 不自动复活；**flush 也不唤醒 `WAITING_APPROVAL`/`WAITING_INPUT`**；**API 装载 reconcile `auto_wake=False`：succeeded 也不唤醒、不 spawn**）、`turn_pipeline.py`（前缀 owner 区分初始安装/增量复查；投影媒体是入历史时保存的不可变图片快照（`image_ref` 路径 + SHA-256），发送前校验并解析为 data URL；原图覆盖/删除不改写历史，快照损坏或缺失直接失败）、调用生命周期（`event_writer.py` 有序持久化唯一写口；invocation 五态、executor 恰一次；**持久化失败抛 EventPersistenceError 不伪造终态**）。JS 协议默认：`tool_catalog.py`（**线缆投影唯一来源，禁止在别处新建工具名集合**）、`js_runtime.py`（QuickJS-WASM 沙箱；**JS 堆不跨重启恢复、失败程序不自动重跑**；取消只 SIGTERM/SIGKILL JS host，绝不碰 scheduler/guard/QM）。`policies/` 八个 PolicyStage（permission/unattended/method_policy/dag/goal/schedule/knowledge/guidance；新 harness 能力只加 stage）。**通道纪律**：操作级修正进工具结果、行为级引导进 pin 常驻上下文通知（guidance stage：submit 的 TS/IRC 嗅探 → ts_prepare 提示、Coordinator 亲自计算 → 派单提醒、bash 手写文件/坐标 → 结构化工具提醒；pin 按键幂等去重、永不阻拦）。其余：`dispatcher.py`（**Agent 间消息提交/投递唯一入口**，`commit_and_deliver` 固定四拍：组装 `agent.message_injected` → 经 EventWriter 落库并发布（失败即抛，不入队不唤醒）→ 入队 → 按 `WakePolicy` 唤醒；`wake` 策略只有四值 park_terminal / park_waiting / idle_only / never，hub mention、子 agent 回传、督导通知、计算通知与门禁反馈全部走它，`Mailbox.deliver` 已删除；恢复阶段由 `persistence` 用同一载荷构造 + 一次性落库屏障实现同一次序）、`mailbox.py`（只提供载荷形状与易失 inbox）、`pending.py`（重启恢复时孤儿审批/提问落 expired）、`reminders.py`、`notices.py`（pin/push 按「未应用变更按顺序追加」进上下文；消费游标与正文由同一 `context.appended` 事件原子承载，LLM 重试重发同一批，未消费 push 跨重启不丢）、`compaction.py`（统一全轮次压缩：**全量折叠**——用户指令、assistant 回复与工具调用、工具结果一起进摘要，投影里不留逐字保留区；唯一不压缩的是 harness 前缀（调用方按当前状态重新装配），压缩边界之后到达的输入照常逐字可见。结构化 JSON 摘要校验 + 按容量分段（容量口径 = `infra/token_estimator.py` 的 `TokenEstimator`/tiktoken 单一事实源：content、工具调用名与参数、reasoning 全计入——旧口径只看 content 且一律 4 字符/token，GH #40 实测低估 2.3×；计数是 CPU 工作，协程里调用点一律 `asyncio.to_thread`）；**来源下标越界钳制进轨迹范围并计数**（`stats["clamped_sources"]`，结构不符/空 objective 仍 fail-loud）；多段摘要按容量**分批多轮合并**，收敛不了即拒替换；单次摘要调用有 `summary_timeout` 有界等待（下限 600s，超时落 segment_failed/merge_failed）；围栏剥离（语言标签 + 闭合后散文）与三种无损形状提升（objective 单元素数组/裸字符串、列表项裸字符串）后再校验，空 objective / 缺 text 仍 fail-loud；形状校验失败时把错误回喂重问一次，仍失败即拒替换——不降级解析；拒替换 `error` 空字符串落到类型名；触发只有手动/预算/overflow 三种，schedule stop 不再自动 compact，预算触发被拒后要等投影再长出预算的 10% 才重试；候选经 `context.compacted` 一条事件原子安装，版本不符即放弃。摘要调用落 `kind="summary"` 的 `llm.completed`，`cloudra stats tokens` 单列压缩成本）、`launch_groups.py`（swarm 并发组；**组清单是事件投影**——`launch_group.created`/`item_dispatched`/`item_finished`/`finished` 四类事件，唯一应用点在 `apply_event`，worker 任务才属进程内（经 `track_background` 登记、父取消级联）；重启只重建组清单并标 `interrupted`，**绝不重放 spawn**，未派发 item 保持 queued 由用户显式重派）、`persistence.py`（快照载荷含 session_contexts；**恢复时 running/waiting agent 落 failed**；僵尸子终态回传父信箱但不 wake 休眠父；恢复路径绝不执行 executor/JS 进程/调度作业）。
-- `tools/` — 按领域分组（Bash/Chem/Search/Write/Plan 等；QM 双引擎 + xtb + MLIP 路由；DAG 面是 `dag_tools/`）。`registry.py` 注册，下游只经 `capabilities.py` 投影查询，**禁止在别处新建工具名集合**。工具级角色门槛：registry 条目的 `role_allowlist` 声明允许使用的 role_id（空=不限；wire 投影隐藏 + PermissionStage 硬拦两道防线，投影函数 `capabilities.role_hidden_tools`；化学/QM 工具默认限 `_SCIENCE_ROLES`=coordinator/small_mol/md/dft/experiment + supervisor 保 evidence_read 面，ir/nmr_processor 是 experiment 专属；benchmark 题面 agent 以 coordinator 运行故 coordinator 必须始终在列；带 allowlist 的工具必须显式声明 `tool_name` 否则投影落空）。`tools/core/` 权限模型、审批流水线、各引擎 frames 解析（纯函数）。重点：`structure_builder.py`（**分片建模唯一实现**；`BuildStatus` 枚举表达状态；「坐标已生成」或「优化返回 0」都不构成「几何可用」）、`complex_assembly.py`（**参数已由用户批准**，见 docstring；力场必须 `ignoreInterfragInteractions=False`）、`structure_artifacts.py`（轨迹流式落盘；失败与不收敛轨迹同样保留）、`crest_runner.py`（**进程退出与科学成功分开表达**；分类用精确整行/token 比对，无正则；支持 runtype=nci/qcg/protonate/deprotonate/tautomerize，各模式的产物文件名与产物原子数按 CREST 2.12 实测口径核对，qcg 只跑 grow（产物 `grow/cluster.xyz` + `qcg_energy.dat` 能量；ensemble 阶段刻意不纳入，macOS 实测崩溃且成本高——要壳层排布系综对产物再跑 nci）、依赖外部 xtb-IFF、缺失有专属终止类别 `qcg_xtbiff_missing`，引擎被信号杀死落 `engine_crashed`；macOS arm64 的 QCG-gfnff 预优化路径实测崩溃（gfn2 grow 正常），见 `deploy/xtbiff_macos_shim.md`）、`xtb_path_runner.py`（路径精修必须跑到引擎自判收敛；触顶报 `path_not_converged` 且 `usable_as_guess=False`，绝不默认成功）、`topology_change.py`（拓扑变更**只记录不判定**）、`irc_path.py`（IRC 方向证明与反应对分类器唯一实现：键图 diff A 层硬闸门 + ΔEN/重原子启发 B 层、距离指纹+Hungarian 原子对应、弱接触 warning 降级；ts_guess strict 与 benchmark 自洽性共用）、`run_dirs.py`（运行目录编号/进程组终止/产物清点/版本捕获——crest 与 xtb_path 共用单源）。`Chemtool/frontier_orbitals.py`（前线轨道唯一原语：开壳层报 α/β 两套 + SOMO 语义，自旋交叉 gap 标 undecidable；electronic_analysis 与 log_parser 共用）。`Chemtool/mechanism_predict.py`（FlowER ML 机理假设生成器：**外部 conda env `flower` 子进程**，主进程永不 import torch，只消费 driver 产出的 network.json；**ML 预测不是计算证据**，不走 dag_evidence_producer；config 开关 `flower.enabled` 默认开（未装环境时调用层 fail-loud 引导安装；显式置 false 才 wire 投影隐藏 + 执行层硬失败）；安装走 `scripts/setup_flower.sh`）。工具无持久状态；给模型的文本一律英文；超大结果（>30k 字符）落盘 `.cloudra/tool_output/`。
-- `prompts/`、`skills/` — `prompts/*.md` 角色 prompt（每个 `RoleProfile` 一份，键名=role_id）；`skills/` 科研方法技能包。**legacy 子 Agent 类栈（`subagents/` 包与 a-N 类）已删除**：身份/权限的唯一事实源是 `runtime_v2/roles.py` 的 `RoleProfile`，历史 a-N 词表只经 `base/role_identity.py` 映射。
-- `frontend/` — React SPA（唯一前端）；`npm run build` 通过才算可用；生产由 uvicorn 同端口托管 `dist/`。
+Cloudra 的代码主体在 `cloudra/` 目录下。为了防止迷路，以下是各模块的人话解读：
 
-## dag/ 子系统（DAG 引导编排）
+```
+cloudra/
+├── runtime_v2/    # 【大脑与中枢】新一代事件驱动 Agent 内核，模型推理循环的唯一实现
+├── dag/           # 【监理看板】机理研究的 DAG（有向无环图）编排与交付物审核体系
+├── tools/         # 【工具箱】提供给 Agent 调用的化学、量子化学、文件及搜索工具
+├── scheduler/     # 【调度中心】量子化学计算任务的分发、排队与多节点配额管理
+├── runtime/       # 【运行时守卫】计算任务的执行监视器（Monitor/Guard）及 Prompt 拼装
+├── services/      # 【控制面 API】FastAPI 路由、多节点注册与关停管理
+├── persistence/   # 【持久化层】统一路径生成器（paths.py）与数据库管理
+├── knowledge/     # 【知识库 Chem-KB】化学反应与过渡态知识检索（严格只读）
+├── benchmark/     # 【评测考场】机理探索能力的独立打分体系
+├── infra/         # 【水电气底座】配置中心、进程锁（flock）、SSH/Slurm 远端通信
+└── base/          # 【基类与协议】技能加载器、人机审批钩子、角色身份映射
+```
 
-按会话 opt-in：`orchestration_mode` ∈ `standard`（默认，不读不写图）/ `dag_record`（harness 自动接受草稿，Supervisor 不运行）/ `dag_guided`（Supervisor 异步复核显式送审的证据）。草稿接受不阻塞计算；最终交付门禁读取声明范围内的图、证据和未解决审查意见。继承规则唯一解析点 `agent_host.resolve_orchestration_mode`；supervisor 角色默认钉 dag_guided。
+### 1. `runtime_v2/`：Agent 智能内核
+- **推理循环**：基于事件驱动（Event-driven）。模型做出决策 → 通过 `CommandBus` 派发命令（四步：决定 → 先存盘后生效 → 执行副作用） → `apply_event` 更新状态。
+- **角色体系**：所有 Agent 身份在 `runtime_v2/roles.py` 的 `RoleProfile` 中单点定义，废弃了历史的继承类体系。
+- **督导机制 (`supervision.py`)**：Supervisor（导师）Agent 运行时，它唯一的任务来源是读取 DAG 图存储中的待办，不自行瞎猜。
+- **沙箱隔离 (`js_runtime.py`)**：通过 QuickJS-WASM 运行轻量代码逻辑。如需终止，只杀 JS 进程，绝不触碰底层的量子化学计算！
+- **Policy 过滤链**：内置 8 个 PolicyStage（例如权限拦截、物理思维引导 `physical-thinking`、过度调用拦截、上下文无损折叠压缩等）。
 
-- `models.py`（共享类型）、`store.py`（delivery 图持久存储 + 草稿 + CallReview + `dag_evidence_bindings`）、`engine.py`（事务化变更引擎；`remove_edge`/`remove_node` 必须带 rationale，无隐式级联）、`evidence_ingest.py`（驻点校验**三态**：`verified=True` 才算有频率支撑的判定；没频率数据时 `verified=False` 且 `is_valid=False`——「没做频率分析」绝不等于「已验证极小值」；`n_imag==1` 也不宣称 `mode_matched`，没跑过的坐标匹配不写 True）、`completion.py`（`evaluate_delivery()`）、`controller.py`（`DagController` 四 mixin 门面；**CallReview 唯一来源是显式送审 `submit_evidence_for_review`**；**非 pending 的 CallReview 不可再裁**；`delivery_report`/`audit_stop` **每次现读 store 契约**，不用 `initialize` 缓存）、`requirements.py`/`review_requests.py` 等支撑件。
-- 关键不变量：图存储是权威（不在模型上下文里）；模型声明不能标记交付完成，证据等级由 harness 确定性派生；`rejected` 不是处置——是仍欠的开放缺口，只能重绑或显式 skip/not_applicable-with-reason 关闭；`submit_compute_job` 调用永远不是证据（只认完工作业的解析产物）；每条督导裁决恰好写一条 durable 通知，投递唯一出口 `flush_review_notifications`（重投幂等、终态/`WAITING_INPUT`/工具审批 park-don't-wake，`wait_review` 的 `WAITING_APPROVAL` 要 wake）。`dag_review_step`/`dag_review_species`/`dag_submit_*` **不得写派生 `evidence_level`**（只挂快照或 fail-loud，阶段绑定走 `dag_review_call`/`dag_bind_evidence`）。`apply_stage_bind` / `bind_stage_attachments` 用守卫读到的 revision 做 base，stale 后重算 stages，不重放旧列表；批量绑定与单条共用 ts_opt/frequency/geometry/short_irc/thermochemistry 闸门；geometry 要正常结束+0 虚频，`ts_opt` 要正常结束（带频率则须一阶鞍点），`short_irc` 要双向收敛或双侧够点数，`thermochemistry` 只认 `thermo_analysis` 的 `status=complete`。
-- **逐文件审查与交付依据（2026-09-23）**：guided 草稿提交即落候选图（图、journal、草稿同事务），accept 只记录审查状态，不重放建图、不解锁计算。公开 `dag_propose_mechanism.delivery_targets` 用唯一名称/ID 明示本次交付范围，所选步骤自动带两端物种；省略表示纯探索，不改已接受范围；可单独更新范围。新增范围即当前意图，guided 待审时仍进入最终门禁并阻止沿旧范围完成；缩小范围待审不抹旧债，record 无 Supervisor 则由 harness 自动接受。文件送审的裁决落 `ReviewDecision`，不改机器 `evidence_level`/stage 状态；适用的已接受文件可在交付报告中满足对应 pending 证据项。相关 pending/reject/needs_evidence 与待审或被驳回的机理草稿是交付缺口，新提交本身不抹除旧质疑。逐文件认可只对送审时的目标及其两端物种身份生效，TS/IRC 引用须全部挂在当前对象上；新文件会 supersede 同目标旧的待审文件请求。公开 `dag_delivery_report` 与最终门禁共用 `DagController.delivery_report()`。完整交付依赖此判断时 `basis=supervisor_supported`（界面 `supervisor_reviewed`），纯确定性闭合为 `dag_verified`；`supervisor_approved` 仍专指部分交付审批。以上均不是科学真值，benchmark 独立计分。
-- **live complete 口径（2026-09-21）**：带 stages 的元素以阶段契约为权威，**不**再用 `CoverageContract.required_edge_level`（默认值 `endpoint_supported` 只约束无 stages 的旧边）。默认机理草稿边 = advisory `ts_guess` + required `ts_opt`/`frequency`（`cdxml_to_graph` 同口径，不预置 IRC）；IRC/端点/方向**不是**结题必要条件，需要路径证明时才写进该步契约。benchmark 自洽性（TS 边的 IRC 方向区间）与 `ts_guess strict` 仍走 `tools/core/irc_path.py`，与 live complete 分家。
+### 2. `dag/`：DAG 引导与证据交付（核心业务）
+- **核心思想**：反应机理是一个有向无环图。模型“说自己完成了”是无效的，必须把**经受住频率分析和路径检验的计算结果**绑定到图的节点和边上。
+- **数据流向**：`models.py`（图数据结构） → `store.py`（持久存储，权威事实源） → `engine.py`（事务变更引擎，删边/删点必须给合理理由） → `controller.py`（门面控制器）。
+- **驻点校验三态**：
+  1. `未计算`；
+  2. `已完成计算但未确证`；
+  3. `已验证为极小值点`（`verified=True`，必须有 0 虚频分析支撑）。**“没做频率分析”绝不等同于“验证成功”！**
 
-## 测试约定（tests/）
+### 3. `tools/`：化学与系统工具箱
+- **注册单源**：所有工具统一在 `registry.py` 注册，并根据角色白名单（`role_allowlist`）控制暴露。
+- **物理判据绝不造假**：
+  - `structure_builder.py`：分片建模。“几何优化 exit 0”不代表化学结构可用！
+  - `crest_runner.py` / `xtb_path_runner.py`：构象与反应路径扫描。进程没有崩溃不代表找到了过渡态，必须依据确凿的能量和结构特征判断。
+  - `ts_process.py` / `irc_path.py` / `irc_evidence.py`：过渡态与 IRC 方向证明组装。
+  - `Chemtool/mechanism_predict.py`：FlowER 机器学习机理预测**仅供生成假设，绝不能充当计算证据**。
+- **编号规范**：Gaussian 默认从 1 开始编号（1-based），ORCA 从 0 开始编号（0-based），结构工具统一 1-based，内部逻辑精准转换，不准猜。
 
-- 按文件名前缀分组：`test_dag_*`（DAG）、`test_runtime_v2_*`（新内核）、`test_compute`/`test_slurm`（计算执行）、化学工具各一、其余基础设施单测。
-- `conftest.py` autouse 隔离 data_dir 到 tmp_path；不要在测试里写真实数据目录。
-- 跳过一律按环境探测（缺 `crest`/`xtb` 二进制、无 RDKit/chem extra、无 node>=22 + js_host 依赖、非 POSIX）；无需要真实 LLM key 的测试；可选依赖先探测再 skip，不许硬断言（先例：`tests/test_benchmark_sandbox_fp.py` 的 `_REQUIRES_*`）；计算资源按本机容量申请（`max(1, min(2, os.cpu_count() or 1))`），别写死 `cpus=4`。
-- **场景级回归**：`tests/agent_scenarios.py` 是场景 harness（`ScriptedProvider` 零 API key，按 role 分流 + 可脚本化抛错；`ScenarioHarness` 装真实 core/runner/工具执行器与默认 8 个 PolicyStage），断言只落在**事件序列/结构化字段/状态不变量**上，绝不断言模型措辞；新增「Agent 级故障」修复应补一个场景（`tests/test_agent_scenarios.py`，8 条覆盖 问答/skill→计算/异步子 Agent 回传/provider 重试与 fail-fast/overflow 压缩/unattended/重启）。
-- 测试替身（fake/stub）签名对齐真实接口，建议带 `**_kwargs` 防接口加参后变红。
-- issue #33 复现材料在 `tests/fixtures/chemtool_issue33/`；issue 里除实测值以外的数值一律标记为未复现，不得写进断言。
+### 4. `scheduler/` & `runtime/`：量子化学计算监视与调度
+- **计算调度 (`scheduler/`)**：
+  - 与 Web API 完全解耦，单实例运行，通过 `compute.db` 驱动。
+  - **容量池管理**：每个计算节点声明固定并发额度。如果一个作业指定了在集群 A 跑，哪怕集群 A 塞车、机器 B 空闲，也**绝对不允许自动转投机器 B**！
+- **任务守卫 (`runtime/monitor.py`)**：
+  - 启动 `calculator.sh` 并在后台守卫。
+  - **计算成败标准**：以量子化学软件原生输出文件末尾的**官方正常终止标记（如 ORCA TERMINATED NORMALLY）**为准。`cclib` 仅用来抓取几何与能量数值，绝不能凭 cclib 解析成功就认定计算通过。
 
-## 顶层散件
+### 5. `persistence/`：持久化与数据目录单源
+- `paths.py`：**项目所有数据目录的唯一权威路径表**。需要找临时目录、计算输出、数据库文件？统统从 `paths.py` 取，严禁自己拼接路径！
+- `database.py`：维护会话库（`ConversationDB`）与中央计算账本库（`ComputeDB`，即 `data_dir/compute.db`）。
 
-- `kg_data/`（知识图谱 CSV，`cloudra knowledge import` 的输入）、`ideapool/reaction_candidates/`（**存量** benchmark 四档题源 md；本轮「边选边填 gold」的新候选不从这里抄，见 `gold_compute/README.md`）、`vector_store/`（知识卡片 bge-m3 向量；`scripts/kg_vec_service.py` 微服务跑在外部 `.venv-trans`）、`deploy/`、`docs/`（文档治理规则见 `docs/README.md`：**阶段性文档完成使命即归档**——主线只留随代码同步更新的权威文档，`docs/superpowers/plans|specs` 是按日期保留的设计历史，各目录 `archive/` 收已完成的计划/调研/手记）。
-- `gold_compute/`（gold 战役权威说明在 `README.md`：**2026-09-21 起**主线是边选反应边填自算 gold，候选不来自既有文档/旧题池；存量题不承诺全边 DFT 清零。`archive/` 与 `edge_barriers/` 为历史批次）、`archive/`（一次性实验/运行残留，gitignored；`archive/NA1_clean_env` 仍跟踪为例外）。
-- `build/`、`.worktrees/`、`cloudra.egg-info/` 为构建副产物，勿手改；软著源程序清单由 `scripts/gen_copyright_source.py` 重建（改代码后重跑）。
+### 6. `infra/`：基础设施底座
+- `flocks.py`：**判断底层进程生死与互斥的唯一手段**（基于 Linux/macOS 文件排他锁）。
+- `config.py`：YAML 配置的唯一事实源，修改配置必须走 `mutate_config`。
+- `ssh_transport.py`：集群 SSH 提交与 Rsync 文件传输，同步阻塞调用一律使用 `asyncio.to_thread` 转到子线程。
 
-## 工作约定
+---
 
-- **禁止过度工程**：只做被明确要求的事，不预设「将来可能用到」的抽象、配置项、插件点或兜底分支；不加没人调用的参数；不顺手「改进」无关代码；需求三行能写完就不拆模块。每新增一个公开接口、配置键或概念，先回答：现在谁在用？答不上来就别加。
-- **测试聚焦改动面，别随手跑全套**：`tests/` 全量大而慢。默认只跑与改动直接相关的测试文件（按前缀挑选）；流程是 `compileall` → `ruff` → 相关测试。**全套 `uv run pytest -q tests/` 是 CI 的事，本地不跑**（除非用户明确要求）。
-- **禁止补丁式修复**：项目 beta 未上线，**不考虑向后兼容**。发现问题在架构级根治——不留 legacy 回退分支、不加兼容 shim、不保留死代码、不用「文档注明」替代修复。修复应配能覆盖该问题的测试。
-- 最小改动：修 bug 不顺手重构；新代码跟随所在文件的既有风格与注释密度。
-- **化学/科学设计决策必须问用户**：评分阈值、方法学验收红线、力场/泛函/基组选择、能垒基准定义、评分权重、拒答规则等——必须先向用户确认，**不允许 agent 自作主张拍板**。
-- **事件循环线程禁止同步阻塞调用**：`async` 函数体内不得直接调用同步 SQLite、`time.sleep`、`subprocess.run`、同步网络库——一律 `asyncio.to_thread` 或 `a` 前缀异步变体。护栏 `tests/test_no_sync_on_loop.py` 常驻。
-- **执行面可靠性铁律**：调度器/guard 任何路径不得 kill 计算进程（取消只走显式 `cancel_requested` → Slurm scancel 路径）；进程存活判定一律 `infra/flocks.py` 的 flock 探测，禁止 PID/`ps`//proc 文本判定；核心链路禁止解析计算输入文件。子进程归属链：API/CLI →（detach）scheduler/kg_vec 守护 → guard → calculator.sh → 引擎 → 引擎的 external 子进程（如 MACE 由 ORCA 启动，**Cloudra 从不直接 spawn MACE**）。
-- **禁止引入正则**：`re` 唯一允许的场合是**解析计算引擎输出文件**（`tools/core/*_frames.py`、`log_parser.py`、`ts_guess.py` 等纯解析）。**校验路径一律不准有正则**——尤其是对 agent/LLM 输出：取值与判定走结构化路径（pydantic 校验、`json.loads`、显式 token 扫描、枚举精确比对）或对物理量做确定性比对，一律 fail-loud。常驻护栏 `tests/test_benchmark.py::test_scoring_modules_do_not_import_regex`。
-- 不引入项目未依赖的库；可选能力走 `pyproject.toml` 的 extras（chem/browser/pdf/visual/dev）。
-- **双远端同步（2026-09-20 起）**：仓库同时托管 GitHub（remote `github`，经 `remote.github.proxy` 走本地代理）与 Gitee（remote `origin`，直连）。pull/push 一律两个远端都做，保持镜像一致；Windows 版日常开发直接在 `windows` 分支上进行（政策见 `docs/WINDOWS_PORT.md`）。代理端口变动时更新 `remote.github.proxy`。
-- 改了结构、命令或约定时同步更新本文件。
-- 未经明确要求不做 git 提交/推送等变更操作。
+## 📁 顶层与辅助目录导航
+
+- `kg_data/`：知识图谱 CSV 数据（`cloudra knowledge import` 的输入）。
+- `ideapool/reaction_candidates/`：存量 benchmark 题源 Markdown；新候选见 `gold_compute/README.md`。
+- `vector_store/`：知识卡片 BGE-M3 向量数据（微服务运行在外部 `.venv-trans`）。
+- `gold_compute/`：Gold 基准真值战役目录，主线是边选反应边填自算 Gold 数据；归档交接见 `gold_compute/archive/`。
+- `paper/`：保存研究论文正文；`paper/literature/` 收拢文献原件与下载缓存；阶段性综述在 `paper/archive/`。
+- `scripts/`：脚本目录（详见 `scripts/README.md` 索引）；申报文档编辑脚本在 `scripts/application_docs/`。
+- `docs/`：项目文档与技术设计 Spec；阶段性交付文档按 `docs/README.md` 归档到 `docs/archive/`；原图资源位于 `docs/assets/`。
+- `build/`、`.worktrees/`、`cloudra.egg-info/`：构建与分发副产物，严禁手改。软著清单由 `scripts/gen_copyright_source.py` 自动生成。
+
+---
+
+## 🔬 DAG 机理图：反应步骤如何才算交付成功？
+
+在 DAG 编排模式下，Agent 需要提交一个反应机理图。对于一条反应步骤（即连接反应物和产物的过渡态边），如何才算通过审查？
+
+必须严格按阶段推进并绑定证据：
+
+```mermaid
+flowchart LR
+    A["ts_guess (初猜)"] --> B["ts_opt (鞍点优化)"]
+    B --> C["short_irc (方向证明)"]
+    C --> D["thermochemistry (热力学分析)"]
+    
+    style A fill:#f9f0ff,stroke:#d3adf7
+    style B fill:#e6f7ff,stroke:#91d5ff
+    style C fill:#fff7e6,stroke:#ffd591
+    style D fill:#f6ffed,stroke:#b7eb8f
+```
+
+1. **`ts_guess`（过渡态初猜）**：建议性阶段，生成合理的过渡态结构猜测。
+2. **`ts_opt`（鞍点优化）**：必须正常收敛，且经频率分析确证为**一阶鞍点（有且仅有 1 个虚频）**。
+3. **`short_irc`（路径方向区间证明）**：
+   - 证明虚频振动的两端确实一边倒向反应物、一边倒向产物。
+   - **无需整条 IRC 必须完全收敛到底**，但两端的几何构型必须位于过渡态与两端极小值点之间，方向区间吻合。
+4. **`thermochemistry`（热力学校正）**：提取自由能与焓变，计算活化能垒 $\Delta G^\ddagger$。
+
+> [!NOTE]
+> **关于不可达反应（Impossible 题目）**：
+> 如果某个反应通路在物理化学上不可行，Agent 应当在机理图上如实提交该步骤，并将其标记为 `accessible=false`。在 Benchmark 中，正确证明并标记“不可达”同样能拿满分。**切勿企图用不交付或拒答来逃避计算！**
+
+---
+
+## 🎯 Benchmark 评分体系：分数是怎么算出来的？
+
+Benchmark 评测完全独立于聊天上下文，**只看交付文件（机理图 JSON + 量化计算日志）**，大模型聊天里的自然语言一概不认！
+
+### 1. 综合得分公式（2026-09-25 用户裁决定版）
+
+$$\text{Composite Score} = 0.1 \times \text{图结构分 (Graph)} + 0.3 \times \text{自洽性 (Self-consistency)} + 0.6 \times \text{准确度 (Accuracy)}$$
+
+*为什么图结构只占 10%？因为只要反应机理不正确，在 Accuracy（准确度）层就会受到毁灭性扣分，因此图结构不应虚高。*
+
+### 2. 三大评分支柱
+
+| 评分项 | 权重 | 判定规则 | 人话解释 |
+| :--- | :---: | :--- | :--- |
+| **图结构相似度 (Graph)** | **10%** | 子图同构与覆盖率判定。交付图中多出的无关边不扣分，但关键边缺失或 `accessible` 状态颠倒会重罚。 | “你找没找到论文里认定的关键机理主干？” |
+| **物理自洽性 (Self-consistency)** | **30%** | **全有或全无（布尔值 1 或 0）**。所有驻点必须是 0 虚频，所有过渡态必须是 1 虚频且通过短 IRC 方向区间证明。 | “你算出来的每个分子结构在物理上站得住脚吗？有没有拿局部极大值冒充基态？” |
+| **能垒准确度 (Accuracy)** | **60%** | 从 ORCA/Gaussian 真实日志中提取活化能垒，与黄金标准（Gold）比对。按高斯容差打分。 | “算出来的能垒和标准答案差多少 kcal/mol？” |
+
+### 3. 两大致命惩罚规则（防作弊天网）
+
+- **金标准边自洽回捞 (Gold-edge Clawback)**：
+  如果 Agent 声称找到了金标准（Gold）里的某条关键反应步骤，但在自洽性检查中发现该步骤**虚频不对或 IRC 跑偏**，系统不仅在自洽性层给 0 分，还会**将该步骤从图结构分中强行剔除、倒扣图分**！*（原则：关键金标准边上胡说八道，惩罚远重于额外探索边）*
+- **造假 / 数据不一致 Fail-Loud 短路**：
+  若 Agent 在机理图声明的能垒值与绑定的真实计算日志对不上、或者凭空捏造数据，**评测立即触发短路熔断：自洽性和准确度直接归零，最终得分仅保留 $0.1 \times \text{图分}$！**
+
+---
+
+## 🧪 测试与开发规范 (tests/)
+
+1. **测试文件分组规则**：
+   - `test_dag_*`：DAG 编排、存储与变更引擎测试。
+   - `test_runtime_v2_*`：Agent 内核、调度驱动与策略管道测试。
+   - `test_compute*` / `test_slurm*`：底层计算与集群作业测试。
+   - 其他：各类化学工具的独立单元测试。
+2. **环境隔离保护**：
+   `tests/conftest.py` 会自动将所有测试的 `data_dir` 重定向至独立的临时目录（`tmp_path`），**绝不允许在测试代码里硬编码指向真实的数据目录**！
+3. **环境自适应跳过**：
+   测试环境若缺少某些可选二进制程序（如未安装 `xtb`、`crest`、无 GPU 或非 POSIX 平台），测试必须**通过探针自动跳过 (`pytest.skip`)**，严禁因为本机环境没装外部软件而硬断言报错。
+4. **场景回归测试 (`tests/agent_scenarios.py`)**：
+   用于测试复杂 Agent 交互的自动化 Harness。
+   - 内置 `ScriptedProvider`，**零真实 API Key 即可运行**；
+   - 断言**只检查事件触发序列、状态机跃迁、字段持久化**，**绝不断言大模型回复的具体自然语言措辞**！
+   - 凡是修复了“Agent 逻辑死锁或故障”的代码，必须在此补充一个回归场景。
+
+---
+
+## 🔬 附录：实验性构象搜索与约束优化模块
+
+位于 `tools/core/conformer_*` 与 `constrained_optimization.py`：
+- **构象归档**：构象生成与优化记录在 `conformer_catalog.py` 中，支持不可变追溯与区域快照（Regions）；
+- **受约束几何优化**：基于笛卡尔坐标的 RFO/KKT 算法，带原子间距窗口；
+- **Hessian 铁律**：优化的初始 Hessian 必须来自相同理论级别的实际计算产物，**严禁把位移末帧当作中心导数**；
+- **资格验证与收敛**：数值收敛只代表几何算法收敛，化学意义上的科学有效性由后续流程独立判定。

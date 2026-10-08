@@ -167,7 +167,7 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         # ML 机理假设生成器（FlowER 外部 conda env）：不是计算证据；
         # flower.enabled 默认开（未装环境时调用层引导 setup_flower.sh）。
         config_gate='flower.enabled',
-        role_allowlist=_SCIENCE_ROLES,
+        role_allowlist=_SCIENCE_ROLES | {'researcher'},
     ),
     ToolRegistration(
         module='cloudra.tools.Chemtool.name_to_structure',
@@ -218,7 +218,7 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         supervisor_access='evidence_read',
         role_allowlist=_SCIENCE_ROLES,
     ),
-    # TS 搜索 SOP 的 agent 可见接口（只有这两个函数；刻意没有 status/查询接口）
+    # TS writes and independent read-only inspection.
     ToolRegistration(
         'cloudra.tools.Chemtool.ts_search_process', 'TsPrepare', tool_name='ts_prepare',
         role_allowlist=_SCIENCE_ROLES,
@@ -226,6 +226,10 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
     ToolRegistration(
         'cloudra.tools.Chemtool.ts_search_process', 'TsResume', tool_name='ts_resume',
         role_allowlist=_SCIENCE_ROLES,
+    ),
+    ToolRegistration(
+        'cloudra.tools.Chemtool.ts_search_process', 'TsInspect', tool_name='ts_inspect',
+        supervisor_access='evidence_read', dag_observe=False,
     ),
     ToolRegistration(
         module='cloudra.tools.Chemtool.smiles_to_mol',
@@ -301,11 +305,13 @@ TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
         class_name='SubAgentLauncher',
         tool_name='subagent_launcher',
         runtime_profiles=frozenset({'desktop', 'android'}),
+        role_allowlist=frozenset({'coordinator'}),
     ),
     ToolRegistration(
         module='cloudra.tools.Managetool.subagent_swarm',
         class_name='SubAgentSwarm',
         tool_name='subagent_swarm',
+        role_allowlist=frozenset({'coordinator'}),
     ),
     ToolRegistration('cloudra.tools.Plantool.goal', 'GoalSet'),
     ToolRegistration(

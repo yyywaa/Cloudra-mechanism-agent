@@ -45,6 +45,9 @@ class DagViewInput(input_schema):
 
 
 class DagView(DagToolBase):
+    def is_manage(self) -> bool:
+        return False
+
     tool_id: str = "t-dag-view"
     tool_name: str = "dag_view"
     tool_description: str = (
@@ -141,6 +144,8 @@ class DagView(DagToolBase):
                         "requester": req.requester,
                         "target_ids": [name_map.get(t, t) for t in req.target_ids],
                         "question": req.question,
+                        "scientific_checks": req.proposal.get("scientific_checks", {}),
+                        "evidence_view": f"dag_view_evidence(review_id={req.request_id!r})",
                         "created_at": req.created_at,
                     }
                     for req in ctx.store.list_review_requests("queued")
@@ -167,7 +172,3 @@ class DagView(DagToolBase):
             status_filter=user_input.status_filter,
         )
         return DagToolOutput(is_success=True, action="dag_view", result=result)
-
-
-def get_class():
-    return DagView

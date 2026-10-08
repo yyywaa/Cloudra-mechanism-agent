@@ -13,29 +13,37 @@ exists, so this bridge re-implements the six actions on kernel primitives:
   A sleeping/idle addressee is woken (``WakePolicy``) so the mention or call
   takes effect immediately instead of sitting in the inbox; a failed/cancelled
   addressee is never auto-revived — the message is parked in its mailbox.
-- ``call`` to a role/id spawns a fresh child via the same CommandBus path as
-  the launcher bridge.
+- ``call`` to an absent role creates an independent project peer through
+  CommandBus. It does not inherit the caller's settings or lifecycle.
 
-The legacy tool module is untouched — CLI/Flet keep using it.  Only the fuzzy
-scoring helpers (pure functions) and the incoming-call template are imported
-from there.
+The tool module supplies its wire schema and shared fuzzy-scoring helpers;
+runtime_v2 handles persistence and dispatch here.
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
-from cloudra.base.role_identity import role_id_for_legacy_agent_id
+from pydantic import ValidationError
+
+from cloudra.infra.tool_errors import validation_feedback
 from cloudra.runtime_v2.commands import CommandBus
-from cloudra.runtime_v2.dispatcher import WakePolicy
+from cloudra.runtime_v2.dispatcher import WakePolicy, should_wake
+from cloudra.runtime_v2.effects import EventDraft
+from cloudra.runtime_v2.event_writer import EventPersistenceError
 from cloudra.runtime_v2.policies.base import ToolCall, ToolResult
-from cloudra.runtime_v2.schemas import AgentSession, CommandRejected
-from cloudra.runtime_v2.subagent_bridge import _spawn_child
+from cloudra.runtime_v2.schemas import AgentSession, AgentState, Command, CommandRejected, EventEnvelope
 from cloudra.tools.Managetool._hub_call import format_incoming_call
-from cloudra.tools.Managetool.agent_hub import _FUZZY_FLOOR, _SEARCH_SCAN_LIMIT, _fuzzy_score
+from cloudra.tools.Managetool.agent_hub import (
+    _FUZZY_FLOOR,
+    _SEARCH_SCAN_LIMIT,
+    AgentHub_input_schema,
+    AgentHub_output_schema,
+    _fuzzy_score,
+)
 
 _POST_KINDS = ("finding", "question", "answer", "broadcast", "message")
-_COORDINATOR_ALIASES = ("coordinator", "a-0")
 
 
 def _posts(core, project_id: str, *, limit: int = 500) -> list[dict[str, Any]]:
@@ -55,21 +63,23 @@ def _live_sessions(core, project_id: str) -> list[AgentSession]:
     return [a for a in core.agents.values() if a.project_id == project_id]
 
 
-def _resolve_live_target(core, project_id: str, target: str) -> AgentSession | None:
-    """Map a to_agent/to spec onto a live session: coordinator alias, exact
-    session id, or the most recently spawned live agent of a role."""
+def _resolve_live_target(
+    core, project_id: str, target: str, *, wakeable_role_only: bool = False
+) -> AgentSession | None:
+    """Resolve explicit ids; role calls may skip failed/cancelled sessions."""
     t = target.strip()
     if not t:
         return None
     sessions = _live_sessions(core, project_id)
     clean = t.lstrip("@").lower()
-    if clean in _COORDINATOR_ALIASES:
-        return next((a for a in sessions if a.role_id == "coordinator"), None)
     by_id = core.agents.get(t)
     if by_id is not None and by_id.project_id == project_id:
         return by_id
-    role_id = role_id_for_legacy_agent_id(t.lstrip("@"))
-    matches = [a for a in sessions if a.role_id == role_id]
+    matches = [a for a in sessions if a.role_id == clean]
+    if wakeable_role_only:
+        matches = [
+            a for a in matches if a.state not in {AgentState.FAILED, AgentState.CANCELLED}
+        ]
     return matches[-1] if matches else None
 
 
@@ -81,22 +91,86 @@ async def _notify(
     sender: str,
     content: str,
     post_id: str | None = None,
-) -> None:
+    author: AgentSession | None = None,
+) -> dict[str, str]:
     # 统一不复活纪律（park-don't-wake）：failed/cancelled 终态 agent 不被
     # mention/call 自动 reopen——消息驻留 durable 信箱，用户显式复活后首轮
     # 即可读到。其余状态照常唤醒（策略由 dispatcher 唯一解析）。
-    await core.dispatcher.commit_and_deliver(
+    wake = WakePolicy.PARK_TERMINAL
+    if author is not None:
+        from cloudra.runtime_v2.policies.permission import require_delegation_permissions
+        try:
+            require_delegation_permissions(author.capabilities.permissions, target.capabilities.permissions)
+        except CommandRejected:
+            from cloudra.runtime_v2.supervision import find_project_supervisor
+
+            # Review feedback from the project's bound Supervisor is control
+            # plane traffic to its Coordinator, not permission delegation.
+            # A role name alone cannot authorize a privileged peer wake.
+            supervisor_feedback = (
+                post_id is not None
+                and author.project_id == project_id == target.project_id
+                and find_project_supervisor(core, project_id) is author
+                and author.parent_session_id == target.id
+                and author.requested_by_session_id is None
+                and target.role_id == "coordinator"
+            )
+            if not supervisor_feedback:
+                wake = WakePolicy.NEVER
+    # This snapshot describes wake intent. Persisting the message may yield,
+    # so requested is not evidence that the recipient actually started a run.
+    target_state = target.state.value
+    wake_allowed = should_wake(core, target, wake)
+    envelope = await core.dispatcher.commit_and_deliver(
         to_session_id=target.id,
         project_id=project_id,
         content=content,
         sender=sender,
         post_id=post_id,
-        wake=WakePolicy.PARK_TERMINAL,
+        wake=wake,
+    )
+    return {
+        "session_id": target.id,
+        "message_event_id": envelope.event_id,
+        "delivery": "delivered" if wake_allowed else "parked",
+        "wake_status": (
+            "parked" if not wake_allowed else
+            "already_running" if target_state == AgentState.RUNNING.value else "requested"
+        ),
+        "wake_policy": wake.value,
+        "target_state": target_state,
+    }
+
+
+def post_notification_text(core, post: EventEnvelope, target_id: str) -> str:
+    """Render the same frozen post notification for live delivery and restore."""
+    data = post.data
+    author = str(data.get("author_agent") or "")
+    topic = str(data.get("topic") or "")
+    content = str(data.get("content") or "")
+    parent_id = data.get("parent_id")
+    is_reply = target_id == data.get("reply_session_id") and (
+        target_id != data.get("addressed_session_id")
+    )
+    if is_reply:
+        parent = core.event_log.get(parent_id) if parent_id else None
+        return (
+            f"{author} replied to your AgentHub post in topic "
+            f"'{parent.data['topic'] if parent else topic}' {parent_id} "
+            f"(reply {post.event_id}): {content}"
+        )
+    return (
+        f"{author} {'broadcast' if data.get('kind') == 'broadcast' else 'mentioned you'} "
+        f"in AgentHub topic '{topic}' (post {post.event_id}): {content}"
     )
 
 
-def _err(message: str) -> ToolResult:
-    return ToolResult(is_success=False, summary=message, data={"is_success": False, "message": message})
+def _err(message: str, **data: Any) -> ToolResult:
+    return ToolResult(
+        is_success=False,
+        summary=message,
+        data={"is_success": False, "message": message, **data},
+    )
 
 
 def _ok(summary: str, **data: Any) -> ToolResult:
@@ -106,85 +180,221 @@ def _ok(summary: str, **data: Any) -> ToolResult:
 async def _post(core, author: AgentSession, args: dict[str, Any]) -> ToolResult:
     topic = str(args.get("topic") or "").strip()
     content = str(args.get("content") or "").strip()
-    if not topic or not content:
-        return _err("post requires non-empty topic and content.")
-    kind = str(args.get("kind") or "finding").strip().lower()
-    if kind not in _POST_KINDS:
-        return _err(f"Unknown kind: {kind}")
+    kind = args["kind"]
     to_agent = str(args.get("to_agent") or "").strip()
+    if (
+        to_agent and _resolve_live_target(core, author.project_id, to_agent) is None
+        and core.roles.get(to_agent.lstrip("@").lower()) is None
+    ):
+        return _err(f"Addressee {to_agent!r} is neither a project session nor a known role_id.")
     parent_id = args.get("parent_id") or None
-    if parent_id is not None:
-        parent_id = str(parent_id)
-    if kind == "message" and not to_agent:
-        return _err("message posts need to_agent to name the addressee (the post is still public).")
-    # A valid name may have no live session in this project; the post is still
-    # public, so an unresolved addressee just means no notification.
-    addressee = _resolve_live_target(core, author.project_id, to_agent) if to_agent else None
-    if addressee is None and kind == "broadcast" and author.role_id != "coordinator":
-        # 广播类帖子默认触达项目统筹者 Coordinator，确保全局关键进展不漏唤醒负责人
-        addressee = next((a for a in _live_sessions(core, author.project_id) if a.role_id == "coordinator"), None)
-
-    envelope = core.event_log.append(
-        "hub.posted",
-        stream="project",
-        project_id=author.project_id,
-        session_id=author.id,
-        data={
-            "topic": topic,
-            "kind": kind,
-            "author_agent": author.role_id,
-            "author_session": author.id,
-            "to_agent": to_agent or None,
-            "parent_id": parent_id,
-            "content": content,
-        },
-    )
-    notices = []
-    if addressee is not None and addressee.id != author.id:
-        target_name = to_agent or addressee.role_id
-        await _notify(
-            core,
-            author.project_id,
-            addressee,
-            sender=author.role_id,
-            content=(
-                f"{author.role_id} mentioned you in AgentHub topic '{topic}' "
-                f"(post {envelope.event_id}): {content}"
-            ),
-            post_id=envelope.event_id,
+    retry_post_id = str(args.get("post_id") or "").strip()
+    if retry_post_id:
+        envelope = core.event_log.get(retry_post_id)
+        expected = {
+            "topic": topic, "kind": kind, "to_agent": to_agent or None,
+            "parent_id": parent_id, "content": content,
+        }
+        if (
+            envelope is None or envelope.type != "hub.posted"
+            or envelope.project_id != author.project_id or envelope.session_id != author.id
+            or any(envelope.data.get(key) != value for key, value in expected.items())
+        ):
+            return _err("post_id does not identify your matching post in this project.")
+    else:
+        # Freeze the recipient set with the post. A retry must only finish its
+        # original deliveries; a session created later cannot receive an old
+        # broadcast just because one recipient temporarily failed.
+        addressee = _resolve_live_target(core, author.project_id, to_agent) if to_agent else None
+        parent = core.event_log.get(parent_id) if parent_id else None
+        original = (
+            core.agents.get(parent.session_id)
+            if parent is not None and parent.type == "hub.posted"
+            and parent.project_id == author.project_id and parent.session_id != author.id
+            else None
         )
-        notices.append(f"Notified {target_name}.")
-    if parent_id:
-        parent = next((p for p in _posts(core, author.project_id) if p["id"] == parent_id), None)
-        if parent is not None and parent["author_session"] != author.id:
-            original = core.agents.get(parent["author_session"])
-            if original is not None and (addressee is None or original.id != addressee.id):
-                await _notify(
-                    core,
-                    author.project_id,
-                    original,
-                    sender=author.role_id,
-                    content=(
-                        f"{author.role_id} replied to your AgentHub post in topic "
-                        f"'{parent['topic']}' {parent_id} (reply {envelope.event_id}): {content}"
-                    ),
-                    post_id=envelope.event_id,
-                )
-                notices.append(f"Notified original author {parent['author_agent']}.")
+        targets = (
+            [
+                agent for agent in _live_sessions(core, author.project_id)
+                if agent.id != author.id
+                and agent.state not in {AgentState.FAILED, AgentState.CANCELLED}
+            ] + ([original] if original is not None and original.id != author.id else [])
+            if kind == "broadcast" else
+            [agent for agent in (addressee, original) if agent is not None and agent.id != author.id]
+        )
+        target_ids = list(dict.fromkeys(agent.id for agent in targets))
+        envelope = await core.event_writer.commit(
+            EventDraft(
+                "hub.posted", stream="project", project_id=author.project_id,
+                session_id=author.id,
+                data={
+                    "topic": topic, "kind": kind, "author_agent": author.role_id,
+                    "author_session": author.id, "to_agent": to_agent or None,
+                    "parent_id": parent_id, "content": content,
+                    "notification_target_ids": target_ids,
+                    "addressed_session_id": addressee.id if addressee else None,
+                    "reply_session_id": original.id if original else None,
+                },
+            )
+        )
+
+    delivered_ids = (
+        {
+            event.session_id
+            for event in core.event_log.query_project(
+                author.project_id, after_seq=envelope.seq,
+                types={"agent.message_injected"}, limit=None, tail=False,
+            )
+            if event.data.get("post_id") == envelope.event_id
+        }
+        if retry_post_id else set()
+    )
+    notices: list[str] = []
+    notifications: list[dict[str, str]] = []
+    failed_ids: list[str] = []
+    for target_id in envelope.data.get("notification_target_ids", []):
+        if target_id in delivered_ids:
+            continue
+        target = core.agents.get(target_id)
+        if target is None or target.project_id != author.project_id:
+            failed_ids.append(target_id)
+            continue
+        is_reply = target_id == envelope.data.get("reply_session_id") and (
+            target_id != envelope.data.get("addressed_session_id")
+        )
+        notification = post_notification_text(core, envelope, target_id)
+        if is_reply:
+            parent = core.event_log.get(parent_id)
+            receipt = f"Notified original author {parent.data['author_agent'] if parent else target.role_id}."
+        else:
+            receipt = f"Notified {to_agent or target.role_id}."
+        try:
+            delivery = await _notify(
+                core, author.project_id, target, sender=author.role_id,
+                content=notification, post_id=envelope.event_id, author=author,
+            )
+        except EventPersistenceError:
+            failed_ids.append(target_id)
+            continue
+        delivered_ids.add(target_id)
+        notifications.append(delivery)
+        if delivery["delivery"] == "parked":
+            receipt += " Delivery parked in the mailbox; recipient was not woken."
+        if kind != "broadcast":
+            notices.append(receipt)
     message = f"Posted to topic '{topic}' (id={envelope.event_id})."
-    if notices:
+    if kind == "broadcast":
+        message += f" Notified {len(delivered_ids)} project sessions."
+    elif notices:
         message += " " + " ".join(notices)
-    return _ok(message, post_id=envelope.event_id)
+    if kind == "broadcast":
+        parked_count = sum(item["delivery"] == "parked" for item in notifications)
+        if parked_count:
+            message += f" {parked_count} delivery/deliveries parked without waking the recipient."
+    if failed_ids:
+        return _err(
+            message + " Some notifications failed; retry post with this post_id and the same fields.",
+            post_id=envelope.event_id, notified_count=len(delivered_ids),
+            failed_session_ids=failed_ids, notifications=notifications,
+        )
+    return _ok(message, post_id=envelope.event_id, notified_count=len(delivered_ids), notifications=notifications)
+
+
+async def post_user_post(
+    core,
+    project_id: str,
+    *,
+    topic: str,
+    content: str,
+    kind: str = "finding",
+    to_agent: str = "",
+    parent_id: str | None = None,
+) -> dict[str, Any]:
+    """User-authored forum post (the API path): same ``hub.posted`` event and
+    mailbox-notification semantics as an agent's tool post, but authored by
+    ``user`` with no session.  Validation failures raise ``CommandRejected``
+    (the API layer maps it to HTTP)."""
+    topic = topic.strip()
+    content = content.strip()
+    if not topic or not content:
+        raise CommandRejected("rejected", "post requires non-empty topic and content.")
+    kind = kind.strip().lower()
+    if kind not in _POST_KINDS:
+        raise CommandRejected("rejected", f"Unknown kind: {kind}")
+    to_agent = to_agent.strip()
+    if kind == "message" and not to_agent:
+        raise CommandRejected(
+            "rejected", "message posts need to_agent to name the addressee (the post is still public)."
+        )
+    core.require_project(project_id)
+    addressee = _resolve_live_target(core, project_id, to_agent) if to_agent else None
+    parent = core.event_log.get(parent_id) if parent_id else None
+    if parent_id and (
+        parent is None or parent.type != "hub.posted" or parent.project_id != project_id
+    ):
+        raise CommandRejected("not_found", f"parent post not found in this project: {parent_id}")
+    original = (
+        core.agents.get(parent.session_id)
+        if parent is not None and parent.session_id
+        else None
+    )
+    targets = (
+        [
+            agent for agent in _live_sessions(core, project_id)
+            if agent.state not in {AgentState.FAILED, AgentState.CANCELLED}
+        ]
+        if kind == "broadcast" else
+        [agent for agent in (addressee, original) if agent is not None]
+    )
+    target_ids = list(dict.fromkeys(agent.id for agent in targets))
+    envelope = await core.event_writer.commit(
+        EventDraft(
+            "hub.posted", stream="project", project_id=project_id, session_id=None,
+            data={
+                "topic": topic, "kind": kind, "author_agent": "user",
+                "author_session": None, "to_agent": to_agent or None,
+                "parent_id": parent_id, "content": content,
+                "notification_target_ids": target_ids,
+                "addressed_session_id": addressee.id if addressee else None,
+                "reply_session_id": original.id if original else None,
+            },
+        )
+    )
+    delivered = 0
+    failed_ids: list[str] = []
+    for target_id in target_ids:
+        target = core.agents.get(target_id)
+        if target is None or target.project_id != project_id:
+            failed_ids.append(target_id)
+            continue
+        try:
+            await _notify(
+                core, project_id, target, sender="user",
+                content=post_notification_text(core, envelope, target_id),
+                post_id=envelope.event_id,
+            )
+        except EventPersistenceError:
+            failed_ids.append(target_id)
+            continue
+        delivered += 1
+    return {
+        "post": {
+            "id": envelope.event_id,
+            "seq": envelope.seq,
+            "created_at": envelope.created_at.isoformat(),
+            **envelope.data,
+        },
+        "notified_count": delivered,
+        "failed_session_ids": failed_ids,
+    }
 
 
 def _browse(core, author: AgentSession, args: dict[str, Any]) -> ToolResult:
     limit = max(1, min(int(args.get("limit") or 20), 100))
-    cursor = str(args.get("cursor") or "").strip()
+    cursor = (args.get("cursor") or "").strip()
     posts = _posts(core, author.project_id)
-    # Cursor is an event id (string). Old integer cursors are accepted for
-    # backward compatibility and normalized to the matching event id.
     if cursor:
-        cursor_post = next((p for p in posts if str(p["id"]) == str(cursor)), None)
+        cursor_post = next((p for p in posts if p["id"] == cursor), None)
         if cursor_post is None:
             return _err(f"cursor not found: {cursor!r}")
         # Browse is newest-first; a cursor advances to older activity.
@@ -227,8 +437,6 @@ def _browse(core, author: AgentSession, args: dict[str, Any]) -> ToolResult:
 
 def _read(core, author: AgentSession, args: dict[str, Any]) -> ToolResult:
     topic = str(args.get("topic") or "").strip()
-    if not topic:
-        return _err("read requires a topic.")
     limit = int(args.get("limit") or 20)
     posts = [p for p in _posts(core, author.project_id) if p["topic"] == topic][:limit]
     return _ok(
@@ -239,8 +447,6 @@ def _read(core, author: AgentSession, args: dict[str, Any]) -> ToolResult:
 
 async def _search(core, author: AgentSession, args: dict[str, Any]) -> ToolResult:
     keyword = str(args.get("keyword") or "").strip()
-    if not keyword:
-        return _err("search requires a keyword.")
     limit = int(args.get("limit") or 20)
     scanned = _posts(core, author.project_id, limit=_SEARCH_SCAN_LIMIT)
     scored = []
@@ -259,6 +465,30 @@ async def _search(core, author: AgentSession, args: dict[str, Any]) -> ToolResul
     from cloudra.runtime_v2.knowledge import render_library_hits, search_library
 
     library = await search_library(keyword, limit=5)
+
+    # The skills layer: match domain skills on demand
+    matched_skills = []
+    try:
+        from cloudra.base.skill_class import skill_loader
+        loader = skill_loader()
+        all_skills = loader.list_skills()
+        k_lower = keyword.lower()
+        is_skill_query = "skill" in k_lower or "sop" in k_lower or "guide" in k_lower
+        for sk in all_skills:
+            name_score = _fuzzy_score(keyword, sk["name"])
+            desc_score = _fuzzy_score(keyword, sk["description"])
+            combined = max(name_score, desc_score * 0.8)
+            if is_skill_query:
+                clean_k = k_lower.replace("skill", "").replace("sop", "").replace("guide", "").strip()
+                if not clean_k or clean_k in sk["name"].lower() or clean_k in sk["description"].lower():
+                    combined = max(combined, 0.85)
+            if combined >= _FUZZY_FLOOR:
+                matched_skills.append((combined, sk))
+        matched_skills.sort(key=lambda x: -x[0])
+        matched_skills = [sk for _, sk in matched_skills[:4]]
+    except Exception:
+        matched_skills = []
+
     forum_line = (
         f"Keyword '{keyword}' fuzzy-matched {len(posts)} post(s) (scanned the latest {len(scanned)})."
         if posts
@@ -269,16 +499,24 @@ async def _search(core, author: AgentSession, args: dict[str, Any]) -> ToolResul
         "library": "available" if _providers_present() else (
             "no_hits" if not library else "available"
         ),
+        "skills": "available" if matched_skills else "no_hits",
     }
-    if not library:
-        return _ok(
-            forum_line,
-            posts=posts,
-            library=[],
-            sources_status=sources_status,
-        )
-    summary = f"{forum_line}\nLibrary hits ({len(library)}):\n{render_library_hits(library)}"
-    return _ok(summary, posts=posts, library=library, sources_status=sources_status)
+
+    summary_parts = [forum_line]
+    if matched_skills:
+        skill_lines = []
+        for sk in matched_skills:
+            skill_lines.append(
+                f"- **{sk['name']}**: {sk['description']}\n"
+                f"  -> Load via: `get_skill(skill_name=\"{sk['name']}\")`"
+            )
+        summary_parts.append("Matched Domain Skills:\n" + "\n".join(skill_lines))
+
+    if library:
+        summary_parts.append(f"Library hits ({len(library)}):\n{render_library_hits(library)}")
+
+    summary = "\n\n".join(summary_parts)
+    return _ok(summary, posts=posts, library=library, skills=matched_skills, sources_status=sources_status)
 
 
 def _providers_present() -> bool:
@@ -292,7 +530,12 @@ def _directory(core, author: AgentSession) -> ToolResult:
         {
             "session_id": a.id,
             "agent_id": a.role_id,
-            "agent_type": "coordinator" if a.role_id == "coordinator" else "follower",
+            "agent_type": (
+                "system" if a.role_id == "supervisor" else
+                "subagent" if a.parent_session_id else "peer"
+            ),
+            "parent_session_id": a.parent_session_id,
+            "role_id": a.role_id,
             "state": a.state.value,
             "display_name": a.display_name,
         }
@@ -301,65 +544,131 @@ def _directory(core, author: AgentSession) -> ToolResult:
     return _ok(f"{len(rows)} session(s)." if rows else "No sessions right now.", sessions=rows)
 
 
-async def _call(core, author: AgentSession, args: dict[str, Any], *, allow_spawn: bool = True) -> ToolResult:
+async def _call(core, author: AgentSession, args: dict[str, Any]) -> ToolResult:
     spoken = str(args.get("message") or "").strip()
-    if not spoken:
-        return _err("call requires a non-empty message.")
     raw_to = str(args.get("to") or "").strip()
-    if not raw_to:
-        return _err("call requires a non-empty to.")
 
     post_line = None
     raw_post_id = args.get("post_id")
     if raw_post_id is not None:
-        raw_post_id = str(raw_post_id)
         post = next((p for p in _posts(core, author.project_id) if p["id"] == raw_post_id), None)
         if post is not None:
             post_line = f"Related post {post['id']} (topic {post['topic']})."
+    target = _resolve_live_target(core, author.project_id, raw_to, wakeable_role_only=True)
     text = format_incoming_call(
         caller_agent_id=author.role_id,
         caller_session_id=author.id,
         message=spoken,
         post_line=post_line,
+        auto_report=target is None,
     )
 
-    target = _resolve_live_target(core, author.project_id, raw_to)
     if target is not None:
-        await _notify(core, author.project_id, target, sender=author.role_id, content=text)
-        return _ok(f"Called {target.id} (non-blocking).", session_id=target.id)
+        from cloudra.runtime_v2.policies.permission import require_delegation_permissions
+        require_delegation_permissions(author.capabilities.permissions, target.capabilities.permissions)
+        notification = await _notify(core, author.project_id, target, sender=author.role_id, content=text, author=author)
+        return _ok(f"Called {target.id} (non-blocking).", session_id=target.id, notifications=[notification])
 
-    if not allow_spawn:
+    # A missing role is a request for a new peer, independent of the caller's
+    # role, settings, and cancellation tree. Supervisor is system-managed and
+    # has one instance per project; every caller uses the same rule for it.
+    role_id = raw_to.lstrip("@").lower()
+    try:
+        core.roles.require(role_id)
+    except CommandRejected:
+        import difflib
+        valid_roles = sorted(r.role_id for r in core.roles.list())
+        matches = difflib.get_close_matches(role_id, valid_roles, n=2, cutoff=0.35)
+        suggestion = f" Did you mean '{matches[0]}'?" if matches else ""
         return _err(
-            f"target_not_found: no live session matches {raw_to!r} in this project. "
-            "Spawning a new agent from call is not allowed in this context."
+            f"Target {raw_to!r} is neither a live session nor a known role.{suggestion} "
+            f"Available roles: {valid_roles}."
         )
-
-    # No live session: role names / a-N ids spawn a fresh child, mirroring the
-    # legacy spawn-from-call path.
-    role_id = role_id_for_legacy_agent_id(raw_to)
-    core.roles.require(role_id)  # raises CommandRejected for unknown roles
-    child, receipt = await _spawn_child(
-        CommandBus(core),
-        author,
-        role_id=role_id,
-        query=spoken,
-        context=[{"role": "user", "content": text}],
+    if role_id == "supervisor":
+        return _err("The Supervisor is system-managed; call its existing session or submit a review request.")
+    result = await CommandBus(core).execute(
+        Command(
+            type="agent.spawn",
+            target={"project_id": author.project_id},
+            payload={
+                "role_id": role_id,
+                "requested_by_session_id": author.id,
+            },
+            actor="agent",
+        )
     )
-    # 派发回执带上 child 的有效设置摘要：调用方不必再猜 child 用了哪个
-    # model / protocol（继承规则在 child_settings 唯一定义）。
+    if not result.accepted:
+        error = result.data.get("error", {})
+        raise CommandRejected(error.get("code", "rejected"), error.get("message", "peer creation rejected"))
+    peer = result.data
+    # Create the peer queued, then use the one durable Agent-to-Agent message
+    # path to deliver the call and wake it. A failed message write cannot run
+    # an empty peer; the returned id lets the caller retry the existing one.
+    for attempt in range(2):
+        try:
+            notification = await _notify(core, author.project_id, peer, sender=author.role_id, content=text, author=author)
+            break
+        except EventPersistenceError:
+            if attempt:
+                return _err(
+                    f"Peer {peer.id} was created, but the call message was not delivered. "
+                    "Retry the call using this session_id.",
+                    session_id=peer.id,
+                )
+    settings = peer.settings
+    project = core.require_project(peer.project_id)
+    project_defaults = {
+        name for name, value in project.settings.defaults.model_dump(exclude_unset=True).items()
+        if value is not None
+    }
+    role_defaults = {
+        name for name, value in core.roles.require(peer.role_id).default_settings.model_dump(exclude_unset=True).items()
+        if value is not None
+    }
+    receipt = {
+        "session_id": peer.id,
+        "role_id": peer.role_id,
+        "model": settings.model,
+        "invocation_protocol": settings.invocation_protocol.value,
+        "orchestration_mode": settings.orchestration_mode.value,
+        "unattended": settings.unattended,
+        "visual_mode": settings.visual_mode,
+        "yolo": settings.yolo,
+        "schedule_mode": settings.schedule_mode,
+        "clean_context": settings.clean_context,
+        "sources": {
+            name: (
+                "role_default" if name in role_defaults else
+                "project_default" if name == "orchestration_mode" or name in project_defaults else
+                "schema_default"
+            )
+            for name in (
+                "model", "invocation_protocol", "orchestration_mode", "unattended",
+                "visual_mode", "yolo", "schedule_mode", "clean_context",
+            )
+        },
+    }
     return _ok(
-        f"Called {child.id} (non-blocking). role={receipt['role_id']} "
+        f"Called {peer.id} (non-blocking). role={receipt['role_id']} "
         f"model={receipt['model'] or '(unset)'} protocol={receipt['invocation_protocol']}",
-        session_id=child.id,
+        session_id=peer.id,
         settings=receipt,
+        notifications=[notification],
     )
 
 
-async def handle_hub_tool(
-    core, author: AgentSession, call: ToolCall, *, allow_spawn: bool = True
-) -> ToolResult:
-    args = call.arguments or {}
-    action = str(args.get("action") or "").strip().lower()
+async def handle_hub_tool(core, author: AgentSession, call: ToolCall) -> ToolResult:
+    result = await _dispatch_hub_tool(core, author, call)
+    receipt = AgentHub_output_schema.model_validate(result.data)
+    return replace(result, data=receipt.model_dump(exclude_unset=True))
+
+
+async def _dispatch_hub_tool(core, author: AgentSession, call: ToolCall) -> ToolResult:
+    try:
+        args = AgentHub_input_schema.model_validate(call.arguments).model_dump()
+    except ValidationError as exc:
+        return _err(validation_feedback(exc))
+    action = args["action"]
     if action == "post":
         return await _post(core, author, args)
     if action == "browse":
@@ -372,7 +681,7 @@ async def handle_hub_tool(
         return _directory(core, author)
     if action == "call":
         try:
-            return await _call(core, author, args, allow_spawn=allow_spawn)
+            return await _call(core, author, args)
         except CommandRejected as exc:
             return _err(f"[dispatch rejected] {exc.message}")
     return _err(

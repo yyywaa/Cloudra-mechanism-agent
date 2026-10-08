@@ -23,11 +23,16 @@ cclib / numpy 在函数内惰性导入。
 from __future__ import annotations
 
 import glob
+import hashlib
+import json
 import os
 import re
+from pathlib import Path
 
+from pydantic import BaseModel, ConfigDict
+
+from cloudra.tools.core.cclib_units import energy_ev_to_hartree
 from cloudra.tools.core.gaussian_frames import (
-    EV_PER_HARTREE,
     FrameRecord,
     _as_float_list,
     _ccread_from_text,
@@ -474,7 +479,7 @@ def _extract_opt_frames(log_text: str) -> list[FrameRecord]:
         is_last = i == n - 1
         frames.append(FrameRecord(
             frame=i,
-            scf_energy_hartree=energies_ev[i] / EV_PER_HARTREE,
+            scf_energy_hartree=energy_ev_to_hartree(energies_ev[i]),
             frequencies_cm=freqs if (is_last and freqs) else [],
             xyz=_coords_to_xyz(atomnos, atomcoords[i], comment=f"opt step={i}"),
             converged=converged if is_last else None,
@@ -525,7 +530,7 @@ def _extract_scan_frames(log_text: str) -> list[FrameRecord]:
         frames.append(FrameRecord(
             frame=i,
             reaction_coordinate=rx,
-            scf_energy_hartree=energies_ev[i] / EV_PER_HARTREE,
+            scf_energy_hartree=energy_ev_to_hartree(energies_ev[i]),
             xyz=xyz,
         ))
     return frames
@@ -543,7 +548,7 @@ def _extract_sp_frames(log_text: str) -> list[FrameRecord]:
         return []
     energy_hartree = None
     if energies is not None and len(energies) > 0:
-        energy_hartree = _as_float_list(energies)[-1] / EV_PER_HARTREE
+        energy_hartree = energy_ev_to_hartree(_as_float_list(energies)[-1])
     return [FrameRecord(
         frame=0,
         scf_energy_hartree=energy_hartree,
@@ -808,10 +813,9 @@ def _orca_sidecar_roots(log_path: str, text: str) -> list[tuple[str, str]]:
     if m:
         job = os.path.splitext(m.group("path"))[0]
         base = os.path.basename(job)
-        dirs = []
+        dirs = [log_dir, os.path.dirname(log_dir)]
         if os.path.dirname(job):
             dirs.append(os.path.dirname(job))
-        dirs.extend([log_dir, os.path.dirname(log_dir)])
         for directory in dict.fromkeys(dirs):
             roots.append((directory, base))
     stem = os.path.splitext(os.path.basename(log_path))[0]
@@ -875,6 +879,20 @@ def _irc_endpoint_sidecar(
     return None, None
 
 
+class _ArchivedIrcEndpoint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    filename: str | None
+    sha256: str | None
+    origin: str | None
+    converged: bool | None
+
+
+class _ArchivedIrcEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    log_sha256: str
+    endpoints: dict[str, _ArchivedIrcEndpoint]
+
+
 def extract_irc_endpoints(log_path: str) -> dict:
     """定位 ORCA IRC forward/backward 端点几何（不命名 reactant/product）。
 
@@ -888,6 +906,27 @@ def extract_irc_endpoints(log_path: str) -> dict:
       不是闸门——未收敛方向的轨迹末帧同样是合法的部分端点，方向是否成立
       由调用方的几何区间证明判定。
     """
+    archive = Path(log_path).parent / "irc_endpoints.json"
+    if archive.is_file():
+        manifest = _ArchivedIrcEvidence.model_validate(json.loads(archive.read_text()))
+        if hashlib.sha256(Path(log_path).read_bytes()).hexdigest() != manifest.log_sha256:
+            raise ValueError("Archived IRC log hash mismatch")
+        if set(manifest.endpoints) != {"forward", "backward"}:
+            raise ValueError("Archived IRC requires both direction records")
+        result = {}
+        for direction, endpoint in manifest.endpoints.items():
+            geometry = None
+            if endpoint.filename is not None:
+                if Path(endpoint.filename).name != endpoint.filename:
+                    raise ValueError("Archived IRC endpoint must be a local filename")
+                path = archive.parent / endpoint.filename
+                if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != endpoint.sha256:
+                    raise ValueError("Archived IRC endpoint missing or hash mismatch")
+                geometry = str(path)
+            result[direction] = {"geometry_ref": geometry, "origin": endpoint.origin,
+                                 "availability": "available" if geometry else "unavailable",
+                                 "converged": endpoint.converged}
+        return result
     text = _read_text(log_path)
     roots = _orca_sidecar_roots(log_path, text)
     converged: dict[str, bool | None] = {"FORWARD": None, "BACKWARD": None}

@@ -35,8 +35,10 @@
   agent.cancel_requested / agent.restart_requested / agent.restarted /
   command.rejected /
   agent.message_emitted / agent.warning / loop.detected / project.synced
-- 消息与对话：agent.message_injected / agent.thinking（inbox 内容不重建：
-  输入消息由 context.appended 进会话上下文投影；mailbox 队列是易失 shell）
+- 消息与对话：agent.message_injected / agent.thinking（本函数对二者不投影任何
+  projects/agents/roles 状态；输入消息进入会话上下文走 context.appended，inbox
+  队列则由恢复路径 ``persistence._rebuild_inboxes_from_events`` 从
+  agent.message_injected 重建——不是"易失即弃"）
 - 运行过程流：llm.* / tool.* / run.retry / dag.gate_blocked /
   hub.posted / compaction.started / compaction.finished
 - 自有恢复通道的投影（不经本函数）：approval.* / interaction.*
@@ -162,6 +164,13 @@ def _apply_agent_state_changed(core: RuntimeCore, envelope: EventEnvelope) -> No
     agent.updated_at = envelope.created_at
 
 
+def _apply_agent_task_updated(core: RuntimeCore, envelope: EventEnvelope) -> None:
+    agent = core.agents.get(envelope.session_id or "")
+    if agent is not None:
+        agent.current_task = envelope.data.get("current_task")
+        agent.updated_at = envelope.created_at
+
+
 def _apply_run_started(core: RuntimeCore, envelope: EventEnvelope) -> None:
     agent = core.require_agent(envelope.session_id or "")
     protocol = envelope.data.get("invocation_protocol") or InvocationProtocol.TRADITIONAL
@@ -252,6 +261,7 @@ _APPLIERS: dict[str, Callable[[RuntimeCore, EventEnvelope], None]] = {
     "agent.spawned": _apply_agent_spawned,
     "agent.settings_changed": _apply_agent_settings_changed,
     "agent.state_changed": _apply_agent_state_changed,
+    "agent.task_updated": _apply_agent_task_updated,
     "run.started": _apply_run_started,
     "run.finished": _apply_run_cleared,
     "agent.cancelled": _apply_run_cleared,

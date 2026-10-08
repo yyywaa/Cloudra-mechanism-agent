@@ -2,11 +2,18 @@
 name: molecular-dynamics-simulation
 description: Domain expertise for classical molecular dynamics (MD) simulations (OpenMM, GROMACS, AMBER). Use when selecting biomolecular/small-molecule force fields (AMBER ff14SB/ff19SB, CHARMM36m, GAFF2, OpenFF), parameterizing ligands (Antechamber, AM1-BCC), configuring equilibration protocols (EM -> NVT heating -> NPT density equilibration -> Production), and analyzing trajectories (RMSD, RMSF, Gromos clustering, MM-PBSA/MM-GBSA binding free energies).
 license: MIT
+metadata:
+  original-skill: "molecular-dynamics"
+  source: "https://github.com/K-Dense-AI/scientific-agent-skills"
+  adapted-by: "Cloudra"
+  upstream-license: "MIT, Copyright (c) 2025 K-Dense Inc."
 ---
 
 # Molecular Dynamics Simulation Standard Operating Procedure (SOP)
 
 This skill provides comprehensive methodology for classical molecular dynamics (MD) simulations across biomolecular, protein-ligand, and condensed-matter systems using OpenMM and GROMACS.
+
+> **Provenance**: adapted from the `molecular-dynamics` skill of [K-Dense-AI/scientific-agent-skills](https://github.com/K-Dense-AI/scientific-agent-skills) (MIT License, Copyright (c) 2025 K-Dense Inc.), then substantially extended for the Cloudra toolchain. The OpenMM and MDAnalysis implementations in sections 4 and 5 derive from that upstream skill; the remainder is Cloudra's own methodology. The upstream permission notice is preserved in [docs/licenses/k-dense-scientific-agent-skills.md](../../../docs/licenses/k-dense-scientific-agent-skills.md).
 
 ---
 
@@ -16,7 +23,7 @@ Anchor MD simulation stages in the `CLOUDRA` toolchain and Python ecosystem:
 
 - **System Preparation & Solvation**: Use `PDBFixer` to repair crystal structures and OpenMM `Modeller` or GROMACS `gmx solvate` / `gmx genion` to add explicit solvent boxes and neutralizing salt (0.15 M NaCl).
 - **Small-Molecule Parameterization**: For non-standard ligands and organic molecules, parameterize using AmberTools (`antechamber` for AM1-BCC charge calculation + `parmchk2` for GAFF2 force fields) or `openff-toolkit` / `openff-interchange`.
-- **Job Dispatch**: MD simulations are computationally intensive. Submit all production stages via `submit_compute_job` with `is_async=True`.
+- **Job Execution**: Run GROMACS, LAMMPS, or OpenMM workflows with the available command or script tools. `submit_compute_job` accepts Gaussian, VASP, ORCA, CP2K, and xTB inputs; it cannot schedule an arbitrary MD script. For an unavailable compute route, coordinate with the Coordinator or environment specialist.
 - **Trajectory Processing & Analysis**: Process trajectories using `MDAnalysis` or GROMACS tools (`gmx rms`, `gmx rmsf`, `gmx cluster`). Extract thermodynamic stability and compute binding free energies using **MM-GBSA / MM-PBSA** (`gmx_MMPBSA` or `MMPBSA.py`).
 
 ---

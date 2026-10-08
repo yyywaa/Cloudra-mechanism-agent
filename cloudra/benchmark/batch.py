@@ -31,7 +31,6 @@ from collections import deque
 from pathlib import Path
 from typing import Callable, Optional
 
-from cloudra.benchmark.refusal import RunOutcome, refusal_stats, should_refuse
 from cloudra.benchmark.runner import (
     BenchmarkDB,
     BenchmarkRunner,
@@ -41,6 +40,7 @@ from cloudra.benchmark.runner import (
 )
 from cloudra.benchmark.schema import TaskSpec, Tier
 from cloudra.benchmark.watch import RunWatcher
+from cloudra.runtime_v2.agent_host import is_background_parked
 from cloudra.runtime_v2.schemas import AgentState, Command, CommandRejected, new_id
 
 logger = logging.getLogger(__name__)
@@ -141,7 +141,6 @@ class BenchmarkBatch:
         tasks: list[TaskSpec],
         tasks_dirs: list[str],
         concurrency: int,
-        run_timeout_s: float,
         stuck_grace_s: float,
         poll_interval_s: float,
         emit: Callable[[str, dict], None],
@@ -161,11 +160,9 @@ class BenchmarkBatch:
             "tasks_dirs": [str(d) for d in tasks_dirs],
             "task_ids": [t.task_id for t in tasks],
             "concurrency": self.concurrency,
-            "run_timeout_s": run_timeout_s,
         }
         self.task_states = [_TaskRunState(t) for t in tasks]
         self._watcher_kwargs = {
-            "run_timeout_s": run_timeout_s,
             "stuck_grace_s": stuck_grace_s,
             "poll_interval_s": poll_interval_s,
         }
@@ -206,7 +203,11 @@ class BenchmarkBatch:
                 continue
             # 快照迭代：cancel 经 CommandBus 回写 core 时可能并发落新 agent
             for agent in list(self.core.agents.values()):
-                if agent.project_id != st.project_id or agent.state in _AGENT_TERMINAL:
+                if agent.project_id != st.project_id:
+                    continue
+                if agent.state in _AGENT_TERMINAL and not is_background_parked(
+                    self.core, agent
+                ):
                     continue
                 try:
                     await self.bus.execute(
@@ -315,6 +316,7 @@ class BenchmarkBatch:
                             "name": f"benchmark:{task.task_id}",
                             "workspace_dir": str(sandbox),
                             "settings": {
+                                "benchmark_task_id": task.task_id,
                                 "orchestration_mode": task.prompt.orchestration_mode.value,
                                 "method_policy": task.method_policy.model_dump(),
                             },
@@ -363,11 +365,43 @@ class BenchmarkBatch:
                 # 必须由本协程在 spawn 之后立刻补上。
                 await cancel("batch stop")
 
+            async def resume_background() -> None:
+                # The general runtime deliberately parks compute notices for
+                # coordinators.  A benchmark run has an unattended watcher:
+                # once a notice is in the durable mailbox, resume the parked
+                # coordinator so it can inspect the result before scoring.
+                if agent.state is AgentState.SUCCEEDED and self.core.runner is not None:
+                    await self.core.agent_host.wake(agent, runner=self.core.runner)
+
             watcher = RunWatcher(
                 pending_background=self._pending_background_factory(project.id, agent.id),
+                resume_background=resume_background,
+                stop_event=self._stop,
                 **self._watcher_kwargs,
             )
-            await watcher.wait(self.core, agent, cancel)
+            wait_error = await watcher.wait(self.core, agent, cancel)
+            if wait_error is not None:
+                if self._stop.is_set():
+                    await self._mark_cancelled(st)
+                else:
+                    # A parked run has state SUCCEEDED, so agent.cancel may be
+                    # rejected after a watcher cancellation. The watcher still
+                    # reports no final result; never score that sandbox.
+                    st.status = "error"
+                    st.error = wait_error
+                    result = RunResult(
+                        task_id=task.task_id,
+                        sandbox=str(sandbox),
+                        batch_id=self.batch_id,
+                    )
+                    result.notes.append(f"benchmark watcher: {wait_error}")
+                    st.result = result
+                    await asyncio.to_thread(self._runner.db.record, result)
+                    self.emit(
+                        "benchmark.task_error",
+                        {"batch_id": self.batch_id, "task_id": task.task_id, "error": wait_error},
+                    )
+                return
 
             # stop 只截断未竟工作：正常跑完（SUCCEEDED）的题照常评分，
             # 被 stop 级联取消的题落 cancelled。
@@ -378,7 +412,7 @@ class BenchmarkBatch:
                 await self._mark_cancelled(st)
                 return
 
-            # 评分只读交付物：图 JSON + 日志 + 结构化拒答声明（不读最终消息）
+            # 评分只读交付物：图 JSON + 日志（不读最终消息）
             result = await asyncio.to_thread(
                 self._runner.score_sandbox,
                 task,
@@ -395,10 +429,8 @@ class BenchmarkBatch:
                     "task_id": task.task_id,
                     "final_score": result.final_score,
                     "graph_score": result.graph_score,
-                    "integrity_passed": result.integrity_passed,
                     "selfconsistency_passed": result.selfconsistency_passed,
                     "accuracy_score": result.accuracy_score,
-                    "outcome": result.outcome,
                 },
             )
         except Exception as exc:
@@ -420,14 +452,28 @@ class BenchmarkBatch:
 
     def _pending_background_factory(self, project_id: str, session_id: str):
         from cloudra.persistence.database import ComputeDB
-        from cloudra.services.compute_store import acount_pending_compute_jobs
+        from cloudra.services.compute_store import (
+            acount_active_compute_job_states,
+            pending_terminal_jobs,
+        )
 
         compute_db = ComputeDB()
 
         async def pending_background() -> bool:
             if bool(self.core.reminders.pending(session_id)):
                 return True
-            return bool(await acount_pending_compute_jobs(compute_db, project_id))
+            if await acount_active_compute_job_states(compute_db, project_id):
+                return True
+            # A child may be parked in SUCCEEDED while its own terminal job
+            # still awaits the broker.  Check the whole benchmark project,
+            # not just the coordinator's session.
+            terminal_unnotified = await asyncio.to_thread(
+                pending_terminal_jobs, compute_db, window_seconds=0, limit=1,
+                conversation_id=project_id,
+            )
+            if terminal_unnotified:
+                return True
+            return False
 
         return pending_background
 
@@ -463,7 +509,6 @@ class BenchmarkBatch:
         result = RunResult(
             task_id=st.task.task_id,
             sandbox=str(self._sandbox_for(st.task.task_id)),
-            outcome=RunOutcome.FAILED.value,
             batch_id=self.batch_id,
         )
         result.notes.append(f"infrastructure failure: {message}")
@@ -479,7 +524,6 @@ class BenchmarkBatch:
         result = RunResult(
             task_id=task.task_id,
             sandbox=str(sandbox),
-            outcome=RunOutcome.FAILED.value,
             batch_id=self.batch_id,
         )
         result.notes.append("cancelled by batch stop")
@@ -521,13 +565,10 @@ class BenchmarkBatch:
                 "error": st.error,
                 "final_score": r.final_score if r is not None else None,
                 "graph_score": r.graph_score if r is not None else None,
-                "integrity_passed": r.integrity_passed if r is not None else None,
                 "selfconsistency_passed": r.selfconsistency_passed if r is not None else None,
                 "accuracy_score": r.accuracy_score if r is not None else None,
-                "outcome": r.outcome if r is not None else None,
                 "notes": r.notes if r is not None else [],
             })
-        stats = self._refusal_stats()
         return {
             "batch_id": self.batch_id,
             "status": self.status,
@@ -535,24 +576,6 @@ class BenchmarkBatch:
             "finished_at": self.finished_at,
             "config": self.config,
             "tasks": tasks,
-            "refusal": stats,
-        }
-
-    def _refusal_stats(self) -> dict:
-        pairs = [
-            (should_refuse(st.task), st.status == "scored" and st.result is not None
-             and st.result.outcome == RunOutcome.REFUSED.value)
-            for st in self.task_states
-        ]
-        stats = refusal_stats(pairs)
-        return {
-            "tp": stats.tp,
-            "fp": stats.fp,
-            "fn": stats.fn,
-            "tn": stats.tn,
-            "precision": stats.precision,
-            "recall": stats.recall,
-            "f1": stats.f1,
         }
 
 
@@ -590,7 +613,7 @@ class BenchmarkService:
         return {"tiers": await asyncio.to_thread(task_catalog)}
 
     async def start(self, *, tasks_dirs: list[str] | None, only: str,
-                    concurrency: int, timeout: float,
+                    concurrency: int,
                     tiers: list[str] | None = None) -> dict:
         async with self._lock:
             active = self._active_batch()
@@ -610,7 +633,6 @@ class BenchmarkService:
                 tasks=tasks,
                 tasks_dirs=[str(d) for d in resolved],
                 concurrency=concurrency,
-                run_timeout_s=timeout,
                 stuck_grace_s=300.0,
                 poll_interval_s=2.0,
                 emit=self._emit,
@@ -637,7 +659,6 @@ class BenchmarkService:
                 "finished_at": None,
                 "config": {},
                 "tasks": [],
-                "refusal": {},
             }
         return batch.snapshot()
 

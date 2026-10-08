@@ -5,7 +5,7 @@
 
 [![CI](https://github.com/yyywaa/Cloudra-mechanism-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/yyywaa/Cloudra-mechanism-agent/actions/workflows/ci.yml)
 [![Python ≥ 3.11](https://img.shields.io/badge/python-%E2%89%A53.11-blue)](pyproject.toml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
 [English](README.md) · [文档中心](docs/README.md) · [核心创新点](docs/novelty.md) · [DAG 编排规范](docs/DAG_ORCHESTRATION.md) · [过渡态 SOP](docs/TS_PROCESS_SOP.md) · [插件系统](docs/PLUGINS.md)
 
@@ -65,6 +65,29 @@ export CLOUDRA_COORDINATOR__NATIVE_SEARCH_PARAMS='{}' # 自定义注入参数（
 ```
 
 若未开启原生搜索，系统会自动回落至外部检索工具（Tavily / Brave / Bing / DuckDuckGo）。
+
+### 5. ChatGPT / Codex OAuth 登录
+
+在“全局设置”中选择 **OpenAI Codex (ChatGPT 账号)**，点击登录按钮，打开授权页面并输入显示的一次性设备码。授权完成后，保存 Coordinator 或 Follower 的模型配置即可使用；两个角色共用 Cloudra 的账号登录。
+
+也可以通过命令行完成：
+
+```bash
+cloudra auth codex login
+cloudra config set coordinator.provider openai-codex
+cloudra config set coordinator.model gpt-6-sol
+cloudra config set follower.provider openai-codex
+cloudra config set follower.model gpt-6-sol
+cloudra auth codex status
+# 退出 Cloudra 保存的账号登录：
+cloudra auth codex logout
+```
+
+供应商别名支持 `codex`、`openai_codex`。可用模型以 ChatGPT 账号权限为准。设备码登录可能需要在 ChatGPT 账号或工作区安全设置中开启，参见 [OpenAI 认证说明](https://developers.openai.com/codex/auth/)。
+
+Cloudra 在配置的数据目录下独立保存 `.codex_oauth.json`，文件仅允许当前用户读写。临近过期时自动刷新 access token，并在跨进程锁内保存轮换后的 refresh token；查询登录状态不会刷新。登录凭据不会返回给前端，也不会写入模型配置的 API Key 字段。
+
+Codex 请求使用专用的 `https://chatgpt.com/backend-api/codex/responses` 端点，并设置 `store=false`。Agent、上下文压缩和辅助模型调用共用该传输；端点要求流式响应，Cloudra 会为 `stream=false` 的调用方汇总完整结果。通用的 `temperature`、`top_p` 与输出 token 上限不会发送到此端点。
 
 ---
 
@@ -210,23 +233,22 @@ Cloudra 深度集成了计算化学主流工具链与高性能计算基础设施
 ## 仓库结构
 
 ```text
-cloudra/
-├── core/                        Agent 基类与科学督导（Supervisor）
-├── services/                    控制面 API 服务（api_v2 包：app/routers/context/models）
-├── persistence/                 SQLite 持久化、不可变产物快照、长期记忆、路径管理
-├── base/                        数据契约与工具/技能加载基类
-├── infra/                       配置（磁盘 YAML 唯一事实源）、LLM 传输层、flock 原语、统一日志
-├── dag/                         机理证据交付图子系统（Engine, Store, Controller）
-├── runtime/                     确定性 prompt 组装、工作区快照、计算 guard 与日志监视
-├── scheduler/                   进程隔离的计算调度守护进程（排队/容量记账/flock 崩溃对账）
-├── runtime_v2/                  事件驱动推理新内核（Pipeline, Commands, PolicyStages, Bridges）
-├── benchmark/                   评测生成器、三层证据评分与批量测试运行器
-├── tools/, subagents/           几何与电子感知工具库、领域专长 Agent（dft, md, explorer 等）
-├── skills/, prompts/            实验方法学技能包与经过版本控制的角色策略
-└── frontend/                    React + TypeScript + Vite 现代化 Web 控制台
-docs/                            系统架构规范、SOP 规格、实验门禁、基准调研与设计规格
-paper/                           学术论文手稿、文献缺口分析与基准构建叙事
+cloudra/                         Python 包：运行内核、服务、工具、评测、prompts 与 skills
+frontend/                        React + TypeScript + Vite Web 控制台
+scripts/                         安装、运行、数据脚本与 application_docs/ 一次性文档编辑脚本
+deploy/                          部署与远程计算指南
+tests/                           回归测试与科学验证样本
+docs/                            当前架构/SOP、证据、许可证、标志资源与 archive/
+paper/                           论文正文、literature/ 文献原件与 archive/ 调研快照
+ideapool/                        版本化题源、生成题集与历史调研
+gold_compute/                    gold 方法口径、科学记录与交接归档
+kg_data/, vector_store/          知识图谱输入与向量元数据
+知识卡片/                       知识卡片源档案
+申请材料/, 软著申请材料/        外部申报交付物（保留原路径）
+archive/                         本地实验残留（默认忽略，已跟踪 README 除外）
 ```
+
+详细入口见[文档中心](docs/README.md)、[脚本索引](scripts/README.md)和[文献索引](paper/literature/README.md)。根目录保留配置、许可证/引用文件与 `install.sh`、`web.sh`；临时运行目录和构建产物不入库。
 
 ---
 
@@ -259,4 +281,14 @@ uv run ruff check cloudra tests    # 代码规范检查（line-length 120）
 
 ## 开源许可证
 
-本项目采用 [MIT 许可证](LICENSE)。
+Copyright (C) 2026 Cloudra Team。
+
+Cloudra 是自由软件：你可以依照[ GNU Affero 通用公共许可证](LICENSE)（由自由软件基金会发布）的条款重新发布和/或修改它，许可证版本为第 3 版，或（由你选择）任何更新的版本。
+
+Cloudra 的分发是希望它能有用，但不提供任何担保；甚至不提供适销性或特定用途适用性的默示担保。详情见 [GNU Affero 通用公共许可证](LICENSE)。
+
+本仓库内嵌的第三方组件各自保留其原有许可证，见 [docs/licenses/](docs/licenses/README.md)。
+
+`cloudra/skills/` 下的技能是有意的例外：每个技能在 frontmatter 中声明 `license: MIT`，采用 MIT 许可，以便这些知识能被其他 Agent harness 无障碍采用。引擎、DAG、工具与调度器仍然遵循 AGPL。
+
+贡献采用 Developer Certificate of Origin 模式，请使用 `git commit -s` 签署提交，详见 [CONTRIBUTING.md](CONTRIBUTING.md)。

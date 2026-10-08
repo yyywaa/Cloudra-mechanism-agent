@@ -249,6 +249,7 @@ class DagController(SupervisionMixin, StopAuditMixin, EvidenceInboxMixin, Drafts
         """Only unresolved draft opinions about this delivery remain final debts."""
         latest = {}
         for draft_id, draft, reason in self.store.list_delivery_drafts():
+            targets = set(draft.claim_spec.scope.get("targets", [])) if draft.claim_spec else set()
             for operation in draft.operations:
                 element = getattr(operation, "node", None) or getattr(operation, "edge", None)
                 target = (
@@ -257,8 +258,10 @@ class DagController(SupervisionMixin, StopAuditMixin, EvidenceInboxMixin, Drafts
                     or getattr(operation, "node_id", None)
                     or getattr(operation, "edge_id", None)
                 )
-                if target in selected:
-                    latest[target] = (draft_id, draft.state, reason)
+                if target:
+                    targets.add(target)
+            for target in targets & selected:
+                latest[target] = (draft_id, draft.state, reason)
         gaps = []
         for target, (draft_id, state, reason) in latest.items():
             if state not in {"open", "rejected"}:
@@ -273,13 +276,13 @@ class DagController(SupervisionMixin, StopAuditMixin, EvidenceInboxMixin, Drafts
         return gaps
 
     def _apply_review_stage_credits(self, report, delivery, selected):
-        """Apply only explicit Supervisor acceptance to pending file stages.
+        """Require scientific checks AND explicit Supervisor acceptance for file stages.
 
         A per-file review records Supervisor judgment, but it is deliberately
         not a graph mutation and must not change ``evidence_level``.  Only the
         exact pending stage(s) represented by the immutable file refs may be
-        removed from the coverage report; endpoint, thermochemistry and
-        contradiction gates remain machine obligations.
+        removed from the coverage report after their scientific checks pass;
+        endpoint, thermochemistry and contradiction gates remain obligations.
         """
         from cloudra.dag.models import normalize_claim
 
@@ -305,7 +308,10 @@ class DagController(SupervisionMixin, StopAuditMixin, EvidenceInboxMixin, Drafts
             if decision is not None:
                 latest[key] = (request, decision)
 
+        from cloudra.dag.file_science import file_scientific_checks
+
         credits: dict[str, set[str]] = {}
+        scientific_gaps = []
         for item in latest.values():
             if item is None:
                 continue
@@ -325,19 +331,25 @@ class DagController(SupervisionMixin, StopAuditMixin, EvidenceInboxMixin, Drafts
                 continue
             if any(ref not in elements[target][1].refs for ref in refs):
                 continue
-            if element_type == "species":
-                credits.setdefault(target, set()).add("geometry")
+            expected = {stage.kind.value for stage in elements[target][1].stages
+                        if stage.required and stage.status.value == "pending"}
+            expected &= {"geometry", "ts_opt", "frequency", "short_irc"}
+            if not expected:
                 continue
-            if element_type != "step":
-                continue
-            # Supported is the Supervisor's judgment of the submitted TS and
-            # frequency evidence, including parser-inconclusive cases. Requiring
-            # a machine pass here would collapse the two acceptance routes.
-            credits.setdefault(target, set()).update(("ts_opt", "frequency"))
-            if proposal.get("irc_files"):
-                credits[target].add("short_irc")
+            checks = file_scientific_checks(self.store, delivery, target,
+                                            irc_files=proposal.get("irc_files"), workspace_root=self.working_directory,
+                                            evidence_refs=refs)
+            for stage in expected:
+                check = checks[stage]
+                if check["status"] == "passed":
+                    credits.setdefault(target, set()).add(stage)
+                else:
+                    scientific_gaps.append(CoverageGateResult(
+                        code="scientific_check_incomplete", target_type=elements[target][0], target_id=target,
+                        detail=f"{stage}: {check['status']}. {check['detail']} Next: {check['next_action']}",
+                    ))
 
-        if not credits:
+        if not credits and not scientific_gaps:
             return report
         satisfied = list(report.satisfied)
         unresolved = []
@@ -352,17 +364,19 @@ class DagController(SupervisionMixin, StopAuditMixin, EvidenceInboxMixin, Drafts
                 stage.kind.value for stage in target_stages
                 if stage.required and stage.status.value == "pending"
             }
-            if not required_pending or not required_pending <= credits[gate.target_id]:
-                unresolved.append(gate)
-                continue
+            remaining = required_pending - credits[gate.target_id]
+            if remaining:
+                unresolved.append(gate.model_copy(update={
+                    "detail": "required stages pending: " + ", ".join(sorted(remaining)),
+                }))
             satisfied.append(CoverageGateResult(
                 code="supervisor_evidence_accepted",
                 target_type=gate.target_type,
                 target_id=gate.target_id,
                 detail="Supervisor accepted immutable per-file evidence for stages: "
-                + ", ".join(sorted(required_pending)),
+                + ", ".join(sorted(required_pending & credits[gate.target_id])),
             ))
-        return report.model_copy(update={"satisfied": satisfied, "unresolved": unresolved})
+        return report.model_copy(update={"satisfied": satisfied, "unresolved": [*unresolved, *scientific_gaps]})
 
     def _review_gaps(self, selected, elements):
         """Read durable review outcomes; optional, unscoped advice is not a debt.

@@ -12,9 +12,9 @@ When `agent.settings.schedule_mode` is True:
   stops admitted by the handshake and plain-text final replies reach the same
   runner-side boundary.  The handshake's second-stop self-confirmation is NOT
   completion evidence (计划 §6) — the gate re-evaluates verifiable facts:
-  pending reminder → wait_background (a real wake-up source); verifiable
-  background work (running sub-agent / unfinished compute job) without a
-  reminder → continue_work (schedule a wake-up first); nothing pending →
+    owned compute on a non-coordinator session or a pending reminder →
+    wait_background (a real wake-up source); other verifiable background work
+    without a reminder → continue_work (schedule a wake-up first); nothing pending →
   allow_final explicitly labelled agent-declared, not independently verified.
 """
 
@@ -27,12 +27,15 @@ from cloudra.runtime_v2.policies.base import PipelineContext, PolicyResult, Tool
 SCHEDULE_NOTICE = (
     "[AUTONOMOUS SCHEDULE MODE ACTIVE]\n"
     "You are running in autonomous schedule mode.\n"
-    "- If tasks, calculations, or simulations are in progress (or if you submitted background jobs via "
-    "submit_compute_job, SSH/Slurm sbatch, background scripts, or multi-step experiments), you MUST call "
-    "`schedule` before stopping. Prefer a read-only `check_command` plus `interval_seconds` and a timeout "
+    "- For your own jobs submitted through submit_compute_job, a non-coordinator session can stop and wait for "
+    "the automatic terminal notification; an extra schedule is unnecessary. Coordinator compute notifications "
+    "are stored without waking the coordinator.\n"
+    "- For other background work (including SSH/Slurm sbatch, background scripts, multi-step experiments, "
+    "or a coordinator waiting directly on compute), call `schedule` before stopping. Prefer a read-only "
+    "`check_command` plus `interval_seconds` and a timeout "
     "(e.g. `test -f job.log && grep -q 'Normal termination' job.log`, or `ssh <login> 'squeue -j <id>'`) "
     "so you wake when the work is actually done; `delay_seconds` / `wake_at` alone is the fallback timer.\n"
-    "- Do not stop without a pending schedule (timer or check) while work is ongoing.\n"
+    "- While work is ongoing, stop only when an automatic compute notification or a pending schedule provides a wake-up.\n"
     "- If and only if the user's objective is 100% achieved and fully verified, confirm your conclusions and call `stop`."
 )
 
@@ -103,6 +106,12 @@ class ScheduleStage:
             self._intercepted_stops.discard(ctx.agent.id)
             return PolicyResult.allow()
 
+        if await self._owned_compute_pending(ctx):
+            # The compute broker provides a durable wake when this agent's
+            # submitted jobs finish; a timer would only cause extra LLM runs.
+            self._intercepted_stops.discard(ctx.agent.id)
+            return PolicyResult.allow()
+
         # No pending reminder: check if this is a consecutive stop (confirmation)
         if ctx.agent.id in self._intercepted_stops:
             # Agent explicitly re-called stop after receiving the intercept instruction
@@ -127,11 +136,17 @@ class ScheduleStage:
         子 agent（core.agents 投影）、在算作业（compute.db 权威）。模型的
         "有后台脚本在跑"声明不算数——没有可核实唤醒来源就要求先 schedule。
         """
-        if not getattr(ctx.agent.settings, "schedule_mode", False):
-            return None
         from cloudra.dag.stop_audit import StopGate
 
         core = self.core
+        if await self._owned_compute_pending(ctx):
+            return StopGate(
+                action="wait_background",
+                reason="this agent's compute jobs are still active; terminal notifications will wake it",
+                basis="background_wait",
+            )
+        if not getattr(ctx.agent.settings, "schedule_mode", False):
+            return None
         if core is not None and core.reminders.pending(ctx.agent.id):
             return StopGate(
                 action="wait_background",
@@ -144,6 +159,18 @@ class ScheduleStage:
                 reason=BACKGROUND_WITHOUT_WAKEUP_MESSAGE,
             )
         return StopGate(action="allow_final", reason=DECLARED_COMPLETION_REASON, basis="declared")
+
+    async def _owned_compute_pending(self, ctx: PipelineContext) -> bool:
+        if self.core is None or ctx.agent.role_id == "coordinator":
+            # ComputeNotifyBroker deliberately parks coordinator notices;
+            # it cannot use an owned job as an automatic wake source.
+            return False
+        from cloudra.persistence.database import ComputeDB
+        from cloudra.services.compute_store import acount_waitable_compute_jobs_for_session
+
+        return bool(await acount_waitable_compute_jobs_for_session(
+            ComputeDB(), ctx.agent.project_id, ctx.agent.id
+        ))
 
     async def _verifiable_background_pending(self, ctx: PipelineContext) -> bool:
         from cloudra.dag.stop_audit import has_running_siblings, pending_compute_jobs_exist

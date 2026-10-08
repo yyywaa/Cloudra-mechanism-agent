@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
@@ -20,6 +20,29 @@ def new_id(prefix: str) -> str:
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+class ToolWaitTarget(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    kind: Literal["agent", "compute_job"]
+    target_id: str = Field(min_length=1)
+
+
+class ToolProgress(BaseModel):
+    """Executor-reported facts, never guessed percentages or scientific verdicts.
+
+    effective_arguments is the validated/normalized input at this phase, not a
+    claim that every external program option has been observed.
+    """
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    phase: Literal["validating", "preparing", "executing", "submitting", "waiting", "parsing", "postprocessing"]
+    message: str = ""
+    effective_arguments: dict[str, Any] | None = None
+    compute_job_ids: list[Annotated[int, Field(strict=True, gt=0)]] = Field(default_factory=list)
+    waits: list[ToolWaitTarget] = Field(default_factory=list)
 
 
 class OrchestrationMode(str, Enum):
@@ -197,6 +220,9 @@ class AgentSession(BaseModel):
     role_id: str
     display_name: str
     parent_session_id: Optional[str] = None
+    # AgentHub peer call requests a result notification without creating a
+    # parent/child relationship (and therefore without cancellation cascade).
+    requested_by_session_id: Optional[str] = None
     state: AgentState = AgentState.QUEUED
     settings: RuntimeSettings = Field(default_factory=RuntimeSettings)
     settings_revision: int = 0
@@ -204,6 +230,7 @@ class AgentSession(BaseModel):
         default_factory=lambda: AgentCapabilities(permissions=PermissionSet())
     )
     current_run: Optional[CurrentRun] = None
+    current_task: Optional[str] = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -258,10 +285,12 @@ class MethodPolicy(BaseModel):
     method-*family* granularity (any token containing `xtb` matches the xTB entry).
     Attempting a non-whitelisted method is intercepted, never penalized.
 
-    benchmark 任务与 per-project live 设置共用本模型；live 侧项目未显式
-    设置（`ProjectSettings.method_policy is None`）时完全不启用拦截。"""
+    仅 Benchmark 项目启用此策略；普通项目不启用方法或基组白名单。"""
 
     model_config = ConfigDict(extra="forbid")
+
+    calculation_contracts: dict[str, dict[str, Any]] = Field(default_factory=dict,
+        description="Optional complete task/user calculation contracts by TS purpose; supplied through trusted project settings, never Agent tool input.")
 
     allowed_methods: list[str] = Field(
         default_factory=lambda: ["xtb"]
@@ -276,8 +305,8 @@ class ProjectSettings(BaseModel):
 
     orchestration_mode: OrchestrationMode = OrchestrationMode.STANDARD
     defaults: RuntimeSettingsPatch = Field(default_factory=RuntimeSettingsPatch)
-    # 方法白名单（GH #25）：None = 不启用拦截；设置后由 policies 的
-    # MethodPolicyStage 在 intercept_layers 声明的工具层拦截。
+    benchmark_task_id: Optional[str] = Field(default=None, min_length=1)
+    # 仅 benchmark_task_id 标识的评测项目启用；普通项目忽略此字段。
     method_policy: Optional[MethodPolicy] = None
 
 
@@ -308,7 +337,7 @@ class Command(BaseModel):
     type: str = Field(min_length=1)
     target: dict[str, str] = Field(default_factory=dict)
     payload: dict[str, Any] = Field(default_factory=dict)
-    actor: Literal["user", "system"] = "user"
+    actor: Literal["user", "system", "agent"] = "user"
 
 
 class CommandResult(BaseModel):

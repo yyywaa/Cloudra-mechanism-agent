@@ -32,6 +32,10 @@ from cloudra.infra.slurm import query_job_by_name
 from cloudra.persistence import paths
 from cloudra.persistence.database import ComputeDB
 from cloudra.runtime.compute_executor import _mark_failed, run_compute
+from cloudra.runtime.remote_compute import (
+    probe_remote_shell_handle,
+    recover_remote_slurm_handle,
+)
 from cloudra.services.compute_store import (
     cancel_compute_job,
     claim_ready_compute_job_with_capacity,
@@ -82,8 +86,8 @@ def _record_adopt_spawn(lock_path: str) -> None:
 def _node_capacities() -> tuple[dict[str, dict], str]:
     """全部注册节点的生效容量与默认节点 id（容量池按节点解耦）。
 
-    口径唯一实现在 ``services/node_capacity.py``：跑在本机的 local 节点取
-    min(注册声明, OS 实时余量)，远端/集群节点用注册声明。每个节点只在自己的
+    口径唯一实现在 ``services/node_capacity.py``：所有节点使用注册声明总额度，
+    OS 实时余量不参与调度记账。每个节点只在自己的
     额度内认领——本地额度不会被云端作业吃掉，反之亦然。
     """
     from cloudra.services.node_capacity import node_capacities
@@ -236,19 +240,31 @@ class SchedulerDaemon:
     def _reconcile_central(self) -> list[int]:
         """对中央库跑一次对账：running 的 local 作业逐条探 guard 锁。
 
-        Slurm running 且已有 scheduler_job_id、本进程未在 poll 的作业返回给
-        调用方重挂 ``run_slurm_compute``（attach 路径），不改投、不杀进程。
+        Slurm/SSH 远端 running 且已有 scheduler_job_id、本进程未在 poll 的作业
+        返回给调用方重挂 poller（attach 路径），不改投、不杀进程。无句柄找回：
+        本机 Slurm 按 job-name 查 sacct；ssh_slurm 走远端 sacct；ssh_local 探
+        远端 runner pid 文件（它是 runner 脚本的第一条写操作——查不到即确认未
+        起跑，可安全重挂重投；传输失败则本轮跳过，绝不盲重投）。
         """
         reattach: list[int] = []
         for row in list_running_jobs(self.db):
             task_id = int(row["id"])
-            if (row["scheduler"] or "local") != "local":
+            scheduler_kind = row["scheduler"] or "local"
+            if scheduler_kind != "local":
                 scheduler_job_id = row["scheduler_job_id"]
+                resubmit_remote = False
                 if not scheduler_job_id:
+                    recovered: str | None = None
                     try:
-                        recovered = query_job_by_name(f"cloudra-{task_id}")
+                        if scheduler_kind == "ssh_slurm":
+                            recovered = recover_remote_slurm_handle(row)
+                        elif scheduler_kind == "ssh_local":
+                            recovered = probe_remote_shell_handle(row)
+                            resubmit_remote = recovered is None
+                        else:
+                            recovered = query_job_by_name(f"cloudra-{task_id}")
                     except Exception:
-                        recovered = None
+                        recovered, resubmit_remote = None, False
                     if recovered:
                         mark_slurm_submitted(self.db, task_id, recovered)
                         scheduler_job_id = recovered
@@ -268,10 +284,24 @@ class SchedulerDaemon:
                     ):
                         logger.warning(
                             "compute job %s: cancel_requested with no recoverable "
-                            "Slurm handle; closing ledger as cancelled",
+                            "scheduler handle; closing ledger as cancelled",
                             task_id,
                         )
                         cancel_compute_job(self.db, task_id)
+                elif (
+                    resubmit_remote
+                    and (row.get("state") or "") == "running"
+                    and task_id not in self._jobs
+                ):
+                    logger.warning(
+                        "compute job %s: no remote runner found for ssh job; "
+                        "reattaching poller to re-stage and resubmit",
+                        task_id,
+                    )
+                    take_compute_lease(
+                        self.db, task_id, self.worker_id, _LEASE_RENEW_AFTER_CHECK
+                    )
+                    reattach.append(task_id)
                 continue
             if (row.get("state") or "running") != "running":
                 continue

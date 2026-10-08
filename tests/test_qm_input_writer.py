@@ -1,6 +1,11 @@
 """qm_input_writer: generate valid Gaussian input files."""
 
+import asyncio
+import os
+from pathlib import Path
+
 import pytest
+from pydantic import ValidationError
 
 pytest.importorskip("rdkit", reason="qm_input_writer requires RDKit (chem extra)")
 
@@ -12,6 +17,15 @@ _WATER_XYZ = (
     "H  0.000000  0.757200 -0.469200\n"
     "H  0.000000 -0.757200 -0.469200\n"
 )
+
+
+@pytest.mark.parametrize("nproc", [0, -1])
+def test_qm_input_writer_refuses_nonpositive_cpu_counts(nproc):
+    with pytest.raises(ValidationError, match="nproc"):
+        QmInputWriter_input_schema(
+            source_type="xyz_file", source_value="water.xyz",
+            nproc=nproc, output_path="water.inp",
+        )
 
 
 @pytest.mark.asyncio
@@ -32,7 +46,7 @@ async def test_qm_input_writer_from_xyz_file_produces_valid_gjf(tmp_path):
             mem="8GB",
             nproc=8,
             chk_name="water.chk",
-            output_dir=str(out),
+            output_path=str(out),
         ),
         session=None,
     )
@@ -56,7 +70,7 @@ async def test_qm_input_writer_missing_source_file_fails(tmp_path):
         QmInputWriter_input_schema(
             source_type="xyz_file",
             source_value=str(tmp_path / "nope.xyz"),
-            output_dir=str(tmp_path / "x.gjf"),
+            output_path=str(tmp_path / "x.gjf"),
         ),
         session=None,
     )
@@ -65,12 +79,305 @@ async def test_qm_input_writer_missing_source_file_fails(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_qm_input_writer_rejects_mol_content_declared_as_xyz(tmp_path):
+    """A MOL block mislabeled .xyz must give a usable format error, not a thread StopIteration."""
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+
+    mol = Chem.AddHs(Chem.MolFromSmiles("O"))
+    assert AllChem.EmbedMolecule(mol, randomSeed=1) == 0
+    source = tmp_path / "water.xyz"
+    source.write_text(Chem.MolToMolBlock(mol), encoding="utf-8")
+    output = tmp_path / "water.inp"
+
+    result = await asyncio.wait_for(QmInputWriter().tool_call(
+        QmInputWriter_input_schema(
+            engine="orca",
+            source_type="xyz_file",
+            source_value=str(source),
+            output_path=str(output),
+        ),
+        session=None,
+    ), timeout=2)
+
+    assert not result.is_success
+    assert "XYZ" in result.message
+    assert "mol_file" in result.message
+    assert "StopIteration" not in result.message
+    assert not output.exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("xyz_text", [
+    "-1\ncomment\nH 0 0 0\n",
+    "1\ncomment\nQq 0 0 0\n",
+    "1\ncomment\nH 0 0 0\nH 0 0 1\n",
+])
+async def test_qm_input_writer_rejects_invalid_xyz_records(tmp_path, xyz_text):
+    source = tmp_path / "bad.xyz"
+    source.write_text(xyz_text, encoding="utf-8")
+    output = tmp_path / "bad.inp"
+
+    result = await asyncio.wait_for(QmInputWriter().tool_call(
+        QmInputWriter_input_schema(
+            engine="orca", source_type="xyz_file",
+            source_value=str(source), output_path=str(output),
+        ),
+        session=None,
+    ), timeout=2)
+
+    assert not result.is_success
+    assert "XYZ" in result.message
+    assert not output.exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("coordinate", ["nan", "inf", "-inf", "1e999"])
+async def test_qm_input_writer_refuses_nonfinite_source_coordinates(tmp_path, coordinate):
+    source = tmp_path / "nonfinite.xyz"
+    source.write_text(f"1\ninvalid coordinate\nH {coordinate} 0 0\n", encoding="utf-8")
+    output = tmp_path / "nonfinite.inp"
+
+    result = await QmInputWriter().tool_call(
+        QmInputWriter_input_schema(
+            engine="orca", source_type="xyz_file",
+            source_value=str(source), output_path=str(output),
+        ),
+        session=None,
+    )
+
+    assert not result.is_success
+    assert "finite" in result.message.lower()
+    assert not output.exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mem", ["", "8TB", "garbage", "0GB", "-4GB", "NaNGB", "1_024MB"])
+async def test_qm_input_writer_refuses_invalid_orca_memory(tmp_path, mem):
+    source = tmp_path / "water.xyz"
+    source.write_text(_WATER_XYZ, encoding="utf-8")
+    output = tmp_path / "invalid_memory.inp"
+
+    result = await QmInputWriter().tool_call(
+        QmInputWriter_input_schema(
+            engine="orca", source_type="xyz_file", source_value=str(source),
+            mem=mem, output_path=str(output),
+        ),
+        session=None,
+    )
+
+    assert not result.is_success
+    assert "mem" in result.message.lower()
+    assert not output.exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("mem", "nproc", "per_core_mb"), [
+    (" 1.5 gB ", 3, 512), ("1024 m", 2, 512), ("2048MB", 4, 512),
+])
+async def test_qm_input_writer_preserves_orca_memory_units(tmp_path, mem, nproc, per_core_mb):
+    source = tmp_path / "water.xyz"
+    source.write_text(_WATER_XYZ, encoding="utf-8")
+    output = tmp_path / "memory.inp"
+
+    result = await QmInputWriter().tool_call(
+        QmInputWriter_input_schema(
+            engine="orca", source_type="xyz_file", source_value=str(source),
+            mem=mem, nproc=nproc, output_path=str(output),
+        ),
+        session=None,
+    )
+
+    assert result.is_success, result.message
+    assert f"%maxcore {per_core_mb}\n" in output.read_text(encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_qm_input_writer_offloads_atomic_output_write(tmp_path, monkeypatch):
+    import threading
+
+    from cloudra.tools.Chemtool import qm_input_writer as module
+
+    loop_thread = threading.get_ident()
+    write_threads = []
+    original_write = module.atomic_write_text
+
+    def record_write_thread(path, content):
+        write_threads.append(threading.get_ident())
+        return original_write(path, content)
+
+    monkeypatch.setattr(module, "atomic_write_text", record_write_thread)
+    source = tmp_path / "water.xyz"
+    source.write_text(_WATER_XYZ, encoding="utf-8")
+    output = tmp_path / "water.inp"
+
+    result = await QmInputWriter().tool_call(
+        QmInputWriter_input_schema(
+            engine="orca", source_type="xyz_file", source_value=str(source),
+            output_path=str(output),
+        ),
+        session=None,
+    )
+
+    assert result.is_success, result.message
+    assert output.is_file()
+    assert write_threads and all(thread != loop_thread for thread in write_threads)
+
+
+@pytest.mark.asyncio
+async def test_orca_external_program_requires_absolute_path(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    source = tmp_path / "water.xyz"
+    source.write_text(_WATER_XYZ, encoding="utf-8")
+    output = tmp_path / "relative_external.inp"
+
+    result = await QmInputWriter().tool_call(
+        QmInputWriter_input_schema(
+            engine="orca", source_type="xyz_file", source_value=str(source),
+            external_program=os.path.relpath("/bin/sh", tmp_path), output_path=str(output),
+        ),
+        session=None,
+    )
+
+    assert not result.is_success
+    assert "absolute" in result.message.lower()
+    assert not output.exists()
+
+
+@pytest.mark.asyncio
+async def test_orca_external_program_writes_the_validated_path(tmp_path):
+    source = tmp_path / "water.xyz"
+    source.write_text(_WATER_XYZ, encoding="utf-8")
+    output = tmp_path / "canonical_external.inp"
+
+    result = await QmInputWriter().tool_call(
+        QmInputWriter_input_schema(
+            engine="orca", source_type="xyz_file", source_value=str(source),
+            external_program=" /bin/../bin/sh ", output_path=str(output),
+        ),
+        session=None,
+    )
+
+    assert result.is_success, result.message
+    assert f'ProgExt "{Path("/bin/sh").resolve()}"' in output.read_text(encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_gaussian_external_program_writes_the_validated_token(tmp_path):
+    source = tmp_path / "water.xyz"
+    source.write_text(_WATER_XYZ, encoding="utf-8")
+    output = tmp_path / "external.gjf"
+
+    result = await QmInputWriter().tool_call(
+        QmInputWriter_input_schema(
+            source_type="xyz_file", source_value=str(source),
+            external_program=" mace ", output_path=str(output),
+        ),
+        session=None,
+    )
+
+    assert result.is_success, result.message
+    assert 'external="mace"' in output.read_text(encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_qm_input_writer_preserves_extxyz_property_order(tmp_path):
+    source = tmp_path / "reordered.xyz"
+    source.write_text(
+        "2\nProperties=pos:R:3:species:S:1\n"
+        "0 0 0 H\n0 0 1 H\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "reordered.inp"
+
+    result = await QmInputWriter().tool_call(
+        QmInputWriter_input_schema(
+            engine="orca", source_type="xyz_file",
+            source_value=str(source), output_path=str(output),
+        ),
+        session=None,
+    )
+
+    assert result.is_success, result.message
+    assert "H" in output.read_text(encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_qm_input_writer_uses_final_frame_of_xyz_trajectory(tmp_path):
+    source = tmp_path / "trajectory.xyz"
+    source.write_text(
+        "1\nfirst\nH 0 0 0\n1\nlast\nH 0 0 3\n", encoding="utf-8"
+    )
+    output = tmp_path / "last.inp"
+
+    result = await QmInputWriter().tool_call(
+        QmInputWriter_input_schema(
+            engine="orca", source_type="xyz_file",
+            source_value=str(source), output_path=str(output),
+        ),
+        session=None,
+    )
+
+    assert result.is_success, result.message
+    assert "3.00000000" in output.read_text(encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_qm_input_writer_reports_invalid_mol_source_for_orca(tmp_path):
+    source = tmp_path / "empty.mol"
+    source.write_text("", encoding="utf-8")
+    output = tmp_path / "water.inp"
+
+    result = await asyncio.wait_for(QmInputWriter().tool_call(
+        QmInputWriter_input_schema(
+            engine="orca",
+            source_type="mol_file",
+            source_value=str(source),
+            output_path=str(output),
+        ),
+        session=None,
+    ), timeout=2)
+
+    assert not result.is_success
+    assert "MOL" in result.message
+    assert "Gaussian" not in result.message
+    assert not output.exists()
+
+
+@pytest.mark.asyncio
+async def test_qm_input_writer_reads_valid_mol_source(tmp_path):
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+
+    mol = Chem.AddHs(Chem.MolFromSmiles("O"))
+    assert AllChem.EmbedMolecule(mol, randomSeed=1) == 0
+    source = tmp_path / "water.mol"
+    source.write_text(Chem.MolToMolBlock(mol), encoding="utf-8")
+    output = tmp_path / "water.inp"
+
+    result = await QmInputWriter().tool_call(
+        QmInputWriter_input_schema(
+            engine="orca",
+            source_type="mol_file",
+            source_value=str(source),
+            output_path=str(output),
+        ),
+        session=None,
+    )
+
+    assert result.is_success, result.message
+    content = output.read_text(encoding="utf-8")
+    assert "* xyz 0 1" in content
+    assert sum(line.lstrip().startswith(("O ", "H ")) for line in content.splitlines()) == 3
+
+
+@pytest.mark.asyncio
 async def test_qm_input_writer_invalid_smiles_fails(tmp_path):
     result = await QmInputWriter().tool_call(
         QmInputWriter_input_schema(
             source_type="smiles",
             source_value="not_a_smiles((",
-            output_dir=str(tmp_path / "x.gjf"),
+            output_path=str(tmp_path / "x.gjf"),
         ),
         session=None,
     )
@@ -96,7 +403,7 @@ async def test_qm_input_writer_orca_engine_produces_valid_inp(tmp_path):
             mem="8GB",
             nproc=8,
             extra_keywords="D3BJ",
-            output_dir=str(out),
+            output_path=str(out),
         ),
         session=None,
     )
@@ -128,7 +435,7 @@ async def test_qm_input_writer_orca_single_point_key(tmp_path):
             method="b3lyp",
             basis_set="def2-svp",
             task_type=[{"single_point": None}],
-            output_dir=str(out),
+            output_path=str(out),
         ),
         session=None,
     )
@@ -154,7 +461,7 @@ async def test_qm_input_writer_gaussian_single_point_key(tmp_path):
             method="b3lyp",
             basis_set="6-31g(d)",
             task_type=[{"single_point": None}],
-            output_dir=str(out),
+            output_path=str(out),
         ),
         session=None,
     )
@@ -179,7 +486,7 @@ async def test_qm_input_writer_orca_plain_opt_maps_keywords(tmp_path):
             method="b3lyp",
             basis_set="def2-svp",
             task_type=[{"opt": None}],
-            output_dir=str(out),
+            output_path=str(out),
         ),
         session=None,
     )
@@ -188,6 +495,29 @@ async def test_qm_input_writer_orca_plain_opt_maps_keywords(tmp_path):
     content = out.read_text(encoding="utf-8")
     assert content.startswith("! Opt b3lyp def2-svp")
     assert "\n* xyz 0 1\n" in content
+
+
+@pytest.mark.asyncio
+async def test_qm_input_writer_orca_relaxed_scan_writes_native_geom_scan(tmp_path):
+    xyz = tmp_path / "water.xyz"
+    xyz.write_text(_WATER_XYZ, encoding="utf-8")
+    output = tmp_path / "water_scan.inp"
+
+    result = await QmInputWriter().tool_call(
+        QmInputWriter_input_schema(
+            engine="orca",
+            source_type="xyz_file",
+            source_value=str(xyz),
+            task_type=[{"scan": None}],
+            orca_blocks="%geom\n  Scan B 0 1 = 0.95, 1.20, 4 end\nend",
+            output_path=str(output),
+        ),
+        session=None,
+    )
+
+    assert result.is_success, result.message
+    assert result.interpreted_intent["tasks"] == ["relaxed_scan"]
+    assert "! Opt " in output.read_text(encoding="utf-8")
 
 
 @pytest.mark.asyncio
@@ -214,7 +544,7 @@ async def test_qm_input_writer_orca_extopt_external_mlip(tmp_path):
             external_params="--model /opt/MACE-omol-0.model --device cpu --dtype float64",
             task_type=[{"opt": "ts"}, {"freq": None}],
             nproc=1,
-            output_dir=str(out),
+            output_path=str(out),
         ),
         session=None,
     )
@@ -242,7 +572,7 @@ async def test_qm_input_writer_gaussian_external_route(tmp_path):
             source_value=str(xyz),
             external_program="mace",
             task_type=[{"opt": None}],
-            output_dir=str(out),
+            output_path=str(out),
         ),
         session=None,
     )
@@ -256,7 +586,7 @@ async def test_qm_input_writer_gaussian_external_route(tmp_path):
 
 @pytest.mark.asyncio
 async def test_qm_input_writer_relative_paths_use_agent_workspace(tmp_path, monkeypatch):
-    """相对 output_dir/source_value 解析到绑定 agent 的 working_directory，
+    """相对 output_path/source_value 解析到绑定 agent 的 working_directory，
     绝不落到进程 cwd（C1 沙箱路径缺陷的直接单测）。"""
     workspace = tmp_path / "ws"
     workspace.mkdir()
@@ -275,7 +605,7 @@ async def test_qm_input_writer_relative_paths_use_agent_workspace(tmp_path, monk
         QmInputWriter_input_schema(
             source_type="xyz_file",
             source_value="water.xyz",
-            output_dir="calc/water.gjf",
+            output_path="calc/water.gjf",
         ),
         session=None,
     )
@@ -300,7 +630,7 @@ async def test_qm_input_writer_external_params_requires_external_program(tmp_pat
             source_value=str(xyz),
             external_params="--model /opt/x.model",
             task_type=[{"opt": None}],
-            output_dir=str(tmp_path / "bad.inp"),
+            output_path=str(tmp_path / "bad.inp"),
         ),
         session=None,
     )
@@ -333,7 +663,7 @@ async def test_smiles_source_multifragment_writes_an_assembled_complex(tmp_path)
             source_value="[F-].CCl",
             charge=-1,
             task_type=[{"opt": None}],
-            output_dir=str(gjf),
+            output_path=str(gjf),
         ),
         session=None,
     )
@@ -382,7 +712,7 @@ async def test_smiles_source_single_molecule_uses_shared_builder(tmp_path):
             source_type="smiles",
             source_value="CC(=O)O",
             task_type=[{"opt": None}],
-            output_dir=str(gjf),
+            output_path=str(gjf),
         ),
         session=None,
     )
@@ -403,7 +733,7 @@ async def test_smiles_source_charge_mismatch_is_refused(tmp_path):
             source_value="[F-].CCl",
             charge=0,
             task_type=[{"opt": None}],
-            output_dir=str(gjf),
+            output_path=str(gjf),
         ),
         session=None,
     )
@@ -449,7 +779,7 @@ async def test_orca_external_program_inside_workdir_refused(tmp_path):
             source_value=str(xyz),
             external_program=str(fake_mace),
             task_type=[{"opt": None}],
-            output_dir=str(workspace / "job.inp"),
+            output_path=str(workspace / "job.inp"),
         ),
         session=None,
     )
@@ -477,7 +807,7 @@ async def test_orca_external_program_inside_data_dir_refused(tmp_path):
             source_value=str(xyz),
             external_program=str(fake_mace),
             task_type=[{"opt": None}],
-            output_dir=str(tmp_path / "job.inp"),
+            output_path=str(tmp_path / "job.inp"),
         ),
         session=None,
     )
@@ -497,7 +827,7 @@ async def test_orca_external_program_missing_or_not_executable_refused(tmp_path)
             source_value=str(xyz),
             external_program=str(tmp_path / "no_such_mace"),
             task_type=[{"opt": None}],
-            output_dir=str(tmp_path / "a.inp"),
+            output_path=str(tmp_path / "a.inp"),
         ),
         session=None,
     )
@@ -514,7 +844,7 @@ async def test_orca_external_program_missing_or_not_executable_refused(tmp_path)
             source_value=str(xyz),
             external_program=str(not_exec),
             task_type=[{"opt": None}],
-            output_dir=str(tmp_path / "b.inp"),
+            output_path=str(tmp_path / "b.inp"),
         ),
         session=None,
     )
@@ -536,7 +866,7 @@ async def test_gaussian_external_malformed_values_refused(tmp_path):
                 source_value=str(xyz),
                 external_program=bad,
                 task_type=[{"opt": None}],
-                output_dir=str(tmp_path / "bad.gjf"),
+                output_path=str(tmp_path / "bad.gjf"),
             ),
             session=None,
         )
@@ -556,7 +886,7 @@ async def test_qm_input_writer_same_path_identical_content_reused(tmp_path):
         source_type="xyz_file",
         source_value=str(xyz),
         task_type=[{"opt": None}, {"freq": None}],
-        output_dir=str(out),
+        output_path=str(out),
     )
     first = await QmInputWriter().tool_call(QmInputWriter_input_schema(**kwargs), session=None)
     assert first.is_success is True, first.message
@@ -572,7 +902,7 @@ async def test_qm_input_writer_same_path_identical_content_reused(tmp_path):
 
 @pytest.mark.asyncio
 async def test_qm_input_writer_refuses_overwrite_with_different_content(tmp_path):
-    """目标已存在且内容不同：fail-loud 并给出指引（换 output_dir 或先删除），
+    """目标已存在且内容不同：fail-loud 并给出指引（换 output_path 或先删除），
     绝不静默覆盖、也不抛裸 Errno 17。"""
     xyz = tmp_path / "water.xyz"
     xyz.write_text(_WATER_XYZ, encoding="utf-8")
@@ -584,7 +914,7 @@ async def test_qm_input_writer_refuses_overwrite_with_different_content(tmp_path
             source_type="xyz_file",
             source_value=str(xyz),
             task_type=[{"opt": None}],
-            output_dir=str(out),
+            output_path=str(out),
         ),
         session=None,
     )
@@ -592,13 +922,13 @@ async def test_qm_input_writer_refuses_overwrite_with_different_content(tmp_path
     assert "Errno 17" not in result.message
     assert "already exists" in result.message
     assert "different content" in result.message
-    assert "output_dir" in result.message
+    assert "output_path" in result.message
     # 既有文件原样保留，未被覆盖
     assert out.read_text(encoding="utf-8") == "# unrelated pre-existing content\n"
 
 
 @pytest.mark.asyncio
-async def test_qm_input_writer_output_dir_blocked_by_file_fails_loud(tmp_path):
+async def test_qm_input_writer_output_path_blocked_by_file_fails_loud(tmp_path):
     """输出目录路径被同名普通文件占用：os.makedirs(exist_ok=True) 也会炸
     Errno 17，必须翻译成有指引的报错。"""
     xyz = tmp_path / "water.xyz"
@@ -611,13 +941,13 @@ async def test_qm_input_writer_output_dir_blocked_by_file_fails_loud(tmp_path):
             source_type="xyz_file",
             source_value=str(xyz),
             task_type=[{"opt": None}],
-            output_dir=str(blocker / "water_opt.gjf"),
+            output_path=str(blocker / "water_opt.gjf"),
         ),
         session=None,
     )
     assert result.is_success is False
     assert "Errno 17" not in result.message
-    assert "output_dir" in result.message
+    assert "output_path" in result.message
 
 
 # ---------------------------------------------------------------------------
@@ -644,7 +974,7 @@ async def test_gaussian_bare_scan_refused_with_semantics_recorded(tmp_path):
             source_value=str(xyz),
             task_type=[{"scan": None}],
             end_setting="B 1 2 S 10 0.02",
-            output_dir=str(out),
+            output_path=str(out),
         ),
         session=None,
     )
@@ -665,7 +995,7 @@ async def test_gaussian_scan_relaxed_declaration_refused_with_guidance(tmp_path)
             source_type="xyz_file",
             source_value=str(xyz),
             task_type=[{"scan": "relaxed"}],
-            output_dir=str(tmp_path / "scan.gjf"),
+            output_path=str(tmp_path / "scan.gjf"),
         ),
         session=None,
     )
@@ -686,7 +1016,7 @@ async def test_gaussian_scan_rigid_declaration_writes_bare_scan_route(tmp_path):
             source_value=str(xyz),
             task_type=[{"scan": "rigid"}],
             end_setting="B 1 2 S 10 0.02",
-            output_dir=str(out),
+            output_path=str(out),
         ),
         session=None,
     )

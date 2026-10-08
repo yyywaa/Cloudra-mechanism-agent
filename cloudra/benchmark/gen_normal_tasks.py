@@ -1,11 +1,15 @@
 """Generate normal-tier benchmark task JSONs from ideapool/reaction_candidates/normal.md.
 
 Reads the curated normal-tier markdown and emits one TaskSpec JSON per task into
-ideapool/tasks/normal/N<id>.json for the finalized 10-task list (TASK_IDS; the
-pool keeps 48 entries but only the finalized list is generated — 见 normal.md
+ideapool/tasks/normal/N<id>.json for the current 10-task list (TASK_IDS; the
+pool keeps more candidates but only the finalized list is generated — 见 normal.md
 "定稿圈定"段)。v3（2026-09-09）将 30 条缩至 10 条并按"多步网络 + 尽量 xtb 友好"重选，
-新收 Q1（芳香 Claisen）与 U3（磷叶立德+甲醛）。方法白名单与 hard 对齐：
-`MethodPolicy(allowed_methods=["xtb", "b3lyp/def2svp"])`（B3LYP-D3(BJ)/def2-SVP）。The markdown is the human-curated
+新收 Q1（芳香 Claisen）与 U3（磷叶立德+甲醛）。v4（2026-09-25）换血：换出
+A2/A5/O3（质子交换边饱和、四面体中心过多），换入 R4（Wolff 重排，池内回归）/
+U8（重氮甲烷+乙烯 [3+2]/挤出串联）/Q5（oxy-Cope + 互变异构）——三条均中性
+闭壳两步链；R4 第 2 步与 Q5 第 1 步已回填自算参考垒（Q5 第 2 步
+互变异构按 2026-09-25 PT 边规则留在图里但不挂垒）。方法白名单与 hard 对齐：
+`MethodPolicy(allowed_methods=["xtb", "pm7", "b3lyp/def2svp"])`（B3LYP-D3(BJ)/def2-SVP）。The markdown is the human-curated
 source of truth for SMILES / charges / barriers; this generator is deterministic
 and re-runnable.
 
@@ -54,7 +58,6 @@ from cloudra.benchmark.schema import (
     BondChangeSet,
     GoldMechanismGraph,
     GoldSpec,
-    IntegrityRubric,
     MechanismEdge,
     MechanismNode,
     MethodPolicy,
@@ -72,12 +75,20 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SRC = REPO_ROOT / "ideapool" / "reaction_candidates" / "normal.md"
 DEFAULT_OUT = REPO_ROOT / "ideapool" / "tasks" / "normal"
 
-# normal.md "定稿圈定"段的权威名单（v3 缩减：30 → 10；池子其余 38 条留档不生成）。
-# v3 保留（多步网络 + 尽量 xtb 友好）：A2 丙酮 aldol 缩合 / A5 Mannich / I1 亚胺 /
-# O3 Baeyer–Villiger / R1 pinacol / U5 Passerini / U6 Staudinger / Y3 BAC2 皂化，
-# 另新收 Q1 芳香 Claisen 与 U3 磷叶立德+甲醛（池内被裁条目回归，registry 新增登记）。
+# normal.md "定稿圈定"段的权威名单（v4 换血 2026-09-25；池子其余 40 条留档不生成）。
+# v4（2026-09-25 用户裁决）换出 A2 丙酮 aldol / A5 Mannich / O3 Baeyer–Villiger
+# （质子交换(PT)边饱和、四面体中心过多），换入 R4 Wolff 重排（池内回归）/
+# U8 重氮甲烷+乙烯→吡唑啉→环丙烷+N₂ / Q5 oxy-Cope→5-己烯醛经烯醇——三条均
+# 中性、闭壳、线性两步链；PT 边最小化（Q5 互变异构步按 2026-09-25 PT 边规则
+# 留在图里但不挂参考垒）；R4 第 2 步、Q5 第 1 步已回填自算参考垒。
+# v4 保留：I1 亚胺 / Y3 BAC2 皂化 / R1 pinacol / U3 磷叶立德+甲醛 / U5 Passerini /
+# U6 Staudinger / Q1 芳香 Claisen。
+# v4.1（2026-09-25 用户裁决）：I1 气相版保留，水溶液对偶版 I5 单开（题库 10 → 11）。
+# 2026-09-26：U8 脱氮多参考区无法按 normal 白名单核实，移入 impossible B9（11 → 10）。
+# 2026-09-27：R4 甲酰卡宾多参考路径移入 impossible B10（10 → 9）。
+# 2026-09-27：B1 丙二酸热脱羧自算 gold 验证通过，补回 normal（9 → 10）。
 TASK_IDS = (
-    "A2 A5 I1 O3 R1 U5 U6 Y3 Q1 U3"
+    "B1 I1 I5 Y3 R1 U3 U5 U6 Q1 Q5"
 ).split()
 
 # ---------------------------------------------------------------------------
@@ -282,6 +293,7 @@ def _query(
     mapped: str,
     allowed_methods: Sequence[str] | None = None,
     require_node_energies: bool = True,
+    smiles_schematic: bool = False,
 ) -> str:
     rs = ".".join(reactants)
     ps = ".".join(products)
@@ -289,11 +301,21 @@ def _query(
     # 节点与逐步边，但不点名步数（不泄题）。
     methods_clause = format_allowed_methods_clause(allowed_methods)
     methods_part = f" {methods_clause}" if methods_clause else ""
+    # smiles_schematic（2026-09-25 用户口径）：体系需要溶剂/催化剂等未画出物种时，
+    # SMILES 只给净反应式，但必须显式声明「可能不全」，agent 按条件自判实际参与物种。
+    schematic_clause = (
+        "Note: the reactant and product SMILES above give the net equation only and may omit "
+        "participating species (solvent, catalysts, counterions and other bystanders are not "
+        "depicted); infer the actual medium and assisting species from the stated conditions. "
+        if smiles_schematic
+        else ""
+    )
     return (
         f"Determine the mechanism of the following reaction: {name}. "
         f"Reactant SMILES: {rs}; product SMILES: {ps}; total charge {q}, multiplicity {mult}; "
         f"conditions: {conditions}. "
         f"{conditions_modeling_guidance(conditions)} "
+        f"{schematic_clause}"
         f"Atom-mapped reactant SMILES: {mapped}. "
         "The 1-based map numbers in it are the indexing convention for `bond_changes` "
         "(keep using the plain SMILES above for graph nodes and evidence annotations). "
@@ -385,6 +407,7 @@ def parse_normal_md(src: Path, only: set[str] | None = None) -> list[TaskSpec]:
                         entry["mapped_reactants"],
                         allowed_methods=policy.allowed_methods,
                         require_node_energies=barrier_enabled,
+                        smiles_schematic=bool(entry.get("smiles_schematic")),
                     )
                 ),
                 method_policy=policy,
@@ -401,9 +424,8 @@ def parse_normal_md(src: Path, only: set[str] | None = None) -> list[TaskSpec]:
                 ),
                 gold=GoldSpec(mechanism_graph=graph),
                 # normal 档 accuracy 层高斯容差 σ=2.0（plan 2026-08-29 定稿）；
-                # 无参考边的题只评自洽性（enabled=false）
+                # 无参考边的题 enabled=false = 可算但不评（accuracy 分量直通 1.0）
                 rubric=RubricSpec(
-                    integrity=IntegrityRubric(require_node_energies=barrier_enabled),
                     accuracy=AccuracyRubric(
                         enabled=barrier_enabled,
                         sigma_kcal_mol=2.0,

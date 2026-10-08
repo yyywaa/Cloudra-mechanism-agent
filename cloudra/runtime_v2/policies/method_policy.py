@@ -5,10 +5,10 @@ that actually blocks. Policy supply comes in two forms:
 
 - Explicit policy (benchmark backend): `MethodPolicyStage(task.method_policy,
   base_dir=sandbox)` — one stage instance covers the whole benchmark core.
-- Core projection (live pipeline, GH #25): `MethodPolicyStage(core=core)`
-  resolves the policy per tool call from the agent's project settings
-  (`ProjectSettings.method_policy`); a project without one (None) is never
-  intercepted. `default_stages(core)` wires this form.
+- Core projection: `MethodPolicyStage(core=core)` resolves the policy only
+  for projects carrying `ProjectSettings.benchmark_task_id`. Ordinary projects
+  are never intercepted, even when a stored method policy is present.
+  `default_stages(core)` wires this form.
 
 Otherwise the interception semantics are identical:
 
@@ -58,7 +58,11 @@ class MethodPolicyStage:
         if self._core is None:
             return None
         project = self._core.projects.get(ctx.agent.project_id)
-        return project.settings.method_policy if project is not None else None
+        if project is None or project.settings.benchmark_task_id is None:
+            return None
+        if project.settings.method_policy is None:
+            raise ValueError("Benchmark project is missing its MethodPolicy")
+        return project.settings.method_policy
 
     def _base(self, ctx: PipelineContext) -> Path | None:
         if self._base_dir is not None:
@@ -66,11 +70,13 @@ class MethodPolicyStage:
         return Path(ctx.workspace_dir) if ctx.workspace_dir else None
 
     async def before_tool(self, ctx: PipelineContext, call: ToolCall) -> PolicyResult:
+        import asyncio
+
         policy = self._resolve_policy(ctx)
         if policy is None:
             return PolicyResult.allow()
         base = self._base(ctx)
-        verdict = intercept(call.name, call.arguments, policy, base_dir=base)
+        verdict = await asyncio.to_thread(intercept, call.name, call.arguments, policy, base_dir=base)
         if not verdict.allowed:
             return PolicyResult.block(f"[method_policy] {verdict.reason}")
         if call.name == "bash" and "bash" in set(policy.intercept_layers):
@@ -80,7 +86,7 @@ class MethodPolicyStage:
                 p = Path(raw)
                 refs.append(p if p.is_absolute() or base is None else base / p)
             if refs:
-                verdict = check_input_files(refs, policy)
+                verdict = await asyncio.to_thread(check_input_files, refs, policy)
                 if not verdict.allowed:
                     return PolicyResult.block(f"[method_policy] {verdict.reason}")
         return PolicyResult.allow()

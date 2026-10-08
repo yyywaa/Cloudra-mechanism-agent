@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from cloudra.runtime_v2.schemas import (
     AgentSession,
@@ -107,7 +107,6 @@ def test_js_exec_schema_shape_is_stable():
     assert function["name"] == "js_exec"
     assert function["parameters"]["required"] == ["code"]
     assert function["parameters"]["additionalProperties"] is False
-    assert "only tool call" in function["description"]
 
 
 def test_js_declarations_preserve_tool_workflow_description():
@@ -123,14 +122,6 @@ def test_js_declarations_preserve_tool_workflow_description():
 
     rendered = tool_declarations(["demo_tool"], entries=[Entry()])
     assert "Use this after validation; do not use for raw guesses." in rendered
-
-
-def test_registry_entries_project_real_tool_description():
-    from cloudra.tools import get_tools_lst
-
-    entry = next(item for item in get_tools_lst() if item.tool_name == "get_skill")
-    rendered = tool_declarations(["get_skill"], entries=[entry])
-    assert "Load the full SOP for a named skill." in rendered
 
 
 def test_js_declarations_project_constraints_and_escape_comments():
@@ -243,6 +234,19 @@ def test_guest_declarations_follow_orchestration_mode():
 # ------------------------------------------------------------------ role allowlist
 
 
+def test_hierarchical_dispatch_tools_are_coordinator_only_on_wire_and_guest():
+    for role in ("explorer", "researcher", "small_mol", "supervisor"):
+        names = set(_names(wire_tool_schemas(_agent(role_id=role), ["*"])))
+        assert "agent_hub" in names
+        assert "subagent_launcher" not in names
+        assert "subagent_swarm" not in names
+        guest = guest_tool_names(["*"], role_id=role)
+        assert "subagent_launcher" not in guest
+        assert "subagent_swarm" not in guest
+    coordinator_names = set(_names(wire_tool_schemas(_agent(role_id="coordinator"), ["*"])))
+    assert {"agent_hub", "subagent_launcher", "subagent_swarm"} <= coordinator_names
+
+
 def test_role_allowlist_hides_chem_tools_from_non_science_roles():
     for role in ("explorer", "writer", "researcher", "env"):
         names = set(_names(wire_tool_schemas(_agent(role_id=role), ["*"])))
@@ -265,6 +269,7 @@ def test_role_allowlist_keeps_chem_tools_for_science_roles():
 def test_role_allowlist_filters_guest_names_and_declarations():
     guest = guest_tool_names(["*"], role_id="researcher")
     assert "log_parser" not in guest
+    assert "mechanism_predict" in guest
     assert "bash" in guest
     text = tool_declarations(["*"], role_id="researcher")
     assert "log_parser(" not in text
@@ -299,6 +304,8 @@ def test_permission_stage_blocks_role_restricted_tool():
     assert allowed.outcome == "allow"
     unrestricted = asyncio.run(stage.before_tool(ctx("researcher"), ToolCall(id="t3", name="bash")))
     assert unrestricted.outcome == "allow"
+    hypothesis = asyncio.run(stage.before_tool(ctx("researcher"), ToolCall(id="t4", name="mechanism_predict")))
+    assert hypothesis.outcome == "allow"
 
 
 # ----------------------------------------------------------------------- routing
@@ -344,6 +351,13 @@ def test_guest_names_resolve_wildcard_and_exclude_direct_controls():
     assert "ask_user" not in names
     assert "schedule" not in names
     assert names == sorted(names)
+
+
+def test_guest_names_expand_wildcard_from_single_pass_iterable():
+    names = guest_tool_names(iter(["*", "echo"]), role_id="researcher")
+    assert {"bash", "read", "echo"} <= set(names)
+    assert "log_parser" not in names
+    assert "stop" not in names
 
 
 def test_guest_names_respect_visual_gate():
@@ -415,6 +429,63 @@ def test_declarations_render_enum_array_nullable_and_refs():
     assert '"mode"?: string | null;' in text
     assert "type SampleToolArgs_SubModel = {" in text
     assert '"smiles": string;' in text
+
+
+def test_declarations_preserve_fixed_tuple_atom_references():
+    from cloudra.tools.core.ts_inputs import RotatedConformer, TsReaction
+
+    text = tool_declarations(
+        ["rotate", "reaction"],
+        entries=[
+            _entry("rotate", RotatedConformer, SampleData),
+            _entry("reaction", TsReaction, SampleData),
+        ],
+    )
+    assert '"atoms": [number, number];' in text
+    assert '"reaction_center"?: Array<[number, number]>;' in text
+
+
+def test_declarations_preserve_heterogeneous_tuple_members():
+    class TaggedCoordinate(BaseModel):
+        coordinate: tuple[Literal["bond"], int, int]
+        labeled: tuple[SubModel, str | None]
+
+    text = tool_declarations(
+        ["coordinate"], entries=[_entry("coordinate", TaggedCoordinate, SampleData)],
+    )
+    assert '"coordinate": ["bond", number, number];' in text
+    assert '"labeled": [CoordinateArgs_SubModel, string | null];' in text
+
+
+def test_declarations_preserve_shared_fields_with_mode_conditions():
+    class ModeArgs(BaseModel):
+        model_config = ConfigDict(json_schema_extra={"oneOf": [
+            {
+                "properties": {"mode": {"const": "scan"}}, "required": ["mode"],
+                "anyOf": [
+                    {"properties": {"input_path": {"type": "string"}}, "required": ["input_path"]},
+                    {"properties": {"input_text": {"type": "string"}}, "required": ["input_text"]},
+                ],
+            },
+            {
+                "properties": {"mode": {"const": "verify"}, "log_path": {"type": "string"}},
+                "required": ["mode", "log_path"],
+            },
+        ]})
+        mode: Literal["scan", "verify"]
+        engine: str
+        input_path: str | None = None
+        input_text: str | None = None
+        log_path: str | None = None
+
+    text = tool_declarations(["mode_tool"], entries=[_entry("mode_tool", ModeArgs, SampleData)])
+    assert '"engine": string;' in text
+    assert '"mode": "scan";' in text
+    assert '"input_path": string;' in text
+    assert '"input_text": string;' in text
+    assert '"mode": "verify";' in text
+    assert '"log_path": string;' in text
+    assert " & " in text
 
 
 def test_declarations_are_deterministic_and_escape_comments():

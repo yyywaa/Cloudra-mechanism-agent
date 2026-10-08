@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from cloudra.base.session_class import Session
-from cloudra.core.agent import Coordinator
 from cloudra.infra.config import get_config
 from cloudra.persistence.database import ConversationDB
 from cloudra.tools.Plantool.dag_tools.dag_accept_mechanism import DagAcceptMechanism
@@ -16,18 +15,14 @@ from cloudra.tools.Plantool.dag_tools.dag_review_species import DagReviewSpecies
 from cloudra.tools.Plantool.dag_tools.dag_review_step import DagReviewStep
 from cloudra.tools.Plantool.dag_tools.dag_submit_species_evidence import DagSubmitSpeciesEvidence
 from cloudra.tools.Plantool.dag_tools.dag_submit_step_evidence import DagSubmitStepEvidence
-from tests.dag_identity import call_dag_tool, make_supervisor
+from tests.dag_identity import call_dag_tool, make_coordinator, make_supervisor
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
 def _setup(tmp_path, conversation_id, mode):
     get_config().data_dir = tmp_path
-    agent = Coordinator(
-        query="study mechanism",
-        conversation_id=conversation_id,
-        orchestration_mode=mode,
-    )
+    agent = make_coordinator(conversation_id, orchestration_mode=mode)
     # Set working directory to tmp_path
     agent.working_directory = str(tmp_path)
     session = Session("s1", str(tmp_path / "session.json"))
@@ -127,6 +122,29 @@ async def test_submit_invalid_ts_rejected(tmp_path):
     # 有频率数据但不合格 → "failed validation"（区别于"没有频率数据 → 未验证"）
     assert "TS failed validation" in step_out.error
     assert "not a transition state saddle point" in step_out.error
+
+
+@pytest.mark.asyncio
+async def test_guided_species_submission_rejects_known_imaginary_frequency(tmp_path):
+    agent, session, _db = _setup(tmp_path, "guided-imag-species", "dag_guided")
+    proposed = await call_dag_tool(
+        DagProposeMechanism, agent, session,
+        species=[{"name": "R"}, {"name": "P"}],
+        steps=[{"name": "step1", "source": "R", "target": "P"}],
+        rationale="Hypothesis",
+    )
+    assert proposed.is_success
+
+    ts_log = tmp_path / "saddle.out"
+    ts_log.write_text((FIXTURES_DIR / "xtb" / "ts_hess_xtb.out").read_text())
+    submitted = await call_dag_tool(
+        DagSubmitSpeciesEvidence, agent, session,
+        species_name="R", opt_file=str(ts_log),
+        description="Endpoint optimization with one imaginary frequency",
+    )
+
+    assert not submitted.is_success
+    assert "failed validation" in submitted.error
 
 
 @pytest.mark.asyncio

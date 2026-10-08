@@ -105,6 +105,12 @@ def _insert_params(
     )
 
 
+def insert_compute_job_in_transaction(con, **kwargs) -> int:
+    """Insert into a caller-owned transaction; never commits or opens a queue."""
+    params = _insert_params(**kwargs)
+    return int(con.execute(_INSERT_SQL, params).lastrowid)
+
+
 def insert_compute_job(
     db: ComputeDB,
     *,
@@ -360,7 +366,7 @@ def pending_terminal_jobs(
 
 
 async def acount_pending_compute_jobs(db: ComputeDB, conversation_id: str) -> int:
-    """指定会话的未竟作业数（ready/running）——stop 门禁的挂起判定口径。
+    """指定会话的未竟作业数（含待取消）——stop 门禁的挂起判定口径。
 
     读路径不建库：中央库不存在（从未提交过作业）即 0。
     """
@@ -371,8 +377,36 @@ async def acount_pending_compute_jobs(db: ComputeDB, conversation_id: str) -> in
         async with db.aconnect() as con:
             cur = await con.execute(
                 "SELECT COUNT(*) FROM compute_jobs "
-                "WHERE state IN ('ready', 'running') AND conversation_id = ?",
+                "WHERE state IN ('ready', 'running', 'cancel_requested') "
+                "AND conversation_id = ?",
                 (conversation_id,),
+            )
+            row = await cur.fetchone()
+            return int(row[0]) if row else 0
+
+    return await aretry_on_locked(read)
+
+
+async def acount_waitable_compute_jobs_for_session(
+    db: ComputeDB, conversation_id: str, session_id: str
+) -> int:
+    """Owned jobs that still owe an agent either execution or a terminal notice.
+
+    A job can become terminal between the agent's stop call and the broker's
+    next poll. Until ``notified_at`` is set, the agent must stay parked so it
+    cannot report completion before seeing that job's result.
+    """
+    if not _db_ready(db):
+        return 0
+
+    async def read() -> int:
+        async with db.aconnect() as con:
+            cur = await con.execute(
+                "SELECT COUNT(*) FROM compute_jobs "
+                "WHERE conversation_id = ? AND session_id = ? AND ("
+                "state IN ('ready', 'running', 'cancel_requested') OR "
+                "(state IN ('done', 'failed', 'cancelled') AND notified_at IS NULL))",
+                (conversation_id, session_id),
             )
             row = await cur.fetchone()
             return int(row[0]) if row else 0
@@ -764,8 +798,9 @@ async def acancel_all_compute_jobs(db: ComputeDB) -> dict[str, int]:
     """一键取消全部未竟作业，返回分桶计数。任何路径都不杀计算进程：
 
     - ready → 直接落 cancelled（无进程；认领查询只选 ready，永不会被认领）；
-    - running + slurm → cancel_requested，由租约持有方的既有 poll 循环
-      （infra/slurm.py）走 scancel 收尾——写入端正是这里；
+    - running + slurm/ssh_local/ssh_slurm → cancel_requested，由租约持有方的
+      既有 poll 循环（infra/slurm.py、runtime/remote_compute.py）走远端
+      scancel / runner kill 收尾——写入端正是这里；
     - running + 其它（含 scheduler 为 NULL 的旧行） → cancelled（账本级）：calculator 物理跑完，guard 的
       终态 CAS（only_running=True）自然 no-op，不会覆盖已落的 cancelled。
 
@@ -786,13 +821,13 @@ async def acancel_all_compute_jobs(db: ComputeDB) -> dict[str, int]:
             counts["ready_cancelled"] = cur.rowcount
             cur = await con.execute(
                 "UPDATE compute_jobs SET state='cancel_requested' "
-                "WHERE state='running' AND scheduler='slurm'"
+                "WHERE state='running' AND scheduler IN ('slurm','ssh_local','ssh_slurm')"
             )
             counts["slurm_cancel_requested"] = cur.rowcount
             cur = await con.execute(
                 "UPDATE compute_jobs SET state='cancelled', end_timestamp=?, "
                 "last_error='cancelled by cancel-all (ledger-only; process runs on)' "
-                "WHERE state='running' AND COALESCE(scheduler, '')!='slurm'",
+                "WHERE state='running' AND COALESCE(scheduler, '') NOT IN ('slurm','ssh_local','ssh_slurm')",
                 (now,),
             )
             counts["local_cancelled"] = cur.rowcount

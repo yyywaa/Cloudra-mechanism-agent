@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import shutil
 from pathlib import Path
@@ -107,7 +108,9 @@ def _extract_qm_log(path: Path) -> tuple[bool, str | None, list[float] | None, l
                     vibfreqs = [float(x) for x in np.asarray(data.vibfreqs, dtype=float)]
                 if final_energy is None and hasattr(data, "scfenergies") and data.scfenergies is not None and len(data.scfenergies) > 0:
                     ev = float(data.scfenergies[-1])
-                    final_energy = ev / 27.211386245988
+                    from cloudra.tools.core.cclib_units import energy_ev_to_hartree
+
+                    final_energy = energy_ev_to_hartree(ev)
         except Exception as exc:
             logger.debug("cclib parsing skipped/failed for %s: %s", path, exc)
 
@@ -152,13 +155,57 @@ def snapshot_evidence_file(
 
     evidence_dir = root / ".cloudra" / "evidence"
     evidence_dir.mkdir(parents=True, exist_ok=True)
+    is_qm, engine, freqs, imag_freqs, energy, normal_modes = _extract_qm_log(resolved)
+    sidecars = []
+    irc_endpoints = None
+    if engine == "orca":
+        from cloudra.tools.core import orca_frames
+        try:
+            orca_frames.extract_irc(str(resolved))
+        except ValueError:
+            pass
+        else:
+            irc_endpoints = orca_frames.extract_irc_endpoints(str(resolved))
+            if not any(endpoint.get("geometry_ref") for endpoint in irc_endpoints.values()):
+                raise ValueError(
+                    "ORCA IRC output has no associated endpoint geometries. Submit the original IRC log "
+                    "from the compute job directory with its native endpoint/trajectory files; "
+                    "do not copy or rename the log alone. The evidence snapshot archives the bundle automatically."
+                )
+            for endpoint in irc_endpoints.values():
+                if endpoint.get("geometry_ref"):
+                    sidecar = Path(endpoint["geometry_ref"]).resolve(strict=True)
+                    sidecar.relative_to(root)
+                    sidecars.append((sidecar, hashlib.sha256(sidecar.read_bytes()).hexdigest()))
+    metadata = {}
+    if irc_endpoints is not None:
+        bundle_hash = hashlib.sha256(json.dumps([sha256_hex, [(p.name, h) for p, h in sidecars]]).encode()).hexdigest()
+        evidence_dir = evidence_dir / bundle_hash
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        metadata["irc_sidecars"] = []
+        for original, digest in sidecars:
+            archived = evidence_dir / original.name
+            if not archived.exists():
+                shutil.copy2(original, archived)
+            metadata["irc_sidecars"].append({"snapshot_path": str(archived), "sha256": digest})
+        manifest = {"log_sha256": sha256_hex, "endpoints": {}}
+        for direction, endpoint in irc_endpoints.items():
+            original = endpoint.get("geometry_ref")
+            match = next(((p, h) for p, h in sidecars if str(p) == original), None)
+            manifest["endpoints"][direction] = {
+                "filename": match[0].name if match else None,
+                "sha256": match[1] if match else None,
+                "origin": endpoint.get("origin"), "converged": endpoint.get("converged"),
+            }
+        manifest_path = evidence_dir / "irc_endpoints.json"
+        if not manifest_path.exists():
+            manifest_path.write_text(json.dumps(manifest))
+        metadata["irc_manifest"] = {"snapshot_path": str(manifest_path),
+                                    "sha256": hashlib.sha256(json.dumps(manifest).encode()).hexdigest()}
     snapshot_filename = f"{sha256_hex[:16]}_{resolved.name}"
     snapshot_path = evidence_dir / snapshot_filename
-
     if not snapshot_path.exists():
         shutil.copy2(resolved, snapshot_path)
-
-    is_qm, engine, freqs, imag_freqs, energy, normal_modes = _extract_qm_log(resolved)
 
     return FileEvidenceSnapshot(
         original_path=str(resolved),
@@ -171,7 +218,7 @@ def snapshot_evidence_file(
         imaginary_frequencies=imag_freqs,
         normal_modes=normal_modes,
         final_energy_hartree=energy,
-        metadata={"filename": resolved.name},
+        metadata={"filename": resolved.name, **metadata},
     )
 
 
@@ -258,10 +305,11 @@ def validate_species_minimum(
             ),
         )
 
-    if imaginary_freqs is not None:
-        imag = imaginary_freqs
-    else:
-        imag = [f for f in (freqs or []) if f < 0]
+    # The full spectrum is authoritative when it contains negative modes.
+    # A stale or incomplete imaginary_frequencies side field must not turn a
+    # saddle into a verified minimum.
+    spectrum_imag = [f for f in (freqs or []) if f < 0]
+    imag = spectrum_imag if spectrum_imag else list(imaginary_freqs or [])
     n_imag = len(imag)
 
     if n_imag == 0:

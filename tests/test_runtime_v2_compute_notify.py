@@ -121,6 +121,7 @@ async def test_poll_delivers_agent_message_and_marks_notified():
     )
     assert len(events) == 1
     assert f"task_id={job_id}" in events[0].data["content"]
+    assert "agent_hub" not in events[0].data["content"]
     texts = _inbox_texts(core, coordinator.id)
     assert any(f"task_id={job_id}" in t for t in texts)
     assert _notified_at(job_id) is not None
@@ -130,6 +131,30 @@ async def test_poll_delivers_agent_message_and_marks_notified():
     assert (
         len(core.event_log.query_session(coordinator.id, types={"agent.message_injected"})) == 1
     )
+
+
+@pytest.mark.asyncio
+async def test_failed_job_notice_directs_blocker_to_agent_hub():
+    core, project, coordinator = await _setup_core()
+    job_id = _insert_terminal_job(
+        project.id, session_id=coordinator.id, state="failed",
+        last_error="SCF did not converge",
+    )
+    broker = ComputeNotifyBroker(core)
+
+    await broker._poll_project(project.id)
+
+    notices = core.event_log.query_session(
+        coordinator.id, types={"agent.message_injected"}
+    )
+    assert len(notices) == 1
+    content = notices[0].data["content"]
+    assert f"task_id={job_id}" in content
+    assert "SCF did not converge" in content
+    assert "agent_hub" in content
+    assert "search" in content
+    assert "to_agent" in content
+    assert "email the user" not in content
 
 
 @pytest.mark.asyncio
@@ -376,6 +401,331 @@ async def test_subagent_compute_job_does_not_notify_or_wake_coordinator():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("state", ["done", "failed", "cancelled"])
+async def test_subagent_receives_results_while_other_owned_jobs_run(state):
+    """A long-running batch must not delay processing completed jobs or repairs."""
+    core, project, coordinator = await _setup_core()
+    child = (
+        await CommandBus(core).execute(
+            Command(
+                type="agent.spawn",
+                target={"project_id": project.id},
+                payload={"role_id": "small_mol", "parent_session_id": coordinator.id},
+            )
+        )
+    ).data
+    await core.agent_host.start_run(child)
+    await core.agent_host.finish_run(child, outcome="succeeded")
+    finished = [
+        _insert_terminal_job(project.id, session_id=child.id, state=state, path=f"/tmp/done-{i}.gjf")
+        for i in range(2)
+    ]
+    pending = _insert_terminal_job(project.id, session_id=child.id, path="/tmp/pending.gjf")
+    with ComputeDB().connect() as con:
+        con.execute("UPDATE compute_jobs SET state='running' WHERE id=?", (pending,))
+        con.commit()
+    wakes = []
+
+    class FakeRunner:
+        def schedule(self, session_id):
+            wakes.append(session_id)
+
+    core.runner = FakeRunner()
+    broker = ComputeNotifyBroker(core, poll_interval=0.05)
+
+    await broker._poll_project(project.id)
+
+    assert child.state.value == "running"
+    assert wakes == [child.id]
+    assert all(_notified_at(job_id) is not None for job_id in finished)
+    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 2
+
+    _inbox_texts(core, child.id)
+    await core.agent_host.finish_run(child, outcome="succeeded")
+
+    with ComputeDB().connect() as con:
+        con.execute("UPDATE compute_jobs SET state='done' WHERE id=?", (pending,))
+        con.commit()
+    await broker._poll_project(project.id)
+
+    assert wakes == [child.id, child.id]
+    assert child.state.value == "running"
+    assert _notified_at(pending) is not None
+    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 3
+
+
+@pytest.mark.asyncio
+async def test_same_poll_batch_wakes_subagent_once():
+    core, project, coordinator = await _setup_core()
+    child = (
+        await CommandBus(core).execute(
+            Command(
+                type="agent.spawn",
+                target={"project_id": project.id},
+                payload={"role_id": "small_mol", "parent_session_id": coordinator.id},
+            )
+        )
+    ).data
+    await core.agent_host.start_run(child)
+    await core.agent_host.finish_run(child, outcome="succeeded")
+    job_ids = [
+        _insert_terminal_job(project.id, session_id=child.id, path=f"/tmp/batch-{i}.gjf")
+        for i in range(2)
+    ]
+    wakes = []
+
+    class FakeRunner:
+        def schedule(self, session_id):
+            wakes.append(session_id)
+
+    core.runner = FakeRunner()
+    broker = ComputeNotifyBroker(core, poll_interval=0.05)
+
+    await broker._poll_project(project.id)
+
+    assert wakes == [child.id]
+    assert all(_notified_at(job_id) is not None for job_id in job_ids)
+    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 2
+
+
+@pytest.mark.asyncio
+async def test_subagent_processes_results_before_terminal_backlog_is_drained():
+    """A poll limit must not postpone already delivered results behind the backlog."""
+    core, project, coordinator = await _setup_core()
+    child = (
+        await CommandBus(core).execute(
+            Command(
+                type="agent.spawn",
+                target={"project_id": project.id},
+                payload={"role_id": "small_mol", "parent_session_id": coordinator.id},
+            )
+        )
+    ).data
+    await core.agent_host.start_run(child)
+    await core.agent_host.finish_run(child, outcome="succeeded")
+    job_ids = [
+        _insert_terminal_job(project.id, session_id=child.id, path="")
+        for _ in range(51)
+    ]
+    wakes = []
+
+    class FakeRunner:
+        def schedule(self, session_id):
+            wakes.append(session_id)
+
+    core.runner = FakeRunner()
+    broker = ComputeNotifyBroker(core, poll_interval=0.05)
+
+    await broker._poll_project(project.id)
+
+    assert wakes == [child.id]
+    assert child.state.value == "running"
+    assert all(_notified_at(job_id) is not None for job_id in job_ids[:50])
+    assert _notified_at(job_ids[-1]) is None
+
+    await broker._poll_project(project.id)
+
+    assert wakes == [child.id]
+    assert _notified_at(job_ids[-1]) is not None
+    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 51
+
+
+@pytest.mark.asyncio
+async def test_snapshot_recovery_wakes_despite_other_pending_jobs(monkeypatch):
+    core, project, coordinator = await _setup_core()
+    child = (
+        await CommandBus(core).execute(
+            Command(
+                type="agent.spawn",
+                target={"project_id": project.id},
+                payload={"role_id": "small_mol", "parent_session_id": coordinator.id},
+            )
+        )
+    ).data
+    await core.agent_host.start_run(child)
+    await core.agent_host.finish_run(child, outcome="succeeded")
+    recovered_job = _insert_terminal_job(project.id, session_id=child.id, path="")
+    other_job = _insert_terminal_job(project.id, session_id=child.id, path="")
+    from cloudra.services.compute_store import mark_notified
+
+    mark_notified(ComputeDB(), recovered_job)
+    assert _notified_at(other_job) is None
+    broker = ComputeNotifyBroker(core)
+    broker._snapshot_retries[recovered_job] = (project.id, child.id, False)
+
+    async def recovered(*_args):
+        return "snapshot ready", True
+
+    monkeypatch.setattr(broker, "_snapshot_core_evidence", recovered)
+    await broker._retry_snapshots()
+
+    assert child.state.value == "running"
+    assert len(_inbox_texts(core, child.id)) == 1
+    assert _notified_at(other_job) is None
+
+
+@pytest.mark.asyncio
+async def test_project_scan_and_periodic_scan_deliver_each_job_once(monkeypatch):
+    core, project, coordinator = await _setup_core()
+    job_id = _insert_terminal_job(project.id, session_id=coordinator.id, path="")
+    broker = ComputeNotifyBroker(core)
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    original_deliver = broker._deliver
+
+    async def delayed_deliver(*args, **kwargs):
+        entered.set()
+        await release.wait()
+        return await original_deliver(*args, **kwargs)
+
+    monkeypatch.setattr(broker, "_deliver", delayed_deliver)
+    project_scan = asyncio.create_task(broker._poll_project(project.id))
+    try:
+        await asyncio.wait_for(entered.wait(), timeout=2)
+        periodic_scan = asyncio.create_task(broker._poll_all())
+        await asyncio.sleep(0.05)
+    finally:
+        release.set()
+    await asyncio.gather(project_scan, periodic_scan)
+
+    assert _notified_at(job_id) is not None
+    events = core.event_log.query_session(
+        coordinator.id, types={"agent.message_injected"}
+    )
+    assert len(events) == 1
+
+
+@pytest.mark.asyncio
+async def test_pipeline_advancement_failure_retries_without_losing_notice(monkeypatch):
+    core, project, coordinator = await _setup_core()
+    child = (
+        await CommandBus(core).execute(
+            Command(
+                type="agent.spawn",
+                target={"project_id": project.id},
+                payload={"role_id": "small_mol", "parent_session_id": coordinator.id},
+            )
+        )
+    ).data
+    job_id = _insert_terminal_job(project.id, session_id=child.id)
+    broker = ComputeNotifyBroker(core, poll_interval=0.05)
+
+    def unavailable(*_args):
+        raise RuntimeError("compute.db temporarily unavailable")
+
+    with monkeypatch.context() as patcher:
+        patcher.setattr(
+            "cloudra.tools.core.ts_pipeline_driver.handle_process_job_terminal",
+            unavailable,
+        )
+        await broker._poll_project(project.id)
+
+    assert _notified_at(job_id) is None
+    assert core.event_log.query_session(child.id, types={"agent.message_injected"}) == []
+    await broker._poll_project(project.id)
+    assert _notified_at(job_id) is not None
+    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 1
+
+
+@pytest.mark.asyncio
+async def test_notified_mark_failure_holds_later_notice_and_wake(monkeypatch):
+    """A failed ack on the first job keeps the batch's final wake for retry."""
+    from cloudra.services.compute_store import mark_notified as real_mark_notified
+
+    core, project, coordinator = await _setup_core()
+    child = (
+        await CommandBus(core).execute(
+            Command(
+                type="agent.spawn",
+                target={"project_id": project.id},
+                payload={"role_id": "small_mol", "parent_session_id": coordinator.id},
+            )
+        )
+    ).data
+    await core.agent_host.start_run(child)
+    await core.agent_host.finish_run(child, outcome="succeeded")
+    job_ids = [
+        _insert_terminal_job(project.id, session_id=child.id, path="")
+        for _ in range(2)
+    ]
+    wakes = []
+
+    class FakeRunner:
+        def schedule(self, session_id):
+            wakes.append(session_id)
+
+    core.runner = FakeRunner()
+    broker = ComputeNotifyBroker(core, poll_interval=0.05)
+
+    def fail_first_mark(db, task_id):
+        if task_id == job_ids[0]:
+            raise OSError("compute.db temporarily read-only")
+        return real_mark_notified(db, task_id)
+
+    with monkeypatch.context() as patcher:
+        patcher.setattr("cloudra.runtime_v2.compute_notify.mark_notified", fail_first_mark)
+        await broker._poll_project(project.id)
+
+    assert wakes == []
+    assert child.state.value == "succeeded"
+    assert [_notified_at(job_id) for job_id in job_ids] == [None, None]
+    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 1
+
+    await broker._poll_project(project.id)
+
+    assert wakes == [child.id]
+    assert all(_notified_at(job_id) is not None for job_id in job_ids)
+    # Retrying the DB ack reuses the already durable message.
+    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 2
+
+
+@pytest.mark.asyncio
+async def test_final_notice_ack_failure_does_not_wake_or_duplicate(monkeypatch):
+    core, project, coordinator = await _setup_core()
+    child = (
+        await CommandBus(core).execute(
+            Command(
+                type="agent.spawn",
+                target={"project_id": project.id},
+                payload={"role_id": "small_mol", "parent_session_id": coordinator.id},
+            )
+        )
+    ).data
+    await core.agent_host.start_run(child)
+    await core.agent_host.finish_run(child, outcome="succeeded")
+    job_id = _insert_terminal_job(project.id, session_id=child.id, path="")
+    wakes = []
+
+    class FakeRunner:
+        def schedule(self, session_id):
+            wakes.append(session_id)
+
+    core.runner = FakeRunner()
+    broker = ComputeNotifyBroker(core)
+    real_mark = broker._mark_notified
+
+    def failed_mark(task_id):
+        if task_id == job_id:
+            raise OSError("compute.db temporarily read-only")
+        return real_mark(task_id)
+
+    with monkeypatch.context() as patcher:
+        patcher.setattr(broker, "_mark_notified", failed_mark)
+        await broker._poll_project(project.id)
+
+    assert wakes == []
+    assert child.state.value == "succeeded"
+    assert _notified_at(job_id) is None
+    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 1
+
+    await broker._poll_project(project.id)
+
+    assert wakes == [child.id]
+    assert _notified_at(job_id) is not None
+    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 1
+
+
+@pytest.mark.asyncio
 async def test_coordinator_compute_job_delivered_silently_without_wake():
     """Coordinator 自身提交或 fallback 投递的计算通知静默存入信箱，绝不强制 schedule 唤醒。"""
     core, project, coordinator = await _setup_core()
@@ -436,6 +786,47 @@ async def test_coordinator_notify_is_durable_before_notified_at(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_unacked_terminal_notice_is_not_duplicated_after_restore(tmp_path, monkeypatch):
+    """The durable notice identifies its job when the DB ack died with the broker."""
+    from cloudra.runtime_v2.persistence import RuntimeStore, restore_core
+
+    store = RuntimeStore(tmp_path / "notify-restart.db")
+    core, project, coordinator = await _setup_core()
+    core.store = store
+    await core.event_writer.flush()
+    job_id = _insert_terminal_job(project.id, session_id=coordinator.id, path="")
+    broker = ComputeNotifyBroker(core)
+
+    def failed_mark(_task_id):
+        raise OSError("database ack failed")
+
+    with monkeypatch.context() as patcher:
+        patcher.setattr(broker, "_mark_notified", failed_mark)
+        await broker._poll_project(project.id)
+
+    assert _notified_at(job_id) is None
+    assert len(core.event_log.query_session(
+        coordinator.id, types={"agent.message_injected"}
+    )) == 1
+
+    restored = RuntimeCore(strict_events=True)
+    restore_core(restored, store)
+    await ComputeNotifyBroker(restored)._poll_project(project.id)
+
+    assert _notified_at(job_id) is not None
+    events = restored.event_log.query_session(
+        coordinator.id, types={"agent.message_injected"}
+    )
+    assert len(events) == 1
+    assert events[0].data["manifest"] == {
+        "kind": "compute_completion", "task_id": job_id,
+    }
+    assert sum(f"task_id={job_id}" in text for text in _inbox_texts(
+        restored, coordinator.id
+    )) == 1
+
+
+@pytest.mark.asyncio
 async def test_system_compute_notify_does_not_wake_cancelled_subagent():
     """用户取消后，子 agent 的计算终态只驻留信箱，不得 plan_wake 复活。"""
     from cloudra.runtime_v2.schemas import AgentState
@@ -472,3 +863,124 @@ async def test_system_compute_notify_does_not_wake_cancelled_subagent():
     assert subagent.id not in scheduled_sessions
     events = core.event_log.query_session(subagent.id, types={"agent.message_injected"})
     assert any(f"task_id={job_id}" in e.data["content"] for e in events)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("recover_acknowledged", [False, True])
+@pytest.mark.parametrize("ordinary_result", [False, True])
+async def test_pipeline_intermediate_job_advances_without_agent_message(tmp_path, monkeypatch, recover_acknowledged, ordinary_result):
+    from cloudra.services.compute_admission import AdmissionOutcome
+    from cloudra.services.ts_pipeline_store import bind_stage_job, create_process, save_process_record
+    from cloudra.tools.core.ts_process import TsJobStep, TsProcessRecord
+    core, project, coordinator = await _setup_core()
+    child = (await CommandBus(core).execute(Command(
+        type="agent.spawn", target={"project_id": project.id},
+        payload={"role_id": "small_mol", "parent_session_id": coordinator.id},
+    ))).data
+    await core.agent_host.start_run(child)
+    await core.agent_host.finish_run(child, outcome="succeeded")
+    if ordinary_result:
+        # This notice precedes a TS intermediate result suppressed by the driver.
+        ordinary_job = await asyncio.to_thread(
+            _insert_terminal_job, project.id, session_id=child.id, path="",
+        )
+    project.settings.method_policy = __import__('cloudra.runtime_v2.schemas',fromlist=['MethodPolicy']).MethodPolicy(allowed_methods=['b3lyp/def2svp'])
+    db = await asyncio.to_thread(ComputeDB().init)
+    from tests.ts_fixtures import calculation_input
+    declaration = calculation_input(reactant_smiles='CC',product_smiles='CC',method='b3lyp/def2svp')
+    process = await asyncio.to_thread(create_process, db, request_key='notify-ts', payload=dict(
+        project_id=project.id,owner_id=child.id,workspace_dir=str(tmp_path),input=declaration.model_dump(mode="json")))
+    await asyncio.to_thread((tmp_path/'ts.inp').write_text,'synthetic engine input')
+    job = await asyncio.to_thread(bind_stage_job, db, process_id=process['process_id'],declaration_revision=1,
+        stage_key='ts_opt',attempt=1,job_payload=dict(conversation_id=project.id,session_id=child.id,
+        path=str(tmp_path/'ts.inp'),state='ready',jobtype='orca',node_id='fixture'))
+    record = TsProcessRecord(run_id='notify',run_dir=str(tmp_path/'ts'/'notify'),workspace_dir=str(tmp_path),
+        owner_conversation_id=project.id,owner_session_id=child.id,pipeline_id=process['process_id'],
+        input=declaration,stage='refine',waiting_for=f'job:{job}',job_steps=[TsJobStep(purpose='ts_opt',job_id=job)])
+    await asyncio.to_thread(save_process_record,db,process_id=process['process_id'],record=record.model_dump(mode='json'))
+    def complete():
+        with db.connect() as con:
+            con.execute("UPDATE compute_jobs SET state='done' WHERE id=?",(job,))
+    await asyncio.to_thread(complete)
+    def writer(record, directory):
+        from pathlib import Path
+        path=Path(directory)/'frequency.inp'
+        path.write_text('! Freq B3LYP def2SVP\n* xyz 0 1\nO 0 0 0\n*\n')
+        return '',str(path)
+    monkeypatch.setattr('cloudra.tools.core.ts_process._write_frequency_input',writer)
+    monkeypatch.setattr('cloudra.services.compute_admission.admit_job',lambda **_: AdmissionOutcome(ok=True,node_id='fixture',scheduler='local'))
+    broker=ComputeNotifyBroker(core)
+    if recover_acknowledged:
+        await asyncio.to_thread(broker._mark_notified,job)
+        await broker.ensure_project(project.id)
+    else:
+        await broker._poll_project(project.id)
+    messages = _inbox_texts(core, child.id)
+    assert len(messages) == int(ordinary_result)
+    assert child.state.value == ("running" if ordinary_result else "succeeded")
+    assert _inbox_texts(core, coordinator.id) == []
+    if ordinary_result:
+        assert await asyncio.to_thread(_notified_at, ordinary_job) is not None
+    assert await asyncio.to_thread(_notified_at,job) is not None
+    def jobs():
+        with db.connect() as con:
+            return con.execute('SELECT COUNT(*) FROM compute_jobs').fetchone()[0]
+    assert await asyncio.to_thread(jobs) == 2 + int(ordinary_result)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("outcome,verified", [("verified", True), ("candidate_only", False), ("blocked", None)])
+async def test_ts_outcome_wakes_owner_while_high_throughput_jobs_run(tmp_path, outcome, verified):
+    from cloudra.services.ts_pipeline_store import bind_stage_job, create_process, save_process_record
+    from cloudra.tools.core.ts_process import TsJobStep, _block, _terminal
+    from tests.test_ts_stage_inputs import record_fixture
+
+    core, project, coordinator = await _setup_core()
+    child = (await CommandBus(core).execute(Command(
+        type="agent.spawn", target={"project_id": project.id},
+        payload={"role_id": "small_mol", "parent_session_id": coordinator.id},
+    ))).data
+    await core.agent_host.start_run(child)
+    await core.agent_host.finish_run(child, outcome="succeeded")
+    await asyncio.to_thread(_insert_terminal_job, project.id, session_id=child.id, state="running", path="")
+
+    def completed_pipeline():
+        db = ComputeDB().init()
+        record = record_fixture(tmp_path, owner_conversation_id=project.id, owner_session_id=child.id)
+        process = create_process(db, request_key="verdict-notice", payload=dict(project_id=project.id,
+            owner_id=child.id, workspace_dir=str(tmp_path), input=record.input.model_dump(mode="json")))
+        source = tmp_path / "frequency.inp"
+        source.write_text("Recorded native input")
+        job = bind_stage_job(db, process_id=process["process_id"], declaration_revision=1,
+            stage_key="product_frequency", attempt=1, job_payload=dict(conversation_id=project.id,
+            session_id=child.id, path=str(source), state="ready", jobtype="orca", node_id="fixture"))
+        record.pipeline_id = process["process_id"]
+        record.job_steps = [TsJobStep(purpose="product_frequency", job_id=job, state="done", input_path=str(source))]
+        if outcome == "blocked":
+            _block(record, "refine", "wrong_mode", "Recorded endpoint direction judgement", needs=["verification.frequency"])
+        else:
+            _terminal(record, "verdict", outcome, "Recorded endpoint direction judgement")
+        save_process_record(db, process_id=process["process_id"], record=record.model_dump(mode="json"))
+        with db.connect() as con:
+            con.execute("UPDATE compute_jobs SET state='done' WHERE id=?", (job,))
+        return job
+    job = await asyncio.to_thread(completed_pipeline)
+    broker = ComputeNotifyBroker(core)
+    await broker._poll_project(project.id)
+    messages = _inbox_texts(core, child.id)
+    assert child.state.value == "running"
+    assert _inbox_texts(core, coordinator.id) == []
+    assert len(messages) == 1
+    _, separator, content = messages[0].partition("\nTS state: ")
+    assert separator
+    view, _ = json.JSONDecoder().raw_decode(content)
+    if outcome == "blocked":
+        assert view["status"] == "blocked"
+        assert view["blocked"]["failure_class"] == "wrong_mode"
+    else:
+        assert view["status"] == "ended"
+        assert view["result"]["outcome"] == outcome
+        assert view["result"]["verified"] is verified
+        assert view["result"]["reason"] == "Recorded endpoint direction judgement"
+    assert view["message"] == "Recorded endpoint direction judgement"
+    assert await asyncio.to_thread(_notified_at, job) is not None

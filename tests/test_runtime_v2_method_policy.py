@@ -1,9 +1,4 @@
-"""per-project 方法白名单 stage：live pipeline 拦截（GH #25）。
-
-此前 MethodPolicyStage 只由 benchmark 后端注入；本文件守 live 路径：
-项目 settings 带 method_policy 时 `default_stages(core)` 即按白名单拦截，
-未设置（None）则完全不拦，行为与修复前一致。
-"""
+"""Benchmark 方法与基组拦截；普通项目即使残留策略也不拦截。"""
 
 from __future__ import annotations
 
@@ -11,12 +6,13 @@ import pytest
 from pydantic import ValidationError
 
 from cloudra.runtime_v2.core import RuntimeCore
+from cloudra.runtime_v2.method_policy import check_input_content, intercept
 from cloudra.runtime_v2.policies import default_stages
 from cloudra.runtime_v2.policies.base import ToolCall, ToolResult
 from cloudra.runtime_v2.schemas import (
     AgentCapabilities,
     InvocationProtocol,
-    PermissionSet,
+    MethodPolicy,
     ProjectSettings,
     RuntimeSettings,
 )
@@ -28,6 +24,21 @@ _POLICY = {
 }
 _BASH_B3LYP = "cat > ts.gjf <<'EOF'\n#p b3lyp/6-31g* opt\n\nt\n\n0 1\nC 0 0 0\nEOF\n"
 _BASH_MACE = 'cat > ts.gjf <<\'EOF\'\n#p external="mace" opt freq\n\nt\n\n0 1\nC 0 0 0\nEOF\n'
+
+
+def test_policy_reads_native_scan_method_from_typed_manifest(tmp_path):
+    from cloudra.runtime.chem_task import ChemTask
+
+    task = ChemTask(task='xtb_scan', reactant_xyz='2\nH2\nH 0 0 0\nH 0 0 .74\n', cpus=1,
+        scan={'kind': 'scan', 'calculation': {'engine': 'xtb', 'method': 'GFN2-xTB'},
+              'scans': [{'atoms': [0, 1], 'scan_start': .74, 'scan_end': .8, 'scan_steps': 2}],
+              'force_constant': .5})
+    manifest = tmp_path / 'scan.json'
+    manifest.write_text(task.model_dump_json())
+    arguments = {'input_file': 'scan.json', 'job_type': 'chem_task'}
+    assert intercept('submit_compute_job', arguments, MethodPolicy(allowed_methods=['xtb']), tmp_path).allowed
+    verdict = intercept('submit_compute_job', arguments, MethodPolicy(allowed_methods=['pm7']), tmp_path)
+    assert not verdict.allowed
 
 
 def test_project_settings_method_policy_field():
@@ -89,7 +100,7 @@ async def _run_tool_turn(core: RuntimeCore, agent, tmp_path, call: ToolCall, run
         agent=agent,
         run_id=run_id,
         settings=RuntimeSettings(),
-        capabilities=AgentCapabilities(permissions=PermissionSet(), tools=["*"]),
+        capabilities=AgentCapabilities(permissions=agent.capabilities.permissions, tools=["*"]),
         inbox_messages=[{"content": "go"}],
         workspace_dir=str(tmp_path),
     )
@@ -107,7 +118,7 @@ def _blocked_events(core: RuntimeCore, session_id: str):
 @pytest.mark.asyncio
 async def test_policy_project_blocks_non_whitelisted_bash(tmp_path):
     core = RuntimeCore(strict_events=True)
-    _, agent = await _spawn(core, tmp_path, settings={"method_policy": _POLICY})
+    _, agent = await _spawn(core, tmp_path, settings={"benchmark_task_id": "method-policy-fixture", "method_policy": _POLICY})
     outcome, tools = await _run_tool_turn(
         core, agent, tmp_path, ToolCall(id="t1", name="bash", arguments={"command": _BASH_B3LYP})
     )
@@ -121,7 +132,7 @@ async def test_policy_project_blocks_non_whitelisted_bash(tmp_path):
 @pytest.mark.asyncio
 async def test_policy_project_allows_whitelisted_bash(tmp_path):
     core = RuntimeCore(strict_events=True)
-    _, agent = await _spawn(core, tmp_path, settings={"method_policy": _POLICY})
+    _, agent = await _spawn(core, tmp_path, settings={"benchmark_task_id": "method-policy-fixture", "method_policy": _POLICY})
     outcome, tools = await _run_tool_turn(
         core, agent, tmp_path, ToolCall(id="t1", name="bash", arguments={"command": _BASH_MACE})
     )
@@ -135,7 +146,7 @@ async def test_policy_project_submit_compute_job_layer(tmp_path):
     (tmp_path / "evil.gjf").write_text("#p b3lyp/6-31g* opt\n\nt\n\n0 1\nC 0 0 0\n")
     (tmp_path / "ok.gjf").write_text('#p external="mace" opt\n\nt\n\n0 1\nC 0 0 0\n')
     core = RuntimeCore(strict_events=True)
-    _, agent = await _spawn(core, tmp_path, settings={"method_policy": _POLICY})
+    _, agent = await _spawn(core, tmp_path, settings={"benchmark_task_id": "method-policy-fixture", "method_policy": _POLICY})
 
     _, tools = await _run_tool_turn(
         core, agent, tmp_path,
@@ -159,7 +170,7 @@ async def test_policy_project_bash_referencing_disk_input(tmp_path):
     check_input_files 接线（stage 侧；纯函数覆盖在 test_benchmark.py）。"""
     (tmp_path / "evil.gjf").write_text("#p b3lyp/6-31g* opt\n\nt\n\n0 1\nC 0 0 0\n")
     core = RuntimeCore(strict_events=True)
-    _, agent = await _spawn(core, tmp_path, settings={"method_policy": _POLICY})
+    _, agent = await _spawn(core, tmp_path, settings={"benchmark_task_id": "method-policy-fixture", "method_policy": _POLICY})
 
     _, tools = await _run_tool_turn(
         core, agent, tmp_path,
@@ -181,6 +192,40 @@ async def test_project_without_policy_unaffected(tmp_path):
     assert outcome.decision == "continue"
     assert tools.calls == ["bash"]
     assert _blocked_events(core, agent.id) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool,args", [
+    ("bash", {"command": _BASH_B3LYP}),
+    ("qm_input_writer", {"method": "PBE0", "basis_set": "def2-TZVP"}),
+    ("submit_compute_job", {"input_file": "ordinary.gjf"}),
+])
+async def test_ordinary_project_ignores_stored_method_policy(tmp_path, tool, args):
+    (tmp_path / "ordinary.gjf").write_text("#p PBE0/def2TZVP opt\n\nt\n\n0 1\nO 0 0 0\n")
+    core = RuntimeCore(strict_events=True)
+    _, agent = await _spawn(core, tmp_path, settings={"method_policy": _POLICY})
+    _, tools = await _run_tool_turn(core, agent, tmp_path, ToolCall(id="ordinary", name=tool, arguments=args))
+    assert tools.calls == [tool]
+    assert _blocked_events(core, agent.id) == []
+
+
+@pytest.mark.asyncio
+async def test_benchmark_settings_save_keeps_method_restrictions(tmp_path):
+    from cloudra.runtime_v2.commands import CommandBus
+    from cloudra.runtime_v2.schemas import Command
+
+    core = RuntimeCore(strict_events=True)
+    project, agent = await _spawn(core, tmp_path, settings={"benchmark_task_id": "fixture", "method_policy": _POLICY})
+    await CommandBus(core).execute(Command(type="project.update", target={"project_id": project.id},
+        payload={"settings": {"orchestration_mode": "standard", "defaults": {}}}))
+    _, tools = await _run_tool_turn(core, agent, tmp_path, ToolCall(id="after-save", name="bash", arguments={"command": _BASH_B3LYP}))
+    assert tools.calls == []
+    assert _blocked_events(core, agent.id)
+
+    result = await CommandBus(core).execute(Command(type="project.update", target={"project_id": project.id},
+        payload={"settings": {"benchmark_task_id": None}}))
+    assert result.data["error"]["code"] == "invalid_request"
+    assert core.projects[project.id].settings.benchmark_task_id == "fixture"
 
 
 # ---------------------------------------------------------------------------
@@ -209,6 +254,19 @@ def test_method_whitelist_token_contract(method, allowed):
 
     policy = MethodPolicy(allowed_methods=["xtb"])
     assert check_method(method, policy).allowed is allowed
+
+
+def test_pm7_gaussian_scan_allowed_only_when_whitelisted():
+    from cloudra.runtime_v2.method_policy import check_input_content
+    from cloudra.runtime_v2.schemas import MethodPolicy
+
+    content = "# opt=(modredundant,maxstep=10) pm7\n\nscan\n\n0 1\nH 0 0 0\nH 0 0 1\n\nB 1 2 S 10 0.1\n"
+    assert check_input_content(
+        content, MethodPolicy(allowed_methods=["xtb", "pm7", "b3lyp/def2svp"]), filename="scan.gjf"
+    ).allowed is True
+    assert check_input_content(
+        content, MethodPolicy(allowed_methods=["xtb"]), filename="scan.gjf"
+    ).allowed is False
 
 
 def test_method_whitelist_three_layers_fail_closed(tmp_path):
@@ -324,6 +382,25 @@ def test_orca_control_modifiers_not_method_candidates():
     assert check_input_content(content, policy, filename="t.inp").allowed is True
 
 
+@pytest.mark.parametrize("grid", ["DefGrid1", "DefGrid2", "DefGrid3"])
+def test_orca_defgrid_control_keeps_only_the_electronic_method(grid):
+    from cloudra.runtime_v2.method_policy import _extract_orca_methods
+
+    content = f"! B3LYP def2-SVP RIJCOSX def2/J D3BJ TightOpt {grid} Freq\n"
+    assert _extract_orca_methods(content) == ["b3lyp/def2svp"]
+    policy = MethodPolicy(allowed_methods=["b3lyp/def2svp"])
+    assert check_input_content(content, policy, filename="t.inp").allowed
+
+
+@pytest.mark.parametrize("extra", ["PBE0", "DefGridUnknown", "DefGrid3PBE0"])
+def test_orca_defgrid_does_not_hide_unknown_methods(extra):
+    content = f"! B3LYP def2-SVP DefGrid3 {extra}\n"
+    policy = MethodPolicy(allowed_methods=["b3lyp/def2svp"])
+    verdict = check_input_content(content, policy, filename="t.inp")
+    assert not verdict.allowed
+    assert f"{extra.lower()}/def2svp" in verdict.matched_forbidden
+
+
 def test_orca_grid_modifier_out_of_whitelist_basis_still_blocked():
     """Grid5 不算方法候选，但 def2-tzvp 超白名单（只许 def2svp）仍 fail-closed。"""
     from cloudra.runtime_v2.method_policy import _extract_orca_methods, check_input_content
@@ -350,6 +427,30 @@ def test_orca_dashless_basis_spelling_pairs_with_functional():
     assert check_input_content(content, policy, filename="t.inp").allowed is True
 
 
+def test_orca_auxiliary_fit_basis_does_not_displace_orbital_basis():
+    from cloudra.runtime_v2.method_policy import _extract_orca_methods, check_input_content
+    from cloudra.runtime_v2.schemas import MethodPolicy
+
+    policy = MethodPolicy(allowed_methods=["b3lyp/def2svp"])
+    content = "! Opt B3LYP D3BJ def2-SVP RIJCOSX def2/J\n* xyz 0 1\nH 0 0 0\n*\n"
+    assert _extract_orca_methods(content) == ["b3lyp/def2svp"]
+    assert check_input_content(content, policy, filename="t.inp").allowed is True
+
+
+def test_orca_auxiliary_fit_basis_does_not_allow_missing_or_ambiguous_orbital_basis():
+    from cloudra.runtime_v2.method_policy import check_input_content
+    from cloudra.runtime_v2.schemas import MethodPolicy
+
+    policy = MethodPolicy(allowed_methods=["b3lyp/def2svp"])
+    for route in (
+        "! B3LYP def2/J",
+        "! B3LYP def2-SVP def2-TZVP def2/J",
+        "! PBE0 def2-SVP def2/J",
+    ):
+        content = route + "\n* xyz 0 1\nH 0 0 0\n*\n"
+        assert check_input_content(content, policy, filename="t.inp").allowed is False
+
+
 def test_orca_non_whitelisted_functional_still_blocked():
     """真正的非法泛函（pbe0）在修饰词扩充后仍被拦：白名单只放行 b3lyp/def2svp。"""
     from cloudra.runtime_v2.method_policy import check_input_content
@@ -360,3 +461,29 @@ def test_orca_non_whitelisted_functional_still_blocked():
     verdict = check_input_content(content, policy, filename="t.inp")
     assert verdict.allowed is False
     assert "pbe0/def2svp" in verdict.matched_forbidden
+
+
+@pytest.mark.parametrize('solvent', ['DCM', 'Water', 'DMSO'])
+def test_orca_cpcm_option_is_not_a_second_method(solvent):
+    policy = MethodPolicy(allowed_methods=['b3lyp/def2svp'])
+    content = (
+        '! OptTS B3LYP def2-SVP D3BJ RIJCOSX def2/J TightSCF '
+        f'CPCM({solvent})\n%pal nprocs 1 end\n'
+        '* xyz 0 1\nO 0 0 0\n*\n'
+    )
+    verdict = check_input_content(content, policy, filename='refine.inp', strict=True)
+    assert verdict.allowed, verdict.reason
+
+
+@pytest.mark.parametrize('route', [
+    'B3LYP def2-SVP CPCM(DCM) PBE0',
+    'B3LYP def2-SVP CPCM(DCM',
+    'B3LYP def2-SVP CPCM(DCM)PBE0',
+    'B3LYP def2-SVP CPCM(DCM)(PBE0)',
+    'B3LYP def2-SVP CPCM()',
+    'def2-SVP CPCM(DCM)',
+])
+def test_orca_cpcm_option_does_not_hide_unverifiable_methods(route):
+    policy = MethodPolicy(allowed_methods=['b3lyp/def2svp'])
+    content = f'! OptTS {route}\n* xyz 0 1\nO 0 0 0\n*\n'
+    assert not check_input_content(content, policy, filename='refine.inp', strict=True).allowed

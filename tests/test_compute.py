@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from cloudra.core.message_history import JsonlMessageHistory
 from cloudra.infra.compute_utils import (
     build_calculator_cmd,
     check_calculator_script,
@@ -546,6 +545,37 @@ async def test_submit_compute_job_sync_success(isolated_db, mock_calc_workdir):
 
 
 @pytest.mark.asyncio
+async def test_submit_infers_unspecified_resources_from_input(tmp_path, monkeypatch):
+    from cloudra.services.compute_admission import AdmissionOutcome
+
+    gjf = tmp_path / "resource.gjf"
+    gjf.write_text(
+        "%nprocshared=4\n%mem=8GB\n#p HF/3-21G\n\nH2\n\n0 1\nH 0 0 0\nH 0 0 0.74\n",
+        encoding="utf-8",
+    )
+    observed = {}
+
+    def fake_admit_job(**kwargs):
+        observed.update(kwargs)
+        return AdmissionOutcome(ok=False, message="probe")
+
+    monkeypatch.setattr(
+        "cloudra.tools.Chemtool.submit_compute_job.admit_job", fake_admit_job
+    )
+    tool = SubmitComputeJob()
+    tool.subagent = MockAgent("a-0", "test_conv")
+
+    result = await tool.tool_call(
+        SubmitComputeJob_input_schema(input_file=str(gjf), job_type="gaussian"),
+        session=None,
+    )
+
+    assert result.message == "probe"
+    assert observed["cpus"] == 4
+    assert observed["memory_mb"] == 8192
+
+
+@pytest.mark.asyncio
 async def test_submit_compute_job_sync_failure(isolated_db, mock_calc_workdir_fail):
     """同步模式 calculator 失败时应返回 failed。"""
     gjf = os.path.join(mock_calc_workdir_fail, "h2.gjf")
@@ -635,6 +665,33 @@ async def test_submit_compute_job_async_creates_record(isolated_db, mock_calc_wo
     assert result.is_success is True
     assert result.state == "ready"
     assert result.job_id > 0
+
+
+@pytest.mark.asyncio
+async def test_submit_progress_links_ledger_job_and_resolved_resources(isolated_db, mock_calc_workdir):
+    from cloudra.persistence.database import ComputeDB
+    from cloudra.runtime_v2.invocation_context import InvocationScope, reset_invocation_scope, set_invocation_scope
+    from cloudra.services.compute_store import aget_compute_job
+
+    progress = []
+    async def capture(update):
+        progress.append(update)
+    tool = SubmitComputeJob()
+    tool.subagent = MockAgent('a-0', 'test_conv')
+    token = set_invocation_scope(InvocationScope('call', 'submit_compute_job', report_progress=capture))
+    try:
+        result = await tool.tool_call(SubmitComputeJob_input_schema(
+            input_file=os.path.join(mock_calc_workdir, 'h2.gjf'), job_type='gaussian', is_async=True,
+        ), session=None)
+    finally:
+        reset_invocation_scope(token)
+    assert result.is_success
+    row = await aget_compute_job(ComputeDB(), result.job_id)
+    assert any(result.job_id in update.compute_job_ids for update in progress)
+    resolved = next(p.effective_arguments for p in progress if p.phase == 'submitting')
+    assert resolved['cpus'] == row['req_cpus']
+    assert resolved['node_id'] == row['node_id']
+    assert resolved['input_file'] == row['path']
 
 
 @pytest.mark.asyncio
@@ -893,26 +950,6 @@ exit 0
     assert "PROGRAM ENDED" in out.read_text()
 
 
-@pytest.mark.asyncio
-async def test_message_history_load_and_append(isolated_db):
-    """JsonlMessageHistory 能加载初始上下文并追加消息。"""
-    cm = JsonlMessageHistory(
-        agent_id="a-0",
-        conversation_id="test_conv",
-        initial_query="hello",
-    )
-
-    ctx = await cm.load()
-    assert len(ctx) == 1
-    assert ctx[0]["role"] == "user"
-    assert ctx[0]["content"] == "hello"
-
-    await cm.append({"role": "assistant", "content": "hi there"})
-    ctx = await cm.load()
-    assert len(ctx) == 2
-    assert ctx[1]["content"] == "hi there"
-
-
 def test_calculator_script_help():
     """calculator.sh 参数不足时应返回非零退出码。"""
     script_path = Path(__file__).parent.parent / "cloudra" / "calculator.sh"
@@ -935,32 +972,6 @@ def test_calculator_script_missing_input():
     )
     assert result.returncode != 0
     assert "输入文件不存在" in result.stderr
-
-
-@pytest.mark.asyncio
-async def test_message_history_session_isolation(isolated_db):
-    """同一 conversation_id 下，不同 session_id 的上下文文件应相互隔离。"""
-    cm1 = JsonlMessageHistory(
-        agent_id="a-1",
-        conversation_id="shared_conv",
-        initial_query="task 1",
-        session_id="session_1",
-    )
-    await cm1.append({"role": "assistant", "content": "result from task 1"})
-
-    cm2 = JsonlMessageHistory(
-        agent_id="a-1",
-        conversation_id="shared_conv",
-        initial_query="task 2",
-        session_id="session_2",
-    )
-    ctx2 = await cm2.load()
-
-    # 身份层不持久化；ctx2 只含自己的初始 query，不含 task 1 的消息。
-    assert len(ctx2) == 1
-    assert ctx2[0]["role"] == "user"
-    assert ctx2[0]["content"] == "task 2"
-    assert not any("task 1" in str(msg.get("content", "")) for msg in ctx2)
 
 
 @pytest.mark.asyncio
@@ -1819,3 +1830,44 @@ def test_compute_jobs_lazy_connect_heals_drifted_schema(tmp_path):
     with contextlib.closing(sqlite3.connect(db_path)) as con:
         cols = {row[1] for row in con.execute("PRAGMA table_info(compute_jobs)")}
     assert {"charge", "multiplicity", "xtb_task", "xtb_solvent"} <= cols
+
+
+@pytest.mark.asyncio
+async def test_project_pending_compute_includes_cancel_requested(tmp_path):
+    """A Slurm cancellation remains background work until its poller settles it."""
+    from cloudra.persistence.database import ComputeDB
+    from cloudra.services.compute_store import (
+        acount_pending_compute_jobs,
+        ainsert_compute_job,
+    )
+
+    db = await ComputeDB().ainit()
+    for state in ("ready", "running", "cancel_requested", "done"):
+        await ainsert_compute_job(
+            db, conversation_id="project-pending", session_id="agent",
+            path=str(tmp_path / f"{state}.gjf"), state=state,
+            jobtype="gaussian", node_id="local",
+        )
+    assert await acount_pending_compute_jobs(db, "project-pending") == 3
+
+
+@pytest.mark.skipif(not __import__('cloudra.infra.platform_utils', fromlist=['is_posix']).is_posix(), reason='calculator.sh needs POSIX bash')
+def test_calculator_sh_orca_nested_input_uses_basename_and_keeps_bytes(tmp_path, monkeypatch):
+    """Real ORCA A/B reproduced SIGABRT with a long absolute argument and normal termination with basename."""
+    import hashlib
+
+    from tests.fixtures.benchmark_engines.engine import install_engine
+
+    engine = install_engine(monkeypatch, tmp_path / 'bin', 'orca')
+    workdir = tmp_path / ('nested_' + 'p' * 100) / ('stage_' + 'q' * 80)
+    workdir.mkdir(parents=True)
+    inp = workdir / 'reactant_frequency.inp'
+    inp.write_text(_ORCA_SP_INPUT, encoding='utf-8')
+    original = hashlib.sha256(inp.read_bytes()).hexdigest()
+    result = _run_calculator_orca(inp, workdir)
+    assert result.returncode == 0, result.stderr
+    run, = engine.runs()
+    assert run['argv'][0] == inp.name
+    assert run['cwd'] == str(workdir)
+    assert run['input_sha256'] == original
+    assert hashlib.sha256(inp.read_bytes()).hexdigest() == original

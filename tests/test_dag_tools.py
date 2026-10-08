@@ -1,8 +1,10 @@
+import gzip
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
 from cloudra.base.session_class import Session
-from cloudra.core.agent import Coordinator
 from cloudra.infra.config import get_config
 from cloudra.persistence.database import ConversationDB
 from cloudra.tools.Plantool.dag_tools.dag_add_species import DagAddSpecies, DagAddSpeciesInput
@@ -14,15 +16,18 @@ from cloudra.tools.Plantool.dag_tools.dag_remove_edge import DagRemoveEdge, DagR
 from cloudra.tools.Plantool.dag_tools.dag_set_coverage_contract import DagSetCoverageContract
 from cloudra.tools.Plantool.dag_tools.dag_update_delivery_element import DagUpdateDeliveryElement
 from cloudra.tools.Plantool.dag_tools.dag_view import DagView
-from tests.dag_identity import call_dag_tool, make_supervisor
+from tests.dag_identity import (
+    call_dag_tool,
+    make_coordinator,
+    make_session,
+    make_subagent,
+    make_supervisor,
+    projected_tool_names,
+)
 
 
 def _agent(conversation_id, mode):
-    return Coordinator(
-        query="study a mechanism",
-        conversation_id=conversation_id,
-        orchestration_mode=mode,
-    )
+    return make_coordinator(conversation_id, orchestration_mode=mode)
 
 
 async def _call(cls, agent, session, **kwargs):
@@ -43,11 +48,24 @@ _DAG_TOOL_NAMES = {
 
 
 def test_dag_tools_hidden_in_standard_and_visible_in_dag_modes():
-    standard = _agent("tool-standard-visible", "standard")
-    record = _agent("tool-record-visible", "dag_record")
-
-    standard_names = {entry.tool_name for entry in standard.get_available_tools()}
-    record_names = {entry.tool_name for entry in record.get_available_tools()}
+    # 业务工具只在 traditional 协议上线缆；默认 javascript 下它们走 JS 程序
+    # （guest_tool_names），这里断言的是业务工具面的模式门控。
+    standard_names = projected_tool_names(
+        make_session(
+            "tool-standard-visible",
+            "coordinator",
+            orchestration_mode="standard",
+            protocol="traditional",
+        )
+    )
+    record_names = projected_tool_names(
+        make_session(
+            "tool-record-visible",
+            "coordinator",
+            orchestration_mode="dag_record",
+            protocol="traditional",
+        )
+    )
     assert not (_DAG_TOOL_NAMES & standard_names)
     assert _DAG_TOOL_NAMES <= record_names
     assert "dag_graph" not in record_names
@@ -169,16 +187,26 @@ async def test_add_species_without_revisions_retries_stale(tmp_path, monkeypatch
 @pytest.mark.asyncio
 async def test_deleted_process_tools_are_unregistered(tmp_path):
     """Phase 4：四个 process 时代工具已从注册表移除。"""
-    record = _agent("tool-deleted", "dag_record")
-    record_names = {entry.tool_name for entry in record.get_available_tools()}
+    record_names = projected_tool_names(
+        make_session(
+            "tool-deleted",
+            "coordinator",
+            orchestration_mode="dag_record",
+            protocol="traditional",
+        )
+    )
     for name in (
         "dag_schedule_work",
         "dag_update_process_node",
         "dag_init_from_template",
     ):
         assert name not in record_names
-    # Task 6 reintroduces dag_review_evidence for v2 structured review requests.
-    assert "dag_review_evidence" in record_names
+    # Task 6 reintroduces dag_review_evidence for v2 structured review requests：
+    # 它按模式只在 dag_guided 上线缆（dag_record 下 Supervisor 离线），故这里
+    # 断言的是**注册表**里有它，而不是 record 模式的工具面。
+    from cloudra.tools import get_tools_lst
+
+    assert "dag_review_evidence" in {entry.tool_name for entry in get_tools_lst()}
 
 
 @pytest.mark.asyncio
@@ -441,15 +469,7 @@ from cloudra.tools.Plantool.dag_tools.dag_remove_node import DagRemoveNode  # no
 
 
 def _follower(conversation_id, mode):
-    from cloudra.core.agent import Follower
-
-    return Follower(
-        id="a-4",
-        name="small_mol",
-        query="run an optimization",
-        conversation_id=conversation_id,
-        orchestration_mode=mode,
-    )
+    return make_subagent(conversation_id, "small_mol", orchestration_mode=mode)
 
 
 async def _seed_lone_species(agent, session, name="orphan"):
@@ -467,7 +487,14 @@ async def test_remove_node_visible_and_executable_by_coordinator(tmp_path):
     get_config().data_dir = tmp_path
     for mode in ("dag_record", "dag_guided"):
         agent = _agent(f"rm-node-visible-{mode}", mode)
-        names = {e.tool_name for e in agent.get_available_tools()}
+        names = projected_tool_names(
+            make_session(
+                f"rm-node-visible-{mode}",
+                "coordinator",
+                orchestration_mode=mode,
+                protocol="traditional",
+            )
+        )
         assert "dag_remove_node" in names
         session = Session("s1", str(tmp_path / "session.json"))
         node_id = await _seed_lone_species(agent, session, f"orphan-{mode}")
@@ -916,13 +943,13 @@ async def test_stage_bind_makes_stages_supported_in_order(tmp_path):
 
     first = await _call(
         DagBindEvidence, agent, session,
-        tool_call_id="tc-bind", bind_target="step1", stage_kind="ts_opt",
+        attachments=[{'tool_call_id': "tc-bind", 'bind_target': "step1", 'stage_kind': "ts_opt"}],
     )
     assert first.is_success
     assert first.accepted is True
     second = await _call(
         DagBindEvidence, agent, session,
-        tool_call_id="tc-bind", bind_target="step1", stage_kind="frequency",
+        attachments=[{'tool_call_id': "tc-bind", 'bind_target': "step1", 'stage_kind': "frequency"}],
     )
     assert second.is_success
     assert second.accepted is True
@@ -945,7 +972,7 @@ async def test_stage_bind_out_of_order_rejected(tmp_path):
 
     bound = await _call(
         DagBindEvidence, agent, session,
-        tool_call_id="tc-bind", bind_target="step1", stage_kind="frequency",
+        attachments=[{'tool_call_id': "tc-bind", 'bind_target': "step1", 'stage_kind': "frequency"}],
     )
 
     assert not bound.is_success
@@ -975,7 +1002,7 @@ async def test_ts_guess_agree_never_supports_saddle_stages(tmp_path):
 
     bound = await _call(
         DagBindEvidence, agent, session,
-        tool_call_id="tc-guess", bind_target="step1", stage_kind="ts_guess",
+        attachments=[{'tool_call_id': "tc-guess", 'bind_target': "step1", 'stage_kind': "ts_guess"}],
     )
 
     assert bound.is_success
@@ -1004,7 +1031,7 @@ async def test_pending_ts_guess_never_blocks_ts_opt_bind(tmp_path):
 
     bound = await _call(
         DagBindEvidence, agent, session,
-        tool_call_id="tc-bind", bind_target="step1", stage_kind="ts_opt",
+        attachments=[{'tool_call_id': "tc-bind", 'bind_target': "step1", 'stage_kind': "ts_opt"}],
     )
     assert bound.is_success
     assert bound.accepted is True
@@ -1033,7 +1060,7 @@ async def test_ts_guess_advisory_keeps_other_order_gates(tmp_path):
 
     bound = await _call(
         DagBindEvidence, agent, session,
-        tool_call_id="tc-bind", bind_target="step1", stage_kind="frequency",
+        attachments=[{'tool_call_id': "tc-bind", 'bind_target': "step1", 'stage_kind': "frequency"}],
     )
 
     assert not bound.is_success
@@ -1105,7 +1132,7 @@ async def test_rejected_stage_blocks_later_stages_until_rebound(tmp_path):
 
     rebound = await _call(
         DagBindEvidence, agent, session,
-        tool_call_id="tc-bind", bind_target="step1", stage_kind="ts_opt",
+        attachments=[{'tool_call_id': "tc-bind", 'bind_target': "step1", 'stage_kind': "ts_opt"}],
     )
     assert rebound.is_success
     assert rebound.accepted is True
@@ -1122,7 +1149,7 @@ async def test_bind_evidence_without_registered_evidence_rejected(tmp_path):
 
     bound = await _call(
         DagBindEvidence, agent, session,
-        tool_call_id="tc-running", bind_target="step1", stage_kind="ts_opt",
+        attachments=[{'tool_call_id': "tc-running", 'bind_target': "step1", 'stage_kind': "ts_opt"}],
     )
 
     assert not bound.is_success
@@ -1140,7 +1167,7 @@ async def test_bind_evidence_failed_call_rejected(tmp_path):
 
     bound = await _call(
         DagBindEvidence, agent, session,
-        tool_call_id="tc-bind", bind_target="step1", stage_kind="ts_opt",
+        attachments=[{'tool_call_id': "tc-bind", 'bind_target': "step1", 'stage_kind': "ts_opt"}],
     )
 
     assert not bound.is_success
@@ -1156,7 +1183,7 @@ async def test_bind_evidence_rejected_in_standard_mode(tmp_path):
 
     bound = await _call(
         DagBindEvidence, agent, session,
-        tool_call_id="tc-x", bind_target="step1", stage_kind="ts_opt",
+        attachments=[{'tool_call_id': "tc-x", 'bind_target': "step1", 'stage_kind': "ts_opt"}],
     )
 
     assert not bound.is_success
@@ -1319,6 +1346,130 @@ async def test_geometry_bind_requires_normal_termination(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("stage_kind", ["endpoint_a", "endpoint_b"])
+async def test_endpoint_bind_requires_verified_minimum(tmp_path, stage_kind):
+    from cloudra.dag.controller import DagController
+    from cloudra.dag.store import DagStore
+
+    agent, _session, db = await _seed_staged_step(
+        tmp_path,
+        f"endpoint-min-{stage_kind}",
+        {"is_success": True},
+        stage_kinds=(stage_kind,),
+        mode="dag_record",
+    )
+    store = DagStore(db)
+    controller = DagController(db, "s1", "dag_record", conversation_id=agent.conversation_id)
+    await controller.initialize()
+
+    for label, result in (
+        ("imag", {"normal_termination": True, "imaginary_frequencies": [-74.94]}),
+        ("unverified", {"normal_termination": True}),
+        ("unfinished", {"normal_termination": False, "frequencies": [108.0]}),
+    ):
+        ref = store.register_evidence(
+            "s1", "log_parser",
+            {"tool_call_id": f"tc-{label}", "result": {"is_success": True, **result}},
+        )
+        rejected = await controller.apply_stage_bind(
+            element_id="step1", stage_kind=stage_kind, ref=ref,
+            verdict="agree", tool_succeeded=True,
+        )
+        assert not rejected.accepted
+        assert rejected.rejection_code == "minimum_check_failed"
+
+    minimum = store.register_evidence(
+        "s1", "log_parser",
+        {
+            "tool_call_id": "tc-minimum",
+            "result": {
+                "is_success": True, "normal_termination": True,
+                "frequencies": [108.0, 250.0], "imaginary_frequencies": [],
+            },
+        },
+    )
+    accepted = await controller.apply_stage_bind(
+        element_id="step1", stage_kind=stage_kind, ref=minimum,
+        verdict="agree", tool_succeeded=True,
+    )
+    assert accepted.accepted
+
+
+@pytest.mark.asyncio
+async def test_batch_endpoint_bind_rejects_imaginary_frequency(tmp_path):
+    from cloudra.dag.controller import DagController
+
+    agent, _session, db = await _seed_staged_step(
+        tmp_path, "endpoint-min-batch", {"is_success": True},
+        stage_kinds=("endpoint_a",), mode="dag_record",
+    )
+    controller = DagController(db, "s1", "dag_record", conversation_id=agent.conversation_id)
+    await controller.initialize()
+    await controller.on_tool_finished(
+        "tc-endpoint-imag", "log_parser", {"log_path": "endpoint.log"},
+        {
+            "is_success": True, "normal_termination": True,
+            "frequencies": [-74.94, 234.57], "imaginary_frequencies": [-74.94],
+        },
+    )
+
+    rejected = await controller.bind_stage_attachments(
+        [{
+            "tool_call_id": "tc-endpoint-imag", "bind_target": "step1",
+            "stage_kind": "endpoint_a",
+        }]
+    )
+    assert not rejected["accepted"]
+    assert rejected["rejection_code"] == "minimum_check_failed"
+
+
+@pytest.mark.asyncio
+async def test_m8_endpoint_logs_reject_boat_saddle_and_accept_twist_boat(tmp_path):
+    from cloudra.dag.controller import DagController
+    from cloudra.dag.store import DagStore
+    from cloudra.tools.Chemtool.log_parser import LogParser, LogParser_input_schema
+
+    agent, _session, db = await _seed_staged_step(
+        tmp_path, "m8-real-endpoint", {"is_success": True},
+        stage_kinds=("endpoint_b",), mode="dag_record",
+    )
+    store = DagStore(db)
+    controller = DagController(db, "s1", "dag_record", conversation_id=agent.conversation_id)
+    await controller.initialize()
+    fixture_dir = Path(__file__).parent / "fixtures" / "dag_m8_endpoint"
+
+    for filename, accepted_expected in (
+        ("boat_optfreq.out", False),
+        ("twist_boat_tight_optfreq.out", True),
+    ):
+        log_path = tmp_path / filename
+        with gzip.open(fixture_dir / f"{filename}.gz", "rb") as fixture:
+            log_path.write_bytes(fixture.read())
+        parsed = await LogParser().tool_call(
+            LogParser_input_schema(
+                log_path=str(log_path),
+                properties=["frequencies", "convergence"],
+            ),
+            session=None,
+        )
+        assert parsed.is_success and parsed.normal_termination
+        ref = store.register_evidence(
+            "s1", "log_parser",
+            {"tool_call_id": filename, "result": parsed.model_dump(mode="json")},
+        )
+        result = await controller.apply_stage_bind(
+            element_id="step1", stage_kind="endpoint_b", ref=ref,
+            verdict="agree", tool_succeeded=True,
+        )
+        assert result.accepted is accepted_expected
+        if not accepted_expected:
+            assert parsed.imaginary_frequencies == pytest.approx([-74.94])
+            assert result.rejection_code == "minimum_check_failed"
+        else:
+            assert parsed.imaginary_frequencies == []
+
+
+@pytest.mark.asyncio
 async def test_ts_opt_bind_requires_normal_termination(tmp_path):
     from cloudra.dag.controller import DagController
     from cloudra.dag.store import DagStore
@@ -1366,7 +1517,17 @@ async def test_ts_opt_bind_requires_normal_termination(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_short_irc_bind_requires_path_evidence(tmp_path):
+async def test_short_irc_bind_requires_path_evidence(tmp_path, monkeypatch):
+    """short_irc 绑定走几何方向区间证明（ts_guess verify strict / benchmark
+    自洽性同一判据），收敛与否、双向点数不再是闸门：
+
+    - 证据不带 arguments.log_path → 拒（引导绑 IRC 作业的 parser 输出）；
+    - 材料齐全但方向证明不成立 → 拒（理由带证明失败的细节）；
+    - 方向证明成立 → 收（未收敛但方向对的 IRC 同样收）。
+
+    方向判定与几何抽取由 irc_evidence.verify_short_irc_direction 承担，这里
+    monkeypatch 拦它做闸门逻辑隔离，并断言组装进来的材料路径清单（材料来自
+    同边 ts_opt/frequency 与 endpoint_a/b 阶段已绑证据的 arguments.log_path）。"""
     from cloudra.dag.controller import DagController
     from cloudra.dag.store import DagStore
 
@@ -1374,10 +1535,57 @@ async def test_short_irc_bind_requires_path_evidence(tmp_path):
         tmp_path,
         "short-irc-guard",
         {"is_success": True, "normal_termination": True},
-        stage_kinds=("short_irc",),
+        stage_kinds=("ts_opt", "frequency", "endpoint_a", "endpoint_b", "short_irc"),
         mode="dag_record",
     )
     store = DagStore(db)
+    controller = DagController(
+        db, "s1", "dag_record", conversation_id=agent.conversation_id,
+        working_directory=str(tmp_path),
+    )
+    await controller.initialize()
+
+    def _register(tag: str, log_name: str, result: dict):
+        path = tmp_path / log_name
+        path.write_text("placeholder log\n", encoding="utf-8")
+        return store.register_evidence(
+            "s1",
+            "log_parser",
+            {
+                "tool_call_id": f"tc-{tag}",
+                "arguments": {"log_path": str(path)},
+                "result": result,
+            },
+        )
+
+    async def _bind(stage_kind: str, ref):
+        return await controller.apply_stage_bind(
+            element_id="step1", stage_kind=stage_kind, ref=ref,
+            verdict="agree", tool_succeeded=True,
+        )
+
+    # 先按序绑齐同边的材料阶段（short_irc 的 TS/端点几何来源）
+    ts_ref = _register(
+        "ts-opt", "ts_opt.log",
+        {"is_success": True, "normal_termination": True},
+    )
+    assert (await _bind("ts_opt", ts_ref)).accepted is True
+    freq_ref = _register(
+        "freq", "ts_freq.log",
+        {"is_success": True, "normal_termination": True,
+         "imaginary_frequencies": [-518.3]},
+    )
+    assert (await _bind("frequency", freq_ref)).accepted is True
+    min_result = {
+        "is_success": True, "normal_termination": True,
+        "frequencies_cm": [100.0, 200.0], "imaginary_frequencies": [],
+    }
+    ea_ref = _register("endpoint-a", "endpoint_a.log", dict(min_result))
+    assert (await _bind("endpoint_a", ea_ref)).accepted is True
+    eb_ref = _register("endpoint-b", "endpoint_b.log", dict(min_result))
+    assert (await _bind("endpoint_b", eb_ref)).accepted is True
+
+    # 证据不带 arguments.log_path → 拒
     thin = store.register_evidence(
         "s1",
         "log_parser",
@@ -1386,38 +1594,113 @@ async def test_short_irc_bind_requires_path_evidence(tmp_path):
             "result": {"is_success": True, "normal_termination": True},
         },
     )
-    controller = DagController(db, "s1", "dag_record", conversation_id=agent.conversation_id)
+    rejected = await _bind("short_irc", thin)
+    assert not rejected.accepted
+    assert rejected.rejection_code == "short_irc_check_failed"
+    assert "arguments.log_path" in rejected.rejection_reason
+
+    # 材料齐全但方向证明不成立 → 拒；断言组装进来的材料路径清单
+    irc_ref = _register(
+        "irc", "irc.log",
+        {"is_success": True, "normal_termination": True},
+    )
+    calls = []
+
+    def fake_verify(irc_log, ts_logs, endpoint_a_logs, endpoint_b_logs, **_kwargs):
+        calls.append((irc_log, list(ts_logs), list(endpoint_a_logs), list(endpoint_b_logs)))
+        return False, [
+            "the IRC endpoints do not lie between the TS and the verified "
+            "endpoint minima (the geometric direction proof failed)"
+        ]
+
+    monkeypatch.setattr(
+        "cloudra.dag.evidence_inbox.verify_short_irc_direction", fake_verify
+    )
+    rejected = await _bind("short_irc", irc_ref)
+    assert not rejected.accepted
+    assert rejected.rejection_code == "short_irc_check_failed"
+    assert "do not lie between" in rejected.rejection_reason
+    assert calls == [(
+        str(tmp_path / "irc.log"),
+        [str(tmp_path / "ts_opt.log"), str(tmp_path / "ts_freq.log")],
+        [str(tmp_path / "endpoint_a.log")],
+        [str(tmp_path / "endpoint_b.log")],
+    )]
+
+    # 方向证明成立 → 收（未收敛但方向对的情形由 verifier 的 strict 口径覆盖，
+    # 闸门自身只认 (passed, details)）
+    def fake_verify_ok(irc_log, ts_logs, endpoint_a_logs, endpoint_b_logs, **_kwargs):
+        return True, ["direction proof holds (direct pairing)"]
+
+    monkeypatch.setattr(
+        "cloudra.dag.evidence_inbox.verify_short_irc_direction", fake_verify_ok
+    )
+    accepted = await _bind("short_irc", irc_ref)
+    assert accepted.accepted is True
+    edge = _delivery_edge(db)
+    stage = next(s for s in edge.stages if s.kind.value == "short_irc")
+    assert stage.status.value == "supported"
+
+
+@pytest.mark.asyncio
+async def test_short_irc_real_log_fail_loud_legs(tmp_path):
+    """真实 fixture 集成腿（不拦 verifier，材料组装与日志解析走真路径）：
+
+    - 绑非 IRC 日志（G16 水 opt+freq）→ 拒：拿不出双侧 IRC 端点几何；
+    - 绑真实 IRC 日志（G16 HCN，双向均未收敛——收敛与否本就不是判据）但同边
+      没有 ts_opt/端点材料 → 拒：fail-loud 写明缺哪份材料。
+    """
+    from cloudra.dag.controller import DagController
+    from cloudra.dag.store import DagStore
+
+    fixtures = Path(__file__).parent / "fixtures"
+    agent, _session, db = await _seed_staged_step(
+        tmp_path,
+        "short-irc-real",
+        {"is_success": True, "normal_termination": True},
+        stage_kinds=("short_irc",),
+        mode="dag_record",
+    )
+    store = DagStore(db)
+    controller = DagController(
+        db, "s1", "dag_record", conversation_id=agent.conversation_id,
+        working_directory=str(tmp_path),
+    )
     await controller.initialize()
+
+    def _register_irc(tag: str, log_path: Path):
+        return store.register_evidence(
+            "s1",
+            "log_parser",
+            {
+                "tool_call_id": f"tc-{tag}",
+                "arguments": {"log_path": str(log_path)},
+                "result": {"is_success": True, "normal_termination": True},
+            },
+        )
+
+    # 非 IRC 日志：双侧端点几何不可得 → 拒
+    not_irc = _register_irc("not-irc", fixtures / "gaussian" / "water_opt_freq_g16.out")
     rejected = await controller.apply_stage_bind(
-        element_id="step1",
-        stage_kind="short_irc",
-        ref=thin,
-        verdict="agree",
-        tool_succeeded=True,
+        element_id="step1", stage_kind="short_irc", ref=not_irc,
+        verdict="agree", tool_succeeded=True,
     )
     assert not rejected.accepted
     assert rejected.rejection_code == "short_irc_check_failed"
+    assert "does not yield usable endpoint geometries" in rejected.rejection_reason
 
-    ok_ref = store.register_evidence(
-        "s1",
-        "log_parser",
-        {
-            "tool_call_id": "tc-irc-ok",
-            "result": {
-                "is_success": True,
-                "normal_termination": True,
-                "irc_both_directions_converged": True,
-            },
-        },
+    # 真实 IRC 日志（端点几何可解析），但同边缺 ts_opt/端点材料 → 拒并写明缺口
+    real_irc = _register_irc("real-irc", fixtures / "gaussian" / "hcn_ts_irc_g16.log")
+    rejected = await controller.apply_stage_bind(
+        element_id="step1", stage_kind="short_irc", ref=real_irc,
+        verdict="agree", tool_succeeded=True,
     )
-    accepted = await controller.apply_stage_bind(
-        element_id="step1",
-        stage_kind="short_irc",
-        ref=ok_ref,
-        verdict="agree",
-        tool_succeeded=True,
-    )
-    assert accepted.accepted is True
+    assert not rejected.accepted
+    assert rejected.rejection_code == "short_irc_check_failed"
+    assert "does not yield usable endpoint geometries" not in rejected.rejection_reason
+    assert "missing TS material" in rejected.rejection_reason
+    assert "endpoint_a" in rejected.rejection_reason
+    assert "endpoint_b" in rejected.rejection_reason
 
 
 @pytest.mark.asyncio
@@ -1721,8 +2004,7 @@ async def test_bind_evidence_submits_for_review_in_guided_mode(tmp_path):
 
     bound = await _call(
         DagBindEvidence, agent, session,
-        tool_call_id="tc-conv", bind_target="step1", stage_kind="ts_opt",
-        claim="the converted IRC CSV anchors the TS optimization stage",
+        attachments=[{'tool_call_id': "tc-conv", 'bind_target': "step1", 'stage_kind': "ts_opt", 'claim': "the converted IRC CSV anchors the TS optimization stage"}],
     )
     assert bound.is_success is True
     assert bound.accepted is True
@@ -1777,14 +2059,8 @@ async def test_message_supervisor_persists_request_without_graph_change(tmp_path
     assert blocked.is_success is False
     assert "Coordinator" in blocked.error
 
-    from cloudra.core.agent import Follower
-
-    follower = Follower(
-        id="a-4",
-        name="small_mol",
-        query="opt",
-        conversation_id="tool-msg-supervisor-f",
-        orchestration_mode="dag_guided",
+    follower = make_subagent(
+        "tool-msg-supervisor-f", "small_mol", orchestration_mode="dag_guided"
     )
     from_follower = await _call(
         DagMessageSupervisor, follower, session, message="请排产"
@@ -1841,7 +2117,7 @@ async def test_submit_compute_job_call_is_never_stage_evidence(tmp_path):
     # 同一工具调用走 dag_bind_evidence 高层入口同样被拒
     bound = await _call(
         DagBindEvidence, agent, session,
-        tool_call_id="tc-submit", bind_target="step1", stage_kind="ts_opt",
+        attachments=[{'tool_call_id': "tc-submit", 'bind_target': "step1", 'stage_kind': "ts_opt"}],
     )
     assert not bound.is_success
     assert bound.rejection_code == "bind_target_is_submit"

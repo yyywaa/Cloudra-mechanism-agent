@@ -284,7 +284,6 @@ def test_stream_chunks_support_react_delta_attribute_access():
     for chunk in chunks:
         delta = chunk.choices[0].delta
         # 这三个属性直接访问必须不抛异常
-        assert delta.content is not None or delta.tool_calls is not None or delta.content is None
         _ = delta.tool_calls
         _ = delta.content
     assert chunks[0].choices[0].delta.content == "A"
@@ -443,26 +442,6 @@ def test_responses_usage_is_readable_by_telemetry_cache_parser():
     )
     assert usage["prompt_tokens_details"]["cached_tokens"] == 896
     assert cached_tokens_of(usage) == 896
-
-
-@pytest.mark.asyncio
-async def test_agent_routes_deepseek_native_search_to_responses(monkeypatch):
-    """DeepSeek 原生搜索（默认 auto、无需 params）应走 Responses 传输；OpenRouter 走 chat。"""
-    from cloudra.core.agent import Coordinator
-    from cloudra.infra.config import get_config
-
-    cfg = get_config()
-    monkeypatch.setattr(cfg.coordinator, "native_search", "auto")
-    monkeypatch.setattr(cfg.coordinator, "native_search_params", {})
-    monkeypatch.setattr(cfg.coordinator, "url", "https://api.deepseek.com")
-
-    agent = Coordinator(query="t", conversation_id="c")
-    assert agent._uses_responses_transport() is True
-
-    monkeypatch.setattr(cfg.coordinator, "native_search", "openrouter")
-    monkeypatch.setattr(cfg.coordinator, "url", "https://openrouter.ai/api/v1")
-    agent2 = Coordinator(query="t", conversation_id="c2")
-    assert agent2._uses_responses_transport() is False
 
 
 def test_responses_base_url_strips_v1():

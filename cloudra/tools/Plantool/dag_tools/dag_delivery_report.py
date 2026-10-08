@@ -18,6 +18,9 @@ class DagDeliveryReportInput(input_schema):
 
 
 class DagDeliveryReport(DagToolBase):
+    def is_manage(self) -> bool:
+        return False
+
     tool_id: str = "t-dag-report"
     tool_name: str = "dag_delivery_report"
     tool_description: str = (
@@ -39,7 +42,8 @@ class DagDeliveryReport(DagToolBase):
             return self._standard_disabled()
         ctx = await self._prepare(session)
         controller = DagController(
-            ctx.db, session.id, ctx.mode, conversation_id=ctx.conversation_id
+            ctx.db, session.id, ctx.mode, conversation_id=ctx.conversation_id,
+            working_directory=getattr(self.subagent, "working_directory", None),
         )
         report = await asyncio.to_thread(controller.delivery_report)
         return DagToolOutput(
@@ -47,7 +51,3 @@ class DagDeliveryReport(DagToolBase):
             action="dag_delivery_report",
             result=report.model_dump(mode="json"),
         )
-
-
-def get_class():
-    return DagDeliveryReport

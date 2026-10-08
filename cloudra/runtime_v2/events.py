@@ -47,6 +47,7 @@ EVENT_TYPES: dict[str, str] = {
     "command.rejected": "command rejected with stable error code",
     # agent run events
     "agent.state_changed": "state machine transition",
+    "agent.task_updated": "agent running task description updated",
     "run.started": "run started",
     "run.retry": "crashed turn auto-retried with preserved history",
     "run.finished": "run finished",
@@ -58,6 +59,7 @@ EVENT_TYPES: dict[str, str] = {
     "agent.thinking": "persisted reasoning segment of one LLM call",
     "tool.requested": "tool call requested (durable before any policy/tool effect)",
     "tool.started": "tool admitted by policy; executor about to run",
+    "tool.progress": "executor-reported phase, normalized inputs and explicit job/wait links",
     "tool.result_recorded": "raw tool result durably recorded before postprocessing",
     "tool.blocked": "tool blocked by a policy stage",
     "tool.finished": "tool finished",

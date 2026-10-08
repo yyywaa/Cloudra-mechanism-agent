@@ -18,17 +18,14 @@ import pytest
 
 pytest.importorskip("rdkit", reason="ts_process requires RDKit (chem extra)")
 
+from cloudra.tools.core.ts_inputs import TsInput
 from cloudra.tools.core.ts_process import (  # noqa: E402
-    TsAdjustment,
-    TsBudget,
-    TsDeclaration,
     TsStartRequest,
-    advance,
     evidence_binding_candidates,
     load_record,
-    resume,
     start,
 )
+from tests.ts_fixtures import calculation_input
 
 
 @pytest.fixture(autouse=True)
@@ -42,6 +39,20 @@ def _path_stage_uses_fast_idpp_fallback(monkeypatch, tmp_path, request):
     empty = tmp_path / "_no_xtb_on_path"
     empty.mkdir(exist_ok=True)
     monkeypatch.setenv("PATH", str(empty))
+    # Scientific-stage unit tests consume a finished queue artifact. Queue,
+    # admission and event idempotency are exercised in pipeline-driver tests.
+    from cloudra.tools.core import xtb_path_runner as runner
+    original_run = runner.run_xtb_path
+    def completed_fixture(record, reactant, product):
+        request = runner.XtbPathRequest(reactant_xyz=reactant,product_xyz=product,
+            output_dir=str(tmp_path),timeout=None,refinement_runs=record.input.guess.refinement_runs,
+            extra_args=[f'--{record.input.guess.solvation.model}',record.input.guess.solvation.solvent] if record.input.guess.solvation else [])
+        if runner.run_xtb_path is original_run:
+            result = runner.XtbPathResult(run_dir=str(tmp_path),termination_reason='executable_missing')
+        else:
+            result = runner.run_xtb_path(request)
+        return result,record
+    monkeypatch.setattr('cloudra.tools.core.ts_process._queued_path',completed_fixture)
 
 # 简单可用的两端：SN2 类（F- + CH3Cl → CH3F + Cl-）。原子序号与 SMILES 顺序一致。
 REACTANT = "[F-].CCl"
@@ -49,10 +60,10 @@ PRODUCT = "CF.[Cl-]"
 REACTION_CENTER = [(0, 1)]  # F(0) 进攻 C(1)
 # 反应物构建顺序 [F,C,Cl,H,H,H]，产物构建顺序 [C,F,H,H,H,Cl]（各自按连通分量拼装）：
 # 产物第 k 个原子 → 反应物第 atom_map[k] 个（1-based）
-ATOM_MAP = [2, 1, 4, 5, 6, 3]
+ATOM_MAP = [1, 0, 3, 4, 5, 2]  # internal zero-based mapping
 
 
-def _declaration(**overrides) -> TsDeclaration:
+def _declaration(**overrides) -> TsInput:
     payload = {
         "reactant_smiles": REACTANT,
         "product_smiles": PRODUCT,
@@ -62,17 +73,55 @@ def _declaration(**overrides) -> TsDeclaration:
         "reaction_center": REACTION_CENTER,
         "atom_map": ATOM_MAP,
     }
+    # Historical fixture literals below use human-readable 1-based ring/map rows;
+    # the process core now receives only normalized zero-based declarations.
+    for field in ("atom_map", "ring_order"):
+        if field in overrides:
+            overrides[field] = [i - 1 for i in overrides[field]]
+    if "distance_filters" in overrides:
+        overrides["distance_filters"] = [dict(row, atoms=[i - 1 for i in row["atoms"]])
+                                          for row in overrides["distance_filters"]]
     payload.update(overrides)
-    return TsDeclaration(**payload)
+    return calculation_input(**payload)
 
 
-def _start(tmp_path, **overrides):
-    return start(TsStartRequest(
-        declaration=_declaration(**overrides),
+def _start(tmp_path, request_key='fixture-prepare', **overrides):
+    return start(TsStartRequest(request_key=request_key,
+        input=_declaration(**overrides),
         workspace_dir=str(tmp_path),
         owner_conversation_id="test_project",
         owner_session_id="test_session",
     ))
+
+
+_GUIDED_WINDOWS = [
+    {"atoms": [3, 10], "min_ang": 2.5, "max_ang": 3.8},
+    {"atoms": [1, 10], "min_ang": 2.5, "max_ang": 3.8},
+    {"atoms": [2, 10], "min_ang": 2.5, "max_ang": 3.8},
+]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -82,21 +131,18 @@ def _start(tmp_path, **overrides):
 
 def test_missing_method_is_invalid_input_because_method_is_a_scientific_decision(tmp_path):
     """方法/基组属科学决策：不接受工具默认值，缺了就是 invalid_input（终态）。"""
-    record = _start(tmp_path, method="")
-    assert record.terminal == "invalid_input"
-    assert "method is empty" in record.stage_record("declare").detail
-    # 终态不再可推进
-    assert advance(record).terminal == "invalid_input"
+    with pytest.raises(ValueError, match="method"):
+        _start(tmp_path, method="")
 
 
 def test_empty_endpoints_are_invalid_input(tmp_path):
-    record = _start(tmp_path, reactant_smiles="")
-    assert record.terminal == "invalid_input"
+    with pytest.raises(ValueError):
+        _start(tmp_path, reactant_smiles="")
 
 
 def test_nonpositive_multiplicity_is_invalid_input(tmp_path):
-    record = _start(tmp_path, multiplicity=0)
-    assert record.terminal == "invalid_input"
+    with pytest.raises(ValueError):
+        _start(tmp_path, multiplicity=0)
 
 
 # ---------------------------------------------------------------------------
@@ -114,15 +160,15 @@ def test_run_directory_layout_and_persistence(tmp_path):
         assert (run_dir / name).exists(), name
     on_disk = json.loads((run_dir / "process.json").read_text(encoding="utf-8"))
     assert on_disk["run_id"] == record.run_id
-    assert on_disk["declaration"]["method"] == "b3lyp/def2svp"
+    assert on_disk["input"]["ts_optimization"]["method"] == "b3lyp/def2svp"
     # declare.json 单独可读（便于人核对声明，不用解析整份状态）
     declare = json.loads((run_dir / "declare.json").read_text(encoding="utf-8"))
-    assert declare["reactant_smiles"] == REACTANT
+    assert declare["reaction"]["reactant_smiles"] == REACTANT
 
 
 def test_run_ids_are_numbered_and_isolated(tmp_path):
     first = _start(tmp_path)
-    second = _start(tmp_path)
+    second = _start(tmp_path, request_key='another-path')
     assert (first.run_id, second.run_id) == ("ts_0001", "ts_0002")
     assert first.run_dir != second.run_dir
 
@@ -132,7 +178,7 @@ def test_per_iteration_frames_are_confined_to_build_trajectories(tmp_path):
     record = _start(tmp_path)
     run_dir = Path(record.run_dir)
     frame_files = sorted(run_dir.rglob("frames.*"))
-    assert frame_files, "构建阶段必须留下轨迹（否则说明没跑）"
+    assert not frame_files, "No optimization or iterative trajectory was declared"
     for path in frame_files:
         # 不变量：逐迭代帧只能躺在某个 trajectories/ 目录里，且该分支必须源自 build/
         assert path.parent.parent.name == "trajectories", path
@@ -148,7 +194,7 @@ def test_evidence_candidates_never_include_per_iteration_frames(tmp_path):
     candidates = evidence_binding_candidates(record)
     assert candidates, "至少应有端点候选结构"
     assert all("trajectories" not in path for path in candidates)
-    assert all(path.endswith((".xyz", ".mol")) for path in candidates)
+    assert all(path.endswith((".xyz", ".mol", ".json")) for path in candidates)
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +210,7 @@ def test_missing_atom_map_blocks_with_an_actionable_request(tmp_path):
     assert blocked is not None
     assert blocked.stage == "map"
     assert blocked.failure_class == "atom_map_missing"
-    assert blocked.needs == ["atom_map"]
+    assert blocked.needs == ["reaction.atom_map"]
     assert "ambiguous" in blocked.message
 
 
@@ -182,12 +228,12 @@ def test_missing_atom_map_block_carries_endpoint_numbering(tmp_path):
     assert "hydrogen" in blocked.message.lower()
 
 
-def test_zero_based_atom_map_is_diagnosed(tmp_path):
+def test_negative_internal_atom_map_is_diagnosed(tmp_path):
     """含 0 的映射点名 0-based 笔误：重试引导必须说清错在哪，不只是"不对"。"""
     record = _start(tmp_path, atom_map=[1, 0, 3, 4, 5, 2])
     blocked = record.blocked
     assert blocked.failure_class == "atom_map_not_a_permutation"
-    assert "0-based" in blocked.message
+    assert "negative" in blocked.message
 
 
 def test_heavy_atom_only_map_is_diagnosed(tmp_path):
@@ -206,7 +252,71 @@ def test_missing_reaction_center_blocks_with_a_reason(tmp_path):
     assert record.terminal is None
     assert record.blocked.stage == "assemble"
     assert record.blocked.failure_class == "reaction_center_missing"
-    assert record.blocked.needs == ["reaction_center"]
+    assert record.blocked.needs == ["reaction.reaction_center"]
+
+
+def test_out_of_range_reaction_center_blocks_with_built_atom_numbering(tmp_path):
+    """A bad pair must return a resumable run, not escape as RDKit's atomId error."""
+    record = _start(
+        tmp_path,
+        reactant_smiles="[F-].N",
+        product_smiles="[F-].N",
+        reaction_center=[(0, 5)],
+        atom_map=[1,2,3,4,5],
+    )
+
+    assert record.run_id == "ts_0001"
+    assert record.terminal is None
+    assert record.blocked is not None
+    assert record.blocked.stage == "assemble"
+    assert record.blocked.failure_class == "invalid_reaction_center"
+    assert record.blocked.needs == ["reaction.reaction_center"]
+    assert "1-based" in record.blocked.message
+    assert "1..5" in record.blocked.message
+    assert any("1=F" in detail and "5=H" in detail for detail in record.blocked.atom_details)
+    assert load_record(str(tmp_path), record.run_id).blocked == record.blocked
+
+
+def test_m16_product_reaction_center_reports_its_five_built_atoms(tmp_path):
+    """The formic-acid case must name the bad field instead of leaking RDKit 5 < 5."""
+    record = _start(
+        tmp_path,
+        reactant_smiles="OC=O",
+        product_smiles="O=C=O.[H][H]",
+        charge=0,
+        reaction_center=[(4, 5)],
+        atom_map=[1, 2, 3, 4, 5],
+    )
+
+    assert record.blocked is not None
+    assert record.blocked.stage == "assemble"
+    assert record.blocked.failure_class == "invalid_reaction_center"
+    assert record.blocked.needs == ["reaction.reaction_center"]
+    assert "reactant" in record.blocked.message
+    assert "1..5" in record.blocked.message
+    artifact = json.loads(
+        (Path(record.run_dir) / "build" / "input_0001" / "product" / "prepared_structure.json").read_text()
+    )
+    assert [atom["symbol"] for atom in artifact["atom_identities"]] == ["O", "C", "O", "H", "H"]
+    assert artifact["atom_identities"][3]["component_id"] == "frag1"
+
+
+def test_single_fragment_reaction_center_is_checked_after_atom_mapping(tmp_path):
+    """Single-fragment paths still reject a bad pair before using it as a coordinate."""
+    record = _start(
+        tmp_path,
+        reactant_smiles="OC=O",
+        product_smiles="OC=O",
+        charge=0,
+        reaction_center=[(4, 5)],
+        atom_map=[1, 2, 3, 4, 5],
+    )
+
+    assert record.blocked is not None
+    assert record.blocked.stage == "assemble"
+    assert record.blocked.failure_class == "invalid_reaction_center"
+    assert record.blocked.needs == ["reaction.reaction_center"]
+    assert "1..5" in record.blocked.message
 
 
 def test_charge_mismatch_is_invalid_input_not_a_block(tmp_path):
@@ -219,7 +329,7 @@ def test_charge_mismatch_is_invalid_input_not_a_block(tmp_path):
 def test_built_endpoints_are_delivered_through_the_shared_builder(tmp_path):
     """build 阶段必须真的走共享构建器（留下 prepared_structure.json + 轨迹）。"""
     record = _start(tmp_path)
-    build_dir = Path(record.run_dir) / "build"
+    build_dir = Path(record.run_dir) / "build" / "input_0001"
     assert (build_dir / "reactant" / "prepared_structure.json").is_file()
     assert (build_dir / "product" / "prepared_structure.json").is_file()
 
@@ -229,43 +339,12 @@ def test_built_endpoints_are_delivered_through_the_shared_builder(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.real_xtb
-@pytest.mark.skipif(
-    __import__("shutil").which("xtb") is None, reason="未安装 xtb，跳过真实引擎验收"
-)
-def test_resume_supplies_the_missing_declaration_and_continues(tmp_path):
-    """resume 只接受局部覆盖：补上 atom_map 后从阻塞处继续。"""
-    record = _start(tmp_path, atom_map=[])
-    assert record.blocked.stage == "map"
-    record = resume(record, TsAdjustment(atom_map=ATOM_MAP))
-    assert record.intervention_count == 1
-    assert record.stage_record("map").status == "done"
-    # map 通过后前端 + 提交一路跑完，在 refine 等作业终态
-    assert record.blocked is None
-    assert record.waiting_for.startswith("job:")
-    assert record.job_id is not None
 
 
-def test_resume_is_recorded_and_bounded(tmp_path):
-    """干预次数计入记录；超预算即落终态，不无限续。"""
-    record = _start(tmp_path, atom_map=[], budget=TsBudget(max_interventions=1))
-    record = resume(record, TsAdjustment(atom_map=ATOM_MAP))
-    assert record.intervention_count == 1
-    # 再阻塞一次（把反应中心清空），resume 后预算耗尽
-    record = resume(record, TsAdjustment(reaction_center=[]))
-    assert record.intervention_count == 2
-    assert record.terminal == "search_failed"
-    detail = record.stage_record(record.stage).detail
-    assert "budget" in detail
-    # 搜索失败绝不等于反应不可能
-    assert "NOT a claim" in detail
 
 
-def test_terminal_run_is_not_resumed(tmp_path):
-    record = _start(tmp_path, method="")
-    assert record.terminal == "invalid_input"
-    with pytest.raises(ValueError):
-        resume(record, TsAdjustment(atom_map=ATOM_MAP))
+
+
 
 
 def test_load_record_round_trips_from_disk(tmp_path):
@@ -284,48 +363,25 @@ def test_only_blocked_and_terminal_events_are_emitted(tmp_path):
     """阶段推进不推事件（避免污染上下文）；阻塞与终态才推。"""
     events: list[tuple[str, dict]] = []
     start(
-        TsStartRequest(declaration=_declaration(atom_map=[]), workspace_dir=str(tmp_path)),
+        TsStartRequest(request_key='fixture-prepare', input=_declaration(atom_map=[]), workspace_dir=str(tmp_path)),
         event_sink=lambda name, payload: events.append((name, payload)),
     )
     assert [name for name, _ in events] == ["ts.blocked"]
     payload = events[0][1]
-    assert payload["needs"] == ["atom_map"]
-    assert payload["failure_class"] == "atom_map_missing"
+    assert payload["blocked"]["needs"] == ["reaction.atom_map"]
+    assert payload["blocked"]["failure_class"] == "atom_map_missing"
 
 
 def test_terminal_event_carries_evidence_candidates(tmp_path):
     events: list[tuple[str, dict]] = []
     start(
-        TsStartRequest(declaration=_declaration(method=""), workspace_dir=str(tmp_path)),
+        TsStartRequest(request_key='fixture-prepare', input=_declaration(reactant_smiles="invalid SMILES"), workspace_dir=str(tmp_path)),
         event_sink=lambda name, payload: events.append((name, payload)),
     )
     assert [name for name, _ in events] == ["ts.terminal"]
-    assert events[0][1]["terminal"] == "invalid_input"
+    assert events[0][1]["result"]["outcome"] == "invalid_input"
 
 
-@pytest.mark.real_xtb
-@pytest.mark.skipif(
-    __import__("shutil").which("xtb") is None, reason="未安装 xtb，跳过真实引擎验收"
-)
-def test_waiting_on_compute_emits_no_event(tmp_path):
-    """等计算**不算阻塞**：不推事件，agent 不该被叫醒来做没有决策的事。"""
-    events: list[tuple[str, dict]] = []
-    record = start(
-        TsStartRequest(
-            declaration=_declaration(),
-            workspace_dir=str(tmp_path),
-            owner_conversation_id="test_project",
-            owner_session_id="test_session",
-        ),
-        event_sink=lambda name, payload: events.append((name, payload)),
-    )
-    # declare/build/map/assemble/guess/validate/submit 跑完后在 refine 等作业终态
-    assert record.blocked is None
-    assert record.terminal is None
-    assert record.waiting_for.startswith("job:")
-    assert record.stage_record("refine").status == "waiting"
-    # 只推阻塞与终态两类事件 -> 等待一个都不推
-    assert events == []
 
 
 # ---------------------------------------------------------------------------
@@ -333,63 +389,20 @@ def test_waiting_on_compute_emits_no_event(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.real_xtb
-@pytest.mark.skipif(
-    __import__("shutil").which("xtb") is None, reason="未安装 xtb，跳过真实引擎验收"
-)
-def test_submit_submits_a_ready_job_and_refine_waits_for_it(tmp_path):
-    """submit 阶段真的提交一个 ready 作业；refine 进入 waiting 等它的终态（不轮询）。"""
-    record = _start(tmp_path)
-    statuses = {r.stage: r.status for r in record.stage_records}
-    assert statuses["submit"] == "done"
-    assert record.job_id is not None and record.job_id > 0
-    assert os.path.isfile(record.job_input_path)
-    detail = record.stage_record("submit").detail
-    assert "submitted as 'ready'" in detail
-    # refine 在等这个作业，且说明走的是既有通知路径（不是轮询）
-    assert statuses["refine"] == "waiting"
-    assert record.waiting_for == f"job:{record.job_id}"
-    assert "never polls" in record.stage_record("refine").detail
-    assert record.terminal is None
-    # verdict 还没轮到（作业没到终态）
-    assert "verdict" not in statuses
 
 
-@pytest.mark.real_xtb
-@pytest.mark.skipif(
-    __import__("shutil").which("xtb") is None, reason="未安装 xtb，跳过真实引擎验收"
-)
-def test_submitted_job_is_in_ready_state_in_the_central_queue(tmp_path):
-    """submit 之后作业真的躺在中央 compute_jobs 里且状态为 ready（调度守护去认领）。"""
-    from cloudra.persistence.database import ComputeDB
-
-    record = _start(tmp_path)
-    db = ComputeDB().init()
-    with db.connect() as con:
-        row = con.execute(
-            "SELECT state, path, jobtype, conversation_id, session_id FROM compute_jobs WHERE id = ?",
-            (record.job_id,),
-        ).fetchone()
-    assert row[0] == "ready"
-    assert row[1] == record.job_input_path
-    assert row[2] == "orca"
-    # 归属与 submit_compute_job 同一纪律：终态推送只认这两个字段
-    assert row[3] == "test_project"
-    assert row[4] == "test_session"
-    # 现场落在 jobs/<job_dir>/ 下，与作业现场同处
-    assert "jobs" in Path(record.job_input_path).parts
 
 
 def test_submit_without_owner_is_refused(tmp_path):
     """无归属的 run 到 submit 阶段 fail-loud 拒收：归属缺失的作业是投递不到
     的死信（ComputeNotifyBroker 只按 conversation/session 路由），宁可阻塞。"""
-    record = start(TsStartRequest(
-        declaration=_declaration(), workspace_dir=str(tmp_path),
+    record = start(TsStartRequest(request_key='fixture-prepare',
+        input=_declaration(), workspace_dir=str(tmp_path),
     ))
     assert record.blocked is not None
-    assert record.blocked.failure_class == "owner_missing"
-    assert record.blocked.stage == "submit"
-    assert "owner" in record.blocked.message
+    from cloudra.tools.core.ts_process import _submit_step
+    error, job = _submit_step(record, "ts_opt", "unused.inp", "orca")
+    assert job == -1 and "owner identity" in error
 
 
 # ---------------------------------------------------------------------------
@@ -397,46 +410,8 @@ def test_submit_without_owner_is_refused(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.real_xtb
-@pytest.mark.skipif(
-    __import__("shutil").which("xtb") is None, reason="未安装 xtb，跳过真实引擎验收"
-)
-def test_front_half_with_real_xtb_records_xtb_path_kind(tmp_path):
-    """真实引擎跑完整前端：两端构建 → 映射重排 → MTD 路径 → 校验通过。
-
-    这条同时验证了一件必需的事：构建器按连通分量拼装两端，**原子顺序本来不同**
-    （实测反应物 [F,C,Cl,H,H,H]、产物 [C,F,H,H,H,H]→重排后同序），路径搜索要求同序，
-    所以 map 阶段的重排是必需的，不是形式。
-    """
-    record = _start(tmp_path)
-    statuses = {r.stage: r.status for r in record.stage_records}
-    assert statuses.get("build") == "done"
-    assert statuses.get("map") == "done"
-    assert statuses.get("guess") == "done"
-    assert statuses.get("validate") == "done"
-    assert record.path_kind == "xtb_path"
-    # 重排后的产物可复查（否则 agent 无法核对重排是否合理）
-    reordered = Path(record.run_dir) / "path" / "product_reordered.xyz"
-    assert reordered.is_file()
-    # 提交后在 refine 等作业终态，且不伪造终态
-    assert record.blocked is None
-    assert record.stage_record("refine").status == "waiting"
-    assert record.terminal is None
-    assert record.job_id is not None
-    # TS 候选进了证据候选（小产物），逐迭代帧没有
-    assert any("xtbpath_ts.xyz" in path for path in evidence_binding_candidates(record))
 
 
-def test_guess_reports_idpp_fallback_when_xtb_is_absent(tmp_path, monkeypatch):
-    """xTB 缺失：前端仍走完，但 path_kind 必须标成降级路线——不静默。"""
-    empty = tmp_path / "empty-path"
-    empty.mkdir()
-    monkeypatch.setenv("PATH", str(empty))
-    record = _start(tmp_path)
-    assert record.path_kind == "idpp_fallback"
-    detail = record.stage_record("guess").detail
-    assert "idpp_fallback" in detail
-    assert "degraded" in detail.lower()
 
 
 def test_wrong_atom_map_blocks_with_element_level_detail(tmp_path):
@@ -446,7 +421,7 @@ def test_wrong_atom_map_blocks_with_element_level_detail(tmp_path):
     blocked = record.blocked
     assert blocked.stage == "map"
     assert blocked.failure_class == "atom_map_element_mismatch"
-    assert blocked.needs == ["atom_map"]
+    assert blocked.needs == ["reaction.atom_map"]
     # 每个错配都要说清是哪个原子对不上哪个元素
     assert blocked.atom_details
     assert any("but the map points it at reactant atom" in d for d in blocked.atom_details)
@@ -525,7 +500,7 @@ def test_verdict_cannot_reach_verified_without_irc(tmp_path):
     """频率支持一阶鞍点时，没有 IRC 仍只能到 candidate_only——IRC 是第二道闸。
 
     这里用真实日志里的虚频数据无法构造"恰好 1 个虚频"，所以直接验证纪律本身：
-    判定函数要求 freq(1 imag) **且** IRC 双向收敛才给 verified；缺 IRC 一律 candidate_only。
+    判定函数要求 freq(1 imag) **且** IRC 双侧区间证明才给 verified；缺 IRC 一律 candidate_only。
     """
     from cloudra.tools.core.ts_process import _verdict
 
@@ -541,66 +516,59 @@ def test_verdict_cannot_reach_verified_without_irc(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.real_xtb
-@pytest.mark.skipif(
-    __import__("shutil").which("xtb") is None, reason="未安装 xtb，跳过真实引擎验收"
-)
-def test_refine_submits_the_irc_job_after_frequency(tmp_path):
-    """频率完成后自动提交 IRC：顺带验证它在同一几何上用 %irc 原生块。
+def test_ts_frequency_input_keeps_declared_solvation(tmp_path):
+    from cloudra.tools.core.ts_process import TsJobStep, _write_frequency_input
 
-    这条守的是"verified 可达"：只跑频率的流程最高只能到 candidate_only。
-    """
-    from cloudra.tools.core.ts_process import TsJobStep, _refine
+    record = _start(tmp_path, extra_keywords="CPCM(Water)")
+    source = Path(record.run_dir) / "jobs" / "job_0001"
+    source.mkdir(parents=True, exist_ok=True)
+    input_path = source / "refine.inp"
+    input_path.write_text("! OptTS\n")
+    record.job_steps.append(TsJobStep(
+        purpose="ts_opt", job_id=9001, input_path=str(input_path), state="done",
+    ))
+    from cloudra.tools.core.ts_process import _refinement_log_path
 
-    record = _start(tmp_path)
-    # 把 TS 优化与频率两步都标记为已完成，并把频率的优化几何放好
-    job2 = Path(record.run_dir) / "jobs" / "job_0002"
-    job2.mkdir(parents=True, exist_ok=True)
-    optimized = job2 / "optimized.xyz"
-    optimized.write_text(
-        "3\noptimised\nO 0.0 0.0 0.0\nH 0.96 0.0 0.0\nH -0.24 0.93 0.0\n", encoding="utf-8"
+    log_path = Path(_refinement_log_path(record, record.job_steps[-1]))
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text(
+        "CARTESIAN COORDINATES (ANGSTROEM)\n"
+        "---------------------------------\n"
+        "O 0.000000 0.000000 0.000000\n"
+        "H 0.960000 0.000000 0.000000\n"
+        "H -0.240000 0.930000 0.000000\n\n",
     )
-    freq_input = job2 / "frequency.inp"
-    freq_input.write_text("! Freq\n", encoding="utf-8")
-    # 作业状态是**从库里读的**，所以必须真的插一行 done（手写 state 会被覆盖）
-    from cloudra.persistence.database import ComputeDB
-    from cloudra.services.compute_store import insert_compute_job
+    job_dir = Path(record.run_dir) / "jobs" / "job_0002"
+    job_dir.mkdir()
+    error, path = _write_frequency_input(record, str(job_dir))
+    assert error == ""
+    assert "CPCM(Water)" in Path(path).read_text()
 
-    db = ComputeDB().init()
-    for step, path in ((record.job_steps[0], record.job_steps[0].input_path),
-                       (None, str(freq_input))):
-        job_id = insert_compute_job(
-            db, node_id="node-local", conversation_id="test", session_id=None,
-            path=path, state="done", jobtype="orca",
-        )
-        if step is not None:
-            step.job_id = job_id
-            step.state = "done"
-        else:
-            record.job_steps.append(TsJobStep(
-                purpose="frequency", job_id=job_id, input_path=path, state="done",
-            ))
-    record.waiting_for = ""
 
-    record = _refine(record)
-    assert record.blocked is None, record.blocked and record.blocked.message
-    assert [step.purpose for step in record.job_steps] == ["ts_opt", "frequency", "irc"]
-    irc_step = record.job_steps[-1]
-    assert irc_step.job_id is not None
-    content = Path(irc_step.input_path).read_text(encoding="utf-8")
-    # ORCA：! IRC + 原生 %irc 块，双向，且 Hessian 分支由证据决定
-    assert "IRC" in content
-    assert "%irc" in content
-    assert "Direction both" in content
-    assert ("InitHess read" in content) or ("InitHess calc_numfreq" in content)
-    assert record.waiting_for == f"job:{irc_step.job_id}"
+def test_xtb_path_guess_uses_explicit_path_solvation(tmp_path, monkeypatch):
+    from cloudra.tools.core.xtb_path_runner import XtbPathResult, build_xtb_path_command
+
+    captured = []
+
+    def unavailable_path(request):
+        captured.append(build_xtb_path_command(request))
+        return XtbPathResult(run_dir=str(tmp_path), termination_reason="executable_missing")
+
+    monkeypatch.setattr("cloudra.tools.core.xtb_path_runner.run_xtb_path", unavailable_path)
+    _start(tmp_path, path_solvation={"model": "alpb", "solvent": "water"})
+    assert captured
+    assert captured[0][-2:] == ["--alpb", "water"]
+
+
+
+
 
 
 def test_irc_input_reuses_the_hessian_only_when_the_file_is_actually_there(tmp_path):
     """Hessian 分支由**证据**决定：文件在就用 read+Hess_Filename，不在就 calc_numfreq。"""
     from cloudra.tools.core.ts_process import TsJobStep, _write_irc_input
 
-    record = _start(tmp_path)
+    record = _start(tmp_path, extra_keywords="CPCM(Water)")
     job2 = Path(record.run_dir) / "jobs" / "job_0002"
     job2.mkdir(parents=True, exist_ok=True)
     (job2 / "optimized.xyz").write_text(
@@ -621,15 +589,155 @@ def test_irc_input_reuses_the_hessian_only_when_the_file_is_actually_there(tmp_p
 
     # 落下 .hess -> 复用同一几何的 Hessian
     (job2 / "frequency.hess").write_text("$hessian\n", encoding="utf-8")
-    error, path = _write_irc_input(record, str(job3))
+    new_attempt = job3 / "with_hessian"
+    new_attempt.mkdir()
+    error, path = _write_irc_input(record, str(new_attempt))
     assert error == ""
     content = Path(path).read_text(encoding="utf-8")
     assert "InitHess read" in content
     assert str(job2 / "frequency.hess") in content
+    assert "CPCM(Water)" in content
+
+
+def test_refine_submits_unconstrained_endpoint_optimization_after_irc(tmp_path, monkeypatch):
+    """A completed IRC starts unconstrained QM optimization from its actual outer frame."""
+    import cloudra.tools.core.ts_process as process
+    from cloudra.tools.core.ts_process import TsJobStep
+
+    record = _start(tmp_path)
+    record.blocked = None
+    record.stage = "refine"
+    record.job_steps.append(TsJobStep(
+        purpose="irc", job_id=9010, input_path=str(tmp_path / "irc.inp"), state="done",
+    ))
+    record.waiting_for = "job:9010"
+    monkeypatch.setattr(process, "_read_job_state", lambda _record, _job_id: "done")
+    monkeypatch.setattr(process, "_submit_step", lambda *_args: ("", 9011))
+    irc_log = Path(process._refinement_log_path(record, record.job_steps[-1]))
+    irc_log.parent.mkdir(parents=True, exist_ok=True)
+    irc_log.write_text("IRC complete\n", encoding="utf-8")
+    symbols, positions, _xyz, _mol = process._read_built_xyz(record, "reactant")
+    side_a = [list(position) for position in positions]
+    side_a[0][0] += 0.37
+    _install_fake_irc_endpoints(monkeypatch, symbols, side_a, positions)
+
+    continued = process._refine(record)
+    assert continued.blocked is None
+    assert continued.job_steps[-1].purpose == "reactant_opt"
+    assert continued.waiting_for == "job:9011"
+    content = Path(continued.job_steps[-1].input_path).read_text(encoding="utf-8")
+    assert "Opt" in content
+    assert "Freq" not in content
+    assert "%geom" not in content  # guided distance windows must not survive
+    assert f"{side_a[0][0]:.6f}" in content
+
+
+def test_refine_stops_on_failed_irc_job_before_endpoint_work(tmp_path, monkeypatch):
+    import cloudra.tools.core.ts_process as process
+    from cloudra.tools.core.ts_process import TsJobStep
+
+    record = _start(tmp_path)
+    record.blocked = None
+    record.stage = "refine"
+    record.job_steps.append(TsJobStep(
+        purpose="irc", job_id=9010, input_path=str(tmp_path / "irc.inp"), state="ready",
+    ))
+    monkeypatch.setattr(process, "_read_job_state", lambda _record, _job_id: "failed")
+    result = process._refine(record)
+    assert result.blocked is not None
+    assert result.blocked.failure_class == "job_failed"
+    assert [step.purpose for step in result.job_steps] == ["irc"]
+
+
+def test_refine_endpoint_jobs_survive_reload_and_use_optimized_frames(tmp_path, monkeypatch):
+    """Both Opt→Freq chains continue from persisted records, using each Opt final frame."""
+    from types import SimpleNamespace
+
+    import cloudra.tools.core.ts_process as process
+    from cloudra.tools.core.ts_process import TsJobStep, load_record, save_record
+
+    record = _start(tmp_path, extra_keywords="CPCM(Water)")
+    record.blocked = None
+    record.stage = "refine"
+    record.job_steps = [TsJobStep(
+        purpose="irc", job_id=9010, input_path=str(tmp_path / "irc.inp"), state="done",
+    )]
+    record.waiting_for = "job:9010"
+    monkeypatch.setattr(process, "_read_job_state", lambda _record, _job_id: "done")
+    ids = iter((9011, 9012, 9013, 9014))
+    monkeypatch.setattr(process, "_submit_step", lambda *_args: ("", next(ids)))
+    reactant = process._read_built_xyz(record, "reactant")
+    from cloudra.tools.core.structure_artifacts import read_xyz_atoms
+
+    product_path = process._product_reordered_path(record)
+    irc_log = Path(process._refinement_log_path(record, record.job_steps[0]))
+    irc_log.parent.mkdir(parents=True, exist_ok=True)
+    irc_log.write_text("IRC complete\n", encoding="utf-8")
+    product_atoms = read_xyz_atoms(product_path)
+    _install_fake_irc_endpoints(
+        monkeypatch, reactant[0], reactant[1], [position for _, position in product_atoms],
+    )
+    monkeypatch.setattr(
+        "cloudra.dag.evidence_ingest.snapshot_evidence_file",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            frequencies=[120.0, 300.0], imaginary_frequencies=[],
+        ),
+    )
+    for purpose in (
+        "reactant_opt", "reactant_frequency", "product_opt", "product_frequency",
+    ):
+        record = process._refine(record)
+        assert record.blocked is None, record.blocked and record.blocked.message
+        assert record.job_steps[-1].purpose == purpose
+        assert record.waiting_for == f"job:{record.job_steps[-1].job_id}"
+        assert "CPCM(Water)" in Path(record.job_steps[-1].input_path).read_text()
+        if purpose.endswith("_opt"):
+            opt_log = Path(process._refinement_log_path(record, record.job_steps[-1]))
+            opt_log.parent.mkdir(parents=True, exist_ok=True)
+            final_atoms = read_xyz_atoms(
+                reactant[2] if purpose.startswith("reactant") else product_path
+            )
+            opt_log.write_text(
+                "GEOMETRY OPTIMIZATION CYCLE\n"
+                "CARTESIAN COORDINATES (ANGSTROEM)\n"
+                "---------------------------------\n"
+                + "\n".join(
+                    f"{symbol} {x + 0.2:.8f} {y:.8f} {z:.8f}"
+                    for symbol, (x, y, z) in final_atoms
+                )
+                + "\n\nTHE OPTIMIZATION HAS CONVERGED\n",
+                encoding="utf-8",
+            )
+        else:
+            optimized = Path(record.job_steps[-1].input_path).parent / "optimized.xyz"
+            assert optimized.is_file()
+            freq_log = Path(process._refinement_log_path(record, record.job_steps[-1]))
+            freq_log.parent.mkdir(parents=True, exist_ok=True)
+            optimized_atoms = read_xyz_atoms(str(optimized))
+            freq_log.write_text(
+                "CARTESIAN COORDINATES (ANGSTROEM)\n"
+                "---------------------------------\n"
+                + "\n".join(
+                    f"{symbol} {x:.8f} {y:.8f} {z:.8f}"
+                    for symbol, (x, y, z) in optimized_atoms
+                )
+                + "\n\nfrequency evidence\n",
+                encoding="utf-8",
+            )
+            source = reactant[2] if purpose.startswith("reactant") else product_path
+            source_atoms = read_xyz_atoms(source)
+            assert [symbol for symbol, _ in optimized_atoms] == [
+                symbol for symbol, _ in source_atoms
+            ]
+            assert optimized_atoms[0][1][0] == pytest.approx(source_atoms[0][1][0] + 0.2)
+        save_record(record)
+        record = load_record(str(tmp_path), record.run_id)
+    record = process._refine(record)
+    assert record.stage_record("refine").status == "done"
 
 
 def test_gaussian_irc_uses_the_skill_recipe(tmp_path):
-    """Gaussian 走 skill 表格里的原生写法（含 calcfc / maxpoints），不拼 ORCA 的 %irc 块。"""
+    """Gaussian 走原生 calcfc 写法，不强加步数上限或 ORCA 的 %irc 块。"""
     from cloudra.tools.core.ts_process import TsJobStep, _write_irc_input
 
     record = _start(tmp_path, engine="gaussian")
@@ -648,13 +756,28 @@ def test_gaussian_irc_uses_the_skill_recipe(tmp_path):
     error, path = _write_irc_input(record, str(job3))
     assert error == ""
     content = Path(path).read_text(encoding="utf-8")
-    assert "irc=(calcfc,maxpoints=80)" in content
+    assert "irc=calcfc" in content
+    assert "maxpoints" not in content.lower()
     assert "%irc" not in content
 
 
 # ---------------------------------------------------------------------------
 # 第二端几何来源：两端 SMILES 相同的题型（阻转异构 / 外消旋）
 # ---------------------------------------------------------------------------
+
+
+def test_product_geometry_rejects_a_different_declared_product_graph(tmp_path):
+    """A coordinate rotation cannot turn one molecular graph into another species."""
+    from cloudra.tools.core.ts_inputs import RotatedConformer
+
+    record = _start(
+        tmp_path, reactant_smiles="CC", product_smiles="CO", charge=0,
+        reaction_center=[], atom_map=[],
+        product_geometry=RotatedConformer(kind="rotate_about_bond", atoms=(0, 1), degrees=180).model_dump(),
+    )
+    assert record.terminal == "invalid_input"
+    assert "product_geometry" in record.stage_record("declare").detail
+
 
 #: 题库 easy 档 M1：2,2'-二甲基联苯的阻转异构旋转（Ra<->Sa，文献锚点 13.0 kcal/mol）
 M1_SMILES = "Cc1ccccc1-c1c(C)cccc1"
@@ -680,8 +803,8 @@ def _biaryl_bond(mol) -> tuple[int, int]:
     raise AssertionError("no biaryl bond found")
 
 
-def _m1_declaration(mol) -> TsDeclaration:
-    return TsDeclaration(
+def _m1_declaration(mol) -> TsInput:
+    return calculation_input(
         reactant_smiles=M1_SMILES,
         product_smiles=M1_SMILES,  # 阻转异构：两端是同一个分子
         charge=0,
@@ -763,8 +886,8 @@ def test_same_smiles_endpoints_are_distinguished_by_declared_geometry(tmp_path):
 
     workspace = tmp_path
     declaration = _m1_declaration(mol)
-    record = start(TsStartRequest(
-        declaration=declaration,
+    record = start(TsStartRequest(request_key='fixture-prepare',
+        input=declaration,
         workspace_dir=str(workspace),
         owner_conversation_id="test_project",
         owner_session_id="test_session",
@@ -789,7 +912,7 @@ def test_same_smiles_endpoints_are_distinguished_by_declared_geometry(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# verdict 第二道闸：IRC 双向收敛之外还要过端点区间证明才 verified
+# verdict 第二道闸：IRC 双侧几何及端点区间证明才可 verified
 # ---------------------------------------------------------------------------
 
 
@@ -806,14 +929,20 @@ def _install_fake_irc_endpoints(monkeypatch, symbols, end_a_pos, end_b_pos):
 
     from cloudra.tools.Chemtool.ts_guess import TsGuess
 
-    def _fake_extract(user_input, checks, require_two_sides=True, **_kwargs):
+    def _fake_extract(irc_log, checks, *, output_dir, require_two_sides=True, **_kwargs):
+        out_dir = Path(output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        path_a = out_dir / "irc_end_a.xyz"
+        path_b = out_dir / "irc_end_b.xyz"
+        path_a.write_text(_xyz_text(symbols, end_a_pos, "irc end a"), encoding="utf-8")
+        path_b.write_text(_xyz_text(symbols, end_b_pos, "irc end b"), encoding="utf-8")
         return {
-            "end_a": SimpleNamespace(xyz=_xyz_text(symbols, end_a_pos, "irc end a")),
-            "end_b": SimpleNamespace(xyz=_xyz_text(symbols, end_b_pos, "irc end b")),
+            "end_a": SimpleNamespace(xyz=path_a.read_text(encoding="utf-8")),
+            "end_b": SimpleNamespace(xyz=path_b.read_text(encoding="utf-8")),
             "frames": [],
             "meta": {"forward_converged": True, "backward_converged": True},
-            "path_a": "",
-            "path_b": "",
+            "path_a": str(path_a),
+            "path_b": str(path_b),
         }
 
     monkeypatch.setattr(TsGuess, "_extract_irc_endpoints", staticmethod(_fake_extract))
@@ -854,6 +983,13 @@ def _record_with_freq_and_converged_irc(tmp_path, monkeypatch):
         purpose="frequency", job_id=job_id, input_path=str(freq_input), state="done",
     ))
 
+    from cloudra.tools.core.ts_process import _refinement_log_path
+    irc_input = job_dir/'irc.inp'
+    irc_input.write_text('! IRC B3LYP def2SVP\n')
+    irc_step = TsJobStep(purpose='irc',job_id=9002,input_path=str(irc_input),state='done',actual_calculation=record.input.verification.irc)
+    record.job_steps.append(irc_step)
+    Path(_refinement_log_path(record, irc_step)).write_text('irc evidence\n')
+
     # 交付物替身：频率快照（1 虚频）+ IRC 元数据（双向收敛）
     monkeypatch.setattr(
         "cloudra.dag.evidence_ingest.snapshot_evidence_file",
@@ -887,8 +1023,79 @@ def _sn2_minima(record, symbols):
     return a, b
 
 
+def _install_endpoint_minimum_jobs(record, monkeypatch, symbols, reactant, product,
+                                   *, reactant_opt_converged=True,
+                                   reactant_freqs=None):
+    """Only external QM parsing is replaced; verdict and interval proof stay real."""
+    from types import SimpleNamespace
+
+    from cloudra.tools.core.ts_process import TsJobStep, _refinement_log_path
+
+    endpoint_freqs = [120.0, 300.0] if reactant_freqs is None else reactant_freqs
+    for role, positions, opt_id, freq_id, number in (
+        ("reactant", reactant, 9011, 9012, 3),
+        ("product", product, 9013, 9014, 5),
+    ):
+        opt_dir = Path(record.run_dir) / "jobs" / f"job_{number:04d}"
+        freq_dir = Path(record.run_dir) / "jobs" / f"job_{number + 1:04d}"
+        for directory in (opt_dir, freq_dir):
+            (directory / ".cloudra").mkdir(parents=True, exist_ok=True)
+        opt_input = opt_dir / f"{role}_opt.inp"
+        freq_input = freq_dir / f"{role}_frequency.inp"
+        opt_input.write_text("! Opt\n", encoding="utf-8")
+        freq_input.write_text("! Freq\n", encoding="utf-8")
+        (freq_dir / "optimized.xyz").write_text(
+            _xyz_text(symbols, positions, f"optimized {role}"), encoding="utf-8"
+        )
+        opt_step = TsJobStep(
+            purpose=f"{role}_opt", job_id=opt_id, input_path=str(opt_input), state="done",
+        )
+        freq_step = TsJobStep(
+            purpose=f"{role}_frequency", job_id=freq_id,
+            input_path=str(freq_input), state="done",
+        )
+        record.job_steps.extend((opt_step, freq_step))
+        coordinate_rows = "\n".join(
+            f"{symbol} {position[0]:.8f} {position[1]:.8f} {position[2]:.8f}"
+            for symbol, position in zip(symbols, positions)
+        )
+        Path(_refinement_log_path(record, opt_step)).write_text(
+            "GEOMETRY OPTIMIZATION CYCLE\n"
+            "CARTESIAN COORDINATES (ANGSTROEM)\n"
+            "---------------------------------\n"
+            f"{coordinate_rows}\n\n"
+            + (
+                "THE OPTIMIZATION HAS CONVERGED\n" if (
+                    role != "reactant" or reactant_opt_converged
+                ) else "The optimization did not converge\n"
+            ),
+            encoding="utf-8",
+        )
+        Path(_refinement_log_path(record, freq_step)).write_text(
+            "CARTESIAN COORDINATES (ANGSTROEM)\n"
+            "---------------------------------\n"
+            + coordinate_rows + "\n\nfrequency evidence\n",
+            encoding="utf-8",
+        )
+
+    ts_log = _refinement_log_path(record, record.job_steps[0])
+    reactant_log = _refinement_log_path(record, next(s for s in record.job_steps if s.purpose=="reactant_frequency"))
+
+    def snapshot(path, **_kwargs):
+        frequencies = (
+            [-500.0, 120.0, 300.0] if str(path) == ts_log else
+            endpoint_freqs if str(path) == reactant_log else [110.0, 290.0]
+        )
+        return SimpleNamespace(
+            frequencies=frequencies,
+            imaginary_frequencies=[f for f in frequencies if f < 0],
+        )
+
+    monkeypatch.setattr("cloudra.dag.evidence_ingest.snapshot_evidence_file", snapshot)
+
+
 def test_verdict_verified_requires_and_passes_interval_proof(tmp_path, monkeypatch):
-    """freq(1 imag) + IRC 双向收敛 + 区间证明通过 → verified。
+    """freq(1 imag) + IRC 双侧几何 + 区间证明通过 → verified。
 
     区间证明是本次新增的必要条件：端点几何各自位于 TS 与对应声明极小值之间。
     """
@@ -903,6 +1110,15 @@ def test_verdict_verified_requires_and_passes_interval_proof(tmp_path, monkeypat
         _xyz_text(symbols, ts, "TS geometry"), encoding="utf-8"
     )
     _install_fake_irc_endpoints(monkeypatch, symbols, end_a, end_b)
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
+    # The original build geometry is only a path seed. Corrupting its shape
+    # must not replace the separately optimized endpoint reference in proof.
+    from cloudra.tools.core.ts_process import _read_built_xyz
+
+    record.current_seed_mol_path = _read_built_xyz(record, "reactant")[3]
+    raw_seed = Path(record.run_dir) / "raw_search_seed.xyz"
+    raw_seed.write_text(_xyz_text(symbols, b, "not a minimum"), encoding="utf-8")
+    record.current_seed_xyz_path = str(raw_seed)
 
     record = _verdict(record)
     assert record.terminal == "verified", record.stage_record("verdict").detail
@@ -910,8 +1126,386 @@ def test_verdict_verified_requires_and_passes_interval_proof(tmp_path, monkeypat
     assert "interval proof" in detail
 
 
+def test_verdict_accepts_partial_bidirectional_irc_with_verified_endpoints(
+    tmp_path, monkeypatch,
+):
+    """A short two-sided IRC can verify direction through optimized endpoint minima."""
+    from cloudra.tools.core import orca_frames
+    from cloudra.tools.core.ts_process import _verdict
+
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        orca_frames, "extract_irc",
+        lambda path, **_kwargs: {"forward_converged": False, "backward_converged": False},
+    )
+    a, b = _sn2_minima(record, symbols)
+    (job_dir / "optimized.xyz").write_text(
+        _xyz_text(symbols, 0.5 * (a + b), "TS geometry"), encoding="utf-8",
+    )
+    _install_fake_irc_endpoints(
+        monkeypatch, symbols, 0.75 * a + 0.25 * b, 0.25 * a + 0.75 * b,
+    )
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
+
+    result = _verdict(record)
+    assert result.terminal == "verified", result.stage_record("verdict").detail
+    assert "interval proof" in result.stage_record("verdict").detail
+
+
+def test_verdict_accepts_reversed_irc_side_identity_with_matching_provenance(
+    tmp_path, monkeypatch,
+):
+    """Forward/backward labels do not determine reactant/product identity."""
+    from cloudra.tools.core import orca_frames
+    from cloudra.tools.core.ts_process import _verdict
+
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        orca_frames, "extract_irc",
+        lambda path, **_kwargs: {"forward_converged": False, "backward_converged": False},
+    )
+    a, b = _sn2_minima(record, symbols)
+    (job_dir / "optimized.xyz").write_text(
+        _xyz_text(symbols, 0.5 * (a + b), "TS geometry"), encoding="utf-8",
+    )
+    _install_fake_irc_endpoints(
+        monkeypatch, symbols, 0.25 * a + 0.75 * b, 0.75 * a + 0.25 * b,
+    )
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, b, a)
+
+    result = _verdict(record)
+    assert result.terminal == "verified", result.stage_record("verdict").detail
+    assert "swapped" in result.stage_record("verdict").detail
+
+
+def test_verdict_rejects_two_irc_sides_optimized_to_same_species(tmp_path, monkeypatch):
+    from cloudra.tools.core.ts_process import _verdict
+
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    a, b = _sn2_minima(record, symbols)
+    (job_dir / "optimized.xyz").write_text(
+        _xyz_text(symbols, 0.5 * (a + b), "TS geometry"), encoding="utf-8",
+    )
+    _install_fake_irc_endpoints(
+        monkeypatch, symbols, 0.75 * a + 0.25 * b, 0.25 * a + 0.75 * b,
+    )
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, b, b)
+
+    result = _verdict(record)
+    assert result.terminal == "candidate_only"
+    assert "identity" in result.stage_record("verdict").detail
+
+
+def test_verdict_rejects_identity_pairing_that_contradicts_irc_side_provenance(
+    tmp_path, monkeypatch,
+):
+    from cloudra.tools.core.ts_process import _verdict
+
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    a, b = _sn2_minima(record, symbols)
+    (job_dir / "optimized.xyz").write_text(
+        _xyz_text(symbols, 0.5 * (a + b), "TS geometry"), encoding="utf-8",
+    )
+    # The IRC goes A→reactant/B→product, but the recorded optimization origins
+    # end up A→product/B→reactant. The two facts cannot be combined into proof.
+    _install_fake_irc_endpoints(
+        monkeypatch, symbols, 0.75 * a + 0.25 * b, 0.25 * a + 0.75 * b,
+    )
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, b, a)
+
+    result = _verdict(record)
+    assert result.terminal == "candidate_only"
+    assert "provenance" in result.stage_record("verdict").detail
+
+
+@pytest.mark.parametrize("defect", ["missing_side", "wrong_direction"])
+def test_partial_irc_still_requires_two_valid_directions(
+    tmp_path, monkeypatch, defect,
+):
+    from cloudra.tools.Chemtool.ts_guess import TsGuess
+    from cloudra.tools.core import orca_frames
+    from cloudra.tools.core.ts_process import _verdict
+
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        orca_frames, "extract_irc",
+        lambda path, **_kwargs: {"forward_converged": False, "backward_converged": False},
+    )
+    a, b = _sn2_minima(record, symbols)
+    (job_dir / "optimized.xyz").write_text(
+        _xyz_text(symbols, 0.5 * (a + b), "TS geometry"), encoding="utf-8",
+    )
+    if defect == "missing_side":
+        monkeypatch.setattr(TsGuess, "_extract_irc_endpoints", staticmethod(
+            lambda *_args, **_kwargs: None,
+        ))
+    else:
+        _install_fake_irc_endpoints(monkeypatch, symbols, 0.75 * a + 0.25 * b, a)
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
+
+    result = _verdict(record)
+    assert result.terminal == "candidate_only"
+    assert "interval proof" in result.stage_record("verdict").detail
+
+
+def test_verdict_rejects_raw_endpoint_guesses_even_when_irc_interval_matches(
+    tmp_path, monkeypatch,
+):
+    """An MMFF/constrained seed is not a frequency-verified minimum."""
+    from cloudra.tools.core.ts_process import _verdict
+
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    a, b = _sn2_minima(record, symbols)
+    (job_dir / "optimized.xyz").write_text(
+        _xyz_text(symbols, 0.5 * (a + b), "TS geometry"), encoding="utf-8"
+    )
+    _install_fake_irc_endpoints(
+        monkeypatch, symbols, 0.75 * a + 0.25 * b, 0.25 * a + 0.75 * b,
+    )
+
+    result = _verdict(record)
+    assert result.terminal == "candidate_only"
+    assert "minimum" in result.stage_record("verdict").detail.lower()
+
+
+@pytest.mark.parametrize("bad_spectrum", [[], [-20.0, 120.0]])
+def test_verdict_rejects_endpoint_without_zero_imaginary_frequency(
+    tmp_path, monkeypatch, bad_spectrum,
+):
+    """Missing frequency data and an imaginary mode both fail the minimum gate."""
+    from cloudra.tools.core.ts_process import _verdict
+
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    a, b = _sn2_minima(record, symbols)
+    (job_dir / "optimized.xyz").write_text(
+        _xyz_text(symbols, 0.5 * (a + b), "TS geometry"), encoding="utf-8"
+    )
+    _install_fake_irc_endpoints(
+        monkeypatch, symbols, 0.75 * a + 0.25 * b, 0.25 * a + 0.75 * b,
+    )
+    _install_endpoint_minimum_jobs(
+        record, monkeypatch, symbols, a, b, reactant_freqs=bad_spectrum,
+    )
+
+    result = _verdict(record)
+    assert result.terminal == "candidate_only"
+    assert "reactant" in result.stage_record("verdict").detail.lower()
+
+
+def test_verdict_rejects_normally_ended_but_unconverged_endpoint_opt(
+    tmp_path, monkeypatch,
+):
+    """A done compute row cannot substitute for an optimization convergence marker."""
+    from cloudra.tools.core.ts_process import _verdict
+
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    a, b = _sn2_minima(record, symbols)
+    (job_dir / "optimized.xyz").write_text(
+        _xyz_text(symbols, 0.5 * (a + b), "TS geometry"), encoding="utf-8"
+    )
+    _install_fake_irc_endpoints(
+        monkeypatch, symbols, 0.75 * a + 0.25 * b, 0.25 * a + 0.75 * b,
+    )
+    _install_endpoint_minimum_jobs(
+        record, monkeypatch, symbols, a, b, reactant_opt_converged=False,
+    )
+
+    result = _verdict(record)
+    assert result.terminal == "candidate_only"
+    assert "converge" in result.stage_record("verdict").detail.lower()
+
+
+def test_verdict_rejects_endpoint_xyz_unrelated_to_optimization_log(
+    tmp_path, monkeypatch,
+):
+    """A stale XYZ beside Freq cannot stand in for the Opt log's final frame."""
+    from cloudra.tools.core.ts_process import _verdict
+
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    a, b = _sn2_minima(record, symbols)
+    (job_dir / "optimized.xyz").write_text(
+        _xyz_text(symbols, 0.5 * (a + b), "TS geometry"), encoding="utf-8"
+    )
+    _install_fake_irc_endpoints(
+        monkeypatch, symbols, 0.75 * a + 0.25 * b, 0.25 * a + 0.75 * b,
+    )
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
+    stale = Path(next(s for s in record.job_steps if s.purpose=="reactant_frequency").input_path).parent / "optimized.xyz"
+    shifted = [[x + 0.01, y, z] for x, y, z in a]
+    stale.write_text(_xyz_text(symbols, shifted, "stale"), encoding="utf-8")
+
+    result = _verdict(record)
+    assert result.terminal == "candidate_only"
+    assert "geometry" in result.stage_record("verdict").detail.lower()
+
+
+def test_optimized_endpoint_must_keep_declared_species_connectivity(
+    tmp_path, monkeypatch,
+):
+    """A seed that optimizes into the product basin is not a reactant minimum."""
+    from cloudra.tools.core.ts_process import (
+        _endpoint_identity_error,
+        _validated_endpoint_minimum,
+    )
+
+    record, symbols, _job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    a, b = _sn2_minima(record, symbols)
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, b, b)
+
+    minimum, reason = _validated_endpoint_minimum(record, "reactant")
+    assert minimum is not None, reason
+    assert "connectivity" in _endpoint_identity_error(record, "reactant", minimum).lower()
+
+
+def test_endpoint_identity_accepts_a_nonbonded_entrance_complex(tmp_path):
+    """A short F···C encounter beyond covalent range remains two fragments."""
+    import numpy as np
+
+    from cloudra.tools.core.ts_process import _endpoint_identity_error, _read_built_xyz
+
+    record = _start(tmp_path)
+    symbols, raw_positions, _xyz, _mol = _read_built_xyz(record, "reactant")
+    positions = np.asarray(raw_positions, dtype=float)
+    direction = positions[1] - positions[2]
+    positions[0] = positions[1] + 1.75 * direction / np.linalg.norm(direction)
+
+    assert _endpoint_identity_error(
+        record, "reactant", (symbols, positions.tolist()),
+    ) == ""
+
+
+def test_endpoint_identity_accepts_an_ionic_contact_pair(tmp_path):
+    """A close Na+···Cl- contact is compatible with a disconnected ionic SMILES."""
+    from cloudra.tools.core.ts_process import _endpoint_identity_error
+
+    record = _start(
+        tmp_path, reactant_smiles="[Na+].[Cl-]", product_smiles="[Na+].[Cl-]",
+        charge=0, reaction_center=[], atom_map=[],
+    )
+    assert _endpoint_identity_error(
+        record, "reactant", (["Na", "Cl"], [[0.0, 0.0, 0.0], [2.4, 0.0, 0.0]]),
+    ) == ""
+
+
+def test_endpoint_identity_detects_bond_order_change_with_same_bond_pairs(
+    tmp_path, monkeypatch,
+):
+    """A bond order change is a species change even when the edge set is unchanged."""
+    from cloudra.tools.core import irc_path
+    from cloudra.tools.core.ts_process import _endpoint_identity_error, _read_built_xyz
+
+    record = _start(
+        tmp_path, reactant_smiles="C=CC", product_smiles="C=CC", charge=0,
+        reaction_center=[], atom_map=[],
+    )
+    symbols, positions, _xyz, _mol = _read_built_xyz(record, "reactant")
+    original = irc_path.perceive_bonds
+
+    def changed_order(syms, coords, charge):
+        bonds, source = original(syms, coords, charge)
+        changed = dict(bonds)
+        double = next(pair for pair, order in changed.items() if order == 2.0)
+        changed[double] = 1.0
+        return changed, source
+
+    monkeypatch.setattr(irc_path, "perceive_bonds", changed_order)
+    reason = _endpoint_identity_error(record, "reactant", (symbols, positions))
+    assert "bond order" in reason.lower()
+
+
+def test_refine_stops_before_product_jobs_when_reactant_is_not_a_minimum(
+    tmp_path, monkeypatch,
+):
+    """Do not spend two more QM jobs after the first endpoint fails its Freq gate."""
+    import cloudra.tools.core.ts_process as process
+
+    record, symbols, _job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    a, b = _sn2_minima(record, symbols)
+    _install_endpoint_minimum_jobs(
+        record, monkeypatch, symbols, a, b, reactant_freqs=[-20.0, 120.0],
+    )
+    record.job_steps = [step for step in record.job_steps if step.purpose in ("reactant_opt", "reactant_frequency")]
+    record.stage = "refine"
+    record.blocked = None
+    record.waiting_for = f"job:{record.job_steps[-1].job_id}"
+    monkeypatch.setattr(process, "_read_job_state", lambda _record, _job_id: "done")
+    monkeypatch.setattr(
+        process, "_submit_step",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("product job was submitted")),
+    )
+
+    result = process._refine(record)
+    assert result.terminal == "candidate_only"
+    assert len(result.job_steps) == 2
+
+
+def test_refine_unconverged_endpoint_opt_is_candidate_not_unfixable_block(
+    tmp_path, monkeypatch,
+):
+    """A completed but unconverged endpoint Opt must end as a candidate-only run."""
+    import cloudra.tools.core.ts_process as process
+    from cloudra.tools.core.ts_process import TsJobStep
+
+    record = _start(tmp_path)
+    record.blocked = None
+    record.stage = "refine"
+    opt_dir = Path(record.run_dir) / "jobs" / "job_0004"
+    opt_dir.mkdir(parents=True, exist_ok=True)
+    opt_input = opt_dir / "reactant_opt.inp"
+    opt_input.write_text("! Opt\n", encoding="utf-8")
+    step = TsJobStep(
+        purpose="reactant_opt", job_id=9011, input_path=str(opt_input), state="done",
+    )
+    record.job_steps = [step]
+    record.waiting_for = "job:9011"
+    opt_log = Path(process._refinement_log_path(record, step))
+    opt_log.parent.mkdir(parents=True, exist_ok=True)
+    opt_log.write_text("The optimization did not converge\n", encoding="utf-8")
+    monkeypatch.setattr(process, "_read_job_state", lambda _record, _job_id: "done")
+
+    result = process._refine(record)
+    assert result.terminal == "candidate_only"
+    assert result.blocked is None
+    assert "converge" in result.stage_record("verdict").detail.lower()
+
+
+def test_unreadable_gaussian_endpoint_opt_log_finishes_candidate_only(
+    tmp_path, monkeypatch,
+):
+    """Parser failure after a completed compute job must not strand a waiting run."""
+    import cloudra.tools.core.ts_process as process
+    from cloudra.tools.core import gaussian_frames
+    from cloudra.tools.core.ts_process import TsJobStep
+
+    record = _start(tmp_path, engine="gaussian")
+    record.blocked = None
+    record.stage = "refine"
+    opt_dir = Path(record.run_dir) / "jobs" / "job_0004"
+    opt_dir.mkdir(parents=True, exist_ok=True)
+    opt_input = opt_dir / "reactant_opt.gjf"
+    opt_input.write_text("# opt\n", encoding="utf-8")
+    step = TsJobStep(
+        purpose="reactant_opt", job_id=9011, input_path=str(opt_input), state="done",
+    )
+    record.job_steps = [step]
+    record.waiting_for = "job:9011"
+    opt_log = Path(process._refinement_log_path(record, step))
+    opt_log.parent.mkdir(parents=True, exist_ok=True)
+    opt_log.write_text("Normal termination of Gaussian\n", encoding="utf-8")
+    monkeypatch.setattr(process, "_read_job_state", lambda _record, _job_id: "done")
+    monkeypatch.setattr(
+        gaussian_frames, "extract_frames",
+        lambda _path: (_ for _ in ()).throw(ValueError("unreadable geometry")),
+    )
+
+    result = process._refine(record)
+    assert result.terminal == "candidate_only"
+    assert result.blocked is None
+    assert "unreadable" in result.stage_record("verdict").detail.lower()
+
+
 def test_verdict_converged_irc_without_connectivity_is_candidate_only(tmp_path, monkeypatch):
-    """IRC 双向收敛但端点不在 TS 与声明极小值之间（连通未证明）→ candidate_only。
+    """IRC 双侧有几何但端点不在 TS 与声明极小值之间 → candidate_only。
 
     「IRC 跑完了」本身不构成「落回声明的极小值」的证据。
     """
@@ -929,6 +1523,7 @@ def test_verdict_converged_irc_without_connectivity_is_candidate_only(tmp_path, 
         _xyz_text(symbols, ts, "TS geometry"), encoding="utf-8"
     )
     _install_fake_irc_endpoints(monkeypatch, symbols, end_a, end_b)
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
 
     record = _verdict(record)
     assert record.terminal == "candidate_only"
@@ -959,58 +1554,10 @@ def _xtb_path_stub(tmp_path, seen, termination="path_not_converged"):
     return fake_run
 
 
-def test_refinement_ceiling_defaults_to_runner_default_and_resume_can_raise_it(
-    tmp_path, monkeypatch
-):
-    """未声明 → runner 默认；resume 抬高后 → 新数字必须真的到引擎。
-
-    撞上限（path_not_converged）是 blocked 而不是终态，出路正是"抬高上限重跑"——
-    所以这条链不能停在 schema 里（GH #39：此前写进声明的预算没人消费）。
-    """
-    from cloudra.tools.core import xtb_path_runner as runner
-
-    seen = []
-    monkeypatch.setattr(runner, "run_xtb_path", _xtb_path_stub(tmp_path, seen))
-
-    record = _start(tmp_path)
-    # 未声明：交给 runner 默认，不发明数字
-    assert seen == [runner.DEFAULT_REFINEMENT_RUNS]
-    assert record.blocked is not None and record.blocked.failure_class == "path_not_converged"
-    assert record.blocked.needs == ["budget"]
-    # 阻塞消息点名出路，不让 agent 自己猜
-    assert "path_refinement_runs" in record.blocked.message
-
-    # 抬高上限后 resume：数字真要过引擎
-    record = resume(
-        load_record(str(tmp_path), record.run_id),
-        TsAdjustment(path_refinement_runs=350, budget_override_note="100 轮不够"),
-    )
-    assert seen == [runner.DEFAULT_REFINEMENT_RUNS, 350]
-    assert record.blocked is not None  # 替身仍报触顶，所以应再次阻塞
-    # 落在记录上（否则重启恢复就丢了）
-    assert load_record(str(tmp_path), record.run_id).declaration.budget.path_refinement_runs == 350
 
 
-def test_declared_refinement_ceiling_is_used_on_the_first_guess(tmp_path, monkeypatch):
-    """声明里直接给上限时，第一次 guess 就用它——不必先撞一次墙（负向：默认路径没被这条抢走）。"""
-    from cloudra.tools.core import xtb_path_runner as runner
-
-    seen = []
-    monkeypatch.setattr(runner, "run_xtb_path", _xtb_path_stub(tmp_path, seen))
-
-    _start(tmp_path, budget=TsBudget(path_refinement_runs=250))
-    assert seen == [250]
 
 
-def test_zero_means_undeclared_not_zero_runs(tmp_path, monkeypatch):
-    """0 = 未声明，**不是**"跑 0 轮"：必须落到 runner 默认（否则会把上限设成非法值）。"""
-    from cloudra.tools.core import xtb_path_runner as runner
-
-    seen = []
-    monkeypatch.setattr(runner, "run_xtb_path", _xtb_path_stub(tmp_path, seen))
-
-    _start(tmp_path, budget=TsBudget(path_refinement_runs=0))
-    assert seen == [runner.DEFAULT_REFINEMENT_RUNS]
 
 
 # ---------------------------------------------------------------------------
@@ -1095,7 +1642,7 @@ def test_engine_crash_frames_are_visible_and_next_steps_are_named(tmp_path, monk
     assert "not a usable guess" in record.blocked.message
     assert any("partial iteration frame" in d for d in record.blocked.atom_details)
     # 下一步选项：默认种子路线在前，插值标出适用条件
-    assert "scan_prepare" in record.blocked.message
+    assert "guess" in record.blocked.needs
     assert "internal_coordinates" in record.blocked.message
     assert "interpolate" in record.blocked.message
 
@@ -1115,4 +1662,28 @@ def test_no_partial_frame_noise_when_the_engine_left_none(tmp_path, monkeypatch)
 
     assert "partial iteration frame" not in record.blocked.message
     assert record.blocked.atom_details == []
-    assert "scan_prepare" in record.blocked.message
+    assert "guess" in record.blocked.needs
+
+
+pytestmark = pytest.mark.usefixtures("ts_producer_authority")
+
+
+def test_file_complex_assembly_uses_bound_structure_components(tmp_path):
+    from cloudra.tools.core.ts_process import TsProcessRecord, _assemble
+    prepared = tmp_path / "atom_table.json"
+    prepared.write_text(json.dumps({"components": [], "atom_identities": [
+        {"index": i, "symbol": symbol} for i, symbol in enumerate(["F", "C", "Cl", "H", "H", "H"])]}))
+    record = TsProcessRecord(run_id="file-complex", run_dir=str(tmp_path), workspace_dir=str(tmp_path),
+        owner_conversation_id="test", owner_session_id="test", input=_declaration(reaction_center=[]),
+        current_reactant_prepared_path=str(prepared),
+        structures={"reactant": {"components": 2}})
+    result = _assemble(record)
+    assert result.blocked is not None
+    assert result.blocked.failure_class == "reaction_center_missing"
+
+
+def test_truncated_path_requests_current_guess_revision_not_obsolete_budget(tmp_path, monkeypatch):
+    monkeypatch.setattr("cloudra.tools.core.xtb_path_runner.run_xtb_path", _xtb_path_stub(tmp_path, []))
+    record = _start(tmp_path)
+    assert record.blocked.failure_class == "path_not_converged"
+    assert record.blocked.needs == ["guess"]

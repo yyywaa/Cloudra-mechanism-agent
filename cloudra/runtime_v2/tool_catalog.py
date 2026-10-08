@@ -22,7 +22,6 @@ Single source for the invocation-protocol-aware tool surface:
 from __future__ import annotations
 
 import json
-import re
 from typing import Any, Iterable
 
 from cloudra.runtime_v2.schemas import (
@@ -128,8 +127,9 @@ def validate_wire_route(
 
 def _resolve_names(tool_names: Iterable[str] | None) -> list[str]:
     """Capability-list resolution: wildcard expands over the registry."""
-    names = {str(n) for n in (tool_names or []) if n and n != "*"}
-    if tool_names and "*" in tool_names:
+    supplied = {str(n) for n in (tool_names or []) if n}
+    names = supplied - {"*"}
+    if "*" in supplied:
         from cloudra.tools import get_tools_lst
 
         names |= {entry.tool_name for entry in get_tools_lst() if entry.tool_name}
@@ -358,9 +358,16 @@ def _ts(schema: Any, defs: dict, prefix: str) -> str:
     for key in ("anyOf", "oneOf"):
         if key in schema:
             parts = [_ts(part, defs, prefix) for part in schema[key]]
-            return " | ".join(parts) if parts else "unknown"
+            union = " | ".join(parts) if parts else "unknown"
+            if schema.get("properties"):
+                # Conditions refine the shared object, rather than replacing
+                # its sibling properties (for example a tool's common fields).
+                return f"({_object_ts(schema, defs, prefix)}) & ({union})"
+            return union
     if "allOf" in schema:
         parts = [_ts(part, defs, prefix) for part in schema["allOf"]]
+        if schema.get("properties"):
+            parts.insert(0, _object_ts(schema, defs, prefix))
         return " & ".join(f"({part})" for part in parts) if parts else "unknown"
     type_ = schema.get("type")
     if isinstance(type_, list):
@@ -375,6 +382,16 @@ def _ts(schema: Any, defs: dict, prefix: str) -> str:
     if type_ == "null":
         return "null"
     if type_ == "array":
+        prefix_items = schema.get("prefixItems")
+        if (
+            isinstance(prefix_items, list)
+            and schema.get("minItems") == len(prefix_items)
+            and schema.get("maxItems") == len(prefix_items)
+        ):
+            # Pydantic fixed tuples use prefixItems rather than items. Preserve
+            # each member and the tuple length instead of exposing unknown[].
+            members = [_ts(item, defs, prefix) for item in prefix_items]
+            return "[" + ", ".join(members) + "]"
         items = schema.get("items")
         inner = _ts(items, defs, prefix) if items is not None else "unknown"
         return f"Array<{inner}>"
@@ -431,7 +448,7 @@ def _escape_comment(text: str) -> str:
 
 
 def _alias_base(name: str) -> str:
-    words = re.sub(r"[^0-9A-Za-z]+", " ", name).split()
+    words = "".join(char if char.isascii() and char.isalnum() else " " for char in name).split()
     alias = "".join(word[:1].upper() + word[1:] for word in words) or "Tool"
     if alias[0].isdigit():
         alias = f"T{alias}"
@@ -439,7 +456,10 @@ def _alias_base(name: str) -> str:
 
 
 def _def_name(prefix: str, def_name: str) -> str:
-    cleaned = re.sub(r"[^0-9A-Za-z_]", "_", def_name)
+    cleaned = "".join(
+        char if char.isascii() and (char.isalnum() or char == "_") else "_"
+        for char in def_name
+    )
     if cleaned[:1].isdigit():
         cleaned = f"T{cleaned}"
     return f"{prefix}_{cleaned}"
@@ -447,6 +467,11 @@ def _def_name(prefix: str, def_name: str) -> str:
 
 def _js_ident(name: str) -> str:
     """Guest functions are called as tools.NAME(args); quote exotic names."""
-    if re.fullmatch(r"[A-Za-z_$][0-9A-Za-z_$]*", name):
+    if (
+        name
+        and name[0].isascii()
+        and (name[0].isalpha() or name[0] in "_$")
+        and all(char.isascii() and (char.isalnum() or char in "_$") for char in name[1:])
+    ):
         return name
     return json.dumps(name, ensure_ascii=False)

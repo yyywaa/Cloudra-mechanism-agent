@@ -2,12 +2,10 @@
 
 Per task this spins up an in-process runtime_v2 kernel (RuntimeCore +
 TurnPipeline + AgentRunner), spawns the task's coordinator agent with the task
-query against the per-task sandbox as the project workspace, waits for the
+query against the per-task sandbox as the project workspace, and waits for the
 task to genuinely finish (see ``watch.py`` for the wait_background /
-wait_review state machine, GH #30), then returns the agent's final message
-plus the barrier extracted from it (the final message is the input to refusal
-classification — see `refusal.py`). The method whitelist is enforced by
-appending `MethodPolicyStage` to the pipeline; compute jobs submitted via
+wait_review state machine, GH #30). The task method policy is installed in project settings before agents start,
+so the default policy chain and automatic TS submissions share its authority; compute jobs submitted via
 `submit_compute_job` are claimed and executed by a per-task in-process
 `SchedulerDaemon` (production runs it as a separate `cloudra scheduler`
 process instead).
@@ -28,7 +26,6 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from cloudra.benchmark.policy_stage import MethodPolicyStage
 from cloudra.benchmark.schema import TaskSpec
 from cloudra.benchmark.watch import RunWatcher
 
@@ -44,7 +41,6 @@ class RuntimeV2Backend:
     def __init__(
         self,
         *,
-        run_timeout_s: float = 7200.0,
         stuck_grace_s: float = 300.0,
         poll_interval_s: float = 2.0,
         llm: Any = None,
@@ -52,7 +48,6 @@ class RuntimeV2Backend:
         start_scheduler: bool = True,
         store_path: Any = None,
     ) -> None:
-        self.run_timeout_s = run_timeout_s
         self.stuck_grace_s = stuck_grace_s
         self.poll_interval_s = poll_interval_s
         self.llm = llm
@@ -89,6 +84,7 @@ class RuntimeV2Backend:
         )
         from cloudra.runtime_v2.agent_runner import AgentRunner
         from cloudra.runtime_v2.commands import CommandBus
+        from cloudra.runtime_v2.compute_notify import ComputeNotifyBroker
         from cloudra.runtime_v2.core import RuntimeCore
         from cloudra.runtime_v2.policies import default_stages
         from cloudra.runtime_v2.schemas import Command
@@ -115,8 +111,7 @@ class RuntimeV2Backend:
 
             core.event_hub.subscribe(persist_event)
         core.runtime_defaults = legacy_default_runtime_settings()
-        stage = MethodPolicyStage(task.method_policy, base_dir=sandbox)
-        stages = [*default_stages(core), stage]
+        stages = default_stages(core)
         executor = self.tools or LegacyToolExecutor(core)
         from cloudra.runtime_v2.invocation import InvocationService
 
@@ -134,23 +129,32 @@ class RuntimeV2Backend:
             invocations=invocations,
         )
         core.runner = AgentRunner(core, pipeline)
+        # CLI uses a private RuntimeCore, so the live Web service's notify
+        # broker cannot see its sessions.  Start one here to deliver terminal
+        # compute notices and wake parked child runs.
+        broker = ComputeNotifyBroker(core, poll_interval=self.poll_interval_s)
         scheduler = None
-        if self.start_scheduler:
-            from cloudra.scheduler.daemon import SchedulerDaemon
-
-            # worker_id 含 pid+task_id：并行跑题时同进程多个实例不能共享
-            # 默认的 scheduler:<pid>，否则租约归属互相串。
-            scheduler = SchedulerDaemon(worker_id=f"scheduler:{os.getpid()}:{task.task_id}")
-            await scheduler.start()
-
         agent = None
         bus = CommandBus(core)
         try:
+            await broker.start()
+            if self.start_scheduler:
+                from cloudra.scheduler.daemon import SchedulerDaemon
+
+                # worker_id 含 pid+task_id：并行跑题时同进程多个实例不能共享
+                # 默认的 scheduler:<pid>，否则租约归属互相串。
+                scheduler = SchedulerDaemon(worker_id=f"scheduler:{os.getpid()}:{task.task_id}")
+                await scheduler.start()
             project = (
                 await bus.execute(
                     Command(
                         type="project.create",
-                        payload={"name": f"benchmark:{task.task_id}", "workspace_dir": str(sandbox)},
+                        payload={
+                            "name": f"benchmark:{task.task_id}",
+                            "workspace_dir": str(sandbox),
+                            "settings": {"benchmark_task_id": task.task_id,
+                                         "method_policy": task.method_policy.model_dump(mode="json")},
+                        },
                     )
                 )
             ).data
@@ -178,9 +182,10 @@ class RuntimeV2Backend:
                 )
                 ).data
             await self._wait_terminal(bus, agent)
-            # 评分只读交付物（图 + 日志 + 结构化拒答声明）：后端不回传任何
+            # 评分只读交付物（图 + 日志）：后端不回传任何
             # 供评分使用的文本/数字，杜绝"拿模型自述给自己打分"。
         finally:
+            await broker.close()
             if agent is not None and core.runner is not None:
                 await core.runner.cancel(agent.id)
             # 契约性关机补快照：core 接了 store 时把会话上下文投影落盘。
@@ -190,10 +195,13 @@ class RuntimeV2Backend:
 
     async def _wait_terminal(self, bus, agent) -> None:
         """等题目真正结束（watch.RunWatcher 的 wait_background/wait_review
-        语义，GH #30），卡死/超时则取消该题。"""
+        语义，GH #30），无人回应的卡死状态才按宽限期取消该题。"""
         from cloudra.persistence.database import ComputeDB
-        from cloudra.runtime_v2.schemas import Command
-        from cloudra.services.compute_store import acount_pending_compute_jobs
+        from cloudra.runtime_v2.schemas import AgentState, Command
+        from cloudra.services.compute_store import (
+            acount_active_compute_job_states,
+            pending_terminal_jobs,
+        )
 
         core = bus.core
         compute_db = ComputeDB()
@@ -203,15 +211,27 @@ class RuntimeV2Backend:
             # watcher 的 core 投影承担（子 agent 见 has_running_peers）。
             if bool(core.reminders.pending(agent.id)):
                 return True
+            if await acount_active_compute_job_states(compute_db, agent.project_id):
+                return True
             return bool(
-                await acount_pending_compute_jobs(compute_db, agent.project_id)
+                await asyncio.to_thread(
+                    pending_terminal_jobs, compute_db, window_seconds=0, limit=1,
+                    conversation_id=agent.project_id,
+                )
             )
 
+        async def resume_background() -> None:
+            # Compute notices for coordinators are deliberately parked by the
+            # general broker.  This unattended benchmark watcher resumes its
+            # coordinator once the notice reaches the inbox.
+            if agent.state is AgentState.SUCCEEDED and core.runner is not None:
+                await core.agent_host.wake(agent, runner=core.runner)
+
         watcher = RunWatcher(
-            run_timeout_s=self.run_timeout_s,
             stuck_grace_s=self.stuck_grace_s,
             poll_interval_s=self.poll_interval_s,
             pending_background=background_pending,
+            resume_background=resume_background,
         )
 
         async def cancel(reason: str) -> None:
@@ -224,7 +244,9 @@ class RuntimeV2Backend:
                 )
             )
 
-        await watcher.wait(core, agent, cancel)
+        wait_error = await watcher.wait(core, agent, cancel)
+        if wait_error is not None:
+            raise TimeoutError(wait_error)
 
     def _final_message(self, core, session_id: str) -> str:
         """agent 最后一条 message_emitted 的原文——**仅作诊断日志**，不参与评分。"""

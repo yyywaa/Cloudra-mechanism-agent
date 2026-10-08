@@ -1,6 +1,7 @@
 ---
 name: subagent-prompting
 description: Best practices, contracts, and templates for dispatching specialized sub-agents in Cloudra runtime_v2 (e.g. explorer, researcher, small_mol, dft, md, writer, experiment, env). Use when composing instructions for subagent_launcher or subagent_swarm, coordinating via agent_hub, isolating concurrent task directories, preventing hallucinations, and enforcing circuit breakers.
+license: MIT
 ---
 
 # Sub-Agent Prompting & Multi-Agent Coordination Guide
@@ -11,18 +12,9 @@ This skill establishes operational contracts, prompt engineering templates, and 
 
 ## 1. Built-in Sub-Agent Roles & Scope Boundaries
 
-Cloudra provides 8 specialized sub-agent roles (registered as `a-1` through `a-8`). When launching a sub-agent, select the role that strictly matches the task domain:
+Use the semantic `role_id` in both dispatch tools, for example `role_id="explorer"` or `role_id="small_mol"`. Choose the role whose description fits the task using the built-in directory in the tool description. The directory is generated from `runtime_v2/roles.py`; it is the single source of built-in identities.
 
-| Role Identifier | Role Name | Domain & Tooling Boundary | Primary Use Cases |
-| :--- | :--- | :--- | :--- |
-| **a-1** | `explorer` | Read-only file discovery, codebase grepping, workspace mapping | Quick reconnaissance, locating log files, scanning directory trees |
-| **a-2** | `writer` | Writing/editing documents, formatting reports, Markdown | Drafting research reports, formatting summaries, organizing SI text |
-| **a-3** | `researcher` | Deep literature search (`search` with `source=openalex`/`arxiv`, `read`) | Paper retrieval, DOI extraction, surveying methodology, SI data lookup |
-| **a-4** | `small_mol` | Molecular/cluster QM (Gaussian, ORCA): conformers, TS, reaction mechanisms, spectra | Ligand preparation, atom mapping, TS search, IRC verification, barrier calculations |
-| **a-5** | `md` | Molecular dynamics setup, OpenMM, GROMACS, trajectory parsing | System solvation, topology generation, equilibration, MM-GBSA |
-| **a-6** | `dft` | Periodic first-principles (VASP, CP2K): bulk, surfaces, interfaces, defects | Submitting periodic compute jobs, band structure, adsorption energies |
-| **a-7** | `experiment` | Wet-lab protocols, synthetic routes, reagents, reaction safety | Designing experimental procedures, screening reagents, yield optimization |
-| **a-8** | `env` | Environment inspection, shell commands, dependency installation | Checking CLI binaries (`xtb`, `crest`, `vina`), setting environment paths |
+The runtime checks the current role registry before dispatch. A `role.update` can change permissions or allowed child roles, so the directory does not guarantee static capabilities. Assign goals within the selected role's current permissions; the runtime already injects its identity and applies its tool policy.
 
 ---
 
@@ -36,7 +28,7 @@ Use for linear prerequisites or domain-specific sub-tasks:
 ### 2.2 Parallel Swarm Dispatch (`subagent_swarm`)
 Use when executing homogeneous parallel workloads (e.g. scoring 10 different conformers, screening 20 ligands, or evaluating multiple adsorption sites):
 - **Template Parameter `{{item}}`**: Embed `{{item}}` into the prompt template; `subagent_swarm` automatically expands each entry in the items list into an independent sub-agent.
-- **Concurrency & Resource Limits**: Swarm caps maximum parallel runs to prevent resource starvation.
+- **Concurrency & Resource Limits**: Set `max_concurrency` above zero to cap active sub-agent instances; the default `0` allows unlimited concurrency.
 
 ### 2.3 Forum Collaboration (`agent_hub`)
 Use for asynchronous communication, sharing intermediate discoveries, and collaborative peer reviews:
@@ -50,8 +42,8 @@ Use for asynchronous communication, sharing intermediate discoveries, and collab
 
 When delegating complex tasks, structure the prompt using the **S.C.A.R.F.** framework:
 
-- **(S) System Role & Scope**: Explicitly declare role identity and behavioral red lines.
-  *(e.g., "You are a specialized DFT sub-agent (dft). Focus strictly on setting up the Gaussian input for transition state TS1; do not perform literature searches.")*
+- **(S) System Role & Scope**: Define task scope and boundaries; the runtime already injects role identity.
+  *(e.g., "Locate and validate transition state TS1 from the supplied molecular endpoints; report the evidence and any unresolved gap.")*
 - **(C) Context & Established Facts**: Provide verified ground truth (molecular SMILES, working directory, previous calculation energies) so the sub-agent does not re-compute or guess.
   *(e.g., "The reactant complex energy is -450.2134 Hartree. The optimized coordinates are stored at /abs/path/to/reactant.xyz.")*
 - **(A) Actionable Atomic Goal**: Define unambiguous, verifiable goals as objectives with acceptance criteria.

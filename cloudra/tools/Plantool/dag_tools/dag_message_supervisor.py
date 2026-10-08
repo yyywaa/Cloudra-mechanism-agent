@@ -63,6 +63,12 @@ def _canonical_hash(value: Any) -> str:
 
 
 class DagMessageSupervisor(DagToolBase):
+    def is_manage(self) -> bool:
+        return False
+
+    def is_write(self) -> bool:
+        return True
+
     tool_id: str = "t-dag-message"
     tool_name: str = "dag_message_supervisor"
     tool_description: str = (
@@ -208,7 +214,3 @@ class DagMessageSupervisor(DagToolBase):
                 "enqueued": True,
             },
         )
-
-
-def get_class():
-    return DagMessageSupervisor

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from cloudra.tools import get_tools_lst
 from cloudra.tools.capabilities import (
     android_tools,
@@ -70,15 +73,19 @@ def test_role_allowlist_projection():
     from cloudra.tools.capabilities import role_hidden_tools
 
     hidden = role_hidden_tools("researcher")
-    # 化学/QM 工具对非科学角色隐藏；通用工具不设 allowlist。
+    # 化学/QM 工具对非科学角色隐藏；层级派工只给 Coordinator。
     assert {"log_parser", "submit_compute_job", "ts_guess", "smiles_to_mol"} <= hidden
+    assert {"subagent_launcher", "subagent_swarm"} <= hidden
+    assert "agent_hub" not in hidden
     assert "bash" not in hidden
     assert "read" not in hidden
     # 谱图处理（ir/nmr）是 experiment 角色专属；其余化学工具科学角色共享。
     assert role_hidden_tools("coordinator") == {"ir_processor", "nmr_processor"}
-    assert not role_hidden_tools("experiment")
+    assert role_hidden_tools("experiment") == {"subagent_launcher", "subagent_swarm"}
     for role in ("small_mol", "md", "dft"):
-        assert role_hidden_tools(role) == {"ir_processor", "nmr_processor"}, role
+        assert role_hidden_tools(role) == {
+            "ir_processor", "nmr_processor", "subagent_launcher", "subagent_swarm"
+        }, role
     # supervisor 的 evidence_read 面（log_parser/reaction_mapping）不被角色门拿走。
     assert "log_parser" not in role_hidden_tools("supervisor")
     assert "reaction_mapping" not in role_hidden_tools("supervisor")
@@ -138,17 +145,41 @@ def test_edit_schema_uses_path_and_old_string():
     edit = next(e for e in get_tools_lst() if e.tool_name == "edit")
     params = edit.instantiate().tool_schema_json()["function"]["parameters"]
     props = params["properties"]
-    assert "path" in props and "filepath" not in props
+    assert {"path", "expected_sha256", "edits"} <= props.keys()
+    assert "filepath" not in props
+    assert {"path", "expected_sha256", "edits"} <= set(params["required"])
     edit_item = props["edits"]["items"]
-    keys = edit_item.get("properties") or edit_item
     if "$ref" in edit_item:
-        ref = edit_item["$ref"].rsplit("/", 1)[-1]
-        keys = params.get("$defs", {}).get(ref, {}).get("properties", keys)
-    # $ref unwrap if needed
-    assert "old_string" in keys or "old_string" in str(params)
+        prefix, ref = edit_item["$ref"].rsplit("/", 1)
+        assert prefix == "#/$defs"
+        edit_item = params["$defs"][ref]
+    assert {"old_string", "new_string", "replace_all"} <= edit_item["properties"].keys()
+    assert {"old_string", "new_string"} <= set(edit_item["required"])
+
+
+@pytest.mark.parametrize("missing", ["old_string", "new_string"])
+def test_edit_operation_requires_both_published_text_fields(missing):
+    edit = next(e for e in get_tools_lst() if e.tool_name == "edit")
+    replacement = {"old_string": "before", "new_string": "after"}
+    del replacement[missing]
+    with pytest.raises(ValidationError) as error:
+        edit.input_schema.model_validate({
+            "path": "notes.txt", "expected_sha256": "0" * 64, "edits": [replacement],
+        })
+    assert any(
+        item["loc"] == ("edits", 0, missing) and item["type"] == "missing"
+        for item in error.value.errors()
+    )
 
 
 def test_get_skill_schema_has_reference_not_other():
     skill = next(e for e in get_tools_lst() if e.tool_name == "get_skill")
     props = skill.instantiate().tool_schema_json()["function"]["parameters"]["properties"]
     assert "reference" in props and "other" not in props
+
+
+def test_researcher_can_generate_ml_hypotheses_without_qm_tools():
+    from cloudra.tools.capabilities import role_hidden_tools
+    hidden = role_hidden_tools("researcher")
+    assert "mechanism_predict" not in hidden
+    assert "submit_compute_job" in hidden

@@ -351,18 +351,19 @@ class LogParser(Tool):
 
             # 3. 根据请求填充字段
             if "scf_energy_hartree" in requested or "scf_energy_ev" in requested:
-                if data is not None and hasattr(data, "scfenergies") and data.scfenergies is not None and len(data.scfenergies) > 0:
+                # cclib 的 eV/Hartree 常数与本工具不同，回算会有偏差；
+                # ORCA 最终电子能以原始 Hartree 输出为准。
+                orca_energy = orca_frames.final_energy_hartree(log_text) if engine == "orca" else None
+                if orca_energy is not None:
+                    result["scf_energy_hartree"] = orca_energy
+                    result["scf_energy_ev"] = orca_energy * 27.211386245988
+                elif data is not None and hasattr(data, "scfenergies") and data.scfenergies is not None and len(data.scfenergies) > 0:
                     # cclib 的 scfenergies 单位为 eV
+                    from cloudra.tools.core.cclib_units import energy_ev_to_hartree
+
                     ev = float(data.scfenergies[-1])
                     result["scf_energy_ev"] = ev
-                    result["scf_energy_hartree"] = ev / 27.211386245988
-                elif engine == "orca":
-                    # 外部 MLIP 日志无 SCF 能量段，唯一能量行是
-                    # FINAL SINGLE POINT ENERGY (From external program)
-                    e_hartree = orca_frames.final_energy_hartree(log_text)
-                    if e_hartree is not None:
-                        result["scf_energy_hartree"] = e_hartree
-                        result["scf_energy_ev"] = e_hartree * 27.211386245988
+                    result["scf_energy_hartree"] = energy_ev_to_hartree(ev)
                 elif engine == "xtb":
                     # xtb：最终 TOTAL ENERGY 块 / :: total energy / opt 周期能量行
                     e_hartree = xtb_frames.final_energy_hartree(log_text)
@@ -612,8 +613,6 @@ class LogParser(Tool):
             )
 
 
-def get_class():
-    return LogParser
 
 
 def _has_frequency_data(result: dict[str, Any]) -> bool:
@@ -645,15 +644,15 @@ def derive_delivery_changes(
     """DAG evidence derivation owned by this tool; kept out of DagController.
 
     Only the deterministic harness calls this, and engine still rejects models
-    that try to set derived evidence fields themselves.
+    that try to set derived evidence fields themselves.  IRC 解析字段
+    （点数/收敛/端点能量）只是信息字段：short_irc 阶段绑定不走本 deriver，
+    由 harness 按几何方向区间证明重解析日志判定（irc_evidence）。
     """
     del current, arguments  # 本工具派生不需要 current/arguments
     imaginary = _imaginary_frequency_list(result)
     # 终止状态必须是显式 True 才计证据：None（undecidable，未判定终止）与
     # False 一样不发证据——未知终止的日志不能派生 structure/saddle 支撑。
     normal = result.get("normal_termination") is True
-    # short_irc 门槛：双向均收敛，或每个方向至少这么多 IRC 点（不含 TS）。
-    min_irc_points = 50
     if (
         role == "intermediate_optimization"
         and normal
@@ -671,14 +670,6 @@ def derive_delivery_changes(
             "saddle_supported": True,
             "evidence_level": "saddle_supported",
         }
-    if role == "short_irc" and (
-        result.get("irc_both_directions_converged") is True
-        or (
-            int(result.get("irc_num_points_forward") or 0) >= min_irc_points
-            and int(result.get("irc_num_points_backward") or 0) >= min_irc_points
-        )
-    ):
-        return {"short_irc_supported": True}
     if (
         role == "endpoint_a_optimization"
         and normal

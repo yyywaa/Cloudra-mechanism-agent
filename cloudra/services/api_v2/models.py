@@ -26,12 +26,22 @@ class AgentSpawn(BaseModel):
     display_name: Optional[str] = None
     query: Optional[str] = None
     settings: dict[str, Any] = Field(default_factory=dict)
+    language: Optional[str] = None
 
 
 class MessagePost(BaseModel):
     content: str = Field(min_length=1)
     images: Optional[list[str]] = None
     image_artifact_ids: Optional[list[Optional[str]]] = None
+    language: Optional[str] = None
+
+
+class HubPostCreate(BaseModel):
+    topic: str = Field(min_length=1)
+    content: str = Field(min_length=1)
+    kind: str = "finding"
+    to_agent: Optional[str] = None
+    parent_id: Optional[str] = None
 
 
 class CancelPost(BaseModel):
@@ -78,7 +88,6 @@ class BenchmarkStart(BaseModel):
     tasks_dirs: list[str] = Field(default_factory=list)
     only: str = ""
     concurrency: int = Field(default=1, ge=1, le=8)
-    timeout: float = Field(default=7200.0, ge=60.0)
 
 
 class GoalSetRequest(BaseModel):
@@ -121,6 +130,12 @@ class OpenRouterExchangeRequest(BaseModel):
     code: str
     code_verifier: str
     slot: Optional[Literal["coordinator", "follower"]] = None
+
+
+class CodexDevicePollRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    login_id: str = Field(min_length=1)
 
 
 class CommandResponse(BaseModel):

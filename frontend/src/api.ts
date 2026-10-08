@@ -2,8 +2,11 @@ import type {
   Agent,
   ComputeJob,
   ComputeNode,
+  CodexAuthStatus,
+  CodexDeviceLogin,
   EventEnvelope,
   FsBrowseResponse,
+  HubPost,
   KgGraph,
   KgHealth,
   KgOverview,
@@ -160,9 +163,20 @@ export const api = {
   computeNodes: () => request<ComputeNode[]>('/api/v2/compute/nodes'),
   listPendingReminders: (projectId: string) =>
     request<PendingReminder[]>(`/api/v2/projects/${projectId}/reminders/pending`),
+  // ---- AgentHub forum (routers/hub.py): project-scoped post projection + user posts ----
+  hubPosts: (projectId: string) =>
+    request<{ posts: HubPost[] }>(`/api/v2/projects/${projectId}/hub/posts`),
+  hubPost: (
+    projectId: string,
+    body: { topic: string; content: string; kind: string; to_agent?: string; parent_id?: string | null },
+  ) =>
+    request<{ post: HubPost; notified_count: number; failed_session_ids: string[] }>(
+      `/api/v2/projects/${projectId}/hub/posts`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
   spawnAgent: async (
     projectId: string,
-    body: { role_id: string; query?: string; parent_session_id?: string | null; settings?: Record<string, unknown> },
+    body: { role_id: string; query?: string; parent_session_id?: string | null; settings?: Record<string, unknown>; language?: string },
   ) =>
     assertAccepted(
       await request<CommandResponse<Agent>>(`/api/v2/projects/${projectId}/agents`, {
@@ -187,14 +201,20 @@ export const api = {
     const q = `after=0&limit=${limit}&tail=true${before != null ? `&before=${before}` : ''}`;
     return request<EventEnvelope[]>(`/api/v2/agents/${agentId}/events?${q}`);
   },
-  sendMessage: async (agentId: string, content: string, images?: string[], imageArtifactIds?: (string | null)[]) =>
+  sendMessage: async (
+    agentId: string,
+    content: string,
+    images?: string[],
+    imageArtifactIds?: (string | null)[],
+    language?: string,
+  ) =>
     assertAccepted(
       await request<CommandResponse<Agent>>(`/api/v2/agents/${agentId}/messages`, {
         method: 'POST',
         body: JSON.stringify(
           images && images.length > 0
-            ? { content, images, image_artifact_ids: imageArtifactIds ?? [] }
-            : { content },
+            ? { content, images, image_artifact_ids: imageArtifactIds ?? [], language }
+            : { content, language },
         ),
       }),
       'Message rejected',
@@ -224,6 +244,18 @@ export const api = {
     }),
   listRoles: () => request<Array<{ role_id: string; display_name: string }>>('/api/v2/roles'),
   providers: () => request<ProviderPreset[]>('/api/v2/runtime/providers'),
+  codexAuthStatus: () => request<CodexAuthStatus>('/api/v2/runtime/providers/codex/status'),
+  startCodexLogin: () => request<CodexDeviceLogin>('/api/v2/runtime/providers/codex/device-login', {
+    method: 'POST',
+  }),
+  pollCodexLogin: (login_id: string) =>
+    request<{ status: 'pending' | 'authorized' }>('/api/v2/runtime/providers/codex/device-poll', {
+      method: 'POST',
+      body: JSON.stringify({ login_id }),
+    }),
+  logoutCodex: () => request<{ status: 'logged_out' }>('/api/v2/runtime/providers/codex/auth', {
+    method: 'DELETE',
+  }),
   getOpenRouterPkce: (callbackUrl?: string) =>
     request<{ auth_url: string; code_verifier: string; code_challenge: string }>(
       `/api/v2/runtime/providers/openrouter/pkce${callbackUrl ? `?callback_url=${encodeURIComponent(callbackUrl)}` : ''}`
@@ -260,6 +292,19 @@ export const api = {
   // 2D molecular structure diagram rendered from SMILES.
   chemRenderSmilesUrl: (smiles: string, width = 200, height = 140, theme = 'dark') =>
     withToken(`${runtimeUrl}/api/v2/chem/render-smiles?smiles=${encodeURIComponent(smiles)}&width=${width}&height=${height}&theme=${theme}&v=w4`),
+  // 3D Cartesian coordinates generated from SMILES via RDKit embedding.
+  chemSmilesToXyz: (smiles: string) =>
+    request<{
+      success: boolean;
+      xyz: string;
+      num_atoms: number;
+      formula: string;
+      bonds?: Array<{ atom1: number; atom2: number; order: number }>;
+      num_fragments?: number;
+      error?: string;
+    }>(
+      `/api/v2/chem/smiles-to-xyz?smiles=${encodeURIComponent(smiles)}`,
+    ),
   dagDelivery: (projectId: string) =>
     request<{ mode: string; graph: Record<string, unknown> | null }>(`/api/v2/projects/${projectId}/dag/delivery`),
   dagReviews: (projectId: string) =>
@@ -318,7 +363,7 @@ export const api = {
     ),
   benchmarkStatus: () => request<BenchmarkStatus>('/api/v2/benchmark/status'),
   benchmarkCatalog: () => request<BenchmarkCatalog>('/api/v2/benchmark/catalog'),
-  benchmarkStart: (body: { tiers?: string[]; tasks_dirs?: string[]; only?: string; concurrency?: number; timeout?: number }) =>
+  benchmarkStart: (body: { tiers?: string[]; tasks_dirs?: string[]; only?: string; concurrency?: number }) =>
     request<BenchmarkStatus>('/api/v2/benchmark/start', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -417,21 +462,9 @@ export interface BenchmarkTaskRow {
   error: string;
   final_score: number | null;
   graph_score: number | null;
-  integrity_passed: boolean | null;
   selfconsistency_passed: boolean | null;
   accuracy_score: number | null;
-  outcome: string | null;
   notes: string[];
-}
-
-export interface BenchmarkRefusalStats {
-  tp: number;
-  fp: number;
-  fn: number;
-  tn: number;
-  precision: number | null;
-  recall: number | null;
-  f1: number | null;
 }
 
 export interface BenchmarkCatalogTier {
@@ -452,18 +485,15 @@ export interface BenchmarkStatus {
   finished_at: number | null;
   config: Record<string, unknown>;
   tasks: BenchmarkTaskRow[];
-  refusal: BenchmarkRefusalStats | Record<string, never>;
 }
 
 export interface BenchmarkRunRow {
   task_id: string;
   sandbox: string;
-  integrity_passed: boolean;
   graph_score: number;
   selfconsistency_passed: boolean;
   accuracy_score: number;
   final_score: number;
-  outcome: string;
   notes: string[];
   ts: number;
 }

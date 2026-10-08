@@ -22,6 +22,9 @@ import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
+from pydantic import ValidationError
+
+from cloudra.infra.tool_errors import validation_feedback
 from cloudra.runtime_v2.check_command import (
     CHECK_RUN_TIMEOUT_SECONDS,
     CheckCommandError,
@@ -122,12 +125,14 @@ class ReminderBroker:
         return self.pending_in_project(agent.project_id, session_id=session_id)
 
     def pending_in_project(
-        self, project_id: str, *, session_id: str | None = None
+        self, project_id: str, *, session_id: str | None = None, through_seq: int | None = None
     ) -> list[dict[str, Any]]:
         live: dict[int, dict[str, Any]] = {}
         for env in self.core.event_log.query_project(
             project_id, types=_REMINDER_TYPES, limit=None
         ):
+            if through_seq is not None and env.seq > through_seq:
+                continue
             if env.type == "reminder.scheduled":
                 if session_id is not None and env.session_id != session_id:
                     continue
@@ -347,7 +352,12 @@ class ReminderBroker:
     # ------------------------------------------------------------------ tool
 
     async def handle(self, agent: AgentSession, call: ToolCall) -> ToolResult:
-        args = call.arguments or {}
+        from cloudra.tools.Managetool.schedule import ScheduleInput
+
+        try:
+            args = ScheduleInput.model_validate(call.arguments).model_dump()
+        except ValidationError as exc:
+            return _err(validation_feedback(exc))
         action = str(args.get("action") or "create")
         if action == "list":
             schedules = [

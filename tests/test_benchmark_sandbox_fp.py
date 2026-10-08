@@ -30,6 +30,7 @@ from cloudra.benchmark.runner import BenchmarkRunner
 from cloudra.runtime_v2.commands import CommandBus
 from cloudra.runtime_v2.core import RuntimeCore
 from cloudra.runtime_v2.schemas import AgentState, OrchestrationMode
+from cloudra.services.nodes import default_resources
 from tests.benchmark_support import (
     Receipt,
     ScriptedLLM,
@@ -93,21 +94,27 @@ _BARRIER = "Done. The computed barrier is 5.0 kcal/mol."
 # 计算资源由 agent 显式申请、节点按容量硬校验：申请超过本机核数会被合法拒收
 # （那是 submit 工具的正确行为，不是被测的链路行为）。CI runner 只有 2 核，
 # 所以脚本申请 min(2, 本机核数)，与 tests/test_xtb_channel.py 的既有口径一致。
+# 输入声明的内存也会由 submit 推导并记账；writer 默认 4GB 超过 CI 的 3968MB
+# 额度。引擎替身只需少量内存，显式写入最多 512MB，并给并发用例留一半额度。
 _TEST_CPUS = max(1, min(2, os.cpu_count() or 1))
+_TEST_MEMORY_MB = max(1, min(512, default_resources()["memory_mb"] // 2))
 _CPUS_TOKEN = "__CPUS__"
+_MEMORY_TOKEN = "__MEMORY_MB__"
 
 
-def _fit_cpus(program: str) -> str:
-    """把脚本里的 __CPUS__ 占位换成这台机器真能申请到的核数。"""
-    return program.replace(_CPUS_TOKEN, str(_TEST_CPUS))
+def _fit_resources(program: str) -> str:
+    """把脚本里的资源占位换成这台机器能申请到的测试额度。"""
+    return program.replace(_CPUS_TOKEN, str(_TEST_CPUS)).replace(
+        _MEMORY_TOKEN, str(_TEST_MEMORY_MB)
+    )
 
-_CHILD_SYNC_CHAIN_PROGRAM = _fit_cpus(r"""
+_CHILD_SYNC_CHAIN_PROGRAM = _fit_resources(r"""
 const w = await tools.qm_input_writer({
   source_type: "smiles", source_value: "O",
   method: "b3lyp", basis_set: "6-31g(d)",
   task_type: [{ "sp": null }],
-  nproc: __CPUS__,
-  output_dir: "calc/input.gjf",
+  nproc: __CPUS__, mem: "__MEMORY_MB__MB",
+  output_path: "calc/input.gjf",
 });
 if (!w.is_success) { text("WRITER FAIL: " + w.summary); }
 else {
@@ -129,7 +136,7 @@ else {
 
 # 父 agent（run2）：异步提交同一输入（真实 scheduler 认领 → guard → 引擎），
 # 随后按真实门禁挂起等唤醒；终态由 watcher 的 compute.db 判定收口。
-_PARENT_ASYNC_SUBMIT_PROGRAM = _fit_cpus(r"""
+_PARENT_ASYNC_SUBMIT_PROGRAM = _fit_resources(r"""
 const s = await tools.submit_compute_job({
   input_file: "calc/input.gjf", job_type: "gaussian", is_async: true, cpus: __CPUS__,
 });
@@ -139,13 +146,13 @@ else { text("PARENT SUBMITTED job=" + s.data.job_id + " state=" + s.data.state);
 
 # 引擎失败 → 修正后重提：第一次同步提交必须带回 failed 回执（含编号），
 # 第二次同输入成功，两个编号不同、旧失败记录保留。
-_CHILD_FAIL_THEN_RESUBMIT_PROGRAM = _fit_cpus(r"""
+_CHILD_FAIL_THEN_RESUBMIT_PROGRAM = _fit_resources(r"""
 const w = await tools.qm_input_writer({
   source_type: "smiles", source_value: "O",
   method: "b3lyp", basis_set: "6-31g(d)",
   task_type: [{ "sp": null }],
-  nproc: __CPUS__,
-  output_dir: "calc/input.gjf",
+  nproc: __CPUS__, mem: "__MEMORY_MB__MB",
+  output_path: "calc/input.gjf",
 });
 if (!w.is_success) { text("WRITER FAIL: " + w.summary); }
 else {
@@ -157,13 +164,13 @@ else {
 }
 """)
 
-_CHILD_RESUBMIT_CHAIN_PROGRAM = _fit_cpus(r"""
+_CHILD_RESUBMIT_CHAIN_PROGRAM = _fit_resources(r"""
 const w = await tools.qm_input_writer({
   source_type: "smiles", source_value: "O",
   method: "b3lyp", basis_set: "6-31g(d)",
   task_type: [{ "sp": null }],
-  nproc: __CPUS__,
-  output_dir: "calc/input.gjf",
+  nproc: __CPUS__, mem: "__MEMORY_MB__MB",
+  output_path: "calc/input.gjf",
 });
 if (!w.is_success) { text("WRITER FAIL: " + w.summary); }
 else {
@@ -193,26 +200,26 @@ const goodWrite = await tools.write({
 });
 const badSource = await tools.qm_input_writer({
   source_type: "xyz_file", source_value: "xyz/bad.xyz",
-  method: "b3lyp", engine: "gaussian", output_dir: "calc/bad_from_xyz.gjf",
+  method: "b3lyp", engine: "gaussian", output_path: "calc/bad_from_xyz.gjf",
 });
 const badOption = await tools.qm_input_writer({
   engine: "orca", source_type: "smiles", source_value: "O",
   method: "b3lyp", basis_set: "def2-svp",
   task_type: [{ "opt": "TS,calcfc,noeigen" }],
-  output_dir: "calc/bad_orca.inp",
+  output_path: "calc/bad_orca.inp",
 });
 text("WRITTEN bad=" + badWrite.is_success + " good=" + goodWrite.is_success +
      " | MALFORMED ok=" + badSource.is_success +
      " | BAD OPTION ok=" + badOption.is_success);
 """
 
-_CHILD_CORRECTED_CHAIN_PROGRAM = _fit_cpus(r"""
+_CHILD_CORRECTED_CHAIN_PROGRAM = _fit_resources(r"""
 const w = await tools.qm_input_writer({
   source_type: "xyz_file", source_value: "xyz/water.xyz",
   method: "b3lyp", basis_set: "6-31g(d)",
   task_type: [{ "sp": null }],
-  nproc: __CPUS__,
-  output_dir: "calc/input.gjf",
+  nproc: __CPUS__, mem: "__MEMORY_MB__MB",
+  output_path: "calc/input.gjf",
 });
 if (!w.is_success) { text("WRITER FAIL: " + w.summary); }
 else {
@@ -238,13 +245,13 @@ if (parsed.is_success) {
 """
 
 # Web 路径子 agent：提交后不轮询——ComputeNotifyBroker 回传唤醒后 query+parser。
-_CHILD_PREP_PROGRAM = _fit_cpus(r"""
+_CHILD_PREP_PROGRAM = _fit_resources(r"""
 const w = await tools.qm_input_writer({
   source_type: "smiles", source_value: "O",
   method: "b3lyp", basis_set: "6-31g(d)",
   task_type: [{ "sp": null }],
-  nproc: __CPUS__,
-  output_dir: "calc/input.gjf",
+  nproc: __CPUS__, mem: "__MEMORY_MB__MB",
+  output_path: "calc/input.gjf",
 });
 if (!w.is_success) { text("WRITER FAIL: " + w.summary); }
 else {
@@ -271,14 +278,14 @@ else {
 }
 """
 
-_SPAWN_PROGRAM = r"""
+_SPAWN_PROGRAM = _fit_resources(r"""
 const r = await tools.subagent_launcher({
-  agent_id: "a-4",
-  query: "Prepare a water single-point Gaussian input from SMILES O, submit it asynchronously with cpus=4, wait for completion and parse the log.",
+  role_id: "small_mol",
+  query: "Prepare a water single-point Gaussian input from SMILES O, submit it asynchronously with cpus=__CPUS__, wait for completion and parse the log.",
 });
 if (!r.is_success) { text("SPAWN FAIL: " + r.summary); }
 else { text("SPAWNED session=" + r.data.session_id); }
-"""
+""")
 
 
 def _task_json(task_id: str, *, mode: OrchestrationMode = OrchestrationMode.STANDARD,
@@ -467,6 +474,8 @@ def _assert_job_chain(core, *, engine, workspace: Path, project_id: str,
         assert row["state"] == "done"
         assert row["conversation_id"] == project_id
         assert row["path"] == str(gjf.resolve())
+        assert row["req_cpus"] == _TEST_CPUS
+        assert row["req_memory_mb"] == _TEST_MEMORY_MB
 
     # 事件：每条作业恰好一次 submit，requested/started/finished 一一闭合，
     # 无重复提交、无越权 job id
@@ -496,7 +505,6 @@ def test_cli_full_chain_standard_js(tmp_path, monkeypatch):
         llm=llm,
         start_scheduler=True,
         poll_interval_s=0.05,
-        run_timeout_s=60.0,
         stuck_grace_s=10.0,
     )
 
@@ -554,7 +562,7 @@ def test_cli_full_chain_standard_js(tmp_path, monkeypatch):
     # 最终消息只作审计留痕：它不参与任何评分（评分只读交付物）
     assert any("5.0 kcal/mol" in m for m in parent_messages), parent_messages
 
-    # 评分落库（空沙箱无图 → 零证据倒扣，outcome=failed，与既有契约一致）
+    # 评分落库（空沙箱无图 → 零证据倒扣，与既有契约一致）
     runs = runner.db.list_runs_for("")
     assert [r["task_id"] for r in runs] == ["T1"]
     assert runs[0]["final_score"] == -1.0
@@ -610,12 +618,12 @@ async def test_web_full_chain_standard_js(tmp_path, monkeypatch):
     try:
         service = BenchmarkService(core, bus, data_dir=tmp_path / "bench")
         tasks_dir = _write_tasks(tmp_path / "tasks", "T1")
-        snap = await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1, timeout=90.0)
+        snap = await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1)
         batch = service._batch
         batch_id = snap["batch_id"]
 
         # 父进入 wait_background 挂起时，batch 仍未评分（注入延迟引擎验证）
-        async def parent_suspended() -> bool:
+        def parent_suspended() -> bool:
             st = batch.task_states[0]
             if not st.agent_id:
                 return False
@@ -713,7 +721,7 @@ def test_cli_full_chain_traditional_equivalent(tmp_path, monkeypatch):
 
     llm.script("coordinator", [
         calls(1, [("subagent_launcher", {
-            "agent_id": "a-4",
+            "role_id": "small_mol",
             "query": "traditional protocol equivalent chain",
         })]),
         text(2, "suspended"),
@@ -725,20 +733,22 @@ def test_cli_full_chain_traditional_equivalent(tmp_path, monkeypatch):
             "source_type": "smiles", "source_value": "O",
             "method": "b3lyp", "basis_set": "6-31g(d)",
             "task_type": [{"sp": None}], "nproc": _TEST_CPUS,
-            "output_dir": "calc/input.gjf",
-        })]),
+            "mem": f"{_TEST_MEMORY_MB}MB",
+            "output_path": "calc/input.gjf",
+        })], run=1),
         calls(2, [("submit_compute_job", {
             "input_file": "calc/input.gjf", "job_type": "gaussian",
             "is_async": True, "cpus": _TEST_CPUS,
-        })], expect=Receipt(tool="qm_input_writer", is_success=True)),
-        calls(3, [("query_compute_job", job_id_of)], expect=Receipt(
+        })], run=1, expect=Receipt(tool="qm_input_writer", is_success=True)),
+        calls(3, [("query_compute_job", job_id_of)], run=1, expect=Receipt(
             tool="submit_compute_job", is_success=True)),
-        text(4, "chain complete via traditional protocol"),
+        text(4, "Waiting for the compute notification.", run=1),
+        text(1, "chain complete via traditional protocol", run=2),
     ])
 
     backend = RuntimeV2Backend(
         llm=llm, start_scheduler=True, poll_interval_s=0.05,
-        run_timeout_s=60.0, stuck_grace_s=10.0,
+        stuck_grace_s=10.0,
     )
 
     tasks_dir = _write_tasks(tmp_path / "tasks", "T1")
@@ -780,11 +790,12 @@ def test_cli_full_chain_traditional_equivalent(tmp_path, monkeypatch):
 
 def _run_cli_task(tmp_path, monkeypatch, llm, *, task_id: str = "T1",
                   mode: OrchestrationMode = OrchestrationMode.STANDARD,
-                  method_allowed: tuple[str, ...] = ("b3lyp",)):
+                  method_allowed: tuple[str, ...] = ("b3lyp",),
+                  backend: RuntimeV2Backend | None = None):
     """CLI 入口跑一题（引擎由调用方先 install_engine 并设好控制文件）。"""
-    backend = RuntimeV2Backend(
+    backend = backend or RuntimeV2Backend(
         llm=llm, start_scheduler=True,
-        poll_interval_s=0.05, run_timeout_s=60.0, stuck_grace_s=10.0,
+        poll_interval_s=0.05, stuck_grace_s=10.0,
     )
     tasks_dir = _write_tasks(
         tmp_path / "tasks", task_id, mode=mode, method_allowed=method_allowed
@@ -894,7 +905,12 @@ def test_cli_malformed_inputs_fail_then_corrected(tmp_path, monkeypatch):
     assert len(writer_events) == 3  # 两次失败 + 一次成功，逐次真实执行
     # 可解释：失败回执带拒绝原因（不是空消息）
     summaries = [str(e.data.get("result_summary") or "") for e in writer_events]
-    assert any("not found" in s or "Failed to generate" in s for s in summaries), summaries
+    # 畸形 XYZ 由输入校验确定性拦截（34293c1d 起报 "Invalid input ..."）；
+    # "Failed to generate" 是仍存在的通用包装路径
+    assert any(
+        "Invalid input for qm_input_writer" in s or "Failed to generate" in s
+        for s in summaries
+    ), summaries
     assert any("calcfc" in s or "refused" in s.lower() for s in summaries), summaries
 
 
@@ -949,7 +965,7 @@ text("PROPOSED ok=" + proposal.is_success + " " + proposal.summary);
 
 _GUIDED_SPAWN_PROGRAM = r"""
 const r = await tools.subagent_launcher({
-  agent_id: "a-4",
+  role_id: "small_mol",
   query: "Run the input preparation and compute for step1, then explicitly submit the finished parse as frequency evidence for species R.",
 });
 if (!r.is_success) { text("SPAWN FAIL: " + r.summary); }
@@ -974,8 +990,8 @@ const w = await tools.qm_input_writer({{
   source_type: "smiles", source_value: "O",
   method: "b3lyp", basis_set: "6-31g(d)",
   task_type: [{{ "freq": null }}],
-  nproc: {_TEST_CPUS},
-  output_dir: "calc/input.gjf",
+  nproc: {_TEST_CPUS}, mem: "{_TEST_MEMORY_MB}MB",
+  output_path: "calc/input.gjf",
 }});
 if (!w.is_success) {{ text("WRITER FAIL: " + w.summary); }}
 else {{
@@ -989,11 +1005,13 @@ else {{
     if (!p.is_success) {{ text("PARSE FAIL: " + p.summary); }}
     else {{
       const bound = await tools.dag_bind_evidence({{
-        tool_call_id: p.call_id,
-        bind_target: "{node.node_id}",
-        stage_kind: "geometry",
-        claim: "R is the optimized water minimum (opt+freq job, only real frequencies)",
-        rationale: "step1 compute chain",
+        attachments: [{{
+          tool_call_id: p.call_id,
+          bind_target: "{node.node_id}",
+          stage_kind: "geometry",
+          claim: "R is the optimized water minimum (opt+freq job, only real frequencies)",
+          rationale: "step1 compute chain",
+        }}],
       }});
       text("SUBMITTED evidence ok=" + bound.is_success + " job=" + s.data.job_id +
            " " + bound.summary);
@@ -1075,7 +1093,8 @@ def _exit_stop_arguments(core, agent) -> dict:
 
 
 @_REQUIRES_HOST_AND_RDKIT
-def test_cli_guided_supervisor_loop(tmp_path, monkeypatch):
+@pytest.mark.parametrize("draft_order", ["before_suspend", "after_suspend"])
+def test_cli_guided_supervisor_loop(tmp_path, monkeypatch, draft_order):
     """dag_guided 主场景（四个事实源 + 真实督导裁决回路）。
 
     所有图/证据事件都经生产工具（dag_propose_mechanism / dag_bind_evidence /
@@ -1084,46 +1103,60 @@ def test_cli_guided_supervisor_loop(tmp_path, monkeypatch):
     DAG 状态绕过门禁。
     """
     engine = install_engine(monkeypatch, tmp_path / "bin", "gaussian")
-    llm = ScriptedLLM()
+    class GuidedLLM(ScriptedLLM):
+        """通知可在当前 run 或下一 run 到达；业务动作按真实草稿状态选择。"""
 
-    # 父 agent（Coordinator）：提草稿 → 派子 → partial 挂起等裁决 → 带审批结束。
-    # 每个 run 内用幂等 stop 生成式补位：督导每完成一轮都会给父发一条子完成
-    # 回传，多出的轮次照常重声明 partial（同 basis 的退出请求被复用，不重复
-    # 入队），屏障文本随每轮一并给出，最终消息始终可抓取。
-    # 通知驱动多 run：每个 run 用 run 键控 + 幂等补位（未用到的条目无害），
-    # 通知扎堆时多出的轮次照常收尾，不会把后续 run 的脚本错位。
-    coordinator_steps = [
-        js(1, _GUIDED_PROPOSE_PROGRAM, run=1),
-        text(2, "suspended until the Supervisor decides on the draft", run=1),
-    ]
-    for turn in range(3, 7):
-        coordinator_steps.append(
-            text(turn, "still awaiting the draft decision", run=1)
-        )
-    # 新 run 的历史不跨 run（context_reset）：不能在这里校验上一轮回执
-    coordinator_steps.append(js(1, _GUIDED_SPAWN_PROGRAM, run=2))
-    for turn in range(2, 9):
-        coordinator_steps.append(
-            text(turn, "suspended until the child reports", run=2)
-        )
-    for turn in range(1, 9):
-        coordinator_steps.append(
-            calls(turn, [("stop", {"delivery_disposition": "partial"})], run=3,
-                  content="Partial delivery; the compute chain reports a barrier of 5.0 kcal/mol.")
-        )
-    for turn in range(1, 5):
-        coordinator_steps.append(
-            calls(turn, [("stop", _exit_stop_arguments)], run=4, content=_BARRIER)
-        )
-    # 多出的收尾 run 的幂等补位（Task 4 注：per-run finalize 摘要管线删除后
-    # run 间不再夹着一次摘要 LLM 调用，通知与 run 边界的交错窗口随之移动，
-    # 收尾通知可能多驱动一个 run——内容同为幂等 stop，未用到的条目无害）。
-    for extra_run in range(5, 9):
-        for turn in range(1, 5):
-            coordinator_steps.append(
-                calls(turn, [("stop", _exit_stop_arguments)], run=extra_run, content=_BARRIER)
-            )
-    llm.script("coordinator", coordinator_steps)
+        phase = "propose"
+        draft_order_checked = False
+
+        async def complete(self, agent, messages, tools, **kwargs):
+            self.core = backend.last_core
+            if agent.role_id == "supervisor" and not self.calls_seen_for_supervisor():
+                if draft_order == "after_suspend":
+                    await wait_until(
+                        lambda: any(
+                            a.role_id == "coordinator" and a.state is AgentState.SUCCEEDED
+                            for a in self.core.agents.values()
+                        ),
+                        what="coordinator parks before the draft verdict",
+                    )
+            if agent.role_id == "coordinator":
+                key = (agent.role_id, agent.id, agent.current_run.run_id)
+                turn = self._turn_index.get(key, 0) + 1
+                if self.phase == "propose":
+                    step = js(turn, _GUIDED_PROPOSE_PROGRAM)
+                    self.phase = "spawn"
+                elif self.phase == "spawn":
+                    if draft_order == "before_suspend" and not self.draft_order_checked:
+                        await wait_until(
+                            lambda: any(
+                                a.role_id == "supervisor" and a.state is AgentState.SUCCEEDED
+                                for a in self.core.agents.values()
+                            ),
+                            what="draft supervisor finishes before coordinator continues",
+                        )
+                        self.draft_order_checked = True
+                    draft = await asyncio.to_thread(
+                        lambda: _dag_store(agent.project_id).latest_draft()
+                    )
+                    if draft is not None and draft.get("state") == "accepted":
+                        step = js(turn, _GUIDED_SPAWN_PROGRAM)
+                        self.phase = "finish"
+                    else:
+                        step = text(turn, "suspended until the Supervisor decides on the draft")
+                else:
+                    step = calls(turn, [("stop", _exit_stop_arguments)], content=_BARRIER)
+                self.script("coordinator", [step])
+            return await super().complete(agent, messages, tools, **kwargs)
+
+        def calls_seen_for_supervisor(self):
+            return any(c["role"] == "supervisor" for c in self.calls_seen)
+
+    llm = GuidedLLM()
+    backend = RuntimeV2Backend(
+        llm=llm, start_scheduler=True,
+        poll_interval_s=0.05, stuck_grace_s=10.0,
+    )
 
     # 子 agent：run1 = 确定性 compute 链 + 显式送审；run2 = 收到 call verdict 后收尾
     child_steps = [
@@ -1135,7 +1168,7 @@ def test_cli_guided_supervisor_loop(tmp_path, monkeypatch):
         child_steps.append(text(turn, "evidence submitted for review", run=1))
     for turn in range(1, 5):
         child_steps.append(text(turn, "call verdict received", run=2))
-    # 多出的收尾 run 的幂等补位（同 coordinator 注：run 边界交错窗口移动）
+    # 通知可多驱动一次收尾 run；未用到的幂等回执步骤无害。
     for extra_run in range(3, 7):
         for turn in range(1, 4):
             child_steps.append(text(turn, "call verdict received", run=extra_run))
@@ -1152,7 +1185,7 @@ def test_cli_guided_supervisor_loop(tmp_path, monkeypatch):
     llm.script("supervisor", supervisor_steps)
 
     runner, result, core = _run_cli_task(
-        tmp_path, monkeypatch, llm, mode=OrchestrationMode.DAG_GUIDED
+        tmp_path, monkeypatch, llm, mode=OrchestrationMode.DAG_GUIDED, backend=backend
     )
     workspace = Path(result.sandbox).resolve()
     project_id = next(iter(core.projects))
@@ -1164,6 +1197,16 @@ def test_cli_guided_supervisor_loop(tmp_path, monkeypatch):
     child = agents["small_mol"]
     parent = agents["coordinator"]
     supervisor = agents["supervisor"]      # 真实 spawn 出来的督导 agent
+
+    # 显式验证两种合法交错，不能靠机器速度碰巧覆盖其中一种。
+    parent_events = core.event_log.query_session(parent.id)
+    draft_notice = next(
+        e for e in parent_events
+        if e.type == "agent.message_injected"
+        and str(e.data.get("content", "")).startswith("[Supervisor draft verdict]")
+    )
+    first_parent_finish = next(e for e in parent_events if e.type == "run.finished")
+    assert (draft_notice.seq < first_parent_finish.seq) == (draft_order == "before_suspend")
     assert child.state is AgentState.SUCCEEDED, (
         f"child ended {child.state.value}:\n{_dump_session(core, child.id)}"
     )
@@ -1219,8 +1262,15 @@ def test_cli_guided_supervisor_loop(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 _GUEST_FAIL_CLOSED_PROGRAM = r"""
-const stopped = await tools.stop({ reason: "guest direct control attempt" });
-text("GUEST STOP ok=" + stopped.is_success + " " + stopped.summary);
+const stopType = typeof tools.stop;
+text("GUEST STOP typeof=" + stopType);
+try {
+  const stopped = await tools.stop({ reason: "guest direct control attempt" });
+  text("GUEST STOP ok=" + stopped.is_success + " " + stopped.summary);
+} catch (err) {
+  if (stopType !== "undefined" || !(err instanceof TypeError)) { throw err; }
+  text("GUEST STOP rejected=TypeError");
+}
 """
 
 _ASK_USER_PROGRAM = r"""
@@ -1246,18 +1296,18 @@ async function attemptWriter(args) {
 const bad = await attemptWriter({
   source_type: "smiles", source_value: "O", method: "b3lyp",
   basis_set: "6-31g(d)", task_type: [{ "sp": null }],
-  output_dir: "calc/bad_method.gjf",
+  output_path: "calc/bad_method.gjf",
 });
 const ext = await attemptWriter({
   engine: "orca", source_type: "smiles", source_value: "O",
   external_program: "/opt/conda/envs/chemai/bin/mace",
   task_type: [{ "opt": null }],
-  output_dir: "calc/bad_external.inp",
+  output_path: "calc/bad_external.inp",
 });
 const good = await tools.qm_input_writer({
   engine: "orca", source_type: "smiles", source_value: "O",
   method: "xTB2", basis_set: "", task_type: [{ "opt": null }],
-  output_dir: "calc/ok.inp",
+  output_path: "calc/ok.inp",
 });
 text("BADM=" + bad + " | EXTM=" + ext + " | GOOD=" + good.is_success);
 """
@@ -1277,9 +1327,17 @@ def test_cli_guest_fail_closed_and_role_projection(tmp_path, monkeypatch):
     llm.script("small_mol", [
         js(1, _GUEST_FAIL_CLOSED_PROGRAM),
         text(2, "guest surface checked", expect=Receipt(
-            tool="js_exec", contains=["GUEST STOP ok=false"])),
+            tool="js_exec", contains=[
+                "GUEST STOP typeof=undefined", "GUEST STOP rejected=TypeError",
+            ])),
     ])
-    _run_cli_task(tmp_path, monkeypatch, llm)
+    _, _, core = _run_cli_task(tmp_path, monkeypatch, llm)
+    child = next(a for a in core.agents.values() if a.role_id == "small_mol")
+    assert child.state is AgentState.SUCCEEDED, _dump_session(core, child.id)
+    assert _tool_call_ids(core, child.id, "stop") == []
+    outputs = _program_outputs(core, child)
+    assert "GUEST STOP typeof=undefined" in outputs, outputs
+    assert "GUEST STOP rejected=TypeError" in outputs, outputs
 
     # 客体调用被拒（stop 是 direct-only，不能从程序内调用）
     child_calls = [c for c in llm.calls_seen if c["role"] == "small_mol"]
@@ -1387,7 +1445,7 @@ def test_cli_method_policy_blocks_before_compute(tmp_path, monkeypatch):
 # Task 5（P1）：并发隔离、stop 级联与关闭时真实 JS host 回收
 # ---------------------------------------------------------------------------
 
-async def _web_harness(core, llm, tmp_path, *, concurrency=1, timeout=90.0):
+async def _web_harness(core, llm, tmp_path, *, concurrency=1):
     """Web 入口装配：live core + 测试 scheduler + broker + BenchmarkService。"""
     from cloudra.benchmark.batch import BenchmarkService
     from cloudra.runtime_v2.compute_notify import ComputeNotifyBroker
@@ -1431,7 +1489,7 @@ async def test_web_concurrent_mixed_success_and_failure(tmp_path, monkeypatch):
     tasks_dir = _write_tasks(tmp_path / "tasks", "T1", "T2")
     _, scheduler, broker, service = await _web_harness(core, llm, tmp_path, concurrency=2)
     try:
-        await service.start(tasks_dirs=[tasks_dir], only="", concurrency=2, timeout=60.0)
+        await service.start(tasks_dirs=[tasks_dir], only="", concurrency=2)
         batch = service._batch
         await wait_until(
             lambda: service.status()["status"] in {"done", "error"},
@@ -1467,6 +1525,21 @@ async def test_web_concurrent_mixed_success_and_failure(tmp_path, monkeypatch):
 async def test_web_stop_cascades_but_keeps_live_compute(tmp_path, monkeypatch):
     """batch stop：级联取消推理子树并停止新请求；已提交的计算继续登记与运行
     （测试用控制文件释放引擎后自行收尾），绝不被 kill。"""
+    from cloudra.infra.compute_utils import calc_lock_path, guard_lock_path
+    from cloudra.infra.flocks import is_lock_held
+
+    # 只观察真实 spawn 返回的句柄；stop 取消同步等待后，由测试负责等 guard
+    # 自然退出并 reap，不能因账本先写 done 就提前关掉事件循环。
+    guard_processes = []
+    original_spawn = asyncio.create_subprocess_exec
+
+    async def capture_guard(*args, **kwargs):
+        proc = await original_spawn(*args, **kwargs)
+        if args[1:3] == ("-m", "cloudra.runtime.monitor"):
+            guard_processes.append(proc)
+        return proc
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", capture_guard)
     engine = install_engine(monkeypatch, tmp_path / "bin", "gaussian")
     engine.set_control("wait")
     core = RuntimeCore(strict_events=True)
@@ -1485,9 +1558,21 @@ async def test_web_stop_cascades_but_keeps_live_compute(tmp_path, monkeypatch):
     tasks_dir = _write_tasks(tmp_path / "tasks", "T1")
     _, scheduler, broker, service = await _web_harness(core, llm, tmp_path)
     try:
-        await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1, timeout=60.0)
-        # 等到计算已提交（同步 guard 链在跑，引擎被控制文件挡住）
-        await wait_until(lambda: bool(_compute_rows()), timeout=60.0, what="job submission")
+        await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1)
+        # running 行先于 guard 启动落库，不能拿它当活计算的同步点；等待引擎
+        # 已读到输入，再用生产 flock 口径确认 guard/calculator 都已启动。
+        await wait_until(lambda: bool(engine.runs()), timeout=60.0, what="live calculator startup")
+        started_runs = engine.runs()
+        rows = _compute_rows()
+        assert len(started_runs) == len(rows) == 1, (started_runs, rows)
+        job_id = rows[0]["id"]
+        workdir = str(Path(rows[0]["path"]).parent)
+        assert started_runs[0]["input"] == rows[0]["path"]
+        assert rows[0]["state"] == "running", rows[0]
+        guard_lock = guard_lock_path(workdir, job_id)
+        calc_lock = calc_lock_path(workdir, job_id)
+        assert is_lock_held(guard_lock)
+        assert is_lock_held(calc_lock)
         await service.stop()
         await wait_until(
             lambda: service.status()["status"] == "stopped",
@@ -1512,8 +1597,10 @@ async def test_web_stop_cascades_but_keeps_live_compute(tmp_path, monkeypatch):
 
         # 活计算仍在册且未终态（没有被 kill、没有被标失败）
         rows = _compute_rows()
-        assert rows, "compute row disappeared"
-        assert rows[0]["state"] in {"ready", "running"}, rows[0]
+        assert len(rows) == 1 and rows[0]["id"] == job_id, rows
+        assert rows[0]["state"] == "running", rows[0]
+        assert is_lock_held(guard_lock)
+        assert is_lock_held(calc_lock)
         assert not rows[0]["end_timestamp"] or rows[0]["end_timestamp"] <= 0, rows[0]
 
         # 释放引擎：计算自行跑到终态（证明 stop 没碰它）
@@ -1523,9 +1610,15 @@ async def test_web_stop_cascades_but_keeps_live_compute(tmp_path, monkeypatch):
             timeout=60.0,
             what="compute completion after stop",
         )
+        assert _compute_rows()[0]["id"] == job_id
+        assert engine.runs() == started_runs, "stop must not restart the calculator"
     finally:
+        engine.release()
         await broker.close()
         await scheduler.close()
+        await asyncio.wait_for(
+            asyncio.gather(*(proc.wait() for proc in guard_processes)), timeout=60.0
+        )
 
 
 @_REQUIRES_HOST_AND_RDKIT
@@ -1551,9 +1644,9 @@ async def test_web_shutdown_reaps_real_js_host(tmp_path, monkeypatch):
     js_runtime = core.runner.pipeline.js_runtime
     observed: list = []
     try:
-        await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1, timeout=60.0)
+        await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1)
 
-        async def capture() -> bool:
+        def capture() -> bool:
             procs = js_runtime.active_executions()
             if procs:
                 observed.extend(procs.values())

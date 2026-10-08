@@ -22,7 +22,7 @@ TASKS = {
     # 池内 3D 嵌入已核对）；副通道 = 非导向面 → trans。
     "F1": {
         "name_en": "cyclohex-2-en-1-ol peracid epoxidation: determine the stereochemical outcome",
-        "conditions_en": "performic or perbenzoic acid, CH2Cl2 or benzene, 0-25 degC",
+        "conditions_en": "performic acid, CH2Cl2, 0-25 degC",
         "anchor": "selectivity",
         "minor_channel_en": "undirected opposite-face epoxidation -> trans-2,3-epoxycyclohexanol",
         "mapped_reactants": "[OH:2][CH:1]1[CH:3]=[CH:4][CH2:5][CH2:6][CH2:7]1.[O:9]=[CH:8][O:10][O:11][H:12]",
@@ -30,7 +30,7 @@ TASKS = {
             {
                 "out": "[OH:2][C@H:1]1[C@H:3]2[O:11][C@H:4]2[CH2:5][CH2:6][CH2:7]1.[O:9]=[CH:8][O:10][H:12]",
                 "type": "concerted epoxidation via butterfly TS, allylic OH...OOH hydrogen bond directs O delivery to the syn face: O-O and terminal O-H cleavage with internal proton transfer to the carbonyl-side oxygen, C=C pi cleavage, two epoxide C-O formations -> cis-2,3-epoxycyclohexanol",
-                "barrier": 9.2,
+                "barrier": 16.82,
                 "weight": 0.5,
                 "channel": "directed_face",
             },
@@ -39,16 +39,16 @@ TASKS = {
             {
                 "out": "[OH:2][C@H:1]1[C@@H:3]2[O:11][C@H:4]2[CH2:5][CH2:6][CH2:7]1.[O:9]=[CH:8][O:10][H:12]",
                 "type": "same concerted epoxidation on the undirected (opposite) face -> trans-2,3-epoxycyclohexanol (minor channel)",
-                "barrier": 10.9,
+                "barrier": 20.70,
                 "weight": 0.5,
                 "channel": "opposite_face",
             },
         ],
     },
-    # C/C=C/CO/C=C/C>>C=C[C@H](C)[C@H](C)C=O  (0/1)  (E,E) 底物：chair TS（双甲基
-    # 假赤道）→ anti 为优势通道（competing 边，26.39）；boat TS → syn = (2S,3S)
-    # 型（池内经 Fischer-CIP 推导核对）为次通道（主线边，29.67）。能垒差
-    # 26.39→29.67，ΔΔ = 3.28 kcal/mol（chair 占优）。
+    # (E,E) 底物的 anti 鞍点已按 ORCA 6.1.1 同版最低 RC 回填 26.38。
+    # 新 syn 候选的 IRC 反应物端实际为 (E,Z)，不能回填本题；syn 保持缺测。
+    # chair/boat 优势与 3.28 的题源锚仍是历史文献口径，不是本轮计算出的差值。
+    # 原始几何的 E/Z、CIP 与端点审查见 gold_compute/hard_hg2_2026-10-01.md。
     "G2": {
         "name_en": "(E,E)-crotyl propenyl ether Claisen rearrangement: determine the stereochemical outcome",
         "conditions_en": "gas phase; thermal, ~150-200 degC",
@@ -60,7 +60,7 @@ TASKS = {
             {
                 "out": "[CH2:4]=[CH:3][C@H:2]([CH3:1])[C@H:7]([CH3:8])[CH:6]=[O:5]",
                 "type": "[3,3]-sigmatropic Claisen rearrangement via boat TS (higher-energy minor channel for the (E,E) substrate): allyl/vinyl pi and C-O sigma cleavage, new terminal C-C sigma between the two methyl-bearing termini, migrated allyl pi and C=O pi formation -> syn-2,3-dimethylpent-4-enal (minor channel)",
-                "barrier": 29.67,
+                "barrier": None,
                 "channel": "boat_ts",
                 "favored": False,
                 "node_label": "minor product",
@@ -70,7 +70,7 @@ TASKS = {
             {
                 "out": "[CH2:4]=[CH:3][C@H:2]([CH3:1])[C@@H:7]([CH3:8])[CH:6]=[O:5]",
                 "type": "[3,3]-sigmatropic Claisen rearrangement via chair TS with both methyls pseudo-equatorial (lower-energy favored channel for the (E,E) substrate): allyl/vinyl pi and C-O sigma cleavage, new terminal C-C sigma between the two methyl-bearing termini, migrated allyl pi and C=O pi formation -> anti-2,3-dimethylpent-4-enal (major channel)",
-                "barrier": 26.39,
+                "barrier": 26.38,
                 "channel": "chair_ts",
                 "favored": True,
                 "node_label": "major product",

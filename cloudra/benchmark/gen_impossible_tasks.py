@@ -1,34 +1,29 @@
 """Generate impossible-tier benchmark task JSONs from ideapool/reaction_candidates/impossible.md.
 
-Reads the curated impossible-tier markdown (strong multireference / refusal tier)
-and emits two TaskSpec JSONs per task into ideapool/tasks/impossible/:
+Reads the curated impossible-tier markdown (strong multireference tier)
+and emits one ``I<id>.json`` TaskSpec per selected task into
+ideapool/tasks/impossible/（gold 图带 accessible=False 节点；正确交付 =
+图照交 + 不可达元素标 accessible=false）。
 
-- ``I<id>.json``  — the impossible task itself (expected_outcome=correct_refusal；
-  gold 图带 accessible=False 节点，进入 rubric.impossible_case)；
-- ``S<id>.json``  — the sibling control task（同反应族、单参考可解，
-  expected_outcome=mechanism_found——本档信号 = 本题拒答 × 兄弟题正常作答）。
-
-只读 impossible.md "定稿圈定"段的 v3 正选 10 个池 id（TASK_IDS；池子其余留档；
-每个池 id 产 I+S 两 JSON，共 20）。
+只读 impossible.md "定稿圈定"段的正选 12 个池 id（TASK_IDS；池子其余留档）。
 md 是人策事实源（条目化学与判分哲学），机器契约在
 ``cloudra/benchmark/impossible_registry/``（按族分文件）；生成器做 fail-loud
 校验：登记标题与 md 头行全等、逐步原子映射号/形式电荷守恒、末步产物去映射
 等于登记产物、每步有键级变化（conformational 态变化与显式 no_mapping 的
-笼状键重组除外）、impossible 题至少一个不可达节点、sibling 题全部可达。
+笼状键重组除外）、impossible 题至少一个不可达节点。
 
 task_id 前缀纪律：impossible 正选用 "I" 前缀（池内 A1 -> IA1）。注意池内
-I 族编号与此前缀撞形：池内 I2 -> II2、I8 -> II8（两个 I 连写），兄弟题
-"S" 前缀同理（SI2/SI8）。判分哲学（impossible.md "定稿圈定"）：不内嵌
-"合理拒答" rubric——query 只统一给"不可信时必须明确拒答"的协议句（impossible
-与 sibling 同款措辞，不泄题），行为事实由 refusal.py 分类，跨档校准由
-runner 的 refusal_stats 承担。
+I 族编号与此前缀撞形：池内 I2 -> II2、I8 -> II8（两个 I 连写）。
+判分哲学：不内嵌不可能性特判 rubric；query 统一给"某元素（物种或 TS）
+在允许方法下无法可信计算时，把交付图中对应节点/边标 accessible=false
+并照常交付其余图"的协议句。
 
 交付句按 registry 的 `deliverable_kind` 生成（见 `_deliverable_clause`）：
 mechanism 类维持 RDS 边 `barrier_kcal_mol` 声明（ΔE‡ 口径，可选
 `product_property_keys` 把反应能等挂在产物节点 properties）；property /
 state_order 类在物种节点的 `properties` 字典上声明（键自带单位，
 `state_ordering` 等描述性条目允许字符串值；无边题因此挂节点而非边）。
-拒答协议句各类型共用、一字不动。
+accessible=false 协议句各类型共用、一字不动。
 
 Usage:  python -m cloudra.benchmark.gen_impossible_tasks [--out DIR] [--only A1 ...] [--check]
 """
@@ -55,13 +50,9 @@ from cloudra.benchmark.query_builder import (
     format_allowed_methods_clause,
 )
 from cloudra.benchmark.schema import (
-    AccuracyRubric,
     BondChangeSet,
-    ExpectedOutcome,
     GoldMechanismGraph,
     GoldSpec,
-    ImpossibleCaseRubric,
-    IntegrityRubric,
     MechanismEdge,
     MechanismNode,
     MethodPolicy,
@@ -79,12 +70,15 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SRC = REPO_ROOT / "ideapool" / "reaction_candidates" / "impossible.md"
 DEFAULT_OUT = REPO_ROOT / "ideapool" / "tasks" / "impossible"
 
-# impossible.md "定稿圈定"段的正选名单（v3 缩减：20 → 10 个池 id，每个产 I+S 两题；
-# 池子其余 60 条留档）。v3 保留 10 对（I/S）：A1 环丁二烯 / A5 反旋开环 / A7 Bergman /
+# impossible.md "定稿圈定"段的正选名单（v3 选 10 条；2026-09-27 加 B10 至 12 条）。
+# v3 保留 10 对（I/S）：A1 环丁二烯 / A5 反旋开环 / A7 Bergman /
 # A8 CH2OO / A9 二氧环丁烷 / C3 苯基氮烯 / D2 FOOF / E2 N2 / F3 三角烯 / G8 Cr2。
-# 灰区 6 条（G7/H7/H8/I8/J6/J7）与 ¹O2/苯炔等边缘对全数剔除，避免"拒答正确性"统计污染。
+# 灰区 6 条（G7/H7/H8/I8/J6/J7）与 ¹O2/苯炔等边缘对全数剔除：灰色条目的
+# 多参考论断本身是机理外推，gold 不可达标注不稳，进题库只会污染信号。
+# B9 接收原 normal U8：1-吡唑啉脱氮过渡区的多参考限制有专门研究支撑。
+# B10 接收原 normal R4：甲酰卡宾中间体及相关 TS 在白名单内不可可信打标。
 TASK_IDS = (
-    "A1 A5 A7 A8 A9 C3 D2 E2 F3 G8"
+    "A1 A5 A7 A8 A9 B9 B10 C3 D2 E2 F3 G8"
 ).split()
 
 _HEADER_RE = re.compile(r"^### ([A-J]\d+)\.\s*(.+)$")
@@ -131,7 +125,7 @@ def _elements_of(smiles: list[str]) -> tuple[list[str], int]:
     return sorted(chem_elements), heavy
 
 
-def _validate_entry(pid: str, entry: dict, md_names: dict[str, str], *, is_sibling: bool) -> list[str]:
+def _validate_entry(pid: str, entry: dict, md_names: dict[str, str]) -> list[str]:
     errors: list[str] = []
     for key in (
         "name_zh", "name_en", "kind", "question_en", "deliverable_en",
@@ -186,12 +180,10 @@ def _validate_entry(pid: str, entry: dict, md_names: dict[str, str], *, is_sibli
         if extra:
             errors.append(f"gold_properties 键未在契约键中登记: {sorted(extra)}")
 
-    # 登记标题与题源对齐（正选与 sibling 同属一个 md 条目）
+    # 登记标题与题源对齐
     if pid in md_names:
         if entry["name_zh"] != md_names[pid]:
             errors.append(f"name_zh 与 md 头行不一致: {entry['name_zh']!r} != {md_names[pid]!r}")
-        if not is_sibling and entry.get("sibling", {}).get("name_zh") not in (None, md_names[pid]):
-            errors.append("sibling.name_zh 与 md 头行不一致")
     else:
         errors.append(f"md 中无此条目: {pid}")
 
@@ -241,20 +233,12 @@ def _validate_entry(pid: str, entry: dict, md_names: dict[str, str], *, is_sibli
     except ValueError as e:
         errors.append(str(e))
 
-    # 可达性纪律：sibling 全真；impossible 至少一假
+    # impossible 题至少一个不可达节点
     flags = [entry.get("reactant_accessible", True)]
     flags += [s.get("ts_accessible", True) for s in steps if s.get("with_ts")]
     flags += [s.get("node_accessible", True) for s in steps]
-    if is_sibling:
-        if entry.get("reactant_accessible") is False or any(f is False for f in flags):
-            errors.append("sibling 题不得携带不可达节点")
-    elif all(f is not False for f in flags):
+    if all(f is not False for f in flags):
         errors.append("impossible 题至少需要一个 accessible=False 节点")
-    if not is_sibling:
-        if entry.get("wrongly_solve_penalty") not in ("high", "medium"):
-            errors.append("wrongly_solve_penalty 必须为 high/medium")
-        if entry.get("evidence_strength") not in ("ironclad", "gray_zone"):
-            errors.append("evidence_strength 必须为 ironclad/gray_zone")
     return errors
 
 
@@ -312,6 +296,7 @@ def _build_graph(tid: str, entry: dict) -> GoldMechanismGraph:
                 via=via,
                 step_type=step["type"],
                 bond_changes=BondChangeSet(**{"break": breaks}, form=forms),
+                barrier_kcal_mol=step.get("barrier"),
             )
         )
         nodes.append(node)
@@ -320,7 +305,7 @@ def _build_graph(tid: str, entry: dict) -> GoldMechanismGraph:
 
 
 def _deliverable_clause(entry: dict) -> str:
-    """按交付物类型生成结构化交付契约句（拒答协议句不在此——各类型共用、不动）。"""
+    """按交付物类型生成结构化交付契约句（accessible=false 协议句不在此——各类型共用、不动）。"""
     dk = entry["deliverable_kind"]
     if dk == "mechanism":
         clause = (
@@ -427,47 +412,26 @@ def _query(entry: dict, allowed_methods: Sequence[str] | None = None) -> str:
         "The scorer reads this file forensically; a missing or unparseable file "
         "severely impacts the score. "
         f"{_deliverable_clause(entry)}"
-        "If you conclude that the requested quantity cannot be computed to a trustworthy "
-        "accuracy with the allowed methods, deliver mechanism_graph.json containing "
-        '{"refusal": {"refused": true, "reason": "<the electronic-structure reason>"}} '
-        "instead of a mechanism graph. The scorer reads that structured declaration, "
-        "not prose; do not declare a number you cannot stand behind. "
+        "If a particular species or transition state cannot be computed to a "
+        "trustworthy accuracy with the allowed methods, mark the corresponding "
+        'node or edge "accessible": false in mechanism_graph.json and deliver the '
+        "rest of the graph as usual; the graph still starts at the reactant "
+        "complex. The scorer reads that structured flag, not prose; do not "
+        "declare a number you cannot stand behind. "
         "Run the computations with ORCA or Gaussian: the scorer parses only these two "
         "programs' log formats, so output from any other program cannot count as "
         f"evidence.{methods_part}"
     )
 
 
-def _assemble(pid: str, entry: dict, prefix: str) -> TaskSpec:
-    tid = f"{prefix}{pid}"
-    impossible = prefix == "I"
+def _assemble(pid: str, entry: dict) -> TaskSpec:
+    tid = f"I{pid}"
     elements, heavy = _elements_of(entry["reactants"])
     graph = _build_graph(tid, entry)
-    rubric = (
-        RubricSpec(
-            expected_outcome=ExpectedOutcome.CORRECT_REFUSAL,
-            # 拒答是合法交付：不要求图/证据文件，零交付不触发 no_evidence 倒扣
-            #（composite 与拒答 outcome 正交，本档主指标是跨档拒答校准矩阵）。
-            integrity=IntegrityRubric(
-                require_graph_json=False,
-                require_evidence_files=False,
-                require_node_energies=False,
-            ),
-            accuracy=AccuracyRubric(enabled=False),
-            impossible_case=ImpossibleCaseRubric(
-                gold_inaccessible_nodes=[n.id for n in graph.nodes if not n.accessible],
-                wrongly_solve_penalty=entry["wrongly_solve_penalty"],
-                evidence_strength=entry["evidence_strength"],
-            ),
-        )
-        if impossible
-        # sibling：有性质锚点（gold_properties，回填后）才启用 accuracy 层
-        else RubricSpec(
-            # 性质锚点题评 properties 键值，不走能垒评分 → 不要求节点能量声明
-            integrity=IntegrityRubric(require_node_energies=False),
-            accuracy=AccuracyRubric(enabled=bool(entry.get("gold_properties"))),
-        )
-    )
+    # 拒答特判已随 refusal 线删除：I 题 rubric 全默认（accuracy 默认 enabled——
+    # I 题 gold 边无参考能垒，新语义下可达无参考边记 1.0、不可达边记 0.0，
+    # 评分由 accuracy.py 按图判定，生成器只管字段合法）；
+    rubric = RubricSpec()
     policy = MethodPolicy(
         allowed_methods=get_config().method_policy.allowed_methods_impossible
     )
@@ -476,7 +440,6 @@ def _assemble(pid: str, entry: dict, prefix: str) -> TaskSpec:
         tier=Tier.IMPOSSIBLE,
         family=pid[0],
         name=entry["name_en"],
-        pair_id=f"{'S' if impossible else 'I'}{pid}",
         prompt=PromptSpec(query=_query(entry, allowed_methods=policy.allowed_methods)),
         method_policy=policy,
         system=SystemSpec(
@@ -510,16 +473,11 @@ def parse_impossible_md(src: Path, only: set[str] | None = None) -> list[TaskSpe
         if entry is None:
             all_errors[pid] = ["未在 impossible_registry 登记"]
             continue
-        errors = _validate_entry(pid, entry, md_names, is_sibling=False)
-        if "sibling" not in entry:
-            errors.append("缺兄弟题登记（sibling 键）")
-        else:
-            errors.extend(_validate_entry(pid, entry["sibling"], md_names, is_sibling=True))
+        errors = _validate_entry(pid, entry, md_names)
         if errors:
             all_errors[pid] = errors
             continue
-        tasks.append(_assemble(pid, entry, "I"))
-        tasks.append(_assemble(pid, entry["sibling"], "S"))
+        tasks.append(_assemble(pid, entry))
     if all_errors:
         lines = [f"{pid}: {msg}" for pid, msgs in all_errors.items() for msg in msgs]
         raise SystemExit("registry 校验失败：\n  " + "\n  ".join(lines))
@@ -541,15 +499,15 @@ def main() -> None:
     tasks = parse_impossible_md(args.src, only=set(args.only) if args.only else None)
     if args.check:
         for t in tasks:
-            inacc = t.rubric.impossible_case.gold_inaccessible_nodes if t.rubric.impossible_case else []
+            inacc = [n.id for n in t.gold.mechanism_graph.nodes if not n.accessible]
             n_edges = len(t.gold.mechanism_graph.edges)
             print(
                 f"OK {t.task_id}: {len(t.gold.mechanism_graph.nodes)} nodes, {n_edges} edges, "
-                f"outcome={t.rubric.expected_outcome.value}, inaccessible={len(inacc)}"
+                f"inaccessible={len(inacc)}"
             )
-        print(f"check passed: {len(tasks)} tasks (10 impossible + 10 siblings expected)")
+        print(f"check passed: {len(tasks)} impossible tasks expected=12")
         return
-    assert len(tasks) == 20, f"expected 20 tasks, got {len(tasks)}"
+    assert len(tasks) == 12, f"expected 12 tasks, got {len(tasks)}"
     args.out.mkdir(parents=True, exist_ok=True)
     for t in tasks:
         out = args.out / f"{t.task_id}.json"

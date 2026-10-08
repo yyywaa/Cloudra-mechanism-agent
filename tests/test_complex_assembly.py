@@ -20,7 +20,7 @@ from cloudra.tools.core.complex_assembly import (  # noqa: E402
     assemble,
     combine_components,
 )
-from cloudra.tools.core.structure_artifacts import read_trajectory  # noqa: E402
+from cloudra.tools.core.structure_artifacts import read_trajectory, read_xyz_atoms  # noqa: E402
 
 
 def _embedded_mol(smiles: str, seed: int = 42):
@@ -146,7 +146,7 @@ def test_unreleased_candidate_energy_is_unconstrained_single_point(tmp_path, mon
 def test_real_relaxation_reports_the_unconstrained_single_point_not_the_penalty(tmp_path):
     """端到端（真实力场，无 mock）：约束保持时交付能量必须是无约束单点，不是轨迹终态能量。
 
-    反应中心取水分子内的 O-H 对（0-1）：窗口 1.8–2.6 Å 对共价键不可达（O-H 伸缩力常数远大于
+    反应中心取水分子内的 O-H 对（0-1）：窗口 1.6–3.0 Å 对共价键不可达（O-H 伸缩力常数远大于
     约束的 k=100），因此每个放置的约束全程激活、轨迹终态能量含真实惩罚项——正是旧实现直接拿
     去排序的那种能量。这里从**交付的 .xyz 几何**独立重算无约束 MMFF94 单点，要求与候选能量一致，
     并确认轨迹终态能量（含惩罚）与候选能量相差一个明显的惩罚项。
@@ -191,6 +191,29 @@ def test_real_relaxation_reports_the_unconstrained_single_point_not_the_penalty(
     assert min(penalized) - candidate.energy_kcal > 1.0, (
         "轨迹终态能量含约束惩罚项，旧实现直接拿它排序；两者必须相差一个可观测的惩罚量"
     )
+
+
+def test_guided_assembly_keeps_soft_windows_and_ignores_equilibrium_energy_cutoff(tmp_path):
+    components = [(_embedded_mol("CCO"), 0), (_embedded_mol("O"), 0)]
+    windows = [(2, 9, 2.5, 3.8), (0, 9, 2.5, 3.8), (1, 9, 2.5, 3.8)]
+    result = assemble(
+        components=components, output_dir=str(tmp_path),
+        parameters=AssemblyParameters(energy_window_kcal=-1.0),
+        reaction_center=[(2, 9), (0, 9)], guided_windows=windows,
+    )
+    assert result.status == "ok"
+    assert result.candidates
+    assert len(result.candidates) > 3  # strict guidance is checked before heavy-atom deduplication
+    assert all(candidate.constraint_released is False for candidate in result.candidates)
+    qualified = 0
+    for candidate in result.candidates:
+        atoms = read_xyz_atoms(candidate.xyz_path)
+        positions = [position for _, position in atoms]
+        if all(low <= float(np.linalg.norm(
+                    np.asarray(positions[left]) - np.asarray(positions[right])
+                )) <= high for left, right, low, high in windows):
+            qualified += 1
+    assert qualified > 0
 
 
 # ---------------------------------------------------------------------------
@@ -360,3 +383,11 @@ def test_unconstrained_relaxation_failure_is_caught(tmp_path, monkeypatch):
     assert result.status == "no_candidate"
     assert result.unconverged_after_relaxation > 0
 
+
+def test_contact_graph_accepts_chain_but_rejects_isolated_component():
+    from cloudra.tools.core.complex_assembly import interfragment_clusters
+    groups = [[0], [1], [2]]
+    # Carbon vdW contact = 3.4 A; approved factor 1.7 => 5.78 A.
+    assert interfragment_clusters([[0, 0, 0], [5.6, 0, 0], [11.2, 0, 0]], groups, [6]*3) == [[0, 1, 2]]
+    assert interfragment_clusters([[0, 0, 0], [5.6, 0, 0], [20, 0, 0]], groups, [6]*3) == [[0, 1], [2]]
+    assert interfragment_clusters([[0, 0, 0]], [[0]], [6]) == [[0]]

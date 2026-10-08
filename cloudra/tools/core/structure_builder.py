@@ -94,6 +94,7 @@ BuildStatus = Literal[
     "missing_parameters",  # 力场缺参数，无法优化该组分
     "optimization_failed", # 组分优化未收敛或抛异常
     "invalid_input",       # 输入无法解析
+    "invalid_reaction_center",  # 反应中心引用了构建后结构中不存在的原子
 ]
 
 EmbedStatus = Literal["embedded", "not_required", "failed"]
@@ -150,6 +151,10 @@ class BuildStrategy(BaseModel):
         description="反应物/产物映射得到的反应中心原子对（完整结构的输出原子序号，0-based）。"
                     "给出即按反应模式组装（反应中心引导 + 距离约束预优化 + 条件释放约束）；"
                     "不给则按普通复合物模式组装，不凭空指定成键中心",
+    )
+    guided_windows: list[tuple[int, int, float, float]] = Field(
+        default_factory=list,
+        description="内部预组织距离窗口：(0-based i, j, min Å, max Å)；为空保持原组装行为",
     )
 
 
@@ -553,7 +558,7 @@ class _ComponentBuild:
 
 def _build_component(mol, indices: list[int], component_id: str, request: PreparationRequest,
                      out_dir: str, artifacts: list[TrajectoryArtifact],
-                     index_offset: int) -> _ComponentBuild:
+                     index_offset: int, candidate_sink=None) -> _ComponentBuild:
     """构建单个组分：切分 → 加氢 → （可选）嵌入 → 力场优化（含轨迹）→ 落盘。"""
     submol, old_to_new = _submol_by_input_indices(mol, indices)
     submol_atom_to_input = {new: old for old, new in old_to_new.items()}
@@ -568,6 +573,8 @@ def _build_component(mol, indices: list[int], component_id: str, request: Prepar
         mol_h, submol_atom_to_input, hydrogen_by_index, component_id, index_offset,
     )
 
+    component_capture=candidate_sink.for_component(identities) if candidate_sink else None
+    parent=None
     single_atom = mol_h.GetNumAtoms() == 1
     embed_status: EmbedStatus = "not_required"
     optimization_status: OptimizationStatus = "not_required"
@@ -612,11 +619,16 @@ def _build_component(mol, indices: list[int], component_id: str, request: Prepar
         else:
             embed_status = "embedded"
             conf_id = embedded
+            if component_capture:
+                parent=component_capture.capture(mol_h,conf_id,generator="component_ETKDGv3",seed=request.random_seed)
             engine = _select_engine(mol_h) or ""
             if not request.strategy.optimize:
                 optimization_status = "not_required"
                 diagnostics.append("force-field optimization disabled by the approved build strategy")
             elif not engine:
+                if component_capture:
+                    from cloudra.tools.core.conformer_catalog import Qualification
+                    component_capture.capture(mol_h,conf_id,generator="component_force_field_unavailable",parent_id=parent.candidate_id,state="failed",qualification=Qualification(status="rejected",reasons=["missing_parameters"]))
                 optimization_status = "missing_parameters"
                 diagnostics.append(
                     "no force field covers every atom of this component (MMFF94 and UFF both "
@@ -631,6 +643,17 @@ def _build_component(mol, indices: list[int], component_id: str, request: Prepar
                 trajectory_id = record.trajectory_id
                 final_energy = record.final_frame.energy
                 optimization_status = record.status
+                if component_capture:
+                    from cloudra.tools.core.conformer_catalog import EnergyObservation, Qualification
+                    energies=[]
+                    if final_energy is not None:
+                        energies=[EnergyObservation(value=final_energy,unit='kcal/mol',method_fingerprint=engine,
+                            species_key=parent.species_key,charge=formal_charge,multiplicity=request.multiplicity,
+                            convergence='converged' if record.status=='converged' else 'unconverged',artifact_ref=record.trajectory_id)]
+                    component_capture.capture(mol_h,conf_id,generator='component_'+engine,parent_id=parent.candidate_id,
+                        state='optimized' if record.status=='converged' else 'failed',energies=energies,
+                        qualification=Qualification(status='unknown' if record.status=='converged' else 'rejected',
+                            reasons=[] if record.status=='converged' else [record.status],evidence_refs=[record.trajectory_id]))
                 if record.status == "not_converged":
                     gradient = record.final_frame.max_gradient
                     gradient_text = "n/a" if gradient is None else f"{gradient:.6g}"
@@ -722,7 +745,7 @@ def _component_is_usable(build: _ComponentBuild) -> bool:
     )
 
 
-def prepare_structure(request: PreparationRequest) -> PreparedStructure:
+def prepare_structure(request: PreparationRequest, *, candidate_sink=None) -> PreparedStructure:
     """把请求解析成 ``PreparedStructure``。
 
     所有可预期失败都返回带显式 ``status`` 的产物（不抛异常、也不返回半成品冒充成功）；
@@ -796,7 +819,7 @@ def prepare_structure(request: PreparationRequest) -> PreparedStructure:
     for position, indices in enumerate(fragments):
         component_id = f"frag{position}"
         build = _build_component(
-            mol, list(indices), component_id, request, out_dir, artifacts, index_offset,
+            mol, list(indices), component_id, request, out_dir, artifacts, index_offset, candidate_sink,
         )
         identity_symbols = [a.symbol for a in build.identities]
         if identity_symbols != build.component.symbols:
@@ -811,6 +834,37 @@ def prepare_structure(request: PreparationRequest) -> PreparedStructure:
         index_offset += build.component.atom_count
 
     trajectory_manifest = write_trajectory_manifest(out_dir, artifacts) if artifacts else ""
+
+    atom_count = len(identities)
+    invalid_pairs = [
+        (left, right) for left, right in request.strategy.reaction_center
+        if not (0 <= left < atom_count and 0 <= right < atom_count) or left == right
+    ]
+    # A reaction center is consumed by this builder only when it assembles multiple
+    # embedded fragments. Single-component reaction paths check it after endpoint mapping.
+    if invalid_pairs and len(components) > 1 and request.strategy.embed:
+        numbering = ", ".join(f"{atom.index}={atom.symbol}" for atom in identities)
+        return _finalize(
+            PreparedStructure(
+                status="invalid_reaction_center",
+                message=(
+                    f"reaction_center pair(s) {invalid_pairs} are invalid for the built structure "
+                    f"with {atom_count} atoms. Indices are 0-based in the full output atom order, "
+                    f"including hydrogens; valid indices are 0..{atom_count - 1}, and a pair must "
+                    "name two different atoms."
+                ),
+                components=components,
+                atom_identities=identities,
+                symbols=[atom.symbol for atom in identities],
+                component_paths=component_paths,
+                trajectory_ids=[artifact.trajectory_id for artifact in artifacts],
+                trajectory_manifest_path=trajectory_manifest,
+                total_charge=request.total_charge,
+                formal_charge_sum=formal_charge_sum,
+                diagnostics=[f"built atoms (0-based): {numbering}"],
+            ),
+            out_dir,
+        )
 
     diagnostics: list[str] = []
     assembly: Optional[AssemblyResult] = None
@@ -858,7 +912,8 @@ def prepare_structure(request: PreparationRequest) -> PreparedStructure:
                 output_dir=os.path.join(out_dir, "assembly"),
                 parameters=request.strategy.assembly,
                 reaction_center=list(request.strategy.reaction_center) or None,
-                seed=request.random_seed,
+                guided_windows=list(request.strategy.guided_windows) or None,
+                seed=request.random_seed, candidate_sink=candidate_sink,
             )
             diagnostics.extend(assembly.diagnostics)
             if assembly.status == "ok":
