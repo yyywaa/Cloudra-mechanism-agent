@@ -507,5 +507,25 @@ def create_default_v2_app(*, store_path: str | None = None) -> FastAPI:
     # uvicorn process.  Static mount is added last so /api/* routes win.
     serve_dir = os.environ.get("CLOUDRA_FRONTEND_SERVE_DIR", "").strip()
     if serve_dir and Path(serve_dir, "index.html").is_file():
-        app.mount("/", StaticFiles(directory=serve_dir, html=True), name="frontend")
+        app.mount("/", _SpaStaticFiles(directory=serve_dir, html=True), name="frontend")
     return app
+
+
+class _SpaStaticFiles(StaticFiles):
+    """SPA 静态托管的标准缓存策略（修复"改版后浏览器一直用旧前端"）：
+
+    - 入口 index.html：``no-cache``——入口只引用内容哈希资源，必须每次
+      重校验，否则浏览器对无 Cache-Control 的响应走启发式缓存，旧
+      标签页/普通刷新继续拿旧入口、指向旧哈希包（实测：服务器已发新
+      构建、浏览器仍显示旧 UI 数天）。
+    - ``assets/*``（文件名即内容指纹）：一年 immutable，尽情长缓存。
+    """
+
+    def file_response(self, full_path, stat_result, scope, status_code=200):
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        name = os.path.basename(str(full_path))
+        if name == "index.html":
+            response.headers["Cache-Control"] = "no-cache"
+        elif f"{os.sep}assets{os.sep}" in str(full_path):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
