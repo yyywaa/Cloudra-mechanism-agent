@@ -20,7 +20,7 @@ def setup_record(tmp_path, monkeypatch, budget=None):
     from tests.test_ts_inputs import input_payload
     value = input_payload()
     value['reaction'].update(reactant_smiles='[H][H]', product_smiles='[H][H]', charge=0, atom_map=[0, 1])
-    value['conformers']['reactant']['optimization'] = dict(engine='xtb', method='GFN2-xTB', keywords='')
+    value['conformers']['reactant']['optimization'] = dict(engine='xtb', method='GFN2-xTB', basis_set='', keywords='')
     if budget:
         value['execution']['limits'] = dict(source=budget.source,max_compute_actions=budget.max_compute_actions,max_model_calls=budget.max_model_calls)
     inputs = TsInput.model_validate(value)
@@ -201,3 +201,44 @@ def test_failed_constrained_attempt_can_retry_without_repair_evidence(tmp_path, 
     with db.connect() as con:
         assert con.execute('SELECT state FROM compute_jobs WHERE id=?', (old_job,)).fetchone()[0] == 'failed'
         assert con.execute('SELECT COUNT(*) FROM compute_jobs').fetchone()[0] == 2
+
+
+@pytest.mark.parametrize('electronic_character,multiplicity', [('closed_shell', 1), ('open_shell', 3)])
+def test_constrained_derivative_manifests_retain_declared_electronic_character(
+    tmp_path, monkeypatch, electronic_character, multiplicity,
+):
+    from cloudra.tools.core.geometry_optimization import advance_optimization
+
+    db, record, request = setup_record(tmp_path, monkeypatch)
+    record.input.reaction.electronic_character = electronic_character
+    record.input.reaction.multiplicity = multiplicity
+    assert advance_optimization(record, 'selected', request) is None
+    assert record.blocked is None
+    hessian = record.job_steps[-1]
+    task = ChemTask.model_validate_json(Path(hessian.input_path).read_text())
+    assert task.task == 'xtb_hessian'
+    assert task.electronic_character == electronic_character
+    assert task.multiplicity == multiplicity
+    finish(db, hessian)
+    assert advance_optimization(record, 'selected', request) is None
+    assert record.blocked is None
+    gradient = ChemTask.model_validate_json(Path(record.job_steps[-1].input_path).read_text())
+    assert gradient.task == 'xtb_gradient'
+    assert gradient.electronic_character == electronic_character
+    assert gradient.multiplicity == multiplicity
+
+
+def test_constrained_cache_does_not_reuse_another_electronic_character(tmp_path, monkeypatch):
+    from cloudra.tools.core import ts_process
+    from cloudra.tools.core.geometry_optimization import advance_optimization
+
+    _, record, request = setup_record(tmp_path, monkeypatch)
+    monkeypatch.setattr(ts_process, '_submit_step', lambda *_, **__: ('', 601))
+    monkeypatch.setattr(ts_process, '_read_job_state', lambda *_: 'ready')
+    assert advance_optimization(record, 'selected', request) is None
+    key, checkpoint = next(iter(record.optimization_checkpoints.items()))
+    record.optimization_checkpoints[key] = checkpoint.model_copy(update={
+        'result': {'source_state': 'unspecified electronic character'}})
+    record.input.reaction.electronic_character = 'closed_shell'
+    assert advance_optimization(record, 'selected', request) is None
+    assert len(record.optimization_checkpoints) == 2

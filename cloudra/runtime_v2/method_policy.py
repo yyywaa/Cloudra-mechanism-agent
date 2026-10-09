@@ -58,6 +58,10 @@ from cloudra.runtime_v2.schemas import MethodPolicy
 # suffixes we treat as QM input files
 _QM_INPUT_SUFFIXES = {".gjf", ".com", ".inp"}
 
+# ORCA's Gaussian-definition B3LYP is one native functional keyword.
+# Its internal slash remains part of the method when no basis suffix follows.
+_NATIVE_SLASH_METHODS = {'b3lyp/g'}
+
 # job-type / control tokens that may appear on a Gaussian route card or an
 # ORCA "!" keyword line and are NOT the method. This is a parsing ignore-list,
 # not a security boundary: anything unrecognized is treated as a method
@@ -127,10 +131,12 @@ def _norm_basis(b: str) -> str:
 
 
 def _split_method_basis(token: str) -> tuple[str, str]:
-    """`functional/basis` 组合拆成 (functional, 归一化基组)；无 slash 时基组为空。"""
+    """Split the final policy/input basis suffix, preserving complete native methods."""
     t = token.strip().lower()
-    fam, sep, basis = t.partition("/")
-    return fam.strip(), _norm_basis(basis) if sep else ""
+    if t in _NATIVE_SLASH_METHODS:
+        return t, ''
+    family, separator, basis = t.rpartition('/')
+    return (family.strip(), _norm_basis(basis)) if separator else (t, '')
 
 
 def _entry_matches(family: str, req_basis: str, entries: Iterable[str]) -> bool:
@@ -164,10 +170,12 @@ def _family(token: str) -> str:
 def check_method(method: str, policy: MethodPolicy, basis: str = "") -> MethodVerdict:
     """Structured check for an explicit method string (qm_input_writer path):
     whitelist membership at method-family granularity after normalization.
-    `method` 可自带 slash 基组（`b3lyp/def2svp`），或由 `basis` 参数（工具的
-    `basis_set` 字段）补上；组合条目要求基组精确一致（拼写归一后），请求缺
-    基组时 fail-closed。"""
-    fam_raw, inline_basis = _split_method_basis(_normalize(method))
+    Public calculation tools supply one native method token and an explicit
+    basis_set. Policy/native-input combined identities split only the final
+    basis suffix; B3LYP/G stays distinct from B3LYP. A policy entry
+    with a basis requires the same actual basis (spellings normalized).
+    """
+    fam_raw, inline_basis = (_normalize(method), '') if basis else _split_method_basis(_normalize(method))
     fam = _family(fam_raw)
     req_basis = _norm_basis(basis) or inline_basis
     if _entry_matches(fam, req_basis, policy.allowed_methods):
@@ -175,8 +183,8 @@ def check_method(method: str, policy: MethodPolicy, basis: str = "") -> MethodVe
     return MethodVerdict(
         allowed=False,
         method=method,
-        reason=f"method '{method}' not in allowed_methods {policy.allowed_methods}; "
-        f"fall back to an allowed method (e.g. {policy.allowed_methods[0]})",
+        reason=f"current Benchmark task: method '{method}' not in allowed_methods {policy.allowed_methods}; "
+        "compare the submitted input with this task's requirements before changing its method",
         matched_forbidden=[method],
     )
 
@@ -242,10 +250,10 @@ def _extract_gaussian_methods(content: str) -> list[list[str]]:
                     slashed.append("external")
                 continue
             if "/" in t:
-                head, _, bset = t.partition("/")
+                head, bset = _split_method_basis(t)
                 if head:
                     # 权威 slash 声明：方法+基组组合候选（`b3lyp/def2svp`）
-                    slashed.append(f"{head}/{_norm_basis(bset)}" if bset else head)
+                    slashed.append(f"{head}/{bset}" if bset else head)
                 continue
             if "=" in t or "(" in t or _is_basis_token(t) or t in _GAUSSIAN_JOB_TOKENS:
                 continue
@@ -352,7 +360,7 @@ def check_input_content(
         if strict:
             return MethodVerdict(
                 allowed=False,
-                reason="input file is not recognizable as a Gaussian/ORCA input; "
+                reason="current Benchmark task: input file is not recognizable as a Gaussian/ORCA input; "
                 f"whitelist cannot be verified (allowed: {policy.allowed_methods})",
             )
         return MethodVerdict(allowed=True)
@@ -361,7 +369,7 @@ def check_input_content(
         if not cards or any(not c for c in cards):
             return MethodVerdict(
                 allowed=False,
-                reason="gaussian input has route card(s) with no parseable method "
+                reason="current Benchmark task: gaussian input has route card(s) with no parseable method "
                 f"directive; whitelist cannot be verified (allowed: {policy.allowed_methods})",
             )
         candidates = [c for card in cards for c in card]
@@ -370,7 +378,7 @@ def check_input_content(
         if not candidates:
             return MethodVerdict(
                 allowed=False,
-                reason="orca input has no parseable method directive; "
+                reason="current Benchmark task: orca input has no parseable method directive; "
                 f"whitelist cannot be verified (allowed: {policy.allowed_methods})",
             )
     bad = []
@@ -382,9 +390,9 @@ def check_input_content(
         return MethodVerdict(
             allowed=False,
             method=bad[0],
-            reason=f"{engine} input requests method(s) {bad} not in "
-            f"allowed_methods {policy.allowed_methods}; fall back to an allowed "
-            f"method (e.g. {policy.allowed_methods[0]})",
+            reason=f"current Benchmark task: {engine} input requests method(s) {bad} not in "
+            f"allowed_methods {policy.allowed_methods}; compare the submitted input with this "
+            "task's requirements before changing its method",
             matched_forbidden=bad,
         )
     return MethodVerdict(allowed=True, method=candidates[0])
@@ -420,7 +428,7 @@ def check_input_files(
         except Exception as exc:
             return MethodVerdict(
                 allowed=False,
-                reason=f"cannot read QM input {p}: {exc}; whitelist cannot be verified",
+                reason=f"current Benchmark task: cannot read QM input {p}: {exc}; whitelist cannot be verified",
             )
         verdict = check_input_content(content, policy, filename=p.name)
         if not verdict.allowed:
@@ -515,7 +523,7 @@ def intercept(
         if not method:
             return MethodVerdict(
                 allowed=False,
-                reason="qm_input_writer call carries no method; whitelist requires an "
+                reason="current Benchmark task: qm_input_writer call carries no method; whitelist requires an "
                 f"explicit whitelisted method {policy.allowed_methods}",
             )
         basis = str(arguments.get("basis_set") or arguments.get("basis") or "")
@@ -529,7 +537,7 @@ def intercept(
         if not input_file:
             return MethodVerdict(
                 allowed=False,
-                reason="submit_compute_job call carries no input_file; "
+                reason="current Benchmark task: submit_compute_job call carries no input_file; "
                 "cannot verify the whitelist",
             )
         p = Path(input_file)
@@ -538,7 +546,7 @@ def intercept(
         if not p.is_file():
             return MethodVerdict(
                 allowed=False,
-                reason=f"input file not found: {input_file}; cannot verify the whitelist",
+                reason=f"current Benchmark task: input file not found: {input_file}; cannot verify the whitelist",
             )
         if str(arguments.get('job_type') or '').lower() == 'chem_task':
             try:
@@ -550,14 +558,14 @@ def intercept(
                 if task.task != 'xtb_scan':
                     raise ValueError('public chemistry-task submission accepts only xtb_scan')
             except (OSError, ValueError) as exc:
-                return MethodVerdict(allowed=False, reason=f'cannot verify native scan manifest: {exc}')
+                return MethodVerdict(allowed=False, reason=f'current Benchmark task: cannot verify native scan manifest: {exc}')
             return check_method(task.scan.calculation.method, policy)
         try:
             content = p.read_text(encoding="utf-8", errors="replace")
         except Exception as exc:
             return MethodVerdict(
                 allowed=False,
-                reason=f"cannot read input file {input_file}: {exc}",
+                reason=f"current Benchmark task: cannot read input file {input_file}: {exc}",
             )
         return check_input_content(content, policy, filename=p.name, strict=True)
     if tool_name == "bash" and "bash" in layers:

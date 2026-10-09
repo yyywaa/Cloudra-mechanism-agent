@@ -179,6 +179,20 @@ def test_molecular_pes_preparation_pins_nonblocking_guidance(name, arguments):
     assert notices.pin_content("as_g", "guidance-physical-thinking") is not None
 
 
+def test_physical_guidance_replaces_unscoped_resident_method_policy_hint():
+    notices = NoticeManager()
+    notices.pin("as_g", "guidance-physical-thinking", "Always follow the global method policy.")
+    result = _run(GuidanceStage(), _ctx("small_mol", notices),
+                  ToolCall(id="prepare", name="ts_prepare", arguments={}))
+    assert result.outcome == "allow"
+    pin = notices.pin_content("as_g", "guidance-physical-thinking")
+    assert pin is not None
+    assert "Only active Benchmark projects use MethodPolicy" in pin
+    assert "ordinary research projects have no default method/basis whitelist" in pin
+    assert "global configuration, examples or past tasks" in pin
+    assert len(notices.render_current("as_g")) == 1
+
+
 def test_missing_ts_guess_mode_does_not_infer_a_compute_path():
     notices = NoticeManager()
     ctx = _ctx("small_mol", notices)
@@ -432,3 +446,74 @@ def test_ts_notice_uses_inspection_and_grouped_explicit_inputs(tmp_path):
     pin=notices.pin_content('as_g','guidance-ts-sop')
     assert 'ts_inspect' in pin and 'guess.calculation' in pin
     assert 'ts_resume(run_id) without adjustments' not in pin
+
+
+def test_ts_notice_requires_bound_scan_recovery_and_explicit_calculation_replacement():
+    notices = NoticeManager()
+    _run(GuidanceStage(), _ctx('small_mol', notices),
+         ToolCall(id='prepare-contract', name='ts_guess', arguments={'mode': 'scan_prepare'}))
+    pin = notices.pin_content('as_g', 'guidance-ts-sop')
+    assert 'scan_recovery' in pin
+    assert 'basis_set' in pin
+    assert 'replace' in pin
+    assert 'without recovery evidence' not in pin
+
+
+@pytest.mark.parametrize('key,old_content', [
+    ('guidance-ts-sop', '[Guidance] Failed scans may retry without recovery evidence; use changes={}.'),
+    ('guidance-physical-thinking', '[Guidance] Always follow the global method policy.'),
+])
+@pytest.mark.parametrize('fresh', [False, True])
+def test_before_llm_refreshes_restored_static_guidance_in_actual_notice_batch(key, old_content, fresh):
+    from cloudra.runtime_v2.policies.guidance import _PHYSICAL_THINKING_NOTICE, _TS_NOTICE
+
+    log = EventLog(strict=True)
+    old = NoticeManager()
+    old.attach(log, lambda _session_id: 'project')
+    old.pin('as_g', key, old_content)
+    dynamic = {
+        'guidance-scientific-reflection:attempt': 'Keep the recorded reflection and its evidence.',
+        'guidance-delegate-compute': 'Keep the existing delegation guidance.',
+        'guidance-handwritten-coords': 'Keep the existing coordinate guidance.',
+    }
+    for dynamic_key, content in dynamic.items():
+        old.pin('as_g', dynamic_key, content)
+    old.pin('as_other', key, old_content)
+    restored = NoticeManager()
+    restored.restore_from(log)
+    restored.attach(log, lambda _session_id: 'project')
+    if not fresh:
+        restored.collect_batch('as_g', fresh=True)
+        restored.confirm_consumed('as_g')
+    before = sum(event.type == 'context.pin_set' for event in log)
+    stage, ctx = GuidanceStage(), _ctx('small_mol', restored)
+    asyncio.run(stage.before_llm(ctx, []))
+    expected = _TS_NOTICE if key == 'guidance-ts-sop' else _PHYSICAL_THINKING_NOTICE
+    assert restored.pin_content('as_g', key) == expected
+    assert restored.pin_content('as_other', key) == old_content
+    for dynamic_key, content in dynamic.items():
+        assert restored.pin_content('as_g', dynamic_key) == content
+    batch = restored.collect_batch('as_g', fresh=fresh)
+    assert any(expected in message['content'] for message in batch)
+    assert not any(old_content in message['content'] for message in batch)
+    assert sum(event.type == 'context.pin_set' for event in log) == before + 1
+    restored.confirm_consumed('as_g')
+    asyncio.run(stage.before_llm(ctx, []))
+    assert restored.collect_batch('as_g', fresh=False) == []
+    assert sum(event.type == 'context.pin_set' for event in log) == before + 1
+
+
+def test_before_llm_does_not_create_static_guidance_for_agents_without_existing_pins():
+    notices = NoticeManager()
+    notices.pin('as_g', 'guidance-scientific-reflection:attempt', 'Existing dynamic evidence guidance')
+    stage, ctx = GuidanceStage(), _ctx('small_mol', notices)
+    asyncio.run(stage.before_llm(ctx, []))
+    assert notices.pin_content('as_g', 'guidance-ts-sop') is None
+    assert notices.pin_content('as_g', 'guidance-physical-thinking') is None
+    assert notices.render_current('as_g') == [{'role': 'system', 'content': 'Existing dynamic evidence guidance'}]
+
+
+def test_before_llm_static_guidance_refresh_without_notice_sink_is_noop():
+    messages = [{'role': 'user', 'content': 'Continue the current task'}]
+    assert asyncio.run(GuidanceStage().before_llm(_ctx('small_mol', None), messages)) is None
+    assert messages == [{'role': 'user', 'content': 'Continue the current task'}]

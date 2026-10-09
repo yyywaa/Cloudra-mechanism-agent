@@ -18,7 +18,7 @@
 | 杠杆 | 受影响的场景 |
 | :--- | :--- |
 | 默认 invocation protocol | 普通问答（默认协议下的纯文本收尾） |
-| Benchmark 方法策略作用域 | 普通项目残留白名单仍能生成用户指定的计算输入 |
+| Benchmark 方法策略作用域 | 模型看到当前范围；普通项目残留白名单仍能生成用户指定的计算输入 |
 | 角色权限矩阵 | small_mol 技能→计算入口、unattended 拒批 |
 | 重试预算与 fail-fast 分类 | provider 暂态重试 / 永久 4xx |
 | 压缩阈值与摘要 | context overflow |
@@ -30,6 +30,9 @@
 | YOLO 审批结构校验 | 非布尔结论不得写入文件 |
 | TS 故障检查点 + 干预预算 | 重复相同 scan 续接保留原故障、不耗尽预算 |
 | TS fixture 频率门禁 + 终态事件 | 真实零虚频日志阻止 IRC，重复 resume 保留故障与预算 |
+| TS 构象文件修订 | 相对路径绑定工作区；更换结构清除旧绑定并保留同一流程 |
+| TS 同结构文件替换 | 复制同一结构后保留映射和初猜声明，无需 Agent 重复填写 |
+| TS 结构编号覆盖 | 源文件、Agent 原子表与任务声明统一到旧编号，显式新编号只转换一次 |
 """
 
 from __future__ import annotations
@@ -432,7 +435,9 @@ class ScenarioHarness:
 
 # Names shared by the zero-key TS state-machine regressions.
 TS_SCENARIOS = ('ts_prepare_once_auto_complete', 'ts_failed_scan_repair_same_run', 'ts_readonly_inspection',
-                'ts_resume_scan_without_freeze', 'ts_d1_atom_binding_native_scan_recovery')
+                'ts_resume_scan_without_freeze', 'ts_d1_atom_binding_native_scan_recovery',
+                'ts_conformer_source_revision_same_run', 'ts_same_structure_source_keeps_declarations',
+                'ts_canonical_source_overwrite')
 
 
 def d1_component_order_files(workspace: Path) -> tuple[Path, Path]:

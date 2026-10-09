@@ -25,7 +25,7 @@ import {
   type TimelineItem,
   type ToolItem,
 } from './timeline';
-import { mergeAndTrimLiveEvents } from './eventWindow';
+import { boundEventPage, boundStreamView, LiveEventBuffer, mergeAndTrimLiveEvents } from './eventWindow';
 import { resolveComposerSendTarget } from './composerSend';
 import { planSseReconnect } from './sseReconnect';
 import {
@@ -204,14 +204,16 @@ export default function App() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
   const [events, setEvents] = useState<EventEnvelope[]>([]);
-  // Older history pages pulled in by the "Load earlier" bubble at the top of
-  // the chat.  Kept separate from `events` so the live SSE window can keep
-  // clipping itself to EVENTS_WINDOW without discarding user-loaded pages.
+  // One historical page, isolated from the live tail while browsing.
   const [olderEvents, setOlderEvents] = useState<EventEnvelope[]>([]);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlder, setHasOlder] = useState(true);
-  const [streamView, setStreamView] = useState<StreamView>({ streamText: '', frozen: [] });
+  const [streamView, setStreamView] = useState<StreamView & { omitted?: boolean }>({ streamText: '', frozen: [] });
   const [sidebarJobs, setSidebarJobs] = useState<ComputeJob[] | null>(null);
+  const [computeRefreshVersion, setComputeRefreshVersion] = useState(0);
+  const [cancellingCompute, setCancellingCompute] = useState(false);
+  const cancellingComputeRef = useRef(false);
+  const sidebarJobsRequestRef = useRef(0);
   const [viewMode, setViewMode] = useState<'dialogue' | 'console'>('dialogue');
   const [consoleTab, setConsoleTab] = useState<ConsoleTab>('overview');
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
@@ -408,30 +410,17 @@ export default function App() {
   // stringification of the window) per event — thousands of times on open and
   // on every tool burst.  We coalesce into one state update per animation
   // frame so the transcript rebuilds once, not per event.
-  const eventBufferRef = useRef<EventEnvelope[]>([]);
+  const eventBufferRef = useRef(new LiveEventBuffer(EVENTS_WINDOW));
   const flushRafRef = useRef<number | null>(null);
   const flushBufferedEvents = useCallback(() => {
     flushRafRef.current = null;
-    const batch = eventBufferRef.current;
-    eventBufferRef.current = [];
+    const batch = eventBufferRef.current.drain();
     if (batch.length === 0) return;
-    let spilled: EventEnvelope[] = [];
-    setEvents((prev) => {
-      const result = mergeAndTrimLiveEvents(prev, batch, EVENTS_WINDOW);
-      spilled = result.spilled;
-      return result.live;
-    });
-    if (spilled.length > 0) {
-      setOlderEvents((prev) => {
-        const seen = new Set(prev.map((e) => e.event_id));
-        const extra = spilled.filter((e) => !seen.has(e.event_id));
-        return extra.length > 0 ? [...prev, ...extra] : prev;
-      });
-    }
+    setEvents((prev) => mergeAndTrimLiveEvents(prev, batch, EVENTS_WINDOW).live);
   }, []);
   const bufferEvent = useCallback(
     (event: EventEnvelope) => {
-      eventBufferRef.current.push(event);
+      eventBufferRef.current.add(event);
       if (flushRafRef.current == null) {
         flushRafRef.current = requestAnimationFrame(flushBufferedEvents);
       }
@@ -479,13 +468,16 @@ export default function App() {
   }, []);
 
   const loadSidebarOps = useCallback(async () => {
+    const requestVersion = ++sidebarJobsRequestRef.current;
     if (!activeProjectId) {
       setSidebarJobs(null);
       return;
     }
     try {
       const jobs = await api.listComputeJobs(activeProjectId, true);
-      setSidebarJobs(jobs);
+      if (requestVersion === sidebarJobsRequestRef.current && activeProjectIdRef.current === activeProjectId) {
+        setSidebarJobs(jobs);
+      }
     } catch {
       // ignore transient poll error
     }
@@ -513,7 +505,7 @@ export default function App() {
       maxSeqRef.current = 0;
       // Drop any buffered events from the previous agent: they must not leak
       // into the freshly loaded transcript.
-      eventBufferRef.current = [];
+      eventBufferRef.current.clear();
       if (flushRafRef.current != null) {
         cancelAnimationFrame(flushRafRef.current);
         flushRafRef.current = null;
@@ -528,8 +520,9 @@ export default function App() {
               : [...prev, agent],
           ),
         );
-        setEvents(eventList);
-        setHasOlder(eventList.length >= EVENTS_WINDOW);
+        const page = boundEventPage(eventList, EVENTS_WINDOW);
+        setEvents(page);
+        setHasOlder(eventList.length >= EVENTS_WINDOW || page.length < eventList.length);
         // Anchors for future thinking segments must account for the fetched
         // history — otherwise the first chunks land at seq 0.5, above the
         // triggering user message, and no SSE echo ever re-bases them.
@@ -580,7 +573,7 @@ export default function App() {
     return () => {
       cancelled = true;
       ++agentSelectionVersionRef.current;
-      eventBufferRef.current = [];
+      eventBufferRef.current.clear();
       if (flushRafRef.current != null) {
         cancelAnimationFrame(flushRafRef.current);
         flushRafRef.current = null;
@@ -760,11 +753,15 @@ export default function App() {
           // Token-level streaming: llm.chunk never enters the event list.
           // Reasoning and content deltas feed streamView via applyStreamEvent.
           if (event.type === 'llm.chunk') {
-            setStreamView((prev) => applyStreamEvent(prev, event, maxSeqRef.current));
+            setStreamView((prev) => boundStreamView(
+              applyStreamEvent(prev, event, maxSeqRef.current), Boolean(prev.omitted),
+            ));
             return;
           }
           maxSeqRef.current = Math.max(maxSeqRef.current, event.session_seq ?? 0);
-          setStreamView((prev) => applyStreamEvent(prev, event, maxSeqRef.current));
+          setStreamView((prev) => boundStreamView(
+            applyStreamEvent(prev, event, maxSeqRef.current), Boolean(prev.omitted),
+          ));
           bufferEvent(event);
           if (event.type === 'agent.message_injected') {
             const content = String(event.data.content ?? '');
@@ -1099,15 +1096,21 @@ export default function App() {
   }
 
   async function cancelAllComputeJobs() {
-    if (!window.confirm(cancelAllComputeConfirm())) {
+    if (cancellingComputeRef.current || !window.confirm(cancelAllComputeConfirm(lang))) {
       return;
     }
+    cancellingComputeRef.current = true;
+    setCancellingCompute(true);
     try {
       const counts = await api.cancelAllComputeJobs();
-      void loadSidebarOps();
-      pushToast('ok', formatCancelAllToast(counts));
+      pushToast('ok', formatCancelAllToast(counts, lang));
     } catch (e) {
       reportError(e);
+    } finally {
+      setComputeRefreshVersion((version) => version + 1);
+      await loadSidebarOps();
+      cancellingComputeRef.current = false;
+      setCancellingCompute(false);
     }
   }
 
@@ -1533,7 +1536,7 @@ export default function App() {
   const sessionEvents = useMemo(
     () =>
       activeAgentId
-        ? [...olderEvents, ...events].filter((e) => e.session_id === activeAgentId)
+        ? (olderEvents.length ? olderEvents : events).filter((e) => e.session_id === activeAgentId)
         : [],
     [olderEvents, events, activeAgentId],
   );
@@ -1546,6 +1549,7 @@ export default function App() {
   // live streaming bubble and the transient thinking segments stay out of this
   // memo so token deltas never re-trigger the O(n log n) sort.
   const committedTimeline = useMemo(() => {
+    if (olderEvents.length) return persistedTimeline;
     const persisted = new Set(
       persistedTimeline
         .filter((i): i is MessageItem => i.kind === 'message')
@@ -1555,8 +1559,9 @@ export default function App() {
     const merged: TimelineItem[] = [...persistedTimeline, ...frozen];
     merged.sort((a, b) => a.seq - b.seq);
     return merged;
-  }, [persistedTimeline, streamView.frozen]);
+  }, [persistedTimeline, streamView.frozen, olderEvents.length]);
   const timeline = useMemo(() => {
+    if (olderEvents.length) return committedTimeline;
     // Live bubble before thinking/pending messages, transient streaming thinking,
     // and optimistic pending user messages.
     const items: TimelineItem[] = [...committedTimeline];
@@ -1601,6 +1606,7 @@ export default function App() {
     streamView.streamThinkingSeq,
     pendingMessages,
     activeAgent?.display_name,
+    olderEvents.length,
   ]);
   const runningTool = useMemo(
     () => {
@@ -1750,46 +1756,85 @@ export default function App() {
     const el = chatRef.current;
     if (el && nearBottomRef.current) el.scrollTop = el.scrollHeight;
   }, [timeline, streamView, activeAgent?.state]);
-  // Prepending an older page must not yank the viewport: capture the scroll
-  // geometry before the fetch and re-anchor by the height delta after the new
-  // page renders.  (The auto-scroll above is a no-op here — nearBottom is
-  // false while the user is up at the top.)
-  const scrollRestoreRef = useRef<{ height: number } | null>(null);
+  const scrollRestoreRef = useRef<'older' | 'newer' | null>(null);
   useLayoutEffect(() => {
     const el = chatRef.current;
     const restore = scrollRestoreRef.current;
     if (el && restore) {
       scrollRestoreRef.current = null;
-      el.scrollTop += el.scrollHeight - restore.height;
+      el.scrollTop = restore === 'older' ? el.scrollHeight : 0;
     }
   }, [olderEvents]);
+  const canLoadOlder = olderEvents.length
+    ? hasOlder
+    : hasOlder || (sessionEvents[0]?.session_seq ?? 0) > 1;
   const loadOlder = useCallback(async () => {
-    if (!activeAgentId || loadingOlder || !hasOlder) return;
-    let oldest = Infinity;
-    for (const e of olderEvents) {
-      if (e.session_id === activeAgentId) oldest = Math.min(oldest, e.session_seq ?? Infinity);
-    }
-    for (const e of events) {
-      if (e.session_id === activeAgentId) oldest = Math.min(oldest, e.session_seq ?? Infinity);
-    }
+    if (!activeAgentId || loadingOlder || !canLoadOlder) return;
+    const oldest = Math.min(...sessionEvents.map((event) => event.session_seq ?? Infinity));
     if (!Number.isFinite(oldest)) return;
-    const el = chatRef.current;
-    if (el) scrollRestoreRef.current = { height: el.scrollHeight };
+    nearBottomRef.current = false;
     const version = agentSelectionVersionRef.current;
     setLoadingOlder(true);
     try {
       const page = await api.eventsPage(activeAgentId, { before: oldest, limit: HISTORY_PAGE_SIZE });
       if (version !== agentSelectionVersionRef.current) return;
-      const known = new Set([...olderEvents, ...events].map((e) => e.event_id));
-      const fresh = page.filter((e) => !known.has(e.event_id));
-      setOlderEvents((prev) => [...fresh, ...prev]);
-      if (page.length < HISTORY_PAGE_SIZE) setHasOlder(false);
+      const bounded = boundEventPage(page, HISTORY_PAGE_SIZE);
+      if (bounded.length) {
+        scrollRestoreRef.current = 'older';
+        setOlderEvents(bounded);
+      }
+      setHasOlder(page.length >= HISTORY_PAGE_SIZE || bounded.length < page.length);
     } catch (e) {
       reportError(e);
     } finally {
       if (version === agentSelectionVersionRef.current) setLoadingOlder(false);
     }
-  }, [activeAgentId, loadingOlder, hasOlder, olderEvents, events, reportError]);
+  }, [activeAgentId, loadingOlder, canLoadOlder, sessionEvents, reportError]);
+
+  const loadLatest = useCallback(async () => {
+    if (!activeAgentId || loadingOlder) return;
+    const version = agentSelectionVersionRef.current;
+    setLoadingOlder(true);
+    try {
+      const page = await api.eventsPage(activeAgentId, { limit: EVENTS_WINDOW });
+      if (version !== agentSelectionVersionRef.current) return;
+      const newest = page.at(-1)?.session_seq ?? 0;
+      const bounded = boundEventPage(page, EVENTS_WINDOW);
+      setEvents((prev) => mergeAndTrimLiveEvents(
+        bounded, prev.filter((event) => (event.session_seq ?? 0) > newest), EVENTS_WINDOW,
+      ).live);
+      nearBottomRef.current = true;
+      setOlderEvents([]);
+      setHasOlder(page.length >= EVENTS_WINDOW || bounded.length < page.length);
+    } catch (e) {
+      reportError(e);
+    } finally {
+      if (version === agentSelectionVersionRef.current) setLoadingOlder(false);
+    }
+  }, [activeAgentId, loadingOlder, reportError]);
+
+  const loadNewer = useCallback(async () => {
+    if (!activeAgentId || loadingOlder || !olderEvents.length) return;
+    const newest = olderEvents.at(-1)?.session_seq;
+    if (newest == null) return;
+    const version = agentSelectionVersionRef.current;
+    setLoadingOlder(true);
+    try {
+      const page = await api.eventsPage(activeAgentId, { after: newest, tail: false, limit: HISTORY_PAGE_SIZE });
+      if (version !== agentSelectionVersionRef.current) return;
+      if (page.length) {
+        scrollRestoreRef.current = 'newer';
+        setOlderEvents(boundEventPage(page, HISTORY_PAGE_SIZE, 'oldest'));
+        setHasOlder(true);
+      } else {
+        await loadLatest();
+      }
+    } catch (e) {
+      reportError(e);
+    } finally {
+      if (version === agentSelectionVersionRef.current) setLoadingOlder(false);
+    }
+  }, [activeAgentId, loadingOlder, olderEvents, loadLatest, reportError]);
 
   const connLabel = !activeProject ? 'idle' : connState === 'live' ? 'live' : connState === 'connecting' ? 'connecting' : 'reconnecting…';
   const totalPending = approvals.length + interactions.length;
@@ -2075,12 +2120,12 @@ export default function App() {
                 type="button"
                 className="btn ghost sm"
                 data-testid="cancel-all-compute-foot"
-                onClick={(event) => {
-                  event.currentTarget.closest('details')?.removeAttribute('open');
-                  void cancelAllComputeJobs();
-                }}
+                disabled={cancellingCompute}
+                onClick={() => { void cancelAllComputeJobs(); }}
               >
-                {lang === 'zh' ? '取消全部计算' : 'Cancel All Compute'}
+                {cancellingCompute
+                  ? (lang === 'zh' ? '请求中…' : 'Requesting…')
+                  : (lang === 'zh' ? '取消全部计算' : 'Cancel All Compute')}
               </button>
             </div>
           </details>
@@ -2262,7 +2307,9 @@ export default function App() {
                     }}
                     title="切换至控制台查看计算队列"
                   >
-                    {sidebarJobs.length} 个计算任务运行中 →
+                    {lang === 'zh'
+                      ? `${sidebarJobs.length} 个计算任务未完成 →`
+                      : `${sidebarJobs.length} unfinished compute jobs →`}
                   </span>
                 )}
               </div>
@@ -2290,13 +2337,30 @@ export default function App() {
                   : 'Send a message below to start the coordinator.'}
               </div>
             )}
-            {activeAgent && hasOlder && timeline.length > 0 && (
+            {activeAgent && canLoadOlder && sessionEvents.length > 0 && (
               <button className="load-earlier" disabled={loadingOlder} onClick={() => void loadOlder()}>
                 {loadingOlder ? 'loading…' : 'Load earlier'}
               </button>
             )}
             {activeAgent && !hasOlder && olderEvents.length > 0 && (
               <div className="history-end">beginning of history</div>
+            )}
+            {olderEvents.length > 0 && (
+              <div className="audit-pager">
+                <span>Browsing history · {olderEvents.length} events shown</span>
+                <button className="btn ghost sm" disabled={loadingOlder} onClick={() => void loadNewer()}>Newer</button>
+                <button className="btn ghost sm" disabled={loadingOlder} onClick={() => void loadLatest()}>Latest</button>
+              </div>
+            )}
+            {sessionEvents.some((event) => event.data._payload_omitted) && (
+              <button className="load-earlier" onClick={() => { setViewMode('console'); setConsoleTab('audit'); }}>
+                Large event contents are available in the audit log
+              </button>
+            )}
+            {streamView.omitted && !olderEvents.length && (
+              <div className="history-end">
+                Earlier transient text is omitted from this view. Full persisted events are available in the audit log.
+              </div>
             )}
             {timeline.map((item) =>
               item.kind === 'message' ? (
@@ -2654,7 +2718,7 @@ export default function App() {
             />
           ) : consoleTab === 'compute' ? (
             <div className="console-compute-container">
-              <OpsPanel project={activeProject} agents={agents} onError={reportError} />
+              <OpsPanel project={activeProject} agents={agents} onError={reportError} refreshVersion={computeRefreshVersion} />
             </div>
           ) : consoleTab === 'artifacts' ? (
             <ArtifactsPanel project={activeProject} onError={reportError} />

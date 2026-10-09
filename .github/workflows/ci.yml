@@ -41,6 +41,9 @@ jobs:
           pytest tests/test_runtime_v2_js_runtime.py -q -k host_env
           pytest tests/test_web_launcher.py -q -k platform_separator
 
+      - name: Run Windows guard cancellation regression
+        run: pytest tests/test_compute_guard_platform.py -q
+
   test:
     runs-on: ubuntu-latest
     # 任何测试挂起时 15 分钟快速失败，而不是空烧默认 6 小时

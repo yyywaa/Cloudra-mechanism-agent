@@ -18,7 +18,7 @@ def test_same_run_can_change_guess_and_formal_method_after_attempt_ends(tmp_path
     from cloudra.tools.core.ts_revision import plan_input_revision, revise_record
 
     record = record_fixture(tmp_path, terminal=outcome, stage='verdict')
-    change = request(record, {'ts_optimization': {'engine': 'orca', 'method': 'b97-3c', 'keywords': ''}})
+    change = request(record, {'ts_optimization': {'replace': {'engine': 'orca', 'method': 'b97-3c', 'basis_set': '', 'keywords': ''}}})
     receipt = plan_input_revision(record, change)
     revised = revise_record(record, change, receipt)
     assert revised.run_id == record.run_id
@@ -36,7 +36,7 @@ def test_endpoint_revision_retains_independent_completed_branch(tmp_path):
     record = record_fixture(tmp_path, terminal='verified', stage='verdict')
     purposes = ['ts_opt', 'frequency', 'irc', 'reactant_opt', 'reactant_frequency', 'product_opt', 'product_frequency']
     record.job_steps = [TsJobStep(purpose=p, job_id=i + 1, state='done') for i, p in enumerate(purposes)]
-    change = request(record, {'verification': {'reactant_endpoint': {'optimization': {'engine': 'orca', 'method': 'b97-3c', 'keywords': ''}}}})
+    change = request(record, {'verification': {'reactant_endpoint': {'optimization': {'replace': {'engine': 'orca', 'method': 'b97-3c', 'basis_set': '', 'keywords': ''}}}}})
     receipt = plan_input_revision(record, change)
     revised = revise_record(record, change, receipt)
     assert [s.job_id for s in revised.job_steps] == [1, 2, 3, 6, 7]
@@ -44,7 +44,7 @@ def test_endpoint_revision_retains_independent_completed_branch(tmp_path):
     assert [ref.stage_key for ref in receipt.invalidated] == ['reactant_opt', 'reactant_frequency']
 
 
-def test_failed_scan_can_revise_without_recovery_evidence(tmp_path):
+def test_failed_scan_point_count_change_preserves_failure_without_recovery_evidence(tmp_path):
     from cloudra.tools.core.ts_process import TsBlocked, TsJobStep
     from cloudra.tools.core.ts_revision import plan_input_revision, revise_record
     record = record_fixture(tmp_path, stage='guess', blocked=TsBlocked(stage='guess', failure_class='scan_job_failed', message='native failure'))
@@ -52,12 +52,10 @@ def test_failed_scan_can_revise_without_recovery_evidence(tmp_path):
     guess = record.input.guess.model_dump(mode='json')
     guess['scans'][0]['scan_steps'] = 8
     change = request(record, {'guess': guess})
-    revised = revise_record(record, change, plan_input_revision(record, change))
-    assert revised.run_id == record.run_id
-    assert revised.scan_step is None and revised.blocked is None
-    assert revised.terminal is None
-    assert revised.attempt_history[-1].job_steps[-1].job_id == 7
-    assert revised.attempt_history[-1].blocked.failure_class == 'scan_job_failed'
+    with pytest.raises(ValueError, match='recovery evidence'):
+        revise_record(record, change, plan_input_revision(record, change))
+    assert record.blocked.failure_class == 'scan_job_failed'
+    assert record.attempt_history == []
     assert record.scan_step.state == 'failed'
 
 
@@ -102,9 +100,9 @@ def test_source_revision_clears_old_geometry_and_numeric_checkpoints(tmp_path):
     assert record.current_seed_xyz_path == 'old.xyz'
 
 
-def test_overwritten_external_xyz_invalidates_old_atom_numbers(tmp_path):
+def test_overwritten_ambiguous_external_xyz_blocks_unproved_atom_numbers(tmp_path):
     from cloudra.tools.core.ts_inputs import FileConformer
-    from cloudra.tools.core.ts_revision import plan_input_revision, revise_record
+    from cloudra.tools.core.ts_revision import plan_input_revision
 
     source = tmp_path / 'reactant.xyz'
     source.write_text('2\nold\nH 0 0 0\nH 0 0 .74\n')
@@ -116,15 +114,13 @@ def test_overwritten_external_xyz_invalidates_old_atom_numbers(tmp_path):
     record.structures['reactant'] = {'xyz_sha256': 'old', 'input_revision': 1}
     source.write_text('2\nchanged\nH 0 0 .74\nH 0 0 0\n')
     change = request(record, {})
-    receipt = plan_input_revision(record, change)
-    revised = revise_record(record, change, receipt)
-    assert 'reaction.atom_map' in receipt.changes
-    assert revised.stage == 'build'
-    assert revised.input.reaction.atom_map == [] and revised.input.guess is None
+    with pytest.raises(ValueError, match='atom correspondence is unproved'):
+        plan_input_revision(record, change)
     assert snapshot.read_text().startswith('2\nold')
 
 
-def test_repeated_method_revisions_retain_unchanged_source_binding(tmp_path):
+@pytest.mark.parametrize('relative_source', [False, True])
+def test_repeated_method_revisions_retain_unchanged_source_binding(tmp_path, monkeypatch, relative_source):
     from cloudra.tools.core.ts_inputs import FileConformer
     from cloudra.tools.core.ts_revision import plan_input_revision, revise_record
 
@@ -134,25 +130,29 @@ def test_repeated_method_revisions_retain_unchanged_source_binding(tmp_path):
     snapshot.parent.mkdir(parents=True)
     snapshot.write_bytes(source.read_bytes())
     record = record_fixture(tmp_path, stage='verdict', terminal='candidate_only')
-    record.input.conformers.reactant = FileConformer(kind='file', xyz_path=str(source))
+    cwd = tmp_path / 'service'
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
+    record.input.conformers.reactant = FileConformer(kind='file', xyz_path='reactant.xyz' if relative_source else str(source))
     record.structures['reactant'] = {'input_revision': 1, 'xyz_path': str(snapshot)}
     original_input = record.input.model_copy(deep=True)
-    for method in ('b97-3c', 'b3lyp/def2svp'):
+    for method, basis in (('b97-3c', ''), ('b3lyp', 'def2svp')):
         calculation = record.input.ts_optimization.model_dump()
         calculation['method'] = method
-        change = request(record, {'ts_optimization': calculation})
+        calculation['basis_set'] = basis
+        change = request(record, {'ts_optimization': {'replace': calculation}})
         receipt = plan_input_revision(record, change)
         record = revise_record(record, change, receipt)
         assert record.stage == 'submit'
         assert record.input.reaction.atom_map == original_input.reaction.atom_map
         assert record.input.guess == original_input.guess
         assert record.structures['reactant']['input_revision'] == 1
-        assert receipt.changes == ['ts_optimization.method']
+        assert receipt.changes == ['ts_optimization.basis_set', 'ts_optimization.method']
     source.write_text('2\nchanged\nH 0 0 .74\nH 0 0 0\n')
     change = request(record, {})
-    revised = revise_record(record, change, plan_input_revision(record, change))
-    assert revised.stage == 'build'
-    assert revised.input.reaction.atom_map == [] and revised.input.guess is None
+    with pytest.raises(ValueError, match='atom correspondence is unproved'):
+        plan_input_revision(record, change)
+    assert record.input.reaction.atom_map == original_input.reaction.atom_map
 
 
 def test_missing_external_source_can_be_supplied_at_same_path(tmp_path):
@@ -190,7 +190,7 @@ def test_custom_derivative_binding_is_preserved_in_revision_receipt(tmp_path):
     assert receipt.invalidated[0].stage_key == 'candidate_constraints:point'
 
 
-def test_failed_job_allows_same_input_retry_without_extra_calculation_proof(tmp_path):
+def test_failed_scan_same_input_retry_requires_recovery_evidence(tmp_path):
     from cloudra.persistence.database import ComputeDB
     from cloudra.services.compute_store import insert_compute_job
     from cloudra.services.ts_pipeline_context import use_pipeline_database
@@ -204,10 +204,11 @@ def test_failed_job_allows_same_input_retry_without_extra_calculation_proof(tmp_
         scan_step=TsJobStep(purpose='scan', job_id=failed, input_path=str(old),state='failed'))
     change = request(record, {})
     with use_pipeline_database(db):
-        revised = revise_record(record,change,plan_input_revision(record,change))
-    assert revised.scan_step is None and revised.blocked is None
-    assert revised.run_id == record.run_id
-    assert revised.attempt_history[-1].blocked.failure_class == 'scan_job_failed'
+        with pytest.raises(ValueError, match='recovery evidence'):
+            revise_record(record,change,plan_input_revision(record,change))
+    assert record.scan_step.job_id == failed
+    assert record.blocked.failure_class == 'scan_job_failed'
+    assert record.attempt_history == []
     with db.connect() as con:
         assert con.execute('SELECT state FROM compute_jobs WHERE id=?',(failed,)).fetchone()[0] == 'failed'
         assert con.execute('SELECT COUNT(*) FROM compute_jobs').fetchone()[0] == 1
@@ -263,7 +264,7 @@ def test_intervention_limit_blocks_changes_without_erasing_history(tmp_path):
     assert record.intervention_count==1
 
 
-@pytest.mark.parametrize('purpose,stage,restart', [('ts_opt','refine','submit'), ('frequency','verdict','refine'), ('scan','guess','guess')])
+@pytest.mark.parametrize('purpose,stage,restart', [('ts_opt','refine','submit'), ('frequency','verdict','refine')])
 def test_same_input_retry_restarts_at_failed_job_producer(tmp_path, purpose, stage, restart):
     from cloudra.tools.core.ts_process import TsJobStep, _record_candidate_failure
     from cloudra.tools.core.ts_revision import plan_input_revision, revise_record

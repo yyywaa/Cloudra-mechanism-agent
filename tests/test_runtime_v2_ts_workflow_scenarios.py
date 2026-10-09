@@ -19,7 +19,7 @@ def water_input(tmp_path, *, scan=False):
     evidence.write_text('Explicit candidate provenance')
     inputs=calculation_input(reactant_smiles='O',product_smiles='O',method='HF/STO-3G',atom_map=[0,1,2])
     inputs.conformers.reactant=inputs.conformers.product=FileConformer(kind='file',xyz_path=str(seed))
-    inputs.guess=ScanGuess(kind='scan',calculation={'engine':'orca','method':'HF/STO-3G','keywords':''},scans=[{'atoms':[0,1],'scan_start':1.,'scan_end':2.,'scan_steps':3}]) if scan else ProvidedGuess(kind='provided',xyz_path=str(seed),evidence_refs=[str(evidence)])
+    inputs.guess=ScanGuess(kind='scan',calculation={'engine':'orca','method':'HF','basis_set':'STO-3G','keywords':''},scans=[{'atoms':[0,1],'scan_start':1.,'scan_end':2.,'scan_steps':3}]) if scan else ProvidedGuess(kind='provided',xyz_path=str(seed),evidence_refs=[str(evidence)])
     data=inputs.model_dump(mode='json')
     data['reaction']['atom_map']=[1,2,3]
     return data
@@ -37,6 +37,200 @@ class StateProvider(ScriptedProvider):
             with use_runtime_authority(self.harness.core):
                 await asyncio.to_thread(self.callback,self)
         return await super().complete(*args,**kwargs)
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('rdkit_chemistry')
+async def test_ts_conformer_source_revision_same_run(tmp_path, monkeypatch):
+    from cloudra.persistence.database import ComputeDB
+    from cloudra.tools.core.ts_process import load_record
+
+    assert 'ts_conformer_source_revision_same_run' in TS_SCENARIOS
+    service = tmp_path / 'service'
+    service.mkdir()
+    monkeypatch.chdir(service)
+    payload = water_input(tmp_path)
+    payload['conformers']['reactant']['xyz_path'] = 'missing.xyz'
+    payload['conformers']['product']['xyz_path'] = 'water.xyz'
+
+    def complete(provider):
+        record = load_record(str(tmp_path), 'ts_0001')
+        provider.records.append(record)
+        if len(provider.records) == 1:
+            provider._scripts['small_mol'][0].tools = [('ts_resume', {
+                'run_id': record.run_id, 'expected_revision': record.revision,
+                'reason': 'Supply the available endpoint source',
+                'changes': {'conformers': {'reactant': {'kind': 'file', 'xyz_path': 'water.xyz'}}},
+            })]
+
+    provider = StateProvider(tmp_path, [Step(tools=[('ts_prepare', {'input': payload})]),
+                                      Step(), Step(stop=True)], complete)
+    harness = await ScenarioHarness.start(tmp_path, workspace_dir=tmp_path, provider=provider)
+    provider.harness = harness
+    try:
+        agent = await harness.spawn('small_mol', protocol='traditional')
+        await harness.wait_terminal(agent)
+        assert [(e['tool_name'], e['is_success']) for e in harness.tool_events(agent)] == [
+            ('ts_prepare', True), ('ts_resume', True),
+        ], harness.describe(agent)
+        first, revised = provider.records[0], provider.records[-1]
+        assert first.blocked.issues[0]['path'] == str(tmp_path / 'missing.xyz')
+        assert revised.run_id == first.run_id and revised.declaration_revision == 2
+        assert revised.blocked.failure_class == 'atom_map_missing'
+        assert revised.input.reaction.atom_map == [] and revised.input.guess is None
+        assert revised.attempt_history[0].input.reaction.atom_map == [0, 1, 2]
+        with ComputeDB().connect() as con:
+            assert con.execute('SELECT COUNT(*) FROM ts_pipeline_processes').fetchone()[0] == 1
+            assert con.execute('SELECT COUNT(*) FROM compute_jobs').fetchone()[0] == 0
+    finally:
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("rdkit_chemistry")
+async def test_ts_same_structure_source_keeps_declarations(tmp_path, monkeypatch):
+    from cloudra.persistence.database import ComputeDB
+    from cloudra.tools.core.ts_process import load_record
+
+    assert 'ts_same_structure_source_keeps_declarations' in TS_SCENARIOS
+    service = tmp_path / 'service'
+    service.mkdir()
+    monkeypatch.chdir(service)
+    payload = water_input(tmp_path)
+    payload['conformers']['reactant']['xyz_path'] = 'water.xyz'
+    payload['conformers']['product']['xyz_path'] = 'water.xyz'
+    payload['guess']['xyz_path'] = 'missing-guess.xyz'
+    payload['reaction']['reaction_center'] = [[1, 2]]
+    replacement = tmp_path / 'renamed-water.xyz'
+    replacement.write_bytes((tmp_path / 'water.xyz').read_bytes())
+
+    def complete(provider):
+        record = load_record(str(tmp_path), 'ts_0001')
+        provider.records.append(record)
+        if len(provider.records) == 1:
+            provider._scripts['small_mol'][0].tools = [('ts_resume', {
+                'run_id': record.run_id, 'expected_revision': record.revision,
+                'reason': 'Use the same structure under its new filename',
+                'changes': {'conformers': {'reactant': {
+                    'kind': 'file', 'xyz_path': 'renamed-water.xyz',
+                }}},
+            })]
+
+    provider = StateProvider(tmp_path, [Step(tools=[('ts_prepare', {'input': payload})]),
+                                      Step(), Step(stop=True)], complete)
+    harness = await ScenarioHarness.start(tmp_path, workspace_dir=tmp_path, provider=provider)
+    provider.harness = harness
+    try:
+        agent = await harness.spawn('small_mol', protocol='traditional')
+        await harness.wait_terminal(agent)
+        assert [(e['tool_name'], e['is_success']) for e in harness.tool_events(agent)] == [
+            ('ts_prepare', True), ('ts_resume', True),
+        ], harness.describe(agent)
+        first, revised = provider.records[0], provider.records[-1]
+        assert first.blocked.stage == 'guess'
+        assert revised.run_id == first.run_id and revised.declaration_revision == 2
+        assert revised.input.reaction.atom_map == first.input.reaction.atom_map == [0, 1, 2]
+        assert revised.input.reaction.reaction_center == first.input.reaction.reaction_center
+        assert revised.input.guess == first.input.guess
+        assert revised.input_binding['binding_status'] == 'complete'
+        assert revised.blocked.stage == 'guess'
+        with ComputeDB().connect() as con:
+            assert con.execute('SELECT COUNT(*) FROM ts_pipeline_processes').fetchone()[0] == 1
+            assert con.execute('SELECT COUNT(*) FROM compute_jobs').fetchone()[0] == 0
+    finally:
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("rdkit_chemistry")
+@pytest.mark.parametrize('explicit_references', [False, True])
+async def test_ts_canonical_source_overwrite_matches_agent_numbering(tmp_path, explicit_references):
+    from rdkit import Chem
+
+    from cloudra.persistence.database import ComputeDB
+    from cloudra.tools.core.structure_artifacts import read_xyz_atoms
+    from cloudra.tools.core.ts_process import load_record
+
+    assert 'ts_canonical_source_overwrite' in TS_SCENARIOS
+    payload = water_input(tmp_path)
+    payload['guess']['xyz_path'] = 'missing-guess.xyz'
+    payload['reaction']['reaction_center'] = [[1, 2]]
+    xyz_path = tmp_path / 'water.xyz'
+    mol_path = tmp_path / 'water.mol'
+    molecule = Chem.AddHs(Chem.MolFromSmiles('O'))
+    original_atoms = read_xyz_atoms(str(xyz_path))
+    conformer = Chem.Conformer(3)
+    for index, (symbol, position) in enumerate(original_atoms):
+        assert molecule.GetAtomWithIdx(index).GetSymbol() == symbol
+        molecule.GetAtomWithIdx(index).SetAtomMapNum(index + 10)
+        conformer.SetAtomPosition(index, position)
+    molecule.AddConformer(conformer)
+    mol_path.write_text(Chem.MolToMolBlock(molecule))
+    for role in ('reactant', 'product'):
+        payload['conformers'][role]['mol_path'] = str(mol_path)
+    raw_payloads = []
+    raw_atoms = []
+
+    def complete(provider):
+        record = load_record(str(tmp_path), 'ts_0001')
+        provider.records.append(record)
+        if len(provider.records) == 1:
+            raw = Chem.RenumberAtoms(molecule, [2, 0, 1])
+            for index in range(raw.GetNumAtoms()):
+                position = raw.GetConformer().GetAtomPosition(index)
+                raw.GetConformer().SetAtomPosition(index, (position.x + .1, position.y, position.z))
+            xyz_path.write_text(Chem.MolToXYZBlock(raw))
+            mol_path.write_text(Chem.MolToMolBlock(raw))
+            raw_payloads.append(xyz_path.read_bytes())
+            raw_atoms.append(read_xyz_atoms(str(xyz_path)))
+            changes = {'reaction': {'atom_map': [1, 2, 3], 'reaction_center': [[2, 3]]}} if explicit_references else {}
+            # Both endpoints share the overwritten source, so an explicit raw
+            # product->reactant map is identity; both slots and values normalize.
+            provider._scripts['small_mol'][0].tools = [('ts_resume', {
+                'run_id': record.run_id, 'expected_revision': record.revision,
+                'reason': 'Update coordinates and restore the current canonical atom order',
+                'changes': changes,
+            })]
+
+    provider = StateProvider(tmp_path, [Step(tools=[('ts_prepare', {'input': payload})]),
+                                      Step(), Step(tools=[('ts_inspect', {'run_id': 'ts_0001'})]),
+                                      Step(stop=True)], complete)
+    harness = await ScenarioHarness.start(tmp_path, workspace_dir=tmp_path, provider=provider)
+    provider.harness = harness
+    try:
+        agent = await harness.spawn('small_mol', protocol='traditional')
+        await harness.wait_terminal(agent)
+        assert [(e['tool_name'], e['is_success']) for e in harness.tool_events(agent)] == [
+            ('ts_prepare', True), ('ts_resume', True), ('ts_inspect', True),
+        ], harness.describe(agent)
+        first, current = provider.records[0], provider.records[-1]
+        assert current.input.reaction.atom_map == first.input.reaction.atom_map == [0, 1, 2]
+        assert current.input.reaction.reaction_center == [(0, 1)]
+        assert current.input.guess == first.input.guess
+        assert read_xyz_atoms(str(xyz_path)) == [raw_atoms[0][index] for index in [1, 2, 0]]
+        assert xyz_path.read_bytes() != raw_payloads[0]
+        actual_mol = Chem.MolFromMolFile(str(mol_path), removeHs=False)
+        assert [atom.GetSymbol() for atom in actual_mol.GetAtoms()] == ['O', 'H', 'H']
+        for role in ('reactant', 'product'):
+            assert read_xyz_atoms(current.structures[role]['xyz_path']) == read_xyz_atoms(str(xyz_path))
+            assert [row['symbol'] for row in current.structures[role]['atoms']] == ['O', 'H', 'H']
+        outputs = [event.data['result']['data'] for event in harness.core.event_log.query_session(agent.id)
+                   if event.type == 'tool.result_recorded' and event.data.get('tool_name') in ('ts_resume', 'ts_inspect')]
+        assert len(outputs) == 2
+        for output in outputs:
+            assert output['revision'] == current.revision
+            for role in ('reactant', 'product'):
+                table = output['structures'][role]
+                assert [row['symbol'] for row in table['atoms']] == ['O', 'H', 'H']
+                assert [row['number'] for row in table['atoms']] == [1, 2, 3]
+                assert table['normalization']['status'] == 'applied'
+                assert table['normalization']['paths']['xyz'] == str(xyz_path)
+                assert 'raw_source_paths' not in table['normalization']
+        with ComputeDB().connect() as con:
+            assert con.execute('SELECT COUNT(*) FROM ts_pipeline_processes').fetchone()[0] == 1
+            assert con.execute('SELECT COUNT(*) FROM compute_jobs').fetchone()[0] == 0
+    finally:
+        await harness.aclose()
 
 
 @pytest.mark.asyncio
@@ -127,6 +321,10 @@ def _script_compute(monkeypatch, first_scan='peak'):
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("rdkit_chemistry")
 async def test_ts_failed_scan_repair_same_run(tmp_path,monkeypatch):
+    import hashlib
+
+    from cloudra.tools.core.ts_inputs import ScanRepairReceipt
+
     assert TS_SCENARIOS[1]=='ts_failed_scan_repair_same_run'
     from cloudra.persistence.database import ComputeDB
     from cloudra.tools.core import ts_process as process
@@ -142,7 +340,26 @@ async def test_ts_failed_scan_repair_same_run(tmp_path,monkeypatch):
             record=process.TsProcessRecord.model_validate(handle_process_job_terminal(ComputeDB(),record.scan_step.job_id)['record'])
         provider.records.append(record)
         if record.failed_attempt and record.declaration_revision==1:
-            provider._scripts['small_mol'][0].tools=[('ts_resume',{'run_id':record.run_id,'reason':'retry failed scan without prerequisite repair calculation','expected_revision':record.revision})]
+            failed = record.scan_step
+            attempt_id = f'{failed.source_input_revision}:scan:{failed.job_id}'
+            input_hash = hashlib.sha256(Path(failed.input_path).read_bytes()).hexdigest()
+            repair = tmp_path / 'scan-repair-receipt.json'
+            repair.write_text(ScanRepairReceipt(
+                failed_attempt_id=attempt_id, failure_input_sha256=input_hash,
+                repair='Fixture execution environment repaired after the first scan failed to produce output',
+            ).model_dump_json())
+            provider._scripts['small_mol'][0].tools=[('ts_resume',{
+                'run_id':record.run_id,
+                'reason':'Retry the failed scan with an independently bound environment repair receipt',
+                'expected_revision':record.revision,
+                'scan_recovery': {
+                    'failed_attempt_id': attempt_id,
+                    'failure_input_sha256': input_hash,
+                    'failure_log_sha256': None,
+                    'evidence_refs': [{'path': str(repair),
+                                       'sha256': hashlib.sha256(repair.read_bytes()).hexdigest()}],
+                },
+            })]
     provider=StateProvider(tmp_path,[Step(tools=[('ts_prepare',{'input':payload})]),Step(),Step(stop=True)],complete)
     harness=await ScenarioHarness.start(tmp_path,workspace_dir=tmp_path,provider=provider)
     provider.harness=harness
@@ -153,7 +370,13 @@ async def test_ts_failed_scan_repair_same_run(tmp_path,monkeypatch):
         assert [(e['tool_name'],e['is_success']) for e in harness.tool_events(agent)]==[('ts_prepare',True),('ts_resume',True)],harness.describe(agent)
         current=provider.records[-1]
         assert current.run_id=='ts_0001' and current.intervention_count==1
-        assert current.attempt_history[-1].failed_attempt['failure_class']=='scan_job_failed'
+        assert current.attempt_history[-1].failed_attempt['failure_class']=='unclassified_failure'
+        assert current.attempt_history[-1].blocked.failure_class == 'scan_job_failed'
+        recovery = current.attempt_history[-1].recovery_evidence
+        assert recovery['failed_attempt']['attempt_id'] == f'1:scan:{submissions[0]["id"]}'
+        assert recovery['input_diff'] == []
+        assert recovery['evidence_refs'][0]['kind'] == 'repair_receipt'
+        assert recovery['scientific_recovery_verified'] is False
         assert [s['purpose'] for s in submissions]==['scan','scan','ts_opt']
     finally:
         await harness.aclose()
@@ -246,7 +469,7 @@ async def test_ts_d1_atom_binding_native_scan_recovery(tmp_path, monkeypatch):
     base['reaction']['atom_map'] = []
     base['conformers'] = {'reactant': {'kind':'file','xyz_path':str(xyz),'mol_path':str(graph)},
                           'product': {'kind':'file','xyz_path':str(xyz),'mol_path':str(graph)}}
-    base['guess'] = {'kind':'scan','calculation':{'engine':'xtb','method':'GFN2-xTB'},
+    base['guess'] = {'kind':'scan','calculation':{'engine':'xtb','method':'GFN2-xTB','basis_set':''},
                      'scans':[{'atoms':[4,11],'scan_start':7.,'scan_end':4.,'scan_steps':3}],
                      'force_constant':.5}
     # This two-component fixture must declare the same pair used by its scan.
