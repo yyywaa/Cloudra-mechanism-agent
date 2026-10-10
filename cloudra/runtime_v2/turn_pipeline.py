@@ -244,6 +244,20 @@ class TurnPipeline:
                 record = record.model_copy(update={'status':'failed','error_code':'selection_interrupted'})
                 await broker.record_tool_selection(agent=agent,run_id=run_id,record=record,messages=[{
                     'role':'system','content':'Initial document selection was interrupted. Read tool contracts on demand.'}])
+            if record.status == 'selected' and record.names:
+                def current_versions():
+                    entries = get_tools_lst()
+                    allowed = guest_tool_names(agent.capabilities.tools,visual_mode=agent.settings.visual_mode,
+                        orchestration_mode=agent.settings.orchestration_mode,role_id=agent.role_id)
+                    names = [name for name in record.names if name in allowed]
+                    return {doc.name:doc.revision for doc in build_tool_documents(names,allowed_names=allowed,entries=entries)}
+                versions = await asyncio.to_thread(current_versions)
+                if versions != record.document_revisions:
+                    record = record.model_copy(update={'document_revisions':versions})
+                    await broker.record_tool_selection(agent=agent,run_id=run_id,record=record,messages=[{
+                        'role':'system','content':'Previously loaded tool contracts or availability changed. '
+                        'Earlier versions are superseded. Read current contracts with get_tool_docs. '
+                        'Current available versions: '+str(versions)}])
             if owner is not None:
                 owner.set_tool_selection(record.model_dump(mode='json'))
             return

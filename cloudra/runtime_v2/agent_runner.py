@@ -929,6 +929,10 @@ class AgentRunner:
                     "role": "tool",
                     "tool_call_id": call.id,
                     "content": await asyncio.to_thread(self._tool_result_content, agent, result),
+                    **({'tool_document_compact_content':result.data['tool_document_compact_content']}
+                       if isinstance(result.data, dict) and result.data.get('tool_document_compact_content') else {}),
+                    **({'tool_documents':[{'name':doc['name'],'revision':doc['revision']} for doc in result.data.get('documents',[])]}
+                       if call.name=='get_tool_docs' and result.is_success else {}),
                 }
             )
         if outcome.blocked_call is not None:

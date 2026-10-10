@@ -772,3 +772,31 @@ async def test_host_exits_when_parent_is_sigkilled():
                 os.kill(host_pid, signal.SIGKILL)
             except (ProcessLookupError, PermissionError):
                 pass
+
+
+@pytest.mark.asyncio
+async def test_document_provenance_compacts_only_contract_in_mixed_js_output():
+    core = RuntimeCore(strict_events=True)
+    agent = _agent()
+    ctx = _ctx(agent, tools=["get_tool_docs", "echo"])
+    doc = {"name": "read", "revision": "v1", "content": "ACTUAL_CONTRACT", "references": []}
+
+    class Documents:
+        async def execute(self, agent, call):
+            if call.name == "get_tool_docs":
+                return ToolResult(True, "loaded", {"documents": [doc]})
+            return ToolResult(True, "energy", {"energy": -42.5})
+
+    result = await _runtime(core, tools=Documents()).execute(
+        ctx,
+        ToolCall("w", "js_exec", {"code":
+            'const docs = await tools.get_tool_docs({names: ["read"]}); '
+            'const energy = await tools.echo({}); '
+            'text(docs.data.documents); text(energy.data); text("USER_NOTE");'}),
+    )
+    assert result.is_success
+    assert "ACTUAL_CONTRACT" in result.summary
+    compact = result.data["tool_document_compact_content"]
+    assert "ACTUAL_CONTRACT" not in compact
+    assert "read" in compact and "v1" in compact and "get_tool_docs" in compact
+    assert '-42.5' in compact and "USER_NOTE" in compact

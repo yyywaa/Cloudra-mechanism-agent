@@ -85,3 +85,18 @@ def build_tool_documents(names: Sequence[str], *, allowed_names: Collection[str]
             'if (r.is_success) text(r.data); else text(r.summary);\n```')
         documents.append(ToolDocument(name=name, revision=revision, content=content, references=refs))
     return tuple(documents)
+
+
+def compact_document_outputs(outputs: Sequence[Any], documents: Sequence[dict]) -> list[Any]:
+    """Replace only exact documents returned by a completed host reader."""
+    def compact(value):
+        for document in documents:
+            if value == document or (isinstance(value, str) and value == document['content']):
+                return {'tool_document':document['name'], 'revision':document['revision'],
+                    'reload':'get_tool_docs'}
+        if isinstance(value, list):
+            return [compact(item) for item in value]
+        if isinstance(value, dict):
+            return {key:compact(item) for key,item in value.items()}
+        return value
+    return [compact(value) for value in outputs]

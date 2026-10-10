@@ -954,4 +954,3 @@ def registered_cache_tool(monkeypatch):
         summary='Echo a cache-test payload.')
     original = get_tools_lst
     monkeypatch.setattr('cloudra.tools.get_tools_lst', lambda: [*original(), entry])
-

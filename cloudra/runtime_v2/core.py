@@ -141,7 +141,8 @@ class ContextBroker:
         record = ToolSelectionRecord.model_validate(record.model_dump(mode='json'))
         event_type = 'tool_documents.selection_started' if record.status == 'started' else 'tool_documents.selection_finished'
         events = [(event_type, {'record':record.model_dump(mode='json'), 'messages':list(messages)})]
-        if record.status != 'started' and record.source == 'llm' and record.usage:
+        previous = ((self.prefix_state(agent.id) or {}).get('meta') or {}).get('tool_selection') or {}
+        if record.status != 'started' and previous.get('status') == 'started' and record.source == 'llm' and record.usage:
             events.append(('llm.completed', {'kind':'tool_selection','model':record.model,
                 'usage':record.usage,'duration_ms':record.duration_ms}))
         await self._persist_then_apply(agent=agent,run_id=run_id,events=events)
