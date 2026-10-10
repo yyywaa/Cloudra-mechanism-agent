@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
 import inspect
 import json
 import logging
@@ -256,6 +257,7 @@ class LegacyContextPrefix:
         self._revisions: dict[str, str | None] = {}
         self._prompt_revision = ""
         self._capability_revision = ""
+        self._js_revision = ""
         self._tool_selection = None
         self._pending_install: tuple[dict[str, Any], ...] = ()
         self._pending_appends: tuple[dict[str, Any], ...] = ()
@@ -273,6 +275,7 @@ class LegacyContextPrefix:
                 self._revisions = dict(meta.get("revisions") or {})
                 self._prompt_revision = str(meta.get("prompt_revision") or "")
                 self._capability_revision = str(meta.get("capability_revision") or "")
+                self._js_revision = str(meta.get('js_revision') or '')
 
     # ------------------------------------------------------------- pipeline 协议
 
@@ -294,13 +297,14 @@ class LegacyContextPrefix:
         self._revisions = self._dynamic_revisions(assembly)
         self._prompt_revision = assembly.prompt_revision
         self._capability_revision = assembly.capability_revision
+        self._js_revision = self._js_message_revision(js_message)
         self._pending_install = tuple(messages)
         self._pending_appends = ()
         return messages
 
     async def refresh(self) -> list[dict[str, Any]]:
         """每轮只读复查动态源：变化追加带来源/替代关系的新消息，不变返回空。"""
-        assembly, _js = await asyncio.to_thread(self._assemble)
+        assembly, js_message = await asyncio.to_thread(self._assemble)
         appends: list[dict[str, Any]] = []
         # 静态边界：角色 prompt / 技能清单 / 工具协议在 run 内真实变化时是
         # 新的冷启动边界——记录原因并以追加消息表达，不重写已发送的前缀，
@@ -333,6 +337,14 @@ class LegacyContextPrefix:
             )
             self._prompt_revision = assembly.prompt_revision
             self._capability_revision = assembly.capability_revision
+        js_revision = self._js_message_revision(js_message)
+        if js_revision != self._js_revision:
+            if js_message is not None:
+                appends.append({'role': 'system', 'content':
+                    '[Tool directory update]\nThe current directory and reader protocol below '
+                    'supersedes earlier versions. Read current contracts before calling tools.\n\n'
+                    + str(js_message['content'])})
+            self._js_revision = js_revision
         new_revisions = self._dynamic_revisions(assembly)
         new_messages = {
             source.kind: message
@@ -382,6 +394,7 @@ class LegacyContextPrefix:
             "revisions": dict(self._revisions),
             "prompt_revision": self._prompt_revision,
             "capability_revision": self._capability_revision,
+            'js_revision': self._js_revision,
         }
 
     async def current_prefix(self) -> tuple[list[dict[str, Any]], dict]:
@@ -398,6 +411,7 @@ class LegacyContextPrefix:
             "revisions": self._dynamic_revisions(assembly),
             "prompt_revision": assembly.prompt_revision,
             "capability_revision": assembly.capability_revision,
+            'js_revision': self._js_message_revision(js_message),
         }
         return messages, meta
 
@@ -408,6 +422,7 @@ class LegacyContextPrefix:
         self._revisions = dict(meta.get("revisions") or {})
         self._prompt_revision = str(meta.get("prompt_revision") or "")
         self._capability_revision = str(meta.get("capability_revision") or "")
+        self._js_revision = str(meta.get('js_revision') or '')
 
     # ------------------------------------------------------------------ 内部
 
@@ -431,6 +446,10 @@ class LegacyContextPrefix:
                 ),
             }
         return assembly, js_message
+
+    @staticmethod
+    def _js_message_revision(message: dict | None) -> str:
+        return hashlib.sha256(json.dumps(message, sort_keys=True, ensure_ascii=False).encode('utf-8')).hexdigest()
 
     @staticmethod
     def _dynamic_revisions(assembly) -> dict[str, str | None]:

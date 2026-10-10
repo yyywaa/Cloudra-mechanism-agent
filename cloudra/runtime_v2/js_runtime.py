@@ -583,10 +583,15 @@ class JavaScriptRuntime:
             "error": program_error,
         }
         if document_sources:
+            data['tool_documents'] = [
+                {'name': doc['name'], 'revision': doc['revision']} for doc in document_sources
+            ]
             from cloudra.tools.documentation import compact_document_outputs
             compact_outputs = compact_document_outputs(outputs, document_sources)
-            if compact_outputs != outputs:
-                data['tool_document_compact_content'] = _summary_with_program_outputs(summary_prefix, compact_outputs)
+            # Even transformed documents may share output with evidence. An
+            # unchanged alternative preserves that output instead of allowing
+            # the document tag to collapse the complete mixed tool message.
+            data['tool_document_compact_content'] = _summary_with_program_outputs(summary_prefix, compact_outputs)
         if child_images:
             data["image_paths"] = child_images
         if control_decision is not None:

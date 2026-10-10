@@ -116,6 +116,12 @@ class ContextBroker:
         appended = [*appends, *user_messages, *notice_messages]
         if appended or notices_through is not None:
             data = {"messages": appended}
+            if context_prefix is not None:
+                data['prefix_meta'] = context_prefix.snapshot_meta()
+            meta = (self.prefix_state(agent.id) or {}).get('meta') or {}
+            first_ids = [str(message['message_id']) for message in user_messages if message.get('message_id')]
+            if first_ids and not meta.get('tool_document_task_message_ids'):
+                data['prefix_meta'] = {**data.get('prefix_meta', {}), 'tool_document_task_message_ids': first_ids}
             if notices_through is not None:
                 data["notices_through"] = notices_through
             events.append(("context.appended", data))
