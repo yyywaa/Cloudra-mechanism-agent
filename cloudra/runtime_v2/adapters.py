@@ -899,6 +899,7 @@ class _LegacyAgentBridge:
     """Duck-typed old-Agent surface required by existing tool classes."""
 
     def __init__(self, agent: AgentSession, workspace_dir: str | None) -> None:
+        self._runtime_agent = agent
         self.id = agent.id
         self.name = agent.role_id
         # dag_* 工具的 _actor() 依 type=="supervisor" 判 GraphActor.SUPERVISOR

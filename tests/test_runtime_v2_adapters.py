@@ -109,7 +109,7 @@ async def test_js_instructions_installed_once_via_context_prefix(tmp_path):
         ),
     )
     prefix = LegacyPromptProvider().begin_context(
-        agent=agent, workspace_dir=str(tmp_path), tool_names=["echo", "stop"]
+        agent=agent, workspace_dir=str(tmp_path), tool_names=["read", "stop"]
     )
     installed = await prefix.install()
     js_messages = [

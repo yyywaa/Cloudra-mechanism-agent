@@ -83,6 +83,9 @@ _SCIENCE_ROLES = frozenset(
 )
 
 TOOL_REGISTRY: tuple[ToolRegistration, ...] = (
+    ToolRegistration('cloudra.tools.Skilltool.get_tool_docs', 'GetToolDocs',
+        tool_name='get_tool_docs', summary='Read complete current contracts for named tools without granting permissions.',
+        dag_observe=False, supervisor_access='skill_read'),
     ToolRegistration(
         module='cloudra.tools.Bashtool.bash',
         class_name='Bash',

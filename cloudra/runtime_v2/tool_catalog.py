@@ -215,12 +215,12 @@ def javascript_instructions(
     the serial backend, the fixed limits and the direct-only controls; the
     generated declarations are documentation, not executable guest input.
     """
-    declarations = tool_declarations(
-        tool_names,
-        visual_mode=visual_mode,
-        orchestration_mode=orchestration_mode,
-        role_id=role_id,
-    )
+    names = guest_tool_names(tool_names, visual_mode=visual_mode,
+        orchestration_mode=orchestration_mode, role_id=role_id)
+    declarations = tool_declarations(['get_tool_docs'] if 'get_tool_docs' in names else [],
+        visual_mode=visual_mode, orchestration_mode=orchestration_mode, role_id=role_id)
+    manifest = tool_capability_manifest(names, visual_mode=visual_mode,
+        orchestration_mode=orchestration_mode, role_id=role_id)
     return (
         "This run uses the JavaScript invocation protocol. To use tools, call "
         "js_exec({code}) with an ECMAScript program that uses top-level await.\n"
@@ -254,9 +254,24 @@ def javascript_instructions(
         "program in a later js_exec call.\n"
         "- Program output is not scientific evidence; completed child call "
         "results are recorded as tool.result_recorded events.\n"
-        "Available tool functions and their argument/data types:\n"
-        f"{declarations}"
+        "Bootstrap reader contract:\n"
+        f"{declarations}\n\n"
+        "Current capability directory (names and purposes, not argument contracts):\n"
+        f"{manifest}\n"
+        "For a business tool whose detailed contract is absent, first call tools.get_tool_docs({names: [name]}), "
+        "then text(r.data.documents). Only documentation is loaded; all calls retain their existing permission checks."
     )
+
+
+def tool_capability_manifest(tool_names, *, visual_mode=True,
+        orchestration_mode=OrchestrationMode.STANDARD, role_id=None) -> str:
+    from cloudra.tools import get_tools_lst
+    from cloudra.tools.documentation import tool_capability_summaries
+
+    names = guest_tool_names(tool_names, visual_mode=visual_mode,
+        orchestration_mode=orchestration_mode, role_id=role_id)
+    summaries = tool_capability_summaries(names, entries=get_tools_lst())
+    return "\n".join(f"- {item.name}: {item.summary}" for item in summaries)
 
 
 def _function_declaration(name, entry, args_type, data_type):
