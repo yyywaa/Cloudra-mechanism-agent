@@ -259,6 +259,23 @@ def javascript_instructions(
     )
 
 
+def _function_declaration(name, entry, args_type, data_type):
+    description = str(getattr(entry, "tool_description", "") or "").strip()
+    if not description:
+        description = _schema_description(_input_schema_of(entry))
+    description = description.replace("*/", "* /")
+    comment = f"  /** {description} */\n" if description else ""
+    return f"{comment}  {_js_ident(name)}(args: {args_type}): Promise<ToolResponse<{data_type}>>;"
+
+
+def render_tool_declaration(entry) -> str:
+    """Render one actual contract without a second availability projection."""
+    decls, args_type, data_type = _render_tool_types(entry.tool_name, entry)
+    function = _function_declaration(entry.tool_name, entry, args_type, data_type)
+    return "\n\n".join([_DECLARATION_HEADER, *decls,
+        "declare const tools: {\n" + function + "\n};", _DECLARATION_FOOTER])
+
+
 def tool_declarations(
     tool_names: Iterable[str] | None,
     *,
@@ -285,19 +302,7 @@ def tool_declarations(
         entry = by_name.get(name)
         decls, args_type, data_type = _render_tool_types(name, entry)
         sections.extend(decls)
-        # Tool descriptions carry workflow, permission and failure guidance
-        # that input-schema docstrings often omit. Preserve that contract in
-        # the JS declaration; the schema remains the source for argument types.
-        description = str(getattr(entry, "tool_description", "") or "").strip()
-        if not description:
-            description = _schema_description(_input_schema_of(entry))
-        # Keep generated comments valid even if a tool description contains a
-        # comment terminator.
-        description = description.replace("*/", "* /")
-        comment = f"  /** {description} */\n" if description else ""
-        functions.append(
-            f"{comment}  {_js_ident(name)}(args: {args_type}): Promise<ToolResponse<{data_type}>>;"
-        )
+        functions.append(_function_declaration(name, entry, args_type, data_type))
     sections.append("declare const tools: {\n" + "\n".join(functions) + "\n};" if functions
                     else "declare const tools: Record<string, never>;")
     sections.append(_DECLARATION_FOOTER)
