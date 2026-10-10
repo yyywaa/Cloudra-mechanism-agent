@@ -259,8 +259,11 @@ def build_router(ctx: ApiContext) -> APIRouter:
         try:
             await asyncio.to_thread(mutate_config, update)
         except ValidationError as exc:
+            errors = exc.errors(include_input=False, include_context=False)
             raise HTTPException(status_code=422,
-                detail=exc.errors(include_input=False, include_context=False)) from None
+                detail={'code': 'invalid_tool_document_loading',
+                    'message': '; '.join(error['msg'] for error in errors),
+                    'errors': errors}) from None
         return await runtime_config()
 
     return router

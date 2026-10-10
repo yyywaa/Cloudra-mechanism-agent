@@ -20,6 +20,7 @@ async def test_tool_document_loading_api_preserves_secrets_and_rejects_invalid_a
         saved = cfg.config_file.read_text()
         invalid = await client.patch('/api/v2/runtime/config/tool-document-loading',json={'jev':{'key':''}})
         assert invalid.status_code == 422
+        assert isinstance(invalid.json()['detail']['message'], str)
         assert 'secret-to-hide' not in invalid.text
         assert cfg.config_file.read_text() == saved
         cleared = await client.patch('/api/v2/runtime/config/tool-document-loading',json={'strategy':'llm','jev':{'key':''}})
