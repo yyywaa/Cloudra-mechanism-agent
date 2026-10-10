@@ -26,6 +26,14 @@ class ToolSelectionResult(BaseModel):
     duration_ms: int = 0
 
 
+class ToolSelectionRecord(ToolSelectionResult):
+    status: Literal['started', 'selected', 'empty', 'failed']
+    selection_id: str
+    task_message_ids: tuple[str, ...] = ()
+    model: str = ''
+    document_revisions: dict[str, str] = Field(default_factory=dict)
+
+
 class _Noul(BaseModel):
     model_config = ConfigDict(strict=True)
     noul: FiniteFloat = Field(ge=0, le=1)

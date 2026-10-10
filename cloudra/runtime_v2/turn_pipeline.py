@@ -224,6 +224,70 @@ class TurnPipeline:
             return
         await self.event_hub.publish(envelope)
 
+    async def _initial_tool_documents(self, agent, run_id, inputs, broker, owner):
+        from uuid import uuid4
+
+        from cloudra.infra.config import get_config
+        from cloudra.runtime_v2.schemas import InvocationProtocol, effective_invocation_protocol
+        from cloudra.runtime_v2.tool_catalog import guest_tool_names
+        from cloudra.runtime_v2.tool_selection import ToolDocumentSelector, ToolSelectionRecord
+        from cloudra.tools import get_tools_lst
+        from cloudra.tools.documentation import build_tool_documents, catalog_revision, tool_capability_summaries
+
+        if effective_invocation_protocol(agent) is not InvocationProtocol.JAVASCRIPT:
+            return
+        state = broker.prefix_state(agent.id) or {}
+        previous = (state.get('meta') or {}).get('tool_selection')
+        if previous:
+            record = ToolSelectionRecord.model_validate(previous)
+            if record.status == 'started':
+                record = record.model_copy(update={'status':'failed','error_code':'selection_interrupted'})
+                await broker.record_tool_selection(agent=agent,run_id=run_id,record=record,messages=[{
+                    'role':'system','content':'Initial document selection was interrupted. Read tool contracts on demand.'}])
+            if owner is not None:
+                owner.set_tool_selection(record.model_dump(mode='json'))
+            return
+        if not inputs:
+            return
+        config = await asyncio.to_thread(lambda: get_config().tool_document_loading.model_copy(deep=True))
+        resolver = getattr(self.llm,'resolve_effective_settings',None)
+        settings = await asyncio.to_thread(resolver,agent) if resolver is not None else agent.settings.model_copy(deep=True)
+        def candidate_data():
+            entries = get_tools_lst()
+            allowed = guest_tool_names(agent.capabilities.tools, visual_mode=agent.settings.visual_mode,
+                orchestration_mode=agent.settings.orchestration_mode, role_id=agent.role_id)
+            return entries, allowed, tool_capability_summaries(allowed,entries=entries)
+        entries, allowed, summaries = await asyncio.to_thread(candidate_data)
+        source = 'llm' if config.strategy == 'llm' else config.semantic_backend
+        record = ToolSelectionRecord(status='started',selection_id=uuid4().hex,source=source,
+            catalog_revision=catalog_revision(summaries),model=settings.model if source=='llm' else getattr(config,source).model,
+            task_message_ids=tuple(str(item['message_id']) for item in inputs if item.get('message_id')))
+        await broker.record_tool_selection(agent=agent,run_id=run_id,record=record,messages=[])
+        if owner is not None:
+            owner.set_tool_selection(record.model_dump(mode='json'))
+        result = await ToolDocumentSelector(self.llm).select(agent=agent,task_messages=inputs,
+            resolved_settings=settings,candidates=summaries,config=config)
+        changes = result.model_dump()
+        docs = ()
+        if result.status=='selected':
+            try:
+                docs = await asyncio.to_thread(build_tool_documents,result.names,allowed_names=allowed,entries=entries)
+            except ValueError:
+                changes.update(status='failed',names=(),error_code='document_unavailable')
+        record = record.model_copy(update=changes)
+        messages=[]
+        if docs:
+            record = record.model_copy(update={'document_revisions':{doc.name:doc.revision for doc in docs}})
+            messages=[{'role':'system','content':'Initial tool contracts. These documents do not grant permissions.\n\n'+
+                '\n\n'.join(doc.content for doc in docs),
+                'tool_documents':[{'name':doc.name,'revision':doc.revision} for doc in docs]}]
+        elif record.status=='failed':
+            messages=[{'role':'system','content':f'Initial tool documentation preload failed ({record.error_code}). '
+                'Use the capability directory and get_tool_docs to read contracts as needed.'}]
+        await broker.record_tool_selection(agent=agent,run_id=run_id,record=record,messages=messages)
+        if owner is not None:
+            owner.set_tool_selection(record.model_dump(mode='json'))
+
     async def run_turn(
         self,
         *,
@@ -348,6 +412,10 @@ class TurnPipeline:
                 notices=notice_sink,
                 user_messages=input_user_messages,
             )
+        if context_broker is not None:
+            await self._initial_tool_documents(agent, run_id, input_user_messages,
+                context_broker, prefix_owner)
+            messages = context_broker.current_messages(agent.id)
         # 投影里的媒体是稳定引用（image_ref：路径 + fallback 文本）；
         # 发送前解析为 data URL 或文本降级，投影不重嵌 base64。
         messages = await resolve_media_references(messages, vision_enabled=vision_enabled)

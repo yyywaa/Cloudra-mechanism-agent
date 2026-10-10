@@ -256,6 +256,7 @@ class LegacyContextPrefix:
         self._revisions: dict[str, str | None] = {}
         self._prompt_revision = ""
         self._capability_revision = ""
+        self._tool_selection = None
         self._pending_install: tuple[dict[str, Any], ...] = ()
         self._pending_appends: tuple[dict[str, Any], ...] = ()
         # 跨 run/重启回灌（Task 4）：会话上下文投影的头部即上次安装的前缀，
@@ -264,6 +265,7 @@ class LegacyContextPrefix:
         # 投影头部，跨 run 不重装、不重发。
         if restored:
             meta = dict(restored.get("meta") or {})
+            self._tool_selection = meta.get("tool_selection")
             prefix_len = int(meta.get("prefix_len") or 0)
             messages = list(restored.get("messages") or [])
             if prefix_len and len(messages) >= prefix_len:
@@ -369,10 +371,14 @@ class LegacyContextPrefix:
         self._pending_appends = ()
         return pending
 
+    def set_tool_selection(self, record: dict) -> None:
+        self._tool_selection = dict(record)
+
     def snapshot_meta(self) -> dict:
         """随 context.prefix_installed 事件持久化的安装元数据（回灌用）。"""
         return {
             "prefix_len": len(self._initial or []),
+            "tool_selection": self._tool_selection,
             "revisions": dict(self._revisions),
             "prompt_revision": self._prompt_revision,
             "capability_revision": self._capability_revision,
@@ -388,6 +394,7 @@ class LegacyContextPrefix:
         messages.extend(assembly.observation_messages)
         meta = {
             "prefix_len": len(messages),
+            "tool_selection": self._tool_selection,
             "revisions": self._dynamic_revisions(assembly),
             "prompt_revision": assembly.prompt_revision,
             "capability_revision": assembly.capability_revision,
@@ -397,6 +404,7 @@ class LegacyContextPrefix:
     def adopt(self, messages: list[dict[str, Any]], meta: dict) -> None:
         """compact 安装后采纳新头部：后续轮次 matches() 命中，不重装。"""
         self._initial = list(messages)
+        self._tool_selection = meta.get("tool_selection")
         self._revisions = dict(meta.get("revisions") or {})
         self._prompt_revision = str(meta.get("prompt_revision") or "")
         self._capability_revision = str(meta.get("capability_revision") or "")

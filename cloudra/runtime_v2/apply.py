@@ -248,6 +248,17 @@ def _apply_context_reset(core: RuntimeCore, envelope: EventEnvelope) -> None:
         core.session_contexts.pop(envelope.session_id, None)
 
 
+def _apply_tool_document_selection(core: RuntimeCore, envelope: EventEnvelope) -> None:
+    from cloudra.runtime_v2.tool_selection import ToolSelectionRecord
+    if not envelope.session_id:
+        return
+    data = envelope.data or {}
+    record = ToolSelectionRecord.model_validate(data['record'])
+    ctx = _context_of(core, envelope.session_id)
+    ctx.prefix_meta = {**(ctx.prefix_meta or {}), 'tool_selection':record.model_dump(mode='json')}
+    ctx.messages.extend(dict(message) for message in data.get('messages', []))
+
+
 _APPLIERS: dict[str, Callable[[RuntimeCore, EventEnvelope], None]] = {
     "project.created": _apply_project_created,
     "project.updated": _apply_project_updated,
@@ -270,6 +281,8 @@ _APPLIERS: dict[str, Callable[[RuntimeCore, EventEnvelope], None]] = {
     "context.prefix_installed": _apply_context_prefix_installed,
     "context.appended": _apply_context_appended,
     "context.compacted": _apply_context_compacted,
+    'tool_documents.selection_started': _apply_tool_document_selection,
+    'tool_documents.selection_finished': _apply_tool_document_selection,
 }
 
 

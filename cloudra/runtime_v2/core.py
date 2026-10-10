@@ -136,6 +136,16 @@ class ContextBroker:
             events=[("context.appended", {"messages": list(messages)})],
         )
 
+    async def record_tool_selection(self, *, agent, run_id, record, messages):
+        from cloudra.runtime_v2.tool_selection import ToolSelectionRecord
+        record = ToolSelectionRecord.model_validate(record.model_dump(mode='json'))
+        event_type = 'tool_documents.selection_started' if record.status == 'started' else 'tool_documents.selection_finished'
+        events = [(event_type, {'record':record.model_dump(mode='json'), 'messages':list(messages)})]
+        if record.status != 'started' and record.source == 'llm' and record.usage:
+            events.append(('llm.completed', {'kind':'tool_selection','model':record.model,
+                'usage':record.usage,'duration_ms':record.duration_ms}))
+        await self._persist_then_apply(agent=agent,run_id=run_id,events=events)
+
     async def install_compacted(
         self, *, agent: AgentSession, run_id: str, messages: list[dict],
         prefix_meta: dict | None, expected_version: int, trigger: str,
