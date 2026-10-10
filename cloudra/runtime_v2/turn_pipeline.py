@@ -137,6 +137,9 @@ class LLMProvider(Protocol):
         on_delta: DeltaSink | None = None,
     ) -> LLMResponse: ...
 
+    async def select_tool_names(self, agent: AgentSession, messages: list[dict[str, Any]],
+                               *, resolved_settings: RuntimeSettings) -> LLMResponse: ...
+
 
 class ToolExecutor(Protocol):
     async def execute(self, agent: AgentSession, call: ToolCall) -> ToolResult: ...

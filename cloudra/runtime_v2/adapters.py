@@ -593,6 +593,36 @@ class LegacyLLMProvider:
         """
         return legacy_default_settings(agent)
 
+    async def select_tool_names(self, agent, messages, *, resolved_settings):
+        """A no-tool auxiliary request using the current effective model."""
+        from cloudra.persistence.database import ComputeDB
+        from cloudra.services.conformer_model_budget import ModelRequestAccounting
+        settings = resolved_settings.model_copy(deep=True)
+        client = self._make_client(settings)
+        accounting = None
+        succeeded = False
+        try:
+            database = await asyncio.to_thread(ComputeDB)
+            accounting = await ModelRequestAccounting.for_agent(database, agent.project_id, agent.id)
+            client.request_accounting = accounting
+            kwargs = dict(model=settings.model, messages=messages, stream=False,
+                temperature=settings.temperature, max_tokens=settings.max_tokens)
+            if settings.reasoning_effort:
+                kwargs['reasoning_effort'] = settings.reasoning_effort
+            self._log_request_fingerprint(agent, kwargs, kind='tool_selection')
+            response = await asyncio.wait_for(client.create(**kwargs), timeout=settings.timeout or 300)
+            message = response.choices[0].message
+            succeeded = True
+            return LLMResponse(content=message.content or '',
+                tool_calls=list(getattr(message, 'tool_calls', None) or []),
+                usage=dict(client.last_usage or {}))
+        finally:
+            try:
+                if accounting is not None:
+                    await accounting.finish(success=succeeded, usage=client.last_usage)
+            finally:
+                await client.aclose()
+
     async def complete(
         self,
         agent: AgentSession,
