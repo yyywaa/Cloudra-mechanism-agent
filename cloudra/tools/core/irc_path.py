@@ -32,6 +32,30 @@ from __future__ import annotations
 
 from typing import Optional, Sequence
 
+
+def same_geometry(reference, mobile) -> bool:
+    """Same coordinates up to atom order and proper rigid rotation.
+
+    Reuse the existing six-decimal XYZ rounding bound; this is identity of a
+    calculation geometry, not a conformer or chemical similarity criterion.
+    """
+    import numpy as np
+
+    if reference is None or mobile is None:
+        return False
+    alignment = align_atom_order(*reference, *mobile)
+    if alignment is None:
+        return False
+    ref = np.asarray(reference[1], dtype=float)
+    mob = np.asarray(mobile[1], dtype=float)[alignment[0]]
+    ref = ref - ref.mean(axis=0)
+    mob = mob - mob.mean(axis=0)
+    u, _, vt = np.linalg.svd(mob.T @ ref)
+    if np.linalg.det(u @ vt) < 0:
+        u[:, -1] *= -1
+    residual = np.linalg.norm(mob @ (u @ vt) - ref, axis=1)
+    return bool(np.max(residual) <= np.sqrt(3) * 10 ** -6)
+
 _STRICT_PAIR_DELTA_MIN_ANG = 0.15
 _STRICT_INTERVAL_TOL_ANG = 0.10
 _STRICT_MAX_AUTO_PAIRS = 5

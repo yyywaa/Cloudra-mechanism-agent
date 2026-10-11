@@ -11,6 +11,20 @@ from tests.test_dag_async_evidence_review import FIXTURES_DIR, _coordinator, _se
 
 
 @pytest.mark.asyncio
+async def test_composite_native_log_cannot_mix_ts_optimization_and_frequency(tmp_path):
+    from tests.dag_identity import make_coordinator
+    session, db, _ = await asyncio.to_thread(_seed_review_graph, tmp_path, 'mixed-native-file')
+    native = FIXTURES_DIR/'benchmark_nu3'
+    path = tmp_path/'mixed.out'
+    path.write_bytes((native/'ts1_frequency.out').read_bytes() + (native/'ts2_optimization.out').read_bytes())
+    agent = make_coordinator(db.conversation_id, orchestration_mode='dag_guided', workspace_dir=str(tmp_path))
+    result = await call_dag_tool(DagSubmitStepEvidence, agent, session, step_name='step1', ts_file=str(path))
+    assert result.is_success  # Missing science can be reviewed, but cannot earn credits.
+    assert result.result['scientific_checks']['frequency']['status'] == 'incomplete'
+    assert result.result['scientific_checks']['ts_opt']['status'] == 'incomplete'
+
+
+@pytest.mark.asyncio
 async def test_accepted_irc_file_leaves_explicit_scientific_gap(tmp_path):
     session, db, store = _seed_review_graph(tmp_path, 'file-irc-missing-proof')
     from cloudra.dag.engine import DagEngine
@@ -111,6 +125,7 @@ def test_separate_directional_logs_share_geometric_proof(monkeypatch):
         return [FrameRecord(frame=1, reaction_coordinate=1.,
             xyz=f'3\npartial endpoint\nC 0 0 0\nN 0 0 2\nH 0 0 {z}\n')]
     monkeypatch.setattr(irc_evidence, 'irc_frames_for', frames)
+    monkeypatch.setattr(irc_evidence, 'irc_start_geometry', lambda _: geometry(1.))
     monkeypatch.setattr(irc_evidence, 'probe_log', lambda path, **_: {
         'ts': (1, geometry(1.)), 'source': (0, geometry(.1)), 'target': (0, geometry(1.9))}[path])
     passed, _ = irc_evidence.verify_short_irc_pair('forward','reverse',['ts'],['target'],['source'])
