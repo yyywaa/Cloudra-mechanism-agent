@@ -337,7 +337,7 @@ class DagController(SupervisionMixin, StopAuditMixin, EvidenceInboxMixin, Drafts
             if not expected:
                 continue
             checks = file_scientific_checks(self.store, delivery, target,
-                                            irc_files=proposal.get("irc_files"), workspace_root=self.working_directory,
+                                            irc_files=proposal.get("irc_files"), endpoint_refs=proposal.get("endpoint_refs"), workspace_root=self.working_directory,
                                             evidence_refs=refs)
             for stage in expected:
                 check = checks[stage]
