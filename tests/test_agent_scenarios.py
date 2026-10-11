@@ -26,6 +26,93 @@ from tests.agent_scenarios import (
 
 
 @pytest.mark.asyncio
+async def test_stale_file_review_retires_wakes_and_requires_real_resubmission(tmp_path):
+    from cloudra.dag.controller import DagController
+    from cloudra.dag.evidence_facts import EvidenceFact, FactSubject
+    from cloudra.dag.models import UpdateEdge
+    from cloudra.dag.store import DagStore
+    from cloudra.persistence.database import ConversationDB
+    from cloudra.runtime_v2.supervision import flush_review_notifications
+    from tests.agent_scenarios import stale_review_resubmit_steps
+    from tests.test_dag_file_review_contract import _mutate
+
+    review_old, review_new, resubmit, finish, park = [asyncio.Event() for _ in range(5)]
+    old_step, new_step = Step(wait_for=review_old), Step(wait_for=review_new)
+    fixture = Path(__file__).parent / "fixtures/benchmark_synthetic/ts_freq.out"
+    provider = ScriptedProvider(by_role={
+        "coordinator": stale_review_resubmit_steps(fixture.name, resubmit, finish, park),
+        "supervisor": [Step(stop=True), old_step, new_step, Step(wait_for=finish, text="await more evidence")],
+    })
+    harness = await ScenarioHarness.start(tmp_path, provider=provider)
+    try:
+        await _set_supervisor_traditional(harness)
+        workspace = _workspace(harness.project.id)
+        workspace.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(fixture, workspace / fixture.name)
+        await asyncio.to_thread(_seed_guided_step_for_file_review, harness.project.id)
+        db = await asyncio.to_thread(lambda: ConversationDB(harness.project.id).init())
+        store = DagStore(db)
+        await asyncio.to_thread(_mutate, store, UpdateEdge(op="update_edge", graph="delivery", edge_id="step1",
+            changes={"stages": [{"kind": "ts_opt"}, {"kind": "frequency"}, {"kind": "short_irc"}]}))
+        coordinator = await harness.spawn("coordinator", protocol="traditional", orchestration_mode="dag_guided")
+        await harness.wait_for(lambda: any(a.role_id == 'supervisor' and a.state.value == 'succeeded'
+                                          for a in harness.core.agents.values()), 'Supervisor idle after initial submission')
+        park.set()
+        await harness.wait_for(lambda: coordinator.state.value == "waiting_approval", "Coordinator parked awaiting review")
+        submitted = next(t for t in harness.tool_events(coordinator) if t["tool_name"] == "dag_submit_step_evidence")
+        old_id = submitted["result_data"]["result"]["review_id"]
+        old_request = await asyncio.to_thread(store.get_review_request, old_id)
+        await asyncio.to_thread(store.record_facts, [EvidenceFact(fact_id="new-related-fact", check="path", outcome="refutes",
+            subject=FactSubject(target_hint="step1"), source_refs=old_request.supporting_refs, details={"missing_direction": True})])
+        old_step.tools = [("dag_review_evidence", {"request_id": old_id, "verdict": "accept", "reason": "review old file snapshot"})]
+        review_old.set()
+        await harness.wait_for(lambda: any(t["tool_name"] == "dag_review_evidence" and t["status"] in {"completed", "failed"}
+            for a in harness.core.agents.values() if a.role_id == "supervisor" for t in harness.tool_events(a)), "stale review rejected")
+        old_result = next(t for a in harness.core.agents.values() if a.role_id == "supervisor"
+            for t in harness.tool_events(a) if t["tool_name"] == "dag_review_evidence")
+        assert not old_result["is_success"]
+        assert old_result["result_data"]["rejection_code"] == "stale_basis"
+        assert (await asyncio.to_thread(store.get_review_request, old_id)).state == "superseded"
+        assert await asyncio.to_thread(store.get_review_decision_for_request, old_id) is None
+        await harness.wait_for(lambda: coordinator.state.value == "running" and provider.call_count("coordinator") >= 4,
+                               "original requester wakes after stale notice")
+        def notices():
+            with db.connect() as con:
+                return con.execute("SELECT kind,request_id,recipient_session_id,state FROM dag_review_notifications WHERE request_id=?",
+                                   (old_id,)).fetchall()
+        assert await asyncio.to_thread(notices) == [("review_superseded", old_id, coordinator.id, "sent")]
+        assert await flush_review_notifications(harness.core, harness.project.id) == 0
+        assert old_id not in [r.request_id for r in await asyncio.to_thread(store.list_review_requests)]
+        controller = DagController(db, coordinator.id, "dag_guided", conversation_id=harness.project.id)
+        report = await asyncio.to_thread(controller.delivery_report)
+        assert any(g.code == "stale_evidence_review" for g in report.unresolved)
+        resubmit.set()
+        await harness.wait_for(lambda: len([t for t in harness.tool_events(coordinator)
+            if t["tool_name"] == "dag_submit_step_evidence" and t["status"] == "completed"]) == 2, "explicit resubmission")
+        submissions = [t for t in harness.tool_events(coordinator) if t["tool_name"] == "dag_submit_step_evidence"]
+        new_id = submissions[-1]["result_data"]["result"]["review_id"]
+        assert new_id != old_id
+        new_step.tools = [("dag_review_evidence", {"request_id": new_id, "verdict": "needs_evidence",
+            "reason": "IRC direction material remains missing", "next_action": "submit a two-sided IRC with verified minima"})]
+        review_new.set()
+        await harness.wait_for(lambda: len([t for a in harness.core.agents.values() if a.role_id == "supervisor"
+            for t in harness.tool_events(a) if t["tool_name"] == "dag_review_evidence" and t["status"] in {"completed", "failed"}]) == 2,
+            "new material adjudicated")
+        assert (await asyncio.to_thread(store.get_review_request, new_id)).state == "resolved"
+        report = await asyncio.to_thread(controller.delivery_report)
+        assert not report.complete
+        assert any(g.code == "supervisor_review_gap" for g in report.unresolved)
+        assert any("short_irc" in g.detail for g in report.unresolved)
+        assert not any(g.code == "stale_evidence_review" for g in report.unresolved)
+        assert len([m for m in harness.messages(coordinator) if old_id in str(m.get("content", ""))]) == 1
+    finally:
+        for event in (review_old, review_new, resubmit, finish, park):
+            event.set()
+        await harness.aclose()
+
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("protocol", ["traditional", "javascript"])
 async def test_stop_answer_is_emitted_only_after_final_gate_authorizes_it(tmp_path, protocol):
     from cloudra.dag.review_requests import ReviewDecision

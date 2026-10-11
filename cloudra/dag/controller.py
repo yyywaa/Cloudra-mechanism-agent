@@ -299,7 +299,7 @@ class DagController(SupervisionMixin, StopAuditMixin, EvidenceInboxMixin, Drafts
             if not set(targets) & selected:
                 continue
             key = (request.kind, targets, normalize_claim(request.question))
-            if request.state == "queued":
+            if request.state in {"queued", "superseded"}:
                 latest[key] = None
                 continue
             if request.state != "resolved":
@@ -396,6 +396,10 @@ class DagController(SupervisionMixin, StopAuditMixin, EvidenceInboxMixin, Drafts
             ))
 
         requests = self.store.list_review_requests(state=None)
+        newest = {}
+        for request in requests:
+            key = (request.kind, tuple(sorted(request.target_ids)), normalize_claim(request.question))
+            newest[key] = request
         latest = {}
         for request in requests:
             if request.kind not in {"evidence", "exception"}:
@@ -404,6 +408,12 @@ class DagController(SupervisionMixin, StopAuditMixin, EvidenceInboxMixin, Drafts
             if not relevant:
                 continue
             key = (request.kind, tuple(sorted(request.target_ids)), normalize_claim(request.question))
+            if request.state == 'superseded':
+                latest.pop(key, None)
+                if newest[key].request_id == request.request_id:
+                    for target in sorted(relevant):
+                        gap(target, 'stale_evidence_review', f'Review {request.request_id} is superseded; resubmit current evidence for a new decision.')
+                continue
             # A queued replacement never erases the previous decision. It adds
             # an outstanding review until the Supervisor actually resolves it.
             if request.state == "queued":
