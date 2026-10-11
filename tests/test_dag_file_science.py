@@ -25,6 +25,39 @@ async def test_composite_native_log_cannot_mix_ts_optimization_and_frequency(tmp
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('swap', [False, True])
+async def test_file_submission_routes_explicit_verified_endpoint_refs(tmp_path, swap):
+    from cloudra.dag.evidence_ingest import snapshot_evidence_file
+    from cloudra.dag.models import AttachRef, UpdateNode
+    from cloudra.tools.Plantool.dag_tools.dag_view_evidence import DagViewEvidence
+    from tests.test_dag_file_review_contract import _mutate
+
+    session, db, store = await asyncio.to_thread(_seed_review_graph, tmp_path, f'endpoint-route-{swap}')
+    await asyncio.to_thread(_mutate, store, UpdateNode(op='update_node', graph='delivery', node_id='r', changes={'smiles': 'C1CO[PH3]1'}))
+    await asyncio.to_thread(_mutate, store, UpdateNode(op='update_node', graph='delivery', node_id='p', changes={'smiles': 'C=C.O=[PH3]'}))
+    native = FIXTURES_DIR / 'benchmark_nu3'
+    refs = []
+    for name in ('product_minimum.out', 'op_minimum.out'):
+        snap = await asyncio.to_thread(snapshot_evidence_file, str(native / name), workspace_root=str(FIXTURES_DIR.parent.parent), conversation_id=db.conversation_id)
+        ref = await asyncio.to_thread(store.register_evidence, 's1', name, snap.model_dump(mode='json'), source_type='file')
+        await asyncio.to_thread(_mutate, store, AttachRef(op='attach_ref', graph='delivery', target_type='edge', target_id='step1', ref=ref))
+        refs.append(ref)
+    if swap:
+        refs.reverse()
+    submitted = await call_dag_tool(DagSubmitStepEvidence, _coordinator(db.conversation_id), session,
+        step_name='step1', ts_file=str(native/'ts2_frequency.out'), irc_file=str(native/'ts2_irc/irc.out'),
+        endpoint_a_ref=refs[0].model_dump(), endpoint_b_ref=refs[1].model_dump())
+    assert submitted.is_success, submitted
+    expected = 'incomplete' if swap else 'passed'
+    assert submitted.result['scientific_checks']['short_irc']['status'] == expected
+    supervisor = make_supervisor(db.conversation_id, workspace_dir=str(FIXTURES_DIR.parent.parent))
+    viewed = await call_dag_tool(DagViewEvidence, supervisor, session, review_id=submitted.result['review_id'])
+    assert viewed.result['scientific_checks']['short_irc']['status'] == expected
+    reviewed = await call_dag_tool(DagReviewStep, supervisor, session, step_name='step1', verdict='supported', rationale='inspect immutable native chain')
+    assert reviewed.result['scientific_checks']['short_irc']['status'] == expected
+
+
+@pytest.mark.asyncio
 async def test_accepted_irc_file_leaves_explicit_scientific_gap(tmp_path):
     session, db, store = _seed_review_graph(tmp_path, 'file-irc-missing-proof')
     from cloudra.dag.engine import DagEngine

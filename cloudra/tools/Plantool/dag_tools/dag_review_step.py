@@ -101,7 +101,7 @@ class DagReviewStep(DagToolBase):
                 return fail("dag_review_step", "the reviewed step changed after submission", accepted=False)
             from cloudra.dag.file_science import file_scientific_checks
             scientific_checks = await asyncio.to_thread(
-                file_scientific_checks, ctx.store, snapshot.delivery, step.edge_id, irc_files=request.proposal.get("irc_files"), evidence_refs=request.supporting_refs,
+                file_scientific_checks, ctx.store, snapshot.delivery, step.edge_id, irc_files=request.proposal.get("irc_files"), endpoint_refs=request.proposal.get("endpoint_refs"), evidence_refs=request.supporting_refs,
                 workspace_root=getattr(self.subagent, "working_directory", None))
             pending = {stage.kind.value for stage in step.stages if stage.required and stage.status.value == "pending"}
             repairs = [check["next_action"] for stage, check in scientific_checks.items()
