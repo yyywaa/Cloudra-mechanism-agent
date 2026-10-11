@@ -3,6 +3,7 @@
 import pytest
 
 from tests.test_ts_input_evidence import concrete
+from tests.test_ts_search_process_tools import inputs, invoke, owned_tool
 
 
 @pytest.mark.parametrize("electronic_character", [None, "closed_shell"])
@@ -27,9 +28,41 @@ def test_explicit_concrete_binding_needs_indices_not_a_copied_digest(electronic_
     assert result["atom_map"] == [1, 2, 3]
 
 
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("rdkit_chemistry", "ts_producer_authority")
+async def test_resume_tracks_current_revision_without_model_copying_version(tmp_path):
+    from cloudra.tools.Chemtool.ts_search_process import (
+        TsPrepare,
+        TsPrepare_input_schema,
+        TsResume,
+        TsResume_input_schema,
+    )
+
+    first = await invoke(owned_tool(TsPrepare, workspace=tmp_path),
+                         TsPrepare_input_schema(input=inputs(mapped=False)))
+    assert first.is_success, first.message
+    assert first.blocked["failure_class"] == "atom_map_missing"
+    request = TsResume_input_schema(
+        run_id=first.run_id, reason="Declare the intended centre; mapping is still unresolved",
+        changes={"reaction": {"reaction_center": [[1, 2]]}},
+    )
+    tool = owned_tool(TsResume, workspace=tmp_path)
+    result = await invoke(tool, request, call_id="revision-owned-by-program")
+    replay = await invoke(tool, request, call_id="revision-owned-by-program")
+    assert result.is_success, result.message
+    assert result.blocked["failure_class"] == "atom_map_missing"
+    assert result.receipt == replay.receipt
+    assert result.receipt.input_revision == 2
 
 
 
 
+def test_pinned_ts_guidance_uses_current_resume_parameters():
+    from cloudra.runtime_v2.policies.guidance import _TS_NOTICE
+    from cloudra.tools.Chemtool.ts_search_process import TsResume_input_schema
+
+    signature = _TS_NOTICE.split('ts_resume(', 1)[1].split(')', 1)[0]
+    parameters = {name.strip() for name in signature.split(',')}
+    assert parameters <= TsResume_input_schema.model_fields.keys()
 
 
