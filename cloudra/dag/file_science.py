@@ -13,6 +13,7 @@ from cloudra.tools.core import gaussian_frames, orca_frames, xtb_frames
 from cloudra.tools.core.irc_evidence import (
     frames_for,
     last_geometry,
+    normal_log,
     verify_short_irc_direction,
     verify_short_irc_pair,
 )
@@ -72,8 +73,8 @@ def _logs(store, element, workspace_root=None):
             continue
         engine = snap.engine
         parser = {'orca': orca_frames, 'gaussian': gaussian_frames, 'xtb': xtb_frames}.get(engine)
-        if parser is None or not parser.normal_termination(path.read_text(errors='replace')):
-            problems.append(f'No native normal termination in {path}')
+        if parser is None or not (parser.normal_termination(path.read_text(errors='replace')) if engine == 'xtb' else normal_log(path)):
+            problems.append(f'No usable normally terminated calculation segment in {path}; frequency and final geometry must describe the same calculation structure.')
             continue
         logs.append(str(path))
     return logs, problems
@@ -82,6 +83,9 @@ def _logs(store, element, workspace_root=None):
 def _final_geometry(path):
     from cloudra.tools.core.irc_path import parse_xyz
     from cloudra.tools.core.qm_engine import detect_qm_engine
+
+    if Path(path).suffix.lower() == '.xyz':
+        return parse_xyz(Path(path).read_text(errors='replace'))
 
     if detect_qm_engine(str(path)) == 'xtb':
         return parse_xyz(xtb_frames.final_xyz_from_text(Path(path).read_text(errors='replace')))
@@ -95,29 +99,14 @@ def validate_frequency_geometry(opt_snap, freq_snap):
     using the existing XYZ output precision; it is not a conformer/RMSD cutoff.
     Reflections and changes of molecular geometry are not rigid rotations.
     """
-    import numpy as np
-
-    from cloudra.tools.core.irc_path import align_atom_order
+    from cloudra.tools.core.irc_path import same_geometry
 
     if opt_snap.sha256 == freq_snap.sha256:
         return
     geometries = [_final_geometry(s.snapshot_path) for s in (opt_snap, freq_snap)]
     if any(geo is None for geo in geometries):
         raise ValueError('Optimization/frequency identity requires final geometry in both files.')
-    reference, mobile = geometries
-    alignment = align_atom_order(*reference, *mobile)
-    matches = False
-    if alignment is not None:
-        ref = np.asarray(reference[1], dtype=float)
-        mob = np.asarray(mobile[1], dtype=float)[alignment[0]]
-        ref = ref - ref.mean(axis=0)
-        mob = mob - mob.mean(axis=0)
-        u, _, vt = np.linalg.svd(mob.T @ ref)
-        if np.linalg.det(u @ vt) < 0:
-            u[:, -1] *= -1
-        residual = np.linalg.norm(mob @ (u @ vt) - ref, axis=1)
-        matches = bool(np.max(residual) <= np.sqrt(3) * 10 ** -6)
-    if not matches:
+    if not same_geometry(*geometries):
         raise ValueError('Optimization and frequency files contain different geometries; '
                          'submit the frequency calculation for the delivered optimized structure.')
 
