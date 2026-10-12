@@ -58,7 +58,7 @@ async def test_ts_conformer_source_revision_same_run(tmp_path, monkeypatch):
         provider.records.append(record)
         if len(provider.records) == 1:
             provider._scripts['small_mol'][0].tools = [('ts_resume', {
-                'run_id': record.run_id, 'expected_revision': record.revision,
+                'run_id': record.run_id,
                 'reason': 'Supply the available endpoint source',
                 'changes': {'conformers': {'reactant': {'kind': 'file', 'xyz_path': 'water.xyz'}}},
             })]
@@ -109,7 +109,7 @@ async def test_ts_same_structure_source_keeps_declarations(tmp_path, monkeypatch
         provider.records.append(record)
         if len(provider.records) == 1:
             provider._scripts['small_mol'][0].tools = [('ts_resume', {
-                'run_id': record.run_id, 'expected_revision': record.revision,
+                'run_id': record.run_id,
                 'reason': 'Use the same structure under its new filename',
                 'changes': {'conformers': {'reactant': {
                     'kind': 'file', 'xyz_path': 'renamed-water.xyz',
@@ -187,7 +187,7 @@ async def test_ts_canonical_source_overwrite_matches_agent_numbering(tmp_path, e
             # Both endpoints share the overwritten source, so an explicit raw
             # product->reactant map is identity; both slots and values normalize.
             provider._scripts['small_mol'][0].tools = [('ts_resume', {
-                'run_id': record.run_id, 'expected_revision': record.revision,
+                'run_id': record.run_id,
                 'reason': 'Update coordinates and restore the current canonical atom order',
                 'changes': changes,
             })]
@@ -360,7 +360,6 @@ async def test_ts_failed_scan_repair_same_run(tmp_path,monkeypatch):
             provider._scripts['small_mol'][0].tools=[('ts_resume',{
                 'run_id':record.run_id,
                 'reason':'Retry the failed scan with an independently bound environment repair receipt',
-                'expected_revision':record.revision,
                 'scan_recovery': {
                     'failed_attempt_id': attempt_id,
                     'failure_input_sha256': input_hash,
@@ -436,7 +435,7 @@ async def test_ts_resume_scan_without_freeze(tmp_path, monkeypatch):
         if record.input.guess is None:
             provider._scripts['small_mol'][0].tools = [('ts_resume', {
                 'run_id': record.run_id, 'reason': 'provide explicit scan declaration',
-                'expected_revision': record.revision,
+
                 'changes': {'guess': scan},
             })]
 
@@ -499,7 +498,7 @@ async def test_ts_d1_atom_binding_native_scan_recovery(tmp_path, monkeypatch):
             changes['conformers'][role] = {'kind':'file','xyz_path':str(xyz),'mol_path':str(graph),
                 'heavy_atom_binding':{'indices':[1,2,3,4,11,12]}}
         provider._scripts['small_mol'][0].tools = [('ts_resume', {
-            'run_id':record.run_id,'expected_revision':record.revision,
+            'run_id':record.run_id,
             'reason':'Bind both concrete endpoint atom orders and the complete all-atom map',
             'changes':changes})]
 
