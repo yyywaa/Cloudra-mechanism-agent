@@ -65,6 +65,94 @@ def test_native_optimization_anchor_can_use_separate_same_geometry_frequency(tmp
     assert 'ts2_optimization.out' in used and 'ts2_frequency.out' in used and 'ts2_irc/irc.out' in used
 
 
+def _species_optimization_anchor(tmp_path, node_id, frequency_name):
+    # Remove only the frequency block from captured native evidence to model
+    # separate Opt/Freq delivery at the same coordinates, without running QM.
+    frequency = (tmp_path / frequency_name).read_text()
+    before, _, frequencies = frequency.partition('VIBRATIONAL FREQUENCIES')
+    _, marker, after = frequencies.partition('****ORCA TERMINATED NORMALLY****')
+    assert before and marker
+    anchor_name = f'{node_id}_optimization.out'
+    (tmp_path / anchor_name).write_text(before.replace('! Freq ', '! Opt ') + marker + after)
+    graph_path = tmp_path / 'mechanism_graph.json'
+    graph = json.loads(graph_path.read_text())
+    node = next(node for node in graph['nodes'] if node['id'] == node_id)
+    node['properties'] = {'evidence_log': anchor_name}
+    graph_path.write_text(json.dumps(graph))
+    return anchor_name
+
+
+@pytest.mark.parametrize('node_id,frequency_name', [
+    ('R', 'op_minimum.out'),
+    ('P', 'product_minimum.out'),
+])
+def test_explicit_species_optimization_uses_same_geometry_minimum_for_species_and_irc(
+    tmp_path, node_id, frequency_name,
+):
+    _delivery(tmp_path)
+    anchor_name = _species_optimization_anchor(tmp_path, node_id, frequency_name)
+    integrity = audit_integrity(tmp_path)
+    binding = next(item for item in integrity.node_bindings if item.node_id == node_id)
+    assert binding.matched and binding.bound_files == [anchor_name]
+
+    report = audit_self_consistency(
+        integrity.delivered_graph, integrity.node_bindings, integrity.evidence_files, tmp_path,
+    )
+
+    assert report.passed, report.notes
+    checks = {item.element_id: item for item in report.checks}
+    assert checks[node_id].evidence_used == [anchor_name, frequency_name]
+    assert {anchor_name, frequency_name, 'ts2_irc/irc.out'} <= set(checks['e1'].evidence_used)
+
+
+@pytest.mark.parametrize('bad_frequency', ['different_geometry', 'imaginary', 'abnormal', 'missing'])
+def test_species_optimization_cannot_borrow_invalid_minimum_for_species_or_irc(tmp_path, bad_frequency):
+    _delivery(tmp_path)
+    anchor_name = _species_optimization_anchor(tmp_path, 'R', 'op_minimum.out')
+    frequency_path = tmp_path / 'op_minimum.out'
+    if bad_frequency == 'different_geometry':
+        frequency_path.write_text((tmp_path / 'op_declared_minimum.out').read_text())
+    elif bad_frequency == 'imaginary':
+        frequency_path.write_text(frequency_path.read_text().replace('113.35 cm**-1', '-113.35 cm**-1'))
+    elif bad_frequency == 'abnormal':
+        frequency_path.write_text(frequency_path.read_text().replace(
+            'ORCA TERMINATED NORMALLY', 'ORCA finished by error termination',
+        ))
+    else:
+        frequency_path.unlink()
+    integrity = audit_integrity(tmp_path)
+    binding = next(item for item in integrity.node_bindings if item.node_id == 'R')
+    assert binding.matched and binding.bound_files == [anchor_name]
+
+    report = audit_self_consistency(
+        integrity.delivered_graph, integrity.node_bindings, integrity.evidence_files, tmp_path,
+    )
+
+    checks = {item.element_id: item for item in report.checks}
+    assert not report.passed
+    assert not checks['R'].covered
+    assert not checks['e1'].covered
+
+
+@pytest.mark.parametrize('invalid_anchor', ['missing.out', 'product_minimum.out', ''])
+def test_invalid_explicit_species_anchor_cannot_use_historical_minimum(tmp_path, invalid_anchor):
+    _delivery(tmp_path)
+    graph_path = tmp_path / 'mechanism_graph.json'
+    graph = json.loads(graph_path.read_text())
+    graph['nodes'][0]['properties'] = {'evidence_log': invalid_anchor}
+    graph_path.write_text(json.dumps(graph))
+    integrity = audit_integrity(tmp_path)
+
+    report = audit_self_consistency(
+        integrity.delivered_graph, integrity.node_bindings, integrity.evidence_files, tmp_path,
+    )
+
+    checks = {item.element_id: item for item in report.checks}
+    assert not report.passed
+    assert not checks['R'].bound and not checks['R'].covered
+    assert not checks['e1'].covered
+
+
 def test_explicit_ts_anchor_cannot_borrow_another_saddle_and_irc(tmp_path):
     _delivery(tmp_path, ts="ts1_frequency.out")
     integrity = audit_integrity(tmp_path)
