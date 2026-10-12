@@ -1,5 +1,6 @@
 """Zero-key Agent scenarios exercise the real grouped TS tool/driver boundary."""
 import asyncio
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -330,9 +331,6 @@ def _script_compute(monkeypatch, first_scan='peak'):
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("rdkit_chemistry")
 async def test_ts_failed_scan_repair_same_run(tmp_path,monkeypatch):
-    import hashlib
-
-    from cloudra.tools.core.ts_inputs import ScanRepairReceipt
 
     assert TS_SCENARIOS[1]=='ts_failed_scan_repair_same_run'
     from cloudra.persistence.database import ComputeDB
@@ -349,24 +347,14 @@ async def test_ts_failed_scan_repair_same_run(tmp_path,monkeypatch):
             record=process.TsProcessRecord.model_validate(handle_process_job_terminal(ComputeDB(),record.scan_step.job_id)['record'])
         provider.records.append(record)
         if record.failed_attempt and record.declaration_revision==1:
-            failed = record.scan_step
-            attempt_id = f'{failed.source_input_revision}:scan:{failed.job_id}'
-            input_hash = hashlib.sha256(Path(failed.input_path).read_bytes()).hexdigest()
             repair = tmp_path / 'scan-repair-receipt.json'
-            repair.write_text(ScanRepairReceipt(
-                failed_attempt_id=attempt_id, failure_input_sha256=input_hash,
-                repair='Fixture execution environment repaired after the first scan failed to produce output',
-            ).model_dump_json())
+            repair.write_text(json.dumps({'repair':
+                'Fixture execution environment repaired after the first scan failed to produce output'}))
             provider._scripts['small_mol'][0].tools=[('ts_resume',{
                 'run_id':record.run_id,
                 'reason':'Retry the failed scan with an independently bound environment repair receipt',
-                'scan_recovery': {
-                    'failed_attempt_id': attempt_id,
-                    'failure_input_sha256': input_hash,
-                    'failure_log_sha256': None,
-                    'evidence_refs': [{'path': str(repair),
-                                       'sha256': hashlib.sha256(repair.read_bytes()).hexdigest()}],
-                },
+
+                'scan_recovery': [str(repair)],
             })]
     provider=StateProvider(tmp_path,[Step(tools=[('ts_prepare',{'input':payload})]),Step(),Step(stop=True)],complete)
     harness=await ScenarioHarness.start(tmp_path,workspace_dir=tmp_path,provider=provider)
