@@ -101,6 +101,7 @@ cloudra = [
     "prompts/*.md",
     "skills/**/*",
     "calculator.sh",
+    "benchmark/aitomia/catalog.json",
     "infra/token_data/*",
     "runtime_v2/js_host/*.mjs",
     "runtime_v2/js_host/package.json",

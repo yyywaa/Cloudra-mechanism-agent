@@ -75,7 +75,30 @@ class RuntimeV2Backend:
     def __call__(self, task: TaskSpec, sandbox: Path) -> None:
         asyncio.run(self._run_task(task, Path(sandbox)))
 
+    def run_prompt(
+        self, *, task_id: str, query: str, sandbox: Path, role: str = "coordinator"
+    ) -> dict:
+        """Run an external question without mechanism scoring or a method whitelist.
+
+        The returned state describes runtime completion, not scientific validation.
+        Process-wide data isolation remains the caller's responsibility.
+        """
+        return asyncio.run(self._run_prompt(
+            task_id=task_id, query=query, sandbox=Path(sandbox), role=role,
+        ))
+
     async def _run_task(self, task: TaskSpec, sandbox: Path) -> None:
+        await self._run_prompt(
+            task_id=task.task_id, query=task.prompt.query, sandbox=sandbox,
+            role=task.prompt.role, orchestration_mode=task.prompt.orchestration_mode.value,
+            project_settings={"benchmark_task_id": task.task_id,
+                              "method_policy": task.method_policy.model_dump(mode="json")},
+        )
+
+    async def _run_prompt(
+        self, *, task_id: str, query: str, sandbox: Path, role: str,
+        orchestration_mode: str = "standard", project_settings: dict | None = None,
+    ) -> dict:
         from cloudra.runtime_v2.adapters import (
             LegacyLLMProvider,
             LegacyPromptProvider,
@@ -95,7 +118,7 @@ class RuntimeV2Backend:
 
         core = RuntimeCore(strict_events=True)
         with self._cores_lock:
-            self._cores[task.task_id] = core
+            self._cores[task_id] = core
         if self.store_path is not None:
             from cloudra.runtime_v2.persistence import RuntimeStore
 
@@ -143,17 +166,16 @@ class RuntimeV2Backend:
 
                 # worker_id 含 pid+task_id：并行跑题时同进程多个实例不能共享
                 # 默认的 scheduler:<pid>，否则租约归属互相串。
-                scheduler = SchedulerDaemon(worker_id=f"scheduler:{os.getpid()}:{task.task_id}")
+                scheduler = SchedulerDaemon(worker_id=f"scheduler:{os.getpid()}:{task_id}")
                 await scheduler.start()
             project = (
                 await bus.execute(
                     Command(
                         type="project.create",
                         payload={
-                            "name": f"benchmark:{task.task_id}",
+                            "name": f"benchmark:{task_id}",
                             "workspace_dir": str(sandbox),
-                            "settings": {"benchmark_task_id": task.task_id,
-                                         "method_policy": task.method_policy.model_dump(mode="json")},
+                            "settings": project_settings or {},
                         },
                     )
                 )
@@ -164,10 +186,10 @@ class RuntimeV2Backend:
                         type="agent.spawn",
                         target={"project_id": project.id},
                         payload={
-                            "role_id": task.prompt.role,
-                            "query": task.prompt.query,
+                            "role_id": role,
+                            "query": query,
                             "settings": {
-                                "orchestration_mode": task.prompt.orchestration_mode.value,
+                                "orchestration_mode": orchestration_mode,
                                 # 无人值守：破坏性工具审批走 yolo 自动通道
                                 "yolo": True,
                                 # 无人值守（GH #31）：隐藏并 fail-closed 拦截
@@ -182,8 +204,13 @@ class RuntimeV2Backend:
                 )
                 ).data
             await self._wait_terminal(bus, agent)
-            # 评分只读交付物（图 + 日志）：后端不回传任何
-            # 供评分使用的文本/数字，杜绝"拿模型自述给自己打分"。
+            # This receipt is diagnostic; CloudraBench still scores only files.
+            return {
+                "project_id": project.id,
+                "session_id": agent.id,
+                "state": agent.state.value,
+                "final_message": self._final_message(core, agent.id),
+            }
         finally:
             await broker.close()
             if agent is not None and core.runner is not None:

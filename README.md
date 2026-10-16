@@ -241,6 +241,10 @@ Cloudra seamlessly bridges local exploratory modeling and remote cluster computi
 
 ---
 
+## Aitomia benchmark questions
+
+Run the 47 original Aitomia questions on Cloudra with `python -m cloudra.benchmark.aitomia` (preparation only), or add `--only MED.RXN.RXN5 --run` for a real calculation. The [task-bank guide](benchmarks/aitomia/README.md) documents original sources, missing XYZ attachments and input binding. Runs retain raw calculation evidence and final responses in isolated directories; scientific scores remain unset because per-case reference outputs and an automatic scorer are not publicly provided.
+
 ## Repository Layout
 
 ```text
