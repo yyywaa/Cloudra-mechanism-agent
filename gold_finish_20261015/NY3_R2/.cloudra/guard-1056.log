@@ -1,0 +1,6 @@
+[Gaussian /home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3_R2/rc_cart_optfreq.log ERROR] Unexpectedly encountered end of logfile.
+[guard] Gaussian scratch: /home/ly/g16/scratch/cloudra_g16_task1056_689479
+[guard] calculator 启动 (PID 689551)，等待其结束...
+[guard] calculator 退出，退出码：1
+日志缺少原子坐标或原子序数，视为不完整：/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3_R2/rc_cart_optfreq.log
+[guard] 数据库状态已更新: task_id=1056, state=failed

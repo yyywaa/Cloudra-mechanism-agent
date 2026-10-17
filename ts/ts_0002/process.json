@@ -1,0 +1,589 @@
+{
+  "format_version": 6,
+  "run_id": "ts_0002",
+  "pipeline_id": "2bae4f64ec58bea2cdacfaa19d4f6f0d8c984e672650790caa47f52ab5eb57f9",
+  "declaration_revision": 1,
+  "optimization_checkpoints": {},
+  "budget_action_keys": {},
+  "budget_reservations": {},
+  "attempt_history": [],
+  "catalog_id": null,
+  "partition_revision": null,
+  "candidate_attempts": [],
+  "cards_path": "",
+  "product_seed_candidate_id": null,
+  "product_seed_xyz_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/jobs/declaration_0001/product_seed_opt/optimized_seed.xyz",
+  "product_seed_mol_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/build/input_0001/product/seed.mol",
+  "selected_candidate_id": null,
+  "run_dir": "/home/ly/Cloudra-mechanism-agent/ts/ts_0002",
+  "workspace_dir": "/home/ly/Cloudra-mechanism-agent",
+  "owner_conversation_id": "prj_15b00532a66347c3",
+  "owner_session_id": "as_7479852819ea48c0",
+  "input": {
+    "reaction": {
+      "reactant_smiles": "[Na+].[OH-].COC=O",
+      "product_smiles": "[Na+].CO[C@H]([O-])O",
+      "charge": 0,
+      "multiplicity": 1,
+      "electronic_character": "closed_shell",
+      "atom_map": [],
+      "reaction_center": [
+        [
+          1,
+          5
+        ],
+        [
+          5,
+          6
+        ]
+      ]
+    },
+    "calculations": {
+      "g16": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      }
+    },
+    "conformers": {
+      "reactant": {
+        "kind": "file",
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/rc.xyz",
+        "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/build/g_RC_w283/guided_assembly/assembly/complex_candidate_000.mol",
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/PREP.md"
+        ],
+        "optimization": {
+          "ref": "g16"
+        },
+        "heavy_atom_binding": {
+          "indices": [
+            1,
+            2,
+            4,
+            5,
+            6,
+            7
+          ]
+        }
+      },
+      "product": {
+        "kind": "file",
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/i1.xyz",
+        "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/i1.mol",
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/PREP.md"
+        ],
+        "optimization": {
+          "ref": "g16"
+        },
+        "heavy_atom_binding": {
+          "indices": [
+            1,
+            2,
+            3,
+            4,
+            6,
+            5
+          ]
+        }
+      },
+      "guidance": {
+        "ring_order": [],
+        "distance_filters": []
+      }
+    },
+    "guess": {
+      "kind": "provided",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/ts_e1_guess.xyz",
+      "evidence_refs": [
+        "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/GUESS_PROVENANCE.md"
+      ]
+    },
+    "ts_optimization": {
+      "ref": "g16"
+    },
+    "verification": {
+      "frequency": {
+        "ref": "g16"
+      },
+      "irc": {
+        "ref": "g16"
+      },
+      "irc_log": null,
+      "reactant_endpoint": {
+        "seed": null,
+        "optimization": {
+          "ref": "g16"
+        },
+        "frequency": {
+          "ref": "g16"
+        }
+      },
+      "product_endpoint": {
+        "seed": null,
+        "optimization": {
+          "ref": "g16"
+        },
+        "frequency": {
+          "ref": "g16"
+        }
+      }
+    },
+    "execution": {
+      "cpus": 8,
+      "memory_mb": 10000,
+      "limits": null
+    }
+  },
+  "input_binding": {},
+  "structures": {
+    "reactant": {
+      "role": "reactant",
+      "source_kind": "file",
+      "input_revision": 1,
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/jobs/declaration_0001/candidate_opt/optimized_seed.xyz",
+      "xyz_sha256": "fb6f29c5bbc098007632979c3b1361194e1efc1ee827fc2c83827a0d49cafa7d",
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/build/input_0001/reactant/seed.mol",
+      "mol_sha256": "05528d3d133333772faebf6a15b41a0e84c00cc20ad6b4af9b53348ee908003c",
+      "structure_digest": "872f5dae991fa6d0ea146fc1d9d0fa82c3eca4b835f3882fe5b4d7589e936bf8",
+      "atom_count": 11,
+      "components": 3,
+      "index_base": 1,
+      "atoms": [
+        {
+          "number": 1,
+          "symbol": "Na",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 2,
+          "symbol": "O",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 3,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 4,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 5,
+          "symbol": "O",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 6,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 7,
+          "symbol": "O",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 8,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 9,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 10,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 11,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        }
+      ],
+      "smiles_heavy_atoms": [
+        {
+          "position": 1,
+          "symbol": "Na",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 2,
+          "symbol": "O",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 3,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 4,
+          "symbol": "O",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 5,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 6,
+          "symbol": "O",
+          "isotope": 0,
+          "atom_map_label": 0
+        }
+      ],
+      "binding_status": "unverified",
+      "graph_error": "",
+      "table_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/build/atom_tables/reactant_1_4a3d52f8e1c7.json"
+    },
+    "product": {
+      "role": "product",
+      "source_kind": "file",
+      "input_revision": 1,
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/jobs/declaration_0001/product_seed_opt/optimized_seed.xyz",
+      "xyz_sha256": "b7e835859f231194f6b3a967d44d53861c9dc8b971769c5e79fe08a8ff97b7eb",
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/build/input_0001/product/seed.mol",
+      "mol_sha256": "c4165dfc33a88e26990c32b4c3911259ffc1b092b67aeeb1d595bea33feea184",
+      "structure_digest": "cf31fb7a46e36dac854c6a6f769da3e8b7c9e6526a4ec620a963e159c7b0ba4f",
+      "atom_count": 11,
+      "components": 2,
+      "index_base": 1,
+      "atoms": [
+        {
+          "number": 1,
+          "symbol": "Na",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 2,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 3,
+          "symbol": "O",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 4,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 5,
+          "symbol": "O",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 6,
+          "symbol": "O",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 7,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 8,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 9,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 10,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 11,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        }
+      ],
+      "smiles_heavy_atoms": [
+        {
+          "position": 1,
+          "symbol": "Na",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 2,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 3,
+          "symbol": "O",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 4,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 5,
+          "symbol": "O",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 6,
+          "symbol": "O",
+          "isotope": 0,
+          "atom_map_label": 0
+        }
+      ],
+      "binding_status": "unverified",
+      "graph_error": "",
+      "table_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/build/atom_tables/product_1_f9e2a8845364.json"
+    }
+  },
+  "failed_attempt": null,
+  "method_checks": {
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/jobs/declaration_0001/candidate_opt/seed-opt.gjf": {
+      "input_revision": 1,
+      "purpose": "candidate_opt",
+      "actual": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source": "stage_declaration",
+      "differences": [],
+      "matched": true
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/jobs/declaration_0001/product_seed_opt/seed-opt.gjf": {
+      "input_revision": 1,
+      "purpose": "product_seed_opt",
+      "actual": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source": "stage_declaration",
+      "differences": [],
+      "matched": true
+    }
+  },
+  "stage": "map",
+  "stage_records": [
+    {
+      "stage": "declare",
+      "status": "done",
+      "detail": "reaction declared; each calculation requires its own method",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "build",
+      "status": "done",
+      "detail": "both endpoints built",
+      "artifacts": [
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/build/input_0001/reactant/seed.xyz",
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/build/input_0001/reactant/seed.xyz",
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/build/input_0001/product/seed.xyz",
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/build/input_0001/reactant/seed.xyz",
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/build/input_0001/product/seed.xyz"
+      ],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "map",
+      "status": "blocked",
+      "detail": "no atom_map was declared: the reactant→product atom correspondence is ambiguous, and an ambiguous mapping must be declared rather than guessed (a wrong mapping produces a non-physical path no matter how good the path search is). To fix: declare the FULL 1-based structure map, in product atom order for every engine, covering EVERY atom including hydrogens (a heavy-atom-only map is rejected). Atom numbers refer to the built endpoint XYZs listed in atom_details (component-wise assembly order, NOT raw SMILES order): read them, or call reaction_mapping on the built structures for a draft and verify it element-wise before ts_resume.",
+      "artifacts": [],
+      "source_input_revision": 1
+    }
+  ],
+  "terminal": null,
+  "blocked": {
+    "failure_class": "atom_map_missing",
+    "stage": "map",
+    "message": "no atom_map was declared: the reactant→product atom correspondence is ambiguous, and an ambiguous mapping must be declared rather than guessed (a wrong mapping produces a non-physical path no matter how good the path search is). To fix: declare the FULL 1-based structure map, in product atom order for every engine, covering EVERY atom including hydrogens (a heavy-atom-only map is rejected). Atom numbers refer to the built endpoint XYZs listed in atom_details (component-wise assembly order, NOT raw SMILES order): read them, or call reaction_mapping on the built structures for a draft and verify it element-wise before ts_resume.",
+    "atom_details": [
+      "reactant built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0002/jobs/declaration_0001/candidate_opt/optimized_seed.xyz",
+      "reactant atoms (1-based): 1=Na, 2=O, 3=H, 4=C, 5=O, 6=C, 7=O, 8=H, 9=H, 10=H, 11=H",
+      "product built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0002/jobs/declaration_0001/product_seed_opt/optimized_seed.xyz",
+      "product atoms (1-based): 1=Na, 2=C, 3=O, 4=C, 5=O, 6=O, 7=H, 8=H, 9=H, 10=H, 11=H"
+    ],
+    "needs": [
+      "reaction.atom_map"
+    ],
+    "issues": [
+      {
+        "code": "atom_map_missing",
+        "field": "reaction.atom_map",
+        "index_base": 1,
+        "structure_digests": {
+          "reactant": "872f5dae991fa6d0ea146fc1d9d0fa82c3eca4b835f3882fe5b4d7589e936bf8",
+          "product": "cf31fb7a46e36dac854c6a6f769da3e8b7c9e6526a4ec620a963e159c7b0ba4f"
+        }
+      }
+    ]
+  },
+  "intervention_count": 0,
+  "path_kind": "not_attempted",
+  "guidance_attempt": 0,
+  "active_attempt_dir": "",
+  "current_seed_xyz_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/jobs/declaration_0001/candidate_opt/optimized_seed.xyz",
+  "current_seed_mol_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/build/input_0001/reactant/seed.mol",
+  "current_reactant_prepared_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/build/input_0001/reactant/atom_table.json",
+  "current_ts_guess_path": "",
+  "guidance_manifest_path": "",
+  "effective_reaction_center": [],
+  "job_id": null,
+  "job_input_path": "",
+  "waiting_for": "",
+  "scan_step": null,
+  "job_steps": [
+    {
+      "purpose": "candidate_opt",
+      "job_id": 919,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/jobs/declaration_0001/candidate_opt/seed-opt.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 1,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": null
+    },
+    {
+      "purpose": "product_seed_opt",
+      "job_id": 922,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/jobs/declaration_0001/product_seed_opt/seed-opt.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 1,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": null
+    }
+  ],
+  "evidence_candidates": [
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/build/input_0001/reactant/seed.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/build/input_0001/reactant/seed.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/build/input_0001/product/seed.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/build/input_0001/reactant/seed.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0002/build/input_0001/product/seed.xyz"
+  ],
+  "revision": 13
+}

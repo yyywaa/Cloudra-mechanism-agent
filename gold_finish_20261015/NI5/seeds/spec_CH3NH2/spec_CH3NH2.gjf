@@ -1,0 +1,16 @@
+%chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/seeds/spec_CH3NH2/spec_CH3NH2.chk
+%nprocshared=8
+%mem=10GB
+#p opt freq B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)
+
+smiles: CN | NI5_E1 separated component methylamine Opt+Freq | expected_smiles: CN (unverified expectation)
+
+0 1
+C       -0.57448508     0.00541461     0.01029849
+N        0.83798213     0.18820253     0.29266275
+H       -1.06005523    -0.52000696     0.83730351
+H       -0.71164160    -0.57780670    -0.90469494
+H       -1.06312176     0.97556292    -0.11551711
+H        1.28703719    -0.72272904     0.37785678
+H        1.28428436     0.65136264    -0.49790947
+

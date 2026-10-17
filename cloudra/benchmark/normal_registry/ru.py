@@ -18,12 +18,23 @@ TASKS = {
         "mapped_reactants": "[OH2+:1]([H:2]).[CH3:3][C:4]([CH3:5])([OH:6])[C:7]([CH3:8])([CH3:9])[O:10][H:11]",
         "steps": [
             {
-                # PT：H3O+ 质子化 4 号碳上的 OH
+                # PT：H3O+ 质子化 4 号碳上的 OH。
+                # 2026-10-15 本轮（Gaussian 16 B3LYP/def2SVP + EmpiricalDispersion=GD3BJ + Int(UltraFine) + SCF=Tight，气相，q+1/m1）
+                # 证据：该质子转移在本级别气相无独立鞍点，且声明的 R 复合物（质子在水侧、O1···O8≈2.77 Å）不是极小值：
+                #   ① 从 R 侧几何出发的无约束 Opt+Freq 塌缩到“质子化频哪醇+水”0 虚频极小值（E(RB3LYP)=-464.000864850）；
+                #   ② 903/906 两条弛豫扫描合并的真 PT 差坐标（ΔR=O1-H4 减 H4-O8，21 点）全程无内峰；
+                #   ③ 929 长程 O1···O8 弛豫扫描 9 点（质子全程在水侧）单调上升。故按无垒记 0.0（caveat：无 TS，0.0 表示“无垒”）。
+                # 原生日志与 sha256/行号见 gold_finish_20261015/NR1/E1/E1_FINAL_EVIDENCE.md 与 NR1/ADJUDICATION.md。
                 "out": "[OH2:1].[CH3:3][C:4]([CH3:5])([OH+:6][H:2])[C:7]([CH3:8])([CH3:9])[O:10][H:11]",
                 "type": "proton transfer from H3O+ to one pinacol OH (leaving-group activation)",
+                "barrier": 0.0,
             },
             {
-                # 脱水形成碳正离子/水离子对；未找到独立鞍点，参考垒缺测。
+                # 脱水形成碳正离子/水离子对；无合格独立鞍点，参考垒缺测（不填数）。
+                # 2026-10-15 本轮：约束扫描（917 粗网格 + 964 0.05 Å 细网格）唯一内部极大在 r(C4-O6)∈[2.632,2.812] Å、+16.26 kcal/mol，
+                # 对应的无约束 OptTS（ts_0005 attempt1 job 933/936）恰 1 虚频但为软模 -74.5623 cm-1，且 native IRC 积分失败（l123），
+                # 连通性未证 ⇒ 不填数。另：约束扫描大 r 侧与小 r 侧都出现 C4 被相邻氧分子内捕获（917 末帧 C4-O10=1.5509 Å；964 末帧 2.262 Å），
+                # 声明的自由离子对产物是否可及待位移下坡试验（jobs 972/979）与换水构型 Opt+Freq 判定；合并建议见 NR1/E2/E2_FINAL_EVIDENCE.md。
                 "out": "[OH2:1].[OH:6][H:2].[CH3:3][C+:4]([CH3:5])[C:7]([CH3:8])([CH3:9])[O:10][H:11]",
                 "type": "water departure from protonated pinacol -> tertiary carbocation/water ion pair",
             },

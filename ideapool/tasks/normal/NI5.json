@@ -20,13 +20,8 @@
     "charge": 0,
     "multiplicity": 1,
     "conditions": "aqueous solution, weakly acidic (pH 4-6, bell-shaped rate profile)",
-    "elements": [
-      "C",
-      "H",
-      "N",
-      "O"
-    ],
-    "max_heavy_atoms": 4,
+    "elements": [],
+    "max_heavy_atoms": null,
     "closed_shell": true,
     "single_step": false
   },
@@ -133,7 +128,7 @@
             ]
           },
           "accessible": true,
-          "barrier_kcal_mol": null,
+          "barrier_kcal_mol": 0.93,
           "weight": 1.0,
           "channel": null,
           "favored": null

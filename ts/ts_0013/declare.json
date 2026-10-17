@@ -1,0 +1,123 @@
+{
+  "reaction": {
+    "reactant_smiles": "[Na+].CO[C@H]([O-])O",
+    "product_smiles": "[Na+].C[O-].C(=O)O",
+    "charge": 0,
+    "multiplicity": 1,
+    "electronic_character": "closed_shell",
+    "atom_map": [],
+    "reaction_center": [
+      [
+        3,
+        2
+      ],
+      [
+        3,
+        5
+      ]
+    ]
+  },
+  "calculations": {
+    "g16": {
+      "engine": "gaussian",
+      "method": "b3lyp",
+      "basis_set": "def2svp",
+      "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+      "frequency_mode": "auto",
+      "orca_blocks": null,
+      "end_setting": ""
+    }
+  },
+  "conformers": {
+    "reactant": {
+      "kind": "file",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/i1_dft_min_ref.xyz",
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/i1.mol",
+      "evidence_refs": [
+        "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/E2E3_ENDPOINTS_PROVENANCE.md"
+      ],
+      "optimization": {
+        "ref": "g16"
+      },
+      "heavy_atom_binding": {
+        "indices": [
+          1,
+          2,
+          3,
+          4,
+          6,
+          5
+        ]
+      }
+    },
+    "product": {
+      "kind": "file",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/i2_seed_candD_classB.xyz",
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/build/art_I2_src/assembly/complex_candidate_000.mol",
+      "evidence_refs": [
+        "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/I2_BACKUP_SEEDS_PROVENANCE.md",
+        "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/I2_DFT_VERDICT.md",
+        "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/I2_SEED_NOTE.md"
+      ],
+      "optimization": {
+        "ref": "g16"
+      },
+      "heavy_atom_binding": {
+        "indices": [
+          1,
+          2,
+          3,
+          7,
+          8,
+          9
+        ]
+      }
+    },
+    "guidance": {
+      "ring_order": [],
+      "distance_filters": []
+    }
+  },
+  "guess": {
+    "kind": "provided",
+    "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/ts_e2_guess.xyz",
+    "evidence_refs": [
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/TS_E2_GUESS_PROVENANCE.md"
+    ]
+  },
+  "ts_optimization": {
+    "ref": "g16"
+  },
+  "verification": {
+    "frequency": {
+      "ref": "g16"
+    },
+    "irc": {
+      "ref": "g16"
+    },
+    "irc_log": null,
+    "reactant_endpoint": {
+      "seed": null,
+      "optimization": {
+        "ref": "g16"
+      },
+      "frequency": {
+        "ref": "g16"
+      }
+    },
+    "product_endpoint": {
+      "seed": null,
+      "optimization": {
+        "ref": "g16"
+      },
+      "frequency": {
+        "ref": "g16"
+      }
+    }
+  },
+  "execution": {
+    "cpus": 8,
+    "memory_mb": 10240,
+    "limits": null
+  }
+}

@@ -1,0 +1,20 @@
+%chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E1_refmin/e1_refmin_disp030.chk
+%nproc=8
+%mem=10000MB
+#p opt freq B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)
+
+NY3 E1 reference-minimum rebuild: RC SP displaced 0.30 A along mode 1 (-134.4181 cm-1), opt+freq
+
+0 1
+Na      -2.10378100    -0.85227100     0.01228500
+O       -2.02740600     1.23367400     0.07036800
+H       -2.58810800     2.06523800     0.28534500
+C        2.89697400    -0.26338500    -0.00724000
+O        1.85203200     0.72405300     0.02508300
+C        0.59895000     0.28497200     0.02794100
+O        0.30174300    -0.90034500    -0.00096700
+H        2.81851400    -0.87737600    -0.91646100
+H        3.84153300     0.29232200    -0.00183700
+H        2.83648500    -0.91719800     0.87267200
+H       -0.19195300     1.08194100     0.05966300
+

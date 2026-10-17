@@ -1,0 +1,38 @@
+{
+  "count": 3,
+  "trajectories": [
+    {
+      "trajectory_id": "frag0-mmff94-attempt1",
+      "component_id": "frag0",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 32,
+      "frame_count": 33,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NR1/E2/structures/build_I2/trajectories/frag0-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NR1/E2/structures/build_I2/trajectories/frag0-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NR1/E2/structures/build_I2/trajectories/frag0-mmff94-attempt1/frames.jsonl"
+    },
+    {
+      "trajectory_id": "frag1-mmff94-attempt1",
+      "component_id": "frag1",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 32,
+      "frame_count": 33,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NR1/E2/structures/build_I2/trajectories/frag1-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NR1/E2/structures/build_I2/trajectories/frag1-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NR1/E2/structures/build_I2/trajectories/frag1-mmff94-attempt1/frames.jsonl"
+    },
+    {
+      "trajectory_id": "frag2-mmff94-attempt1",
+      "component_id": "frag2",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 3136,
+      "frame_count": 3137,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NR1/E2/structures/build_I2/trajectories/frag2-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NR1/E2/structures/build_I2/trajectories/frag2-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NR1/E2/structures/build_I2/trajectories/frag2-mmff94-attempt1/frames.jsonl"
+    }
+  ]
+}

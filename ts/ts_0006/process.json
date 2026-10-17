@@ -1,0 +1,2628 @@
+{
+  "format_version": 6,
+  "run_id": "ts_0006",
+  "pipeline_id": "4139c53a98eb0a4d160be0d5a982eb2d5a0a2d467cb80d5aa2b160802083c2e8",
+  "declaration_revision": 7,
+  "optimization_checkpoints": {},
+  "budget_action_keys": {},
+  "budget_reservations": {},
+  "attempt_history": [
+    {
+      "declaration_revision": 1,
+      "selected_candidate_id": null,
+      "job_steps": [],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "blocked",
+          "detail": "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: C=O.CN.O; concrete identity: C.C.N.O.O.[HH].[HH].[HH].[HH].[HH].[HH].[HH].[HH].[HH]. Changing binding indices cannot repair this identity mismatch.",
+          "artifacts": [],
+          "source_input_revision": 1
+        }
+      ],
+      "reason": "drop mol_path: the ASE xyz->mol conversion wrote atoms-only MOL (no bonds), so the perceived concrete identity was all-disconnected atoms (C.C.N.O.O.[HH]...) and mismatched the declared SMILES. Use xyz-only conformer/endpoint seeds so connectivity is perceived from geometry.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "C=O.CN.O",
+          "product_smiles": "C[NH2+]C[O-].O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "atom_map": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13
+          ],
+          "reaction_center": [
+            [
+              0,
+              5
+            ]
+          ]
+        },
+        "calculations": {
+          "dft": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq_last.xyz",
+            "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq_last.mol",
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq.log"
+            ],
+            "optimization": {
+              "ref": "dft"
+            },
+            "heavy_atom_binding": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13_last.xyz",
+            "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13_last.mol",
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13.log"
+            ],
+            "optimization": {
+              "ref": "dft"
+            },
+            "heavy_atom_binding": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": {
+          "kind": "provided",
+          "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/ts/scan02_inner_C1N6/scan02_peak_candidate.xyz",
+          "evidence_refs": [
+            "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/ts/scan02_inner_C1N6/scan02_inner_C1N6.log"
+          ]
+        },
+        "ts_optimization": {
+          "ref": "dft"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "dft"
+          },
+          "irc": {
+            "ref": "dft"
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": {
+              "kind": "file",
+              "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq_last.xyz",
+              "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq_last.mol",
+              "evidence_refs": [
+                "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq.log"
+              ]
+            },
+            "optimization": {
+              "ref": "dft"
+            },
+            "frequency": {
+              "ref": "dft"
+            }
+          },
+          "product_endpoint": {
+            "seed": {
+              "kind": "file",
+              "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13_last.xyz",
+              "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13_last.mol",
+              "evidence_refs": [
+                "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13.log"
+              ]
+            },
+            "optimization": {
+              "ref": "dft"
+            },
+            "frequency": {
+              "ref": "dft"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 8,
+          "memory_mb": 10000,
+          "limits": null
+        }
+      },
+      "terminal": null,
+      "blocked": {
+        "failure_class": "input_identity_unconfirmed",
+        "stage": "build",
+        "message": "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: C=O.CN.O; concrete identity: C.C.N.O.O.[HH].[HH].[HH].[HH].[HH].[HH].[HH].[HH].[HH]. Changing binding indices cannot repair this identity mismatch.",
+        "atom_details": [],
+        "needs": [
+          "conformers.reactant"
+        ],
+        "issues": []
+      },
+      "failed_attempt": null
+    },
+    {
+      "declaration_revision": 2,
+      "selected_candidate_id": null,
+      "job_steps": [
+        {
+          "purpose": "candidate_opt",
+          "job_id": 937,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0002/candidate_opt/seed-opt.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 2,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null
+        },
+        {
+          "purpose": "product_seed_opt",
+          "job_id": 940,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0002/product_seed_opt/seed-opt.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 2,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null
+        }
+      ],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0002/reactant/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0002/reactant/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0002/product/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0002/reactant/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0002/product/seed.xyz"
+          ],
+          "source_input_revision": 2
+        },
+        {
+          "stage": "map",
+          "status": "blocked",
+          "detail": "no atom_map was declared: the reactant→product atom correspondence is ambiguous, and an ambiguous mapping must be declared rather than guessed (a wrong mapping produces a non-physical path no matter how good the path search is). To fix: declare the FULL 1-based structure map, in product atom order for every engine, covering EVERY atom including hydrogens (a heavy-atom-only map is rejected). Atom numbers refer to the built endpoint XYZs listed in atom_details (component-wise assembly order, NOT raw SMILES order): read them, or call reaction_mapping on the built structures for a draft and verify it element-wise before ts_resume.",
+          "artifacts": [],
+          "source_input_revision": 2
+        }
+      ],
+      "reason": "declare the FULL concrete atom map bound to the CURRENT built endpoint structures (identity order: both built endpoint XYZs are 1C 2O 3H 4H 5C 6N 7H 8H 9H 10H 11H 12O 13H 14H). Draft from reaction_mapping(reactant=ts_0006 build candidate_opt/optimized_seed.xyz via heavy-atom binding [1,2,5,6,12], product=build product_seed_opt/optimized_seed.xyz via heavy-atom binding [5,6,1,2,12]): mapping_status=unique, binding_status=complete, reactant_identity=product_identity=match, structure digests a961d9f3…/796fc580… = the digests reported by ts_inspect; element-wise verified by hand.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "C=O.CN.O",
+          "product_smiles": "C[NH2+]C[O-].O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "atom_map": [],
+          "reaction_center": []
+        },
+        "calculations": {
+          "dft": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq_last.xyz",
+            "mol_path": null,
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq.log"
+            ],
+            "optimization": {
+              "ref": "dft"
+            },
+            "heavy_atom_binding": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13_last.xyz",
+            "mol_path": null,
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13.log"
+            ],
+            "optimization": {
+              "ref": "dft"
+            },
+            "heavy_atom_binding": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": null,
+        "ts_optimization": {
+          "ref": "dft"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "dft"
+          },
+          "irc": {
+            "ref": "dft"
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": {
+              "kind": "file",
+              "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq_last.xyz",
+              "mol_path": null,
+              "evidence_refs": [
+                "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq.log"
+              ]
+            },
+            "optimization": {
+              "ref": "dft"
+            },
+            "frequency": {
+              "ref": "dft"
+            }
+          },
+          "product_endpoint": {
+            "seed": {
+              "kind": "file",
+              "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13_last.xyz",
+              "mol_path": null,
+              "evidence_refs": [
+                "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13.log"
+              ]
+            },
+            "optimization": {
+              "ref": "dft"
+            },
+            "frequency": {
+              "ref": "dft"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 8,
+          "memory_mb": 10000,
+          "limits": null
+        }
+      },
+      "terminal": null,
+      "blocked": {
+        "failure_class": "atom_map_missing",
+        "stage": "map",
+        "message": "no atom_map was declared: the reactant→product atom correspondence is ambiguous, and an ambiguous mapping must be declared rather than guessed (a wrong mapping produces a non-physical path no matter how good the path search is). To fix: declare the FULL 1-based structure map, in product atom order for every engine, covering EVERY atom including hydrogens (a heavy-atom-only map is rejected). Atom numbers refer to the built endpoint XYZs listed in atom_details (component-wise assembly order, NOT raw SMILES order): read them, or call reaction_mapping on the built structures for a draft and verify it element-wise before ts_resume.",
+        "atom_details": [
+          "reactant built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0002/candidate_opt/optimized_seed.xyz",
+          "reactant atoms (1-based): 1=C, 2=O, 3=H, 4=H, 5=C, 6=N, 7=H, 8=H, 9=H, 10=H, 11=H, 12=O, 13=H, 14=H",
+          "product built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0002/product_seed_opt/optimized_seed.xyz",
+          "product atoms (1-based): 1=C, 2=O, 3=H, 4=H, 5=C, 6=N, 7=H, 8=H, 9=H, 10=H, 11=H, 12=O, 13=H, 14=H"
+        ],
+        "needs": [
+          "reaction.atom_map"
+        ],
+        "issues": [
+          {
+            "code": "atom_map_missing",
+            "field": "reaction.atom_map",
+            "index_base": 1,
+            "structure_digests": {
+              "product": "796fc580c6138a0c313b9752d6475e81ac21af2669f411f6c74ca4bdf4a2ae4a",
+              "reactant": "a961d9f3d1a46ff3d074c68174f68854d1b81f8d3b735002b335d145651d9c2b"
+            }
+          }
+        ]
+      },
+      "failed_attempt": null
+    },
+    {
+      "declaration_revision": 3,
+      "selected_candidate_id": null,
+      "job_steps": [
+        {
+          "purpose": "candidate_opt",
+          "job_id": 942,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0003/candidate_opt/seed-opt.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 3,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null
+        },
+        {
+          "purpose": "product_seed_opt",
+          "job_id": 944,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0003/product_seed_opt/seed-opt.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 3,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null
+        }
+      ],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/product/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/product/seed.xyz"
+          ],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "map",
+          "status": "done",
+          "detail": "14 atoms mapped; concrete endpoint identities bound to input revision 3",
+          "artifacts": [],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "assemble",
+          "status": "done",
+          "detail": "1 reaction-centre pair(s) guide the assembly",
+          "artifacts": [],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "guess",
+          "status": "blocked",
+          "detail": "Explicit guess source required",
+          "artifacts": [],
+          "source_input_revision": 3
+        }
+      ],
+      "reason": "re-declare the explicit provided TS guess (scan-relaxed inner maximum frame from job 923) against the current declaration_0003 reactant order; the earlier guess declaration became stale after the pipeline re-built/re-optimized the endpoint seeds. The peak frame is in the same full atom order as the current built reactant (1C 2O 3H 4H 5C 6N 7H 8H 9H 10H 11H 12O 13H 14H), element-wise identical.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "C=O.CN.O",
+          "product_smiles": "C[NH2+]C[O-].O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "atom_map": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13
+          ],
+          "reaction_center": [
+            [
+              0,
+              5
+            ]
+          ]
+        },
+        "calculations": {
+          "dft": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq_last.xyz",
+            "mol_path": null,
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq.log"
+            ],
+            "optimization": {
+              "ref": "dft"
+            },
+            "heavy_atom_binding": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13_last.xyz",
+            "mol_path": null,
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13.log"
+            ],
+            "optimization": {
+              "ref": "dft"
+            },
+            "heavy_atom_binding": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": null,
+        "ts_optimization": {
+          "ref": "dft"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "dft"
+          },
+          "irc": {
+            "ref": "dft"
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": {
+              "kind": "file",
+              "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq_last.xyz",
+              "mol_path": null,
+              "evidence_refs": [
+                "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq.log"
+              ]
+            },
+            "optimization": {
+              "ref": "dft"
+            },
+            "frequency": {
+              "ref": "dft"
+            }
+          },
+          "product_endpoint": {
+            "seed": {
+              "kind": "file",
+              "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13_last.xyz",
+              "mol_path": null,
+              "evidence_refs": [
+                "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13.log"
+              ]
+            },
+            "optimization": {
+              "ref": "dft"
+            },
+            "frequency": {
+              "ref": "dft"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 8,
+          "memory_mb": 10000,
+          "limits": null
+        }
+      },
+      "terminal": null,
+      "blocked": {
+        "failure_class": "missing_input",
+        "stage": "guess",
+        "message": "Explicit guess source required",
+        "atom_details": [],
+        "needs": [
+          "guess"
+        ],
+        "issues": []
+      },
+      "failed_attempt": null
+    },
+    {
+      "declaration_revision": 4,
+      "selected_candidate_id": null,
+      "job_steps": [
+        {
+          "purpose": "candidate_opt",
+          "job_id": 942,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0003/candidate_opt/seed-opt.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 3,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null
+        },
+        {
+          "purpose": "product_seed_opt",
+          "job_id": 944,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0003/product_seed_opt/seed-opt.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 3,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null
+        },
+        {
+          "purpose": "ts_opt",
+          "job_id": 946,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0004/ts_opt/refine.gjf",
+          "state": "failed",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 4,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null
+        }
+      ],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/product/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/product/seed.xyz"
+          ],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "map",
+          "status": "done",
+          "detail": "14 atoms mapped; concrete endpoint identities bound to input revision 3",
+          "artifacts": [],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "assemble",
+          "status": "done",
+          "detail": "1 reaction-centre pair(s) guide the assembly",
+          "artifacts": [],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "guess",
+          "status": "done",
+          "detail": "Provided candidate bound; formal optimization and verification remain required.",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/path/input_0004/provided.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/path/input_0004/provenance_0000.log"
+          ],
+          "source_input_revision": 4
+        },
+        {
+          "stage": "validate",
+          "status": "done",
+          "detail": "internal validation passed",
+          "artifacts": [],
+          "source_input_revision": 4
+        },
+        {
+          "stage": "submit",
+          "status": "done",
+          "detail": "refinement job 946 submitted as 'ready' (gaussian, B3LYP); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0004/ts_opt/refine.gjf"
+          ],
+          "source_input_revision": 4
+        },
+        {
+          "stage": "refine",
+          "status": "blocked",
+          "detail": "refinement job 946 (ts_opt) ended as 'failed'; plain per-engine failure classes come from the log below — the run is stopped, not silently retried",
+          "artifacts": [],
+          "source_input_revision": 4
+        }
+      ],
+      "reason": "replace the TS guess with the refined inner-maximum geometry. Evidence: job 949 (inward 3.1413->3.0413, 0.02 A) is monotonic -> no maximum inward; job 950 (outward 0.02 A) gives converged points 3.1413 (-286.604343398), 3.1613 (-286.604251935), 3.1813 (-286.604164912) and at 3.2013 the scan-coordinate gradient changed sign (-DE/DX=+0.0001) with the point failing to converge in 63 steps -> the relaxed-profile maximum lies at R~3.20-3.21 A. The 3.201 A frame (last frame of job 950, sha256 fcf6035ff8d01644f8c5ba71221d40ac8207b28df8d1dd83cdb5d5764b3c1ec0) is the closest available geometry to that maximum; the previous guess (3.1413 A) was outside the true maximum and the TS search overshot into the RC-A basin (job 946).",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "C=O.CN.O",
+          "product_smiles": "C[NH2+]C[O-].O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "atom_map": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13
+          ],
+          "reaction_center": [
+            [
+              0,
+              5
+            ]
+          ]
+        },
+        "calculations": {
+          "dft": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq_last.xyz",
+            "mol_path": null,
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq.log"
+            ],
+            "optimization": {
+              "ref": "dft"
+            },
+            "heavy_atom_binding": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13_last.xyz",
+            "mol_path": null,
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13.log"
+            ],
+            "optimization": {
+              "ref": "dft"
+            },
+            "heavy_atom_binding": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": {
+          "kind": "provided",
+          "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/ts/scan02_inner_C1N6/scan02_peak_candidate.xyz",
+          "evidence_refs": [
+            "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/ts/scan02_inner_C1N6/scan02_inner_C1N6.log"
+          ]
+        },
+        "ts_optimization": {
+          "ref": "dft"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "dft"
+          },
+          "irc": {
+            "ref": "dft"
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": {
+              "kind": "file",
+              "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq_last.xyz",
+              "mol_path": null,
+              "evidence_refs": [
+                "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq.log"
+              ]
+            },
+            "optimization": {
+              "ref": "dft"
+            },
+            "frequency": {
+              "ref": "dft"
+            }
+          },
+          "product_endpoint": {
+            "seed": {
+              "kind": "file",
+              "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13_last.xyz",
+              "mol_path": null,
+              "evidence_refs": [
+                "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13.log"
+              ]
+            },
+            "optimization": {
+              "ref": "dft"
+            },
+            "frequency": {
+              "ref": "dft"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 8,
+          "memory_mb": 10000,
+          "limits": null
+        }
+      },
+      "terminal": null,
+      "blocked": {
+        "failure_class": "job_failed",
+        "stage": "refine",
+        "message": "refinement job 946 (ts_opt) ended as 'failed'; plain per-engine failure classes come from the log below — the run is stopped, not silently retried",
+        "atom_details": [
+          "native log: /home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0004/ts_opt/refine.log",
+          "                    CP:  9.98D-01  1.13D+00  7.68D-01  1.07D+00  9.45D-01",
+          " E= -286.605679078885     Delta-E=       -0.000000000000 Rises=F Damp=F",
+          " DIIS: error= 5.35D-08 at cycle  11 NSaved=  11.",
+          " NSaved=11 IEnMin=11 EnMin= -286.605679078885     IErMin=11 ErrMin= 5.35D-08",
+          " ErrMax= 5.35D-08  0.00D+00 EMaxC= 1.00D-01 BMatC= 3.61D-13 BMatP= 6.75D-13",
+          " IDIUse=1 WtCom= 1.00D+00 WtEn= 0.00D+00",
+          " RMSDP=5.11D-09 MaxDP=1.11D-07 DE=-4.55D-13 OVMax= 1.39D-07",
+          "",
+          " Error on total polarization charges =  0.00674",
+          " SCF Done:  E(RB3LYP) =  -286.605679079     A.U. after   11 cycles",
+          "            NFock= 11  Conv=0.51D-08     -V/T= 2.0095",
+          " KE= 2.839041479173D+02 PE=-1.023025193999D+03 EE= 2.765384066007D+02",
+          " Predicted change in Energy= 1.961357D-05",
+          " Optimization stopped.",
+          "    -- Number of steps exceeded,  NStep=  62",
+          "    -- Flag reset to prevent archiving.",
+          "                           ----------------------------",
+          "                           ! Non-Optimized Parameters !",
+          " XXYZ=              0.1547 YYXZ=             -5.0062 ZZXY=             -2.3954",
+          " N-N= 1.759769604021D+02 E-N=-1.023025200506D+03  KE= 2.839041479173D+02",
+          " No NMR shielding tensors so no spin-rotation constants.",
+          " Leave Link  601 at Thu Oct 15 19:09:01 2026, MaxMem=  1310720000 cpu:               0.4 elap:               0.1",
+          " (Enter /home/ly/g16/l9999.exe)",
+          "",
+          "",
+          "      SCIENCE SANS CONSCIENCE N'EST QUE RUINE DE L'AME.",
+          "",
+          "                                                  -- RABELAIS",
+          " Error termination request processed by link 9999.",
+          " Error termination via Lnk1e in /home/ly/g16/l9999.exe at Thu Oct 15 19:09:01 2026.",
+          " Job cpu time:       0 days  0 hours 48 minutes 50.4 seconds.",
+          " Elapsed time:       0 days  0 hours  6 minutes 20.5 seconds.",
+          " File lengths (MBytes):  RWF=     46 Int=      0 D2E=      0 Chk=      6 Scr=      1"
+        ],
+        "needs": [
+          "ts_optimization",
+          "execution",
+          "reaction.reaction_center"
+        ],
+        "issues": []
+      },
+      "failed_attempt": {
+        "attempt_id": "4:ts_opt:946",
+        "diagnostics": [
+          "native log: /home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0004/ts_opt/refine.log",
+          "                    CP:  9.98D-01  1.13D+00  7.68D-01  1.07D+00  9.45D-01",
+          " E= -286.605679078885     Delta-E=       -0.000000000000 Rises=F Damp=F",
+          " DIIS: error= 5.35D-08 at cycle  11 NSaved=  11.",
+          " NSaved=11 IEnMin=11 EnMin= -286.605679078885     IErMin=11 ErrMin= 5.35D-08",
+          " ErrMax= 5.35D-08  0.00D+00 EMaxC= 1.00D-01 BMatC= 3.61D-13 BMatP= 6.75D-13",
+          " IDIUse=1 WtCom= 1.00D+00 WtEn= 0.00D+00",
+          " RMSDP=5.11D-09 MaxDP=1.11D-07 DE=-4.55D-13 OVMax= 1.39D-07",
+          "",
+          " Error on total polarization charges =  0.00674",
+          " SCF Done:  E(RB3LYP) =  -286.605679079     A.U. after   11 cycles",
+          "            NFock= 11  Conv=0.51D-08     -V/T= 2.0095",
+          " KE= 2.839041479173D+02 PE=-1.023025193999D+03 EE= 2.765384066007D+02",
+          " Predicted change in Energy= 1.961357D-05",
+          " Optimization stopped.",
+          "    -- Number of steps exceeded,  NStep=  62",
+          "    -- Flag reset to prevent archiving.",
+          "                           ----------------------------",
+          "                           ! Non-Optimized Parameters !",
+          " XXYZ=              0.1547 YYXZ=             -5.0062 ZZXY=             -2.3954",
+          " N-N= 1.759769604021D+02 E-N=-1.023025200506D+03  KE= 2.839041479173D+02",
+          " No NMR shielding tensors so no spin-rotation constants.",
+          " Leave Link  601 at Thu Oct 15 19:09:01 2026, MaxMem=  1310720000 cpu:               0.4 elap:               0.1",
+          " (Enter /home/ly/g16/l9999.exe)",
+          "",
+          "",
+          "      SCIENCE SANS CONSCIENCE N'EST QUE RUINE DE L'AME.",
+          "",
+          "                                                  -- RABELAIS",
+          " Error termination request processed by link 9999.",
+          " Error termination via Lnk1e in /home/ly/g16/l9999.exe at Thu Oct 15 19:09:01 2026.",
+          " Job cpu time:       0 days  0 hours 48 minutes 50.4 seconds.",
+          " Elapsed time:       0 days  0 hours  6 minutes 20.5 seconds.",
+          " File lengths (MBytes):  RWF=     46 Int=      0 D2E=      0 Chk=      6 Scr=      1"
+        ],
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0004/ts_opt/refine.log"
+        ],
+        "failure_class": "nonconvergence",
+        "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0004/ts_opt/refine.gjf",
+        "input_revision": 4,
+        "input_sha256": "542750a69a9bfecbb89270b2f73d71f7ca30d4defb3100c588baaabfca1f4e20",
+        "job_id": 946,
+        "log_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0004/ts_opt/refine.log",
+        "log_sha256": "0e604da4568e5dcd8f4e02e9af0a4b2aca50298f9800561647310ac540fbd17f",
+        "purpose": "ts_opt"
+      }
+    },
+    {
+      "declaration_revision": 5,
+      "selected_candidate_id": null,
+      "job_steps": [
+        {
+          "purpose": "candidate_opt",
+          "job_id": 942,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0003/candidate_opt/seed-opt.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 3,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null
+        },
+        {
+          "purpose": "product_seed_opt",
+          "job_id": 944,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0003/product_seed_opt/seed-opt.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 3,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null
+        },
+        {
+          "purpose": "ts_opt",
+          "job_id": 952,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/ts_opt/refine.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 5,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null
+        },
+        {
+          "purpose": "frequency",
+          "job_id": 953,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/frequency/frequency.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 5,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null
+        },
+        {
+          "purpose": "irc",
+          "job_id": 954,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/irc/irc.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 5,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null
+        },
+        {
+          "purpose": "reactant_opt",
+          "job_id": 955,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/reactant_opt/reactant_opt.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 5,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": {
+            "kind": "species_reference",
+            "label": "reactant",
+            "source_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/reactant_opt/reactant_source.xyz",
+            "sha256": "acd100c9a09b953d7d4626b4a3e5768b2074e735ce301d5b49014f7cb12ef783",
+            "irc_job_id": null,
+            "irc_log_sha256": null
+          }
+        },
+        {
+          "purpose": "reactant_frequency",
+          "job_id": 956,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/reactant_frequency/reactant_frequency.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 5,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": {
+            "kind": "species_reference",
+            "label": "reactant",
+            "source_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/reactant_opt/reactant_source.xyz",
+            "sha256": "acd100c9a09b953d7d4626b4a3e5768b2074e735ce301d5b49014f7cb12ef783",
+            "irc_job_id": null,
+            "irc_log_sha256": null
+          }
+        },
+        {
+          "purpose": "product_opt",
+          "job_id": 957,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/product_opt/product_opt.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 5,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": {
+            "kind": "species_reference",
+            "label": "product",
+            "source_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/product_opt/product_source.xyz",
+            "sha256": "16074251ec964ae7adbd824821ec334a2a90ee8333eaaf971a711b1582b5e63a",
+            "irc_job_id": null,
+            "irc_log_sha256": null
+          }
+        },
+        {
+          "purpose": "product_frequency",
+          "job_id": 958,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/product_frequency/product_frequency.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 5,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": {
+            "kind": "species_reference",
+            "label": "product",
+            "source_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/product_opt/product_source.xyz",
+            "sha256": "16074251ec964ae7adbd824821ec334a2a90ee8333eaaf971a711b1582b5e63a",
+            "irc_job_id": null,
+            "irc_log_sha256": null
+          }
+        }
+      ],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/product/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/product/seed.xyz"
+          ],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "map",
+          "status": "done",
+          "detail": "14 atoms mapped; concrete endpoint identities bound to input revision 3",
+          "artifacts": [],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "assemble",
+          "status": "done",
+          "detail": "1 reaction-centre pair(s) guide the assembly",
+          "artifacts": [],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "guess",
+          "status": "done",
+          "detail": "Provided candidate bound; formal optimization and verification remain required.",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/path/input_0005/provided.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/path/input_0005/provenance_0000.log"
+          ],
+          "source_input_revision": 5
+        },
+        {
+          "stage": "validate",
+          "status": "done",
+          "detail": "internal validation passed",
+          "artifacts": [],
+          "source_input_revision": 5
+        },
+        {
+          "stage": "submit",
+          "status": "done",
+          "detail": "refinement job 952 submitted as 'ready' (gaussian, B3LYP); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/ts_opt/refine.gjf"
+          ],
+          "source_input_revision": 5
+        },
+        {
+          "stage": "refine",
+          "status": "done",
+          "detail": "refinement sequence complete: ['candidate_opt', 'product_seed_opt', 'ts_opt', 'frequency', 'irc', 'reactant_opt', 'reactant_frequency', 'product_opt', 'product_frequency']",
+          "artifacts": [],
+          "source_input_revision": 5
+        },
+        {
+          "stage": "verdict",
+          "status": "done",
+          "detail": "verified transition state: exactly one imaginary mode (-164.5 cm^-1), usable IRC geometries from both directions, and each IRC endpoint lies between the TS and the corresponding declared minimum (direct pairing; interval proof per irc_path.assign_irc_endpoints); optimized endpoint identities match the declared reactant and product",
+          "artifacts": [],
+          "source_input_revision": 5
+        }
+      ],
+      "reason": "strengthen IRC connectivity evidence (explorer correction): previous native IRC stopped after the first point of each direction (~0.006 kcal/mol, r(C1-N6) 3.1251->3.1162/3.1341 A) and the endpoint checks used declared species seeds (irc_job_id=null). Replace ONLY the verification.irc stage calculation with a larger native IRC step / more allowed points so each direction can descend; all other stages keep the same dft profile.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "C=O.CN.O",
+          "product_smiles": "C[NH2+]C[O-].O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "atom_map": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13
+          ],
+          "reaction_center": [
+            [
+              0,
+              5
+            ]
+          ]
+        },
+        "calculations": {
+          "dft": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq_last.xyz",
+            "mol_path": null,
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq.log"
+            ],
+            "optimization": {
+              "ref": "dft"
+            },
+            "heavy_atom_binding": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13_last.xyz",
+            "mol_path": null,
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13.log"
+            ],
+            "optimization": {
+              "ref": "dft"
+            },
+            "heavy_atom_binding": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": {
+          "kind": "provided",
+          "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/ts/scan04_fine_out_C1N6/scan04_last_frame.xyz",
+          "evidence_refs": [
+            "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/ts/scan04_fine_out_C1N6/scan04_fine_out_C1N6.log"
+          ]
+        },
+        "ts_optimization": {
+          "ref": "dft"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "dft"
+          },
+          "irc": {
+            "ref": "dft"
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": {
+              "kind": "file",
+              "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq_last.xyz",
+              "mol_path": null,
+              "evidence_refs": [
+                "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq.log"
+              ]
+            },
+            "optimization": {
+              "ref": "dft"
+            },
+            "frequency": {
+              "ref": "dft"
+            }
+          },
+          "product_endpoint": {
+            "seed": {
+              "kind": "file",
+              "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13_last.xyz",
+              "mol_path": null,
+              "evidence_refs": [
+                "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13.log"
+              ]
+            },
+            "optimization": {
+              "ref": "dft"
+            },
+            "frequency": {
+              "ref": "dft"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 8,
+          "memory_mb": 10000,
+          "limits": null
+        }
+      },
+      "terminal": "verified",
+      "blocked": null,
+      "failed_attempt": null
+    },
+    {
+      "declaration_revision": 6,
+      "selected_candidate_id": null,
+      "job_steps": [
+        {
+          "purpose": "candidate_opt",
+          "job_id": 942,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0003/candidate_opt/seed-opt.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 3,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null
+        },
+        {
+          "purpose": "product_seed_opt",
+          "job_id": 944,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0003/product_seed_opt/seed-opt.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 3,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null
+        },
+        {
+          "purpose": "ts_opt",
+          "job_id": 952,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/ts_opt/refine.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 5,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null
+        },
+        {
+          "purpose": "frequency",
+          "job_id": 953,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/frequency/frequency.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 5,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null
+        }
+      ],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/product/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/product/seed.xyz"
+          ],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "map",
+          "status": "done",
+          "detail": "14 atoms mapped; concrete endpoint identities bound to input revision 3",
+          "artifacts": [],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "assemble",
+          "status": "done",
+          "detail": "1 reaction-centre pair(s) guide the assembly",
+          "artifacts": [],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "guess",
+          "status": "done",
+          "detail": "Provided candidate bound; formal optimization and verification remain required.",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/path/input_0005/provided.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/path/input_0005/provenance_0000.log"
+          ],
+          "source_input_revision": 5
+        },
+        {
+          "stage": "validate",
+          "status": "done",
+          "detail": "internal validation passed",
+          "artifacts": [],
+          "source_input_revision": 5
+        },
+        {
+          "stage": "submit",
+          "status": "done",
+          "detail": "refinement job 952 submitted as 'ready' (gaussian, B3LYP); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/ts_opt/refine.gjf"
+          ],
+          "source_input_revision": 5
+        },
+        {
+          "stage": "refine",
+          "status": "blocked",
+          "detail": "keywords: expected ['empiricaldispersion=gd3bj', 'int(ultrafine)', 'irc=(calcfc,stepsize=30,maxpoints=30)', 'scf=tight', 'scrf=(cpcm,solvent=water)']; actual ['empiricaldispersion=gd3bj', 'int(ultrafine)', 'scf=tight', 'scrf=(cpcm,solvent=water)']",
+          "artifacts": [],
+          "source_input_revision": 6
+        }
+      ],
+      "reason": "restore verification.irc to the standard dft configuration (the platform's admission check rejects any irc=(...) token inside the declared keywords: 'keywords: expected ... irc=(calcfc,stepsize=30,maxpoints=30) ...; actual [...]' -> compute_admission_rejected). No IRC step-size/point-count control is available through ts_prepare/ts_resume, so the run is restored to the previously verified configuration so its verdict and evidence are not left in a blocked state.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "C=O.CN.O",
+          "product_smiles": "C[NH2+]C[O-].O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "atom_map": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13
+          ],
+          "reaction_center": [
+            [
+              0,
+              5
+            ]
+          ]
+        },
+        "calculations": {
+          "dft": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq_last.xyz",
+            "mol_path": null,
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq.log"
+            ],
+            "optimization": {
+              "ref": "dft"
+            },
+            "heavy_atom_binding": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13_last.xyz",
+            "mol_path": null,
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13.log"
+            ],
+            "optimization": {
+              "ref": "dft"
+            },
+            "heavy_atom_binding": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": {
+          "kind": "provided",
+          "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/ts/scan04_fine_out_C1N6/scan04_last_frame.xyz",
+          "evidence_refs": [
+            "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/ts/scan04_fine_out_C1N6/scan04_fine_out_C1N6.log"
+          ]
+        },
+        "ts_optimization": {
+          "ref": "dft"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "dft"
+          },
+          "irc": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water) irc=(calcfc,stepsize=30,maxpoints=30)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": {
+              "kind": "file",
+              "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq_last.xyz",
+              "mol_path": null,
+              "evidence_refs": [
+                "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq.log"
+              ]
+            },
+            "optimization": {
+              "ref": "dft"
+            },
+            "frequency": {
+              "ref": "dft"
+            }
+          },
+          "product_endpoint": {
+            "seed": {
+              "kind": "file",
+              "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13_last.xyz",
+              "mol_path": null,
+              "evidence_refs": [
+                "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13.log"
+              ]
+            },
+            "optimization": {
+              "ref": "dft"
+            },
+            "frequency": {
+              "ref": "dft"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 8,
+          "memory_mb": 10000,
+          "limits": null
+        }
+      },
+      "terminal": null,
+      "blocked": {
+        "failure_class": "compute_admission_rejected",
+        "stage": "refine",
+        "message": "keywords: expected ['empiricaldispersion=gd3bj', 'int(ultrafine)', 'irc=(calcfc,stepsize=30,maxpoints=30)', 'scf=tight', 'scrf=(cpcm,solvent=water)']; actual ['empiricaldispersion=gd3bj', 'int(ultrafine)', 'scf=tight', 'scrf=(cpcm,solvent=water)']",
+        "atom_details": [],
+        "needs": [
+          "method",
+          "engine",
+          "budget"
+        ],
+        "issues": []
+      },
+      "failed_attempt": null
+    }
+  ],
+  "catalog_id": null,
+  "partition_revision": null,
+  "candidate_attempts": [],
+  "cards_path": "",
+  "product_seed_candidate_id": null,
+  "product_seed_xyz_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0003/product_seed_opt/optimized_seed.xyz",
+  "product_seed_mol_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/product/seed.bound.mol",
+  "selected_candidate_id": null,
+  "run_dir": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006",
+  "workspace_dir": "/home/ly/Cloudra-mechanism-agent",
+  "owner_conversation_id": "prj_15b00532a66347c3",
+  "owner_session_id": "as_9240d61bec654989",
+  "input": {
+    "reaction": {
+      "reactant_smiles": "C=O.CN.O",
+      "product_smiles": "C[NH2+]C[O-].O",
+      "charge": 0,
+      "multiplicity": 1,
+      "electronic_character": "closed_shell",
+      "atom_map": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+      ],
+      "reaction_center": [
+        [
+          0,
+          5
+        ]
+      ]
+    },
+    "calculations": {
+      "dft": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      }
+    },
+    "conformers": {
+      "reactant": {
+        "kind": "file",
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq_last.xyz",
+        "mol_path": null,
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq.log"
+        ],
+        "optimization": {
+          "ref": "dft"
+        },
+        "heavy_atom_binding": null
+      },
+      "product": {
+        "kind": "file",
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13_last.xyz",
+        "mol_path": null,
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13.log"
+        ],
+        "optimization": {
+          "ref": "dft"
+        },
+        "heavy_atom_binding": null
+      },
+      "guidance": {
+        "ring_order": [],
+        "distance_filters": []
+      }
+    },
+    "guess": {
+      "kind": "provided",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/ts/scan04_fine_out_C1N6/scan04_last_frame.xyz",
+      "evidence_refs": [
+        "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/ts/scan04_fine_out_C1N6/scan04_fine_out_C1N6.log"
+      ]
+    },
+    "ts_optimization": {
+      "ref": "dft"
+    },
+    "verification": {
+      "frequency": {
+        "ref": "dft"
+      },
+      "irc": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "irc_log": null,
+      "reactant_endpoint": {
+        "seed": {
+          "kind": "file",
+          "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq_last.xyz",
+          "mol_path": null,
+          "evidence_refs": [
+            "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq.log"
+          ]
+        },
+        "optimization": {
+          "ref": "dft"
+        },
+        "frequency": {
+          "ref": "dft"
+        }
+      },
+      "product_endpoint": {
+        "seed": {
+          "kind": "file",
+          "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13_last.xyz",
+          "mol_path": null,
+          "evidence_refs": [
+            "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job01_rc_optfreq/rc_optfreq_m13.log"
+          ]
+        },
+        "optimization": {
+          "ref": "dft"
+        },
+        "frequency": {
+          "ref": "dft"
+        }
+      }
+    },
+    "execution": {
+      "cpus": 8,
+      "memory_mb": 10000,
+      "limits": null
+    }
+  },
+  "input_binding": {
+    "atom_map": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14
+    ],
+    "binding_diagnostics": [],
+    "binding_source": "concrete",
+    "binding_status": "complete",
+    "concrete_watch_pairs": [],
+    "hashes": {
+      "product_mol": "2ae8680ce166fb596fc696ad70f8a0fb78de2b694d1acb4d1012b7344ac01cca",
+      "product_xyz": "e8782282d3bcc4e2f28a213497885e2c1eeb20e36f14fe52475b7c2465f1bcef",
+      "reactant_mol": "e5480233b153374c2717194424c513944f47aa3ca6f1539978c8ef5184ce0022",
+      "reactant_xyz": "107c67b0a537ff3ea5cf3230d6129e5c8fe546c834cbff2ae81e1d63e4dd2bb1"
+    },
+    "heavy_atom_bindings": {
+      "product": [
+        5,
+        6,
+        1,
+        2,
+        12
+      ],
+      "reactant": [
+        1,
+        2,
+        5,
+        6,
+        12
+      ]
+    },
+    "input_revision": 5,
+    "product_identity": "match",
+    "reactant_identity": "match",
+    "structure_digests": {
+      "product": "796fc580c6138a0c313b9752d6475e81ac21af2669f411f6c74ca4bdf4a2ae4a",
+      "reactant": "a961d9f3d1a46ff3d074c68174f68854d1b81f8d3b735002b335d145651d9c2b"
+    }
+  },
+  "structures": {
+    "product": {
+      "atom_count": 14,
+      "atoms": [
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 1,
+          "origin": null,
+          "symbol": "C"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 2,
+          "origin": null,
+          "symbol": "O"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 3,
+          "origin": null,
+          "symbol": "H"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 4,
+          "origin": null,
+          "symbol": "H"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 5,
+          "origin": null,
+          "symbol": "C"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 6,
+          "origin": null,
+          "symbol": "N"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 7,
+          "origin": null,
+          "symbol": "H"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 8,
+          "origin": null,
+          "symbol": "H"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 9,
+          "origin": null,
+          "symbol": "H"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 10,
+          "origin": null,
+          "symbol": "H"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 11,
+          "origin": null,
+          "symbol": "H"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 12,
+          "origin": null,
+          "symbol": "O"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 13,
+          "origin": null,
+          "symbol": "H"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 14,
+          "origin": null,
+          "symbol": "H"
+        }
+      ],
+      "binding_status": "complete",
+      "components": 2,
+      "graph_error": "",
+      "heavy_atom_indices": [
+        5,
+        6,
+        1,
+        2,
+        12
+      ],
+      "index_base": 1,
+      "input_revision": 3,
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/product/seed.bound.mol",
+      "mol_sha256": "2ae8680ce166fb596fc696ad70f8a0fb78de2b694d1acb4d1012b7344ac01cca",
+      "role": "product",
+      "smiles_heavy_atoms": [
+        {
+          "atom_map_label": 0,
+          "isotope": 0,
+          "position": 1,
+          "symbol": "C"
+        },
+        {
+          "atom_map_label": 0,
+          "isotope": 0,
+          "position": 2,
+          "symbol": "N"
+        },
+        {
+          "atom_map_label": 0,
+          "isotope": 0,
+          "position": 3,
+          "symbol": "C"
+        },
+        {
+          "atom_map_label": 0,
+          "isotope": 0,
+          "position": 4,
+          "symbol": "O"
+        },
+        {
+          "atom_map_label": 0,
+          "isotope": 0,
+          "position": 5,
+          "symbol": "O"
+        }
+      ],
+      "source_kind": "file",
+      "structure_digest": "796fc580c6138a0c313b9752d6475e81ac21af2669f411f6c74ca4bdf4a2ae4a",
+      "table_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/atom_tables/product_3_2f0ca88f9ab8.json",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0003/product_seed_opt/optimized_seed.xyz",
+      "xyz_sha256": "e8782282d3bcc4e2f28a213497885e2c1eeb20e36f14fe52475b7c2465f1bcef"
+    },
+    "reactant": {
+      "atom_count": 14,
+      "atoms": [
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 1,
+          "origin": null,
+          "symbol": "C"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 2,
+          "origin": null,
+          "symbol": "O"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 3,
+          "origin": null,
+          "symbol": "H"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 4,
+          "origin": null,
+          "symbol": "H"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 5,
+          "origin": null,
+          "symbol": "C"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 6,
+          "origin": null,
+          "symbol": "N"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 7,
+          "origin": null,
+          "symbol": "H"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 8,
+          "origin": null,
+          "symbol": "H"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 9,
+          "origin": null,
+          "symbol": "H"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 10,
+          "origin": null,
+          "symbol": "H"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 11,
+          "origin": null,
+          "symbol": "H"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 12,
+          "origin": null,
+          "symbol": "O"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 13,
+          "origin": null,
+          "symbol": "H"
+        },
+        {
+          "component": null,
+          "input_atom_number": null,
+          "isotope": 0,
+          "number": 14,
+          "origin": null,
+          "symbol": "H"
+        }
+      ],
+      "binding_status": "complete",
+      "components": 3,
+      "graph_error": "",
+      "heavy_atom_indices": [
+        1,
+        2,
+        5,
+        6,
+        12
+      ],
+      "index_base": 1,
+      "input_revision": 3,
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.bound.mol",
+      "mol_sha256": "e5480233b153374c2717194424c513944f47aa3ca6f1539978c8ef5184ce0022",
+      "role": "reactant",
+      "smiles_heavy_atoms": [
+        {
+          "atom_map_label": 0,
+          "isotope": 0,
+          "position": 1,
+          "symbol": "C"
+        },
+        {
+          "atom_map_label": 0,
+          "isotope": 0,
+          "position": 2,
+          "symbol": "O"
+        },
+        {
+          "atom_map_label": 0,
+          "isotope": 0,
+          "position": 3,
+          "symbol": "C"
+        },
+        {
+          "atom_map_label": 0,
+          "isotope": 0,
+          "position": 4,
+          "symbol": "N"
+        },
+        {
+          "atom_map_label": 0,
+          "isotope": 0,
+          "position": 5,
+          "symbol": "O"
+        }
+      ],
+      "source_kind": "file",
+      "structure_digest": "a961d9f3d1a46ff3d074c68174f68854d1b81f8d3b735002b335d145651d9c2b",
+      "table_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/atom_tables/reactant_3_f274a724a556.json",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0003/candidate_opt/optimized_seed.xyz",
+      "xyz_sha256": "107c67b0a537ff3ea5cf3230d6129e5c8fe546c834cbff2ae81e1d63e4dd2bb1"
+    }
+  },
+  "failed_attempt": null,
+  "method_checks": {
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0002/candidate_opt/seed-opt.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 2,
+      "matched": true,
+      "purpose": "candidate_opt",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0002/product_seed_opt/seed-opt.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 2,
+      "matched": true,
+      "purpose": "product_seed_opt",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0003/candidate_opt/seed-opt.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 3,
+      "matched": true,
+      "purpose": "candidate_opt",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0003/product_seed_opt/seed-opt.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 3,
+      "matched": true,
+      "purpose": "product_seed_opt",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0004/ts_opt/refine.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 4,
+      "matched": true,
+      "purpose": "ts_opt",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/frequency/frequency.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 5,
+      "matched": true,
+      "purpose": "frequency",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/irc/irc.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 5,
+      "matched": true,
+      "purpose": "irc",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/product_frequency/product_frequency.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 5,
+      "matched": true,
+      "purpose": "product_frequency",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/product_opt/product_opt.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 5,
+      "matched": true,
+      "purpose": "product_opt",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/reactant_frequency/reactant_frequency.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 5,
+      "matched": true,
+      "purpose": "reactant_frequency",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/reactant_opt/reactant_opt.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 5,
+      "matched": true,
+      "purpose": "reactant_opt",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/ts_opt/refine.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 5,
+      "matched": true,
+      "purpose": "ts_opt",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0006/irc/irc.gjf": {
+      "input_revision": 6,
+      "purpose": "irc",
+      "actual": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water) irc=(calcfc,stepsize=30,maxpoints=30)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source": "stage_declaration",
+      "differences": [
+        {
+          "field": "keywords",
+          "expected": [
+            "empiricaldispersion=gd3bj",
+            "int(ultrafine)",
+            "irc=(calcfc,stepsize=30,maxpoints=30)",
+            "scf=tight",
+            "scrf=(cpcm,solvent=water)"
+          ],
+          "actual": [
+            "empiricaldispersion=gd3bj",
+            "int(ultrafine)",
+            "scf=tight",
+            "scrf=(cpcm,solvent=water)"
+          ],
+          "message": "keywords: expected ['empiricaldispersion=gd3bj', 'int(ultrafine)', 'irc=(calcfc,stepsize=30,maxpoints=30)', 'scf=tight', 'scrf=(cpcm,solvent=water)']; actual ['empiricaldispersion=gd3bj', 'int(ultrafine)', 'scf=tight', 'scrf=(cpcm,solvent=water)']"
+        }
+      ],
+      "matched": false
+    }
+  },
+  "stage": "refine",
+  "stage_records": [
+    {
+      "stage": "declare",
+      "status": "done",
+      "detail": "reaction declared; each calculation requires its own method",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "build",
+      "status": "done",
+      "detail": "both endpoints built",
+      "artifacts": [
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.xyz",
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.xyz",
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/product/seed.xyz",
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.xyz",
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/product/seed.xyz"
+      ],
+      "source_input_revision": 3
+    },
+    {
+      "stage": "map",
+      "status": "done",
+      "detail": "14 atoms mapped; concrete endpoint identities bound to input revision 3",
+      "artifacts": [],
+      "source_input_revision": 3
+    },
+    {
+      "stage": "assemble",
+      "status": "done",
+      "detail": "1 reaction-centre pair(s) guide the assembly",
+      "artifacts": [],
+      "source_input_revision": 3
+    },
+    {
+      "stage": "guess",
+      "status": "done",
+      "detail": "Provided candidate bound; formal optimization and verification remain required.",
+      "artifacts": [
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/path/input_0005/provided.xyz",
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/path/input_0005/provenance_0000.log"
+      ],
+      "source_input_revision": 5
+    },
+    {
+      "stage": "validate",
+      "status": "done",
+      "detail": "internal validation passed",
+      "artifacts": [],
+      "source_input_revision": 5
+    },
+    {
+      "stage": "submit",
+      "status": "done",
+      "detail": "refinement job 952 submitted as 'ready' (gaussian, B3LYP); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+      "artifacts": [
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/ts_opt/refine.gjf"
+      ],
+      "source_input_revision": 5
+    }
+  ],
+  "terminal": null,
+  "blocked": null,
+  "intervention_count": 6,
+  "path_kind": "provided",
+  "guidance_attempt": 0,
+  "active_attempt_dir": "",
+  "current_seed_xyz_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0003/candidate_opt/optimized_seed.xyz",
+  "current_seed_mol_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.bound.mol",
+  "current_reactant_prepared_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/atom_table.json",
+  "current_ts_guess_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/path/input_0005/provided.xyz",
+  "guidance_manifest_path": "",
+  "effective_reaction_center": [],
+  "job_id": 952,
+  "job_input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/ts_opt/refine.gjf",
+  "waiting_for": "",
+  "scan_step": null,
+  "job_steps": [
+    {
+      "purpose": "candidate_opt",
+      "job_id": 942,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0003/candidate_opt/seed-opt.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 3,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": null
+    },
+    {
+      "purpose": "product_seed_opt",
+      "job_id": 944,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0003/product_seed_opt/seed-opt.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 3,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": null
+    },
+    {
+      "purpose": "ts_opt",
+      "job_id": 952,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/ts_opt/refine.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 5,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": null
+    },
+    {
+      "purpose": "frequency",
+      "job_id": 953,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/frequency/frequency.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 5,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": null
+    }
+  ],
+  "evidence_candidates": [
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/product/seed.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/reactant/seed.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/build/input_0003/product/seed.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/path/input_0005/provided.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/path/input_0005/provenance_0000.log",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0006/jobs/declaration_0005/ts_opt/refine.gjf"
+  ],
+  "revision": 79
+}

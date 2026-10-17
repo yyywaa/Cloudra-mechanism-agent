@@ -1,0 +1,21 @@
+[calculator] isolated GAUSS_SCRDIR=/home/ly/g16/scratch/cloudra_g16_task1048_586806
+Error: segmentation violation
+   rax 0000000000000000, rbx ffffffffffffffff, rcx 000012710664553b
+   rdx 0000000000000000, rsp 00007fff2add6f88, rbp 00007fff2add7500
+   rsi 000000000000000b, rdi 000000000008f468, r8  0000000271001000
+   r9  0000000000000401, r10 0000127106617980, r11 0000000000000206
+   r12 00007fff2add7548, r13 0000000000000000, r14 0000000000000000
+   r15 00000000000003e6
+  /lib/x86_64-linux-gnu/libc.so.6(+0x45330) [0x127106645330]
+  /lib/x86_64-linux-gnu/libc.so.6(kill+0xb) [0x12710664553b]
+  /home/ly/g16/l9999.exe() [0x45d565]
+  /home/ly/g16/l9999.exe() [0x47855a]
+  /home/ly/g16/l9999.exe() [0x4acb1b]
+  /home/ly/g16/l9999.exe() [0x49fb0f]
+  /home/ly/g16/l9999.exe() [0x415e18]
+  /home/ly/g16/l9999.exe() [0x41131b]
+  /home/ly/g16/l9999.exe() [0x411224]
+  /lib/x86_64-linux-gnu/libc.so.6(+0x2a1ca) [0x12710662a1ca]
+  /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x8b) [0x12710662a28b]
+  /home/ly/g16/l9999.exe() [0x40b969]
+Aborted (core dumped)

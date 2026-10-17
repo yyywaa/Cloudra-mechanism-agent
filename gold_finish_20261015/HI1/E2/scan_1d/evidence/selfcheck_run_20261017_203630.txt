@@ -1,0 +1,75 @@
+=== 0. provenance ===
+now (host time) : 2026-10-17 20:36:30 
+gjf path        : build/E2_1D_scan.gjf
+gjf sha256      : 6301b836b6ca0006f365d80e28cff2f552bd06edae8f54475d6985e751ffbb16
+gjf bytes       : 2415
+gjf newline count (== wc -l): 52
+gjf split('\n') element count: 53 (last element is '' because the file ends with an empty line)
+seed path       : /home/ly/Cloudra-mechanism-agent/ts/ts_0009/build/input_0004/reactant/seed.xyz
+seed sha256     : c9d59aeab418c248629922ee37d4ea3822c64b7128dd63b3034d3c8c5ec2df3d
+
+=== 1. link0 + route, verbatim ===
+  line 1: %chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E2/scan_1d/build/E2_1D_scan.chk
+  line 2: %nprocshared=8
+  line 3: %mem=10240MB
+  line 4 (route): #p opt=(modredundant,maxstep=8) B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=DMSO)
+
+=== 2. required route tokens (case-insensitive, native Gaussian spelling) ===
+  opt=modredundant             -> present as 'opt=(modredundant'
+  maxstep=8                    -> present as 'maxstep=8'
+  B3LYP/def2SVP                -> present as 'B3LYP/def2SVP'
+  EmpiricalDispersion=GD3BJ    -> present as 'EmpiricalDispersion=GD3BJ'
+  Int(UltraFine)               -> present as 'Int(UltraFine)'
+  SCF=Tight                    -> present as 'SCF=Tight'
+  CPCM                         -> present as 'CPCM'
+  DMSO                         -> present as 'DMSO'
+  SCRF(...)                    -> present as 'SCRF=('
+  ..CPCM(DMSO) is written in native Gaussian form SCRF=(CPCM,Solvent=DMSO); cpcm=True dmso=True
+  forbidden def2-svp           -> absent
+  forbidden cartesian          -> absent
+  forbidden z-matrix           -> absent
+  forbidden zmatrix            -> absent
+  forbidden geom=connectivity  -> absent
+  no basis-lowercase hyphen form 'def2-svp': True
+
+=== 3. end-of-file blank-line structure (byte level) ===
+  last 80 bytes repr: '2262594\nH        0.95590629     2.40163266     2.87635473\n\nB 1 29 S 14 -0.2000\n\n'
+  ends with b'\n\n' (i.e. a genuine blank final line): True
+  nothing after the final '\n': True
+
+=== 4. molecule specification structure ===
+  title line(s) 6-6: HI1_E2 1D relaxed scan R(C1(enamine beta-CH2)...C29(aldehyde C)) 4.3543->1.5543 A step -0.2
+  line 8 charge/multiplicity: '0 1'
+  atom count parsed: 41 (expected 41) -> OK
+  first coord line: 9   last coord line: 49
+  lines from end of coordinate block to EOF:
+    50: ''
+    51: 'B 1 29 S 14 -0.2000'
+    52: ''
+    53: ''
+  ModRedundant non-blank lines: ['B 1 29 S 14 -0.2000']
+  exactly one ModRedundant line: True
+  blank line separating coords from ModRedundant: True
+  blank line after ModRedundant (line 53): True
+
+=== 5. coordinate compare .gjf vs seed.xyz, per atom ===
+  seed comment lines: 2 ; seed atom count: 41
+  element-order mismatches: none (41/41 identical)
+  MAX per-atom max|dx|,|dy|,|dz| over 41 atoms = 0 Angstrom (largest at atom 0)
+  bit-identical coordinates (max|delta| == 0): True
+
+=== 6. identity of atoms 1 and 29 + geometry cross-checks ===
+  atom  1  (gjf line 9): C       0.40064996    -1.31467609     1.30452955
+  atom 29  (gjf line 37): C      -1.06104097     2.78034880     1.07215324
+  atom  2  element C (enamine alpha-C: C=C partner of atom 1 -> atom 1 is the terminal =CH2)
+  atom 28  element O (benzaldehyde carbonyl O: C=O partner of atom 29 -> atom 29 is the aldehyde C)
+  R(1,29)  = 4.354282 Angstrom  (design seed 4.3543 ; scan start)
+  R(1,2)   = 1.3632  (enamine C=C)   R(28,29) = 1.2265  (benzaldehyde C=O)
+  R(2,4)   = 1.3752  (enamine C-N)
+  R(O28...H24) = R(O28-H24) = 1.6817  (identical atom pair; label differs only)
+  R(O11-H24)   = 1.0006  (donor covalent O-H of the proline carboxyl)
+
+=== 7. resource declarations vs authorisation (8 cpus / 10240 MB) ===
+  line 2: '%nprocshared=8'  -> nprocshared == 8 : True
+  line 3: '%mem=10240MB'  -> mem == 10240MB : True
+  charge/multiplicity: '0 1' (design q0/m1: True)

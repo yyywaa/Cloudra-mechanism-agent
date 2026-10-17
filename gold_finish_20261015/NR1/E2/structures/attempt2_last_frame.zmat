@@ -1,0 +1,31 @@
+# Z-matrix (internal coordinates), generated along molecular-graph spanning tree
+# Units: bond length in Å, angle/dihedral in degrees
+# Format: index name | parent r=... | parent a=... | parent d=...
+# Parent is an atom label (e.g. C2) or absolute reference (origin/e_z/e_x)
+
+  4  C4     | origin  r=2.2567  | e_z     a=106.28  | e_x     d=-45.75
+  5  C5     | C4      r=1.5239  | e_z     a=16.50  | e_x     d=109.94
+ 12  H12    | C4      r=1.0993  | C5      a=109.47  | e_x     d=-168.28
+ 13  H13    | C4      r=1.1009  | C5      a=112.54  | e_x     d=71.08
+ 14  H14    | C4      r=1.0976  | C5      a=110.83  | e_x     d=-49.54
+  1  O1     | C5      r=1.4978  | C4      a=107.04  | H12     d=58.72
+  6  C6     | C5      r=1.5254  | O1      a=103.92  | e_x     d=-144.88
+  8  C8     | C5      r=1.5703  | O1      a=108.60  | e_x     d=-24.37
+  3  H3     | O1      r=0.9705  | C5      a=111.21  | C4      d=37.72
+ 15  H15    | C6      r=1.0984  | C5      a=109.55  | O1      d=-59.69
+ 16  H16    | C6      r=1.0973  | C5      a=110.81  | O1      d=-178.98
+ 17  H17    | C6      r=1.0975  | C5      a=111.65  | O1      d=61.16
+  9  C9     | C8      r=1.5274  | C5      a=111.67  | O1      d=176.29
+ 10  C10    | C8      r=1.5306  | C5      a=112.69  | O1      d=50.82
+ 11  O11    | C8      r=1.4650  | C5      a=105.73  | O1      d=-66.77
+ 20  H20    | C9      r=1.0980  | C8      a=112.41  | C5      d=48.74
+ 21  H21    | C9      r=1.1019  | C8      a=109.49  | C5      d=168.86
+ 22  H22    | C9      r=1.0981  | C8      a=111.15  | C5      d=-73.49
+ 23  H23    | C10     r=1.0998  | C8      a=111.80  | C5      d=-62.26
+ 24  H24    | C10     r=1.1001  | C8      a=109.82  | C5      d=178.59
+ 25  H25    | C10     r=1.0988  | C8      a=111.74  | C5      d=59.88
+ 26  H26    | O11     r=0.9687  | C8      a=109.76  | C5      d=-159.92
+  7  O7     | origin  r=2.7154  | e_z     a=91.68  | e_x     d=174.68
+  2  H2     | O7      r=1.1182  | e_z     a=57.48  | e_x     d=-52.08
+ 18  H18    | O7      r=1.0277  | H2      a=96.51  | e_x     d=0.60
+ 19  H19    | O7      r=0.9719  | H2      a=112.58  | e_x     d=115.69

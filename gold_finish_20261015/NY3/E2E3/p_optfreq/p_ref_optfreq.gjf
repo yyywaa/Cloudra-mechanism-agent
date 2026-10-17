@@ -1,0 +1,20 @@
+%chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/p_optfreq/p_ref_optfreq.chk
+%nproc=8
+%mem=10GB
+#p opt freq B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)
+
+NY3 E2E3 P-end reference minimum (formate + methanol + Na+) opt+freq from job934 truncated P frame B3LYP/def2SVP GD3BJ CPCM(water)
+
+0 1
+Na      -0.08159600     1.83582700     0.07866600
+C       -2.31383600    -0.62724600    -0.36572200
+O       -1.33340900    -0.05090400     0.46504300
+H       -2.62352300    -1.63099500    -0.01413300
+H       -3.20979100     0.01439900    -0.36722600
+H       -1.97467200    -0.73033300    -1.41528300
+C        1.76645200    -0.71129200    -0.09833800
+O        1.70869500     0.52744200    -0.28152400
+O        0.83941400    -1.47788900     0.26715400
+H        2.76429500    -1.20167900    -0.27813000
+H       -0.49205700    -0.60345100     0.38842100
+

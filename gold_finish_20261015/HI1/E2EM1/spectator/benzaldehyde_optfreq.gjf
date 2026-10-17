@@ -1,0 +1,23 @@
+%chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E2EM1/spectator/benzaldehyde_optfreq.chk
+%nproc=8
+%mem=10240MB
+#p opt freq B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=DMSO)
+
+HI1 spectator benzaldehyde C7H6O opt+freq (from job 1017 last frame atoms 11-24)
+
+0 1
+O        3.63328600    -2.79514400    -0.83582800
+C        3.54312400    -1.67539300    -1.29601900
+C        3.56477300    -0.42160400    -0.51145600
+C        3.32409300     0.79557600    -1.16760800
+C        3.34415400     1.99358200    -0.45281800
+C        3.61955900     1.97642700     0.91743100
+C        3.86107800     0.76317200     1.57893900
+C        3.82658900    -0.43467300     0.86988400
+H        3.44538100    -1.49937100    -2.39611300
+H        3.10689300     0.79528600    -2.23887000
+H        3.12800400     2.93765800    -0.95797900
+H        3.63960100     2.91297900     1.47965500
+H        4.07164300     0.76005800     2.65068300
+H        4.00525100    -1.39240600     1.36307400
+

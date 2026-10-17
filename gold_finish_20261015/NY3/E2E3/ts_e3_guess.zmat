@@ -1,0 +1,16 @@
+# Z-matrix (internal coordinates), generated along molecular-graph spanning tree
+# Units: bond length in Å, angle/dihedral in degrees
+# Format: index name | parent r=... | parent a=... | parent d=...
+# Parent is an atom label (e.g. C2) or absolute reference (origin/e_z/e_x)
+
+  2  C2     | origin  r=1.5270  | e_z     a=70.99  | e_x     d=-71.42
+  3  O3     | C2      r=1.3245  | e_z     a=86.21  | e_x     d=-4.53
+  4  H4     | C2      r=1.1032  | O3      a=117.26  | e_x     d=-155.40
+  5  H5     | C2      r=1.1032  | O3      a=117.28  | e_x     d=84.56
+  6  H6     | C2      r=1.1033  | O3      a=117.24  | e_x     d=-35.45
+  1  Na1    | O3      r=2.4274  | C2      a=146.43  | H4      d=23.36
+  9  O9     | Na1     r=2.5243  | O3      a=60.60  | C2      d=-117.35
+ 11  H11    | Na1     r=2.1379  | O3      a=30.95  | C2      d=-117.34
+  7  C7     | O9      r=1.3406  | Na1     a=107.46  | O3      d=-105.79
+  8  O8     | C7      r=1.2239  | O9      a=124.35  | Na1     d=57.63
+ 10  H10    | C7      r=1.1006  | O8      a=125.18  | e_x     d=-166.70

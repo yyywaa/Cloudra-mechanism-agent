@@ -1,0 +1,27 @@
+{
+  "count": 2,
+  "trajectories": [
+    {
+      "trajectory_id": "frag1-mmff94-attempt1",
+      "component_id": "frag1",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 40,
+      "frame_count": 41,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/build_candB/structure_build/trajectories/frag1-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/build_candB/structure_build/trajectories/frag1-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/build_candB/structure_build/trajectories/frag1-mmff94-attempt1/frames.jsonl"
+    },
+    {
+      "trajectory_id": "frag2-mmff94-attempt1",
+      "component_id": "frag2",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 108,
+      "frame_count": 109,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/build_candB/structure_build/trajectories/frag2-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/build_candB/structure_build/trajectories/frag2-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/build_candB/structure_build/trajectories/frag2-mmff94-attempt1/frames.jsonl"
+    }
+  ]
+}

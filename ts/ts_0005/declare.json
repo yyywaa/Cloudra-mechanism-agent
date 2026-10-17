@@ -1,0 +1,168 @@
+{
+  "reaction": {
+    "reactant_smiles": "[OH2:1].[CH3:3][C:4]([CH3:5])([OH+:6][H:2])[C:7]([CH3:8])([CH3:9])[O:10][H:11]",
+    "product_smiles": "[OH2:1].[OH:6][H:2].[CH3:3][C+:4]([CH3:5])[C:7]([CH3:8])([CH3:9])[O:10][H:11]",
+    "charge": 1,
+    "multiplicity": 1,
+    "electronic_character": null,
+    "atom_map": [
+      0,
+      1,
+      2,
+      6,
+      17,
+      18,
+      3,
+      4,
+      5,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25
+    ],
+    "reaction_center": [
+      [
+        4,
+        6
+      ]
+    ]
+  },
+  "calculations": {
+    "formal": {
+      "engine": "gaussian",
+      "method": "B3LYP",
+      "basis_set": "def2SVP",
+      "keywords": "empiricaldispersion=gd3bj scf=tight int=ultrafine",
+      "frequency_mode": "auto",
+      "orca_blocks": null,
+      "end_setting": ""
+    }
+  },
+  "conformers": {
+    "reactant": {
+      "kind": "file",
+      "xyz_path": "gold_finish_20261015/NR1/E2/structures/I1_opt_c000_r2.xyz",
+      "mol_path": "gold_finish_20261015/NR1/E2/structures/build_I1/assembly/complex_candidate_000.mol",
+      "evidence_refs": [
+        "gold_finish_20261015/NR1/E2/structures/I1_opt_c000_r2.xyz",
+        "gold_finish_20261015/NR1/E2/logs/E2_I1_optfreq_c000_r2.log",
+        "gold_finish_20261015/NR1/E2/logs/E2_I1_optfreq_c000_r2.gjf"
+      ],
+      "optimization": null,
+      "heavy_atom_binding": {
+        "indices": [
+          1,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ]
+      }
+    },
+    "product": {
+      "kind": "file",
+      "xyz_path": "gold_finish_20261015/NR1/E2/structures/I2_opt_c000_r2.xyz",
+      "mol_path": "gold_finish_20261015/NR1/E2/structures/build_I2/assembly/complex_candidate_000.mol",
+      "evidence_refs": [
+        "gold_finish_20261015/NR1/E2/structures/I2_opt_c000_r2.xyz",
+        "gold_finish_20261015/NR1/E2/logs/E2_I2_optfreq_c000_r2.log",
+        "gold_finish_20261015/NR1/E2/logs/E2_I2_optfreq_c000_r2.gjf"
+      ],
+      "optimization": null,
+      "heavy_atom_binding": {
+        "indices": [
+          1,
+          4,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13
+        ]
+      }
+    },
+    "guidance": {
+      "ring_order": [],
+      "distance_filters": []
+    }
+  },
+  "guess": {
+    "kind": "provided",
+    "xyz_path": "gold_finish_20261015/NR1/E2/seeds/interp_idpp/img_06.xyz",
+    "evidence_refs": [
+      "gold_finish_20261015/NR1/E2/seeds/interp_idpp/img_06.xyz",
+      "gold_finish_20261015/NR1/E2/seeds/interp_idpp/img_05.xyz",
+      "gold_finish_20261015/NR1/E2/seeds/interp_idpp/img_07.xyz"
+    ]
+  },
+  "ts_optimization": {
+    "ref": "formal"
+  },
+  "verification": {
+    "frequency": {
+      "ref": "formal"
+    },
+    "irc": {
+      "ref": "formal"
+    },
+    "irc_log": null,
+    "reactant_endpoint": {
+      "seed": {
+        "kind": "file",
+        "xyz_path": "gold_finish_20261015/NR1/E2/structures/I1_opt_c000_r2.xyz",
+        "mol_path": "gold_finish_20261015/NR1/E2/structures/build_I1/assembly/complex_candidate_000.mol",
+        "evidence_refs": [
+          "gold_finish_20261015/NR1/E2/structures/I1_opt_c000_r2.xyz",
+          "gold_finish_20261015/NR1/E2/logs/E2_I1_optfreq_c000_r2.log"
+        ]
+      },
+      "optimization": {
+        "ref": "formal"
+      },
+      "frequency": {
+        "ref": "formal"
+      }
+    },
+    "product_endpoint": {
+      "seed": {
+        "kind": "file",
+        "xyz_path": "gold_finish_20261015/NR1/E2/structures/I2_opt_c000_r2.xyz",
+        "mol_path": "gold_finish_20261015/NR1/E2/structures/build_I2/assembly/complex_candidate_000.mol",
+        "evidence_refs": [
+          "gold_finish_20261015/NR1/E2/structures/I2_opt_c000_r2.xyz",
+          "gold_finish_20261015/NR1/E2/logs/E2_I2_optfreq_c000_r2.log"
+        ]
+      },
+      "optimization": {
+        "ref": "formal"
+      },
+      "frequency": {
+        "ref": "formal"
+      }
+    }
+  },
+  "execution": {
+    "cpus": 8,
+    "memory_mb": 10240,
+    "limits": null
+  }
+}

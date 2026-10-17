@@ -1,0 +1,3 @@
+[guard] calculator 启动 (PID 4093477)，等待其结束...
+[guard] calculator 退出，退出码：0
+[guard] 数据库状态已更新: task_id=1001, state=done

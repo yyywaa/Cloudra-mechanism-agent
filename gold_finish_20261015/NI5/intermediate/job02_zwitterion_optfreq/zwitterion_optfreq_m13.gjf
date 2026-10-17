@@ -1,0 +1,23 @@
+%chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/intermediate/job02_zwitterion_optfreq/zwitterion_optfreq_m13.chk
+%nproc=12
+%mem=13GB
+#p opt freq B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)
+
+smiles: C[NH2+]C[O-].O | NI5_E1 C-N addition intermediate [O-]CH2-NH2(+)(H)CH3 + H2O unconstrained Opt+Freq
+
+0 1
+O        1.88844621     0.67619465    -0.22590025
+C        1.02742710    -0.15835700    -0.74420512
+N       -0.08877127     0.02902626     0.17715484
+C       -1.26498564    -0.82191426     0.01448735
+H        1.23350771    -1.23783101    -0.74223630
+H        0.61038851     0.01742383    -1.74544019
+H        0.36596150    -0.05183418     1.08950177
+H       -0.31453302     1.03652891     0.12470691
+H       -1.98579655    -0.54409843     0.78674189
+H       -0.96351828    -1.86508568     0.13643470
+H       -1.68757580    -0.64857970    -0.97812757
+O        0.25463479     2.84269378     0.40853290
+H        1.08222375     2.32449644     0.20807920
+H        0.60913918     3.74612801     0.36312934
+

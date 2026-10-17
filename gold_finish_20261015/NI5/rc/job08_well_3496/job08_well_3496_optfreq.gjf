@@ -1,0 +1,23 @@
+%chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job08_well_3496/job08_well_3496_optfreq.chk
+%nproc=8
+%mem=10GB
+#p opt freq B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)
+
+smiles: C=O.CN.O | NI5_E1 P2: is the R(C1-N6)=3.3496 A relaxed-scan well a real pre-addition complex minimum? unconstrained Opt+Freq from scan01 frame 53
+
+0 1
+C       -1.67706900    -1.29210900     0.08790700
+O       -2.27018600    -0.28519800    -0.23992200
+H       -2.20791700    -2.27163700     0.14325700
+H       -0.59001900    -1.27606500     0.33910600
+C        2.57965000    -0.39582600    -0.41722800
+N        1.48496000    -0.28344400     0.53963800
+H        2.17323300    -0.53090100    -1.43319200
+H        3.19277900    -1.28559400    -0.19664200
+H        3.26739100     0.47454200    -0.45352700
+H        0.91525400     0.54310900     0.32735800
+H        1.85442600    -0.13911500     1.48036300
+O       -0.54545400     1.93257800    -0.08866300
+H       -1.20517700     1.21774300    -0.21086100
+H       -0.68506000     2.20060100     0.83127500
+

@@ -1,0 +1,5 @@
+[guard] Gaussian scratch: /home/ly/g16/scratch/cloudra_g16_task918_1899272
+[guard] calculator 启动 (PID 1899283)，等待其结束...
+[guard] calculator 退出，退出码：0
+[guard] 更新数据库失败：database is locked
+[guard] 数据库状态已更新: task_id=918, state=done

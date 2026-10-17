@@ -1,0 +1,20 @@
+%chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/freq_i2_candA/i2_candA_freq.chk
+%nproc=8
+%mem=10GB
+#p freq B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)
+
+NY3 E2E3 freq on I2-type candidate candA (H6 on O1, C4...O3 4.568 A) B3LYP/def2SVP GD3BJ CPCM(water)
+
+0 1
+Na      -0.38094000    -1.19589500    -0.19073800
+C       -3.21888000     0.65065400     0.11912200
+O       -2.07736100    -0.06297500    -0.01943700
+H       -3.53506500     1.23446800    -0.79484900
+H       -4.13805500     0.04354100     0.36846800
+H       -3.19887300     1.43504200     0.93147000
+C        2.48130000     0.18009100     0.13295900
+O        1.87488100    -0.86377100     0.19019400
+O        1.87872700     1.31896300    -0.18031000
+H        3.56950200     0.25969900     0.33643500
+H        2.50833600     2.05989900    -0.17946300
+

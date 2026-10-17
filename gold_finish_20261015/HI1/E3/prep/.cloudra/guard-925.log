@@ -1,0 +1,5 @@
+[guard] Gaussian scratch: /home/ly/g16/scratch/cloudra_g16_task925_1976471
+[guard] calculator 启动 (PID 1976505)，等待其结束...
+[guard] calculator 退出，退出码：1
+日志缺少原子坐标或原子序数，视为不完整：/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/prep/I2_prep_cons180_v3.log
+[guard] 数据库状态已更新: task_id=925, state=failed

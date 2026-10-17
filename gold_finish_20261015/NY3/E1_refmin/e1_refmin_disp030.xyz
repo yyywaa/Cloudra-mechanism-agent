@@ -1,0 +1,13 @@
+11
+E1 refmin seed: job1022 SP (=RC) displaced along mode 1 (-134.4181 cm-1) of ts/ts_0007/jobs/declaration_0005/frequency/frequency.log sha 385214fd76ee5f70bbc49a726968d35bb6ff05ccbb8888e470c1b746863b9c1c (L769 freq, L773-L786 vectors); base geom = ts_opt/refine.log Input orientation @L13411 (sha 4bb4b94d2fe2fbdfbf1ae0eb0103031d4bf5e25bd3035ba4615da5f51fd54c2c); scale s=0.30284 so |d(H6)|=0.300 A, sign = H away from Na; H6-Na 2.942->2.970 A, O1-H6 0.965->1.026 A; original atom order (Na,O,H,C,O,C,O,H,H,H,H) preserved
+Na -2.103781 -0.852271 0.012285
+O -2.027406 1.233674 0.070368
+H -2.588108 2.065238 0.285345
+C 2.896974 -0.263385 -0.007240
+O 1.852032 0.724053 0.025083
+C 0.598950 0.284972 0.027941
+O 0.301743 -0.900345 -0.000967
+H 2.818514 -0.877376 -0.916461
+H 3.841533 0.292322 -0.001837
+H 2.836485 -0.917198 0.872672
+H -0.191953 1.081941 0.059663

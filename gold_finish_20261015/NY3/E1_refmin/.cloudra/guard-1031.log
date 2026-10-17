@@ -1,0 +1,4 @@
+[guard] Gaussian scratch: /home/ly/g16/scratch/cloudra_g16_task1031_339363
+[guard] calculator 启动 (PID 339379)，等待其结束...
+[guard] calculator 退出，退出码：0
+[guard] 数据库状态已更新: task_id=1031, state=done

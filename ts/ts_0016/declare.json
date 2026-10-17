@@ -1,0 +1,198 @@
+{
+  "reaction": {
+    "reactant_smiles": "C/C(C[C@H](O)c1ccccc1)=[N+]1\\CCC[C@H]1C(=O)[O-].O",
+    "product_smiles": "[CH3:1][C@@:2]([O:4]([H:21]))([CH2:3][C@H:6]([O:5][H:22])[c:7]1[cH:8][cH:9][cH:10][cH:11][cH:12]1)[N:20]1[CH2:19][CH2:18][CH2:17][C@H:16]1[C:14](=[O:13])[OH:15]",
+    "charge": 0,
+    "multiplicity": 1,
+    "electronic_character": null,
+    "atom_map": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40
+    ],
+    "reaction_center": [
+      [
+        1,
+        24
+      ],
+      [
+        24,
+        26
+      ],
+      [
+        9,
+        26
+      ]
+    ]
+  },
+  "calculations": {
+    "g16": {
+      "engine": "gaussian",
+      "method": "B3LYP",
+      "basis_set": "def2SVP",
+      "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso)",
+      "frequency_mode": "auto",
+      "orca_blocks": null,
+      "end_setting": ""
+    }
+  },
+  "conformers": {
+    "reactant": {
+      "kind": "file",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/runs/I2_optfreq/I2_min_v5.xyz",
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0011/build/input_0002/reactant/seed.bound.mol",
+      "evidence_refs": [
+        "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/runs/I2_optfreq/I2_optfreq.log"
+      ],
+      "optimization": null,
+      "heavy_atom_binding": {
+        "indices": [
+          3,
+          2,
+          1,
+          29,
+          28,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          25
+        ]
+      }
+    },
+    "product": {
+      "kind": "file",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/prep/hemiaminal_1028_lastframe.xyz",
+      "mol_path": null,
+      "evidence_refs": [
+        "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/runs/interm_c160/interm_c160_optfreq.log"
+      ],
+      "optimization": null,
+      "heavy_atom_binding": {
+        "indices": [
+          3,
+          2,
+          25,
+          1,
+          29,
+          28,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          11,
+          10
+        ]
+      }
+    },
+    "guidance": {
+      "ring_order": [],
+      "distance_filters": []
+    }
+  },
+  "guess": {
+    "kind": "provided",
+    "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/prep/guess_c2o25_182/ts_guess_c2o25_182.xyz",
+    "evidence_refs": [
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/prep/guess_c2o25_182/ts_guess_c2o25_182.xyz",
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/prep/guess_c2o25_182/PROVENANCE_ts_guess_c2o25_182.md"
+    ]
+  },
+  "ts_optimization": {
+    "ref": "g16"
+  },
+  "verification": {
+    "frequency": {
+      "ref": "g16"
+    },
+    "irc": {
+      "ref": "g16"
+    },
+    "irc_log": null,
+    "reactant_endpoint": {
+      "seed": {
+        "kind": "file",
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/runs/I2_optfreq/I2_min_v5.xyz",
+        "mol_path": null,
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/runs/I2_optfreq/I2_optfreq.log"
+        ]
+      },
+      "optimization": null,
+      "frequency": null
+    },
+    "product_endpoint": {
+      "seed": {
+        "kind": "file",
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/prep/hemiaminal_1028_lastframe.xyz",
+        "mol_path": null,
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/runs/interm_c160/interm_c160_optfreq.log"
+        ]
+      },
+      "optimization": null,
+      "frequency": null
+    }
+  },
+  "execution": {
+    "cpus": 8,
+    "memory_mb": 10240,
+    "limits": null
+  }
+}

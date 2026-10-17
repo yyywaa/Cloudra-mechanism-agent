@@ -1,0 +1,20 @@
+%chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/i2_preconv_candD/i2_preconv_candD.chk
+%nproc=8
+%mem=10GB
+#p opt=(calcfc,maxcycles=100) freq B3LYP/def2SVP empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)
+
+NY3 E3/E2 I2-side candD pre-convergence (R21.1 (i)): start = i2_seed_candD_classB.xyz sha256 78448225332a095326025a2c3beaa891c287746889656f7cba6d83bd4856c840; exact method level b3lyp/def2SVP gd3bj ultrafine tight cpcm water; strategy = calcfc (exact start Hessian) + freq in the same job
+
+0 1
+Na       2.37649160     0.22537522    -1.02966754
+C       -0.03127391    -1.76465820     2.39957454
+O        0.55009736    -1.12436398     1.36459397
+H       -0.36953316    -2.78694574     2.13236376
+H        0.64774544    -1.88163551     3.26939055
+H       -0.92779819    -1.22945380     2.77730799
+C        1.56155443     1.47636978    -3.13483944
+O        2.34815237     1.89249847    -2.32425109
+O        1.42547539     0.20068565    -3.37202455
+H        0.93193278     2.16458067    -3.72590528
+H        0.76579384    -0.02228843    -4.06023563
+

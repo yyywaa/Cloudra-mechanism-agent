@@ -1,0 +1,23 @@
+%chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job05_cand004/job05_cand004_optfreq.chk
+%nproc=8
+%mem=10GB
+#p opt freq B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)
+
+smiles: C=O.CN.O | NI5_E1 pre-addition complex candidate 004 (water donates to both O2 (O2...H13 1.816) and N6 (N6...H14 1.883); r(C1...N6)=5.339 A; amine lone pair tied up by water) unconstrained Opt+Freq
+
+0 1
+C       -2.49733027     0.03735545     0.92914229
+O       -1.42493158     0.15319356     0.34456254
+H       -3.15078060     0.90138086     1.13204412
+H       -2.87039675    -0.93603874     1.28556075
+C        1.78692433     0.54588433    -1.41383191
+N        1.76017089     1.98620529    -1.63594566
+H        1.74460909     0.33012279    -0.34271421
+H        2.70219367     0.11118496    -1.82526868
+H        0.92550536     0.07541107    -1.89575376
+H        2.59694873     2.39680991    -1.21650433
+H        1.84678650     2.16353804    -2.63882881
+O       -0.71722057     2.72779503    -0.45095182
+H       -0.87652992     1.79149422    -0.21336294
+H        0.15483315     2.63504938    -0.89567858
+

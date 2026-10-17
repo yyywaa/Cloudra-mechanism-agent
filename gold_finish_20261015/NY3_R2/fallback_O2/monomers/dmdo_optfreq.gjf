@@ -1,0 +1,20 @@
+%chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3_R2/fallback_O2/monomers/dmdo_optfreq.chk
+%nproc=8
+%mem=10240MB
+#p opt freq B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)
+
+O2 reactant monomer: DMDO (C3H6O2, 11 atoms, 0/1) opt+freq B3LYP/def2SVP GD3BJ CPCM(water)
+
+0 1
+C       -1.26932061    -0.37586317    -0.05275805
+C       -0.01609127     0.41743641    -0.05813296
+C        1.29345553    -0.25023701     0.13994847
+O       -0.00424409     1.53464338    -0.94414581
+O       -0.12159269     1.72977413     0.48954394
+H       -1.24905724    -1.12915965    -0.84664492
+H       -2.15065479     0.25506168    -0.21025413
+H       -1.39197098    -0.89155471     0.90491641
+H        1.32180279    -0.75762816     1.10941902
+H        1.46474960    -0.99687435    -0.64191619
+H        2.12292375     0.46440145     0.11002421
+

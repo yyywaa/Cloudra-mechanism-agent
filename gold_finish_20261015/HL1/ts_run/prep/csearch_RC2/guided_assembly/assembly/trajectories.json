@@ -1,0 +1,93 @@
+{
+  "count": 8,
+  "trajectories": [
+    {
+      "trajectory_id": "placement014-mmff94-attempt1",
+      "component_id": "placement014",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 1,
+      "frame_count": 2,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement014-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement014-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement014-mmff94-attempt1/frames.jsonl"
+    },
+    {
+      "trajectory_id": "placement028-mmff94-attempt1",
+      "component_id": "placement028",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 1,
+      "frame_count": 2,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement028-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement028-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement028-mmff94-attempt1/frames.jsonl"
+    },
+    {
+      "trajectory_id": "placement027-mmff94-attempt1",
+      "component_id": "placement027",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 1,
+      "frame_count": 2,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement027-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement027-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement027-mmff94-attempt1/frames.jsonl"
+    },
+    {
+      "trajectory_id": "placement019-mmff94-attempt1",
+      "component_id": "placement019",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 1,
+      "frame_count": 2,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement019-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement019-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement019-mmff94-attempt1/frames.jsonl"
+    },
+    {
+      "trajectory_id": "placement012-mmff94-attempt1",
+      "component_id": "placement012",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 1,
+      "frame_count": 2,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement012-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement012-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement012-mmff94-attempt1/frames.jsonl"
+    },
+    {
+      "trajectory_id": "placement000-mmff94-attempt1",
+      "component_id": "placement000",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 1,
+      "frame_count": 2,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement000-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement000-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement000-mmff94-attempt1/frames.jsonl"
+    },
+    {
+      "trajectory_id": "placement009-mmff94-attempt1",
+      "component_id": "placement009",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 1,
+      "frame_count": 2,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement009-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement009-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement009-mmff94-attempt1/frames.jsonl"
+    },
+    {
+      "trajectory_id": "placement021-mmff94-attempt1",
+      "component_id": "placement021",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 1,
+      "frame_count": 2,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement021-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement021-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RC2/guided_assembly/assembly/trajectories/placement021-mmff94-attempt1/frames.jsonl"
+    }
+  ]
+}

@@ -1,0 +1,672 @@
+{
+  "format_version": 6,
+  "run_id": "ts_0004",
+  "pipeline_id": "0ecd0158d26fcd9bc88114583281fb88d31e2adc68b6d3ff489d24a75e0a7a38",
+  "declaration_revision": 1,
+  "optimization_checkpoints": {},
+  "budget_action_keys": {},
+  "budget_reservations": {},
+  "attempt_history": [],
+  "catalog_id": null,
+  "partition_revision": null,
+  "candidate_attempts": [],
+  "cards_path": "",
+  "product_seed_candidate_id": null,
+  "product_seed_xyz_path": "",
+  "product_seed_mol_path": "",
+  "selected_candidate_id": null,
+  "run_dir": "/home/ly/Cloudra-mechanism-agent/ts/ts_0004",
+  "workspace_dir": "/home/ly/Cloudra-mechanism-agent",
+  "owner_conversation_id": "prj_15b00532a66347c3",
+  "owner_session_id": "as_84bdf87a0f94416c",
+  "input": {
+    "reaction": {
+      "reactant_smiles": "[CH3:1][C:2](=[O:4])[CH2:3]([H:22]).[O:5]=[CH:6][c:7]1[cH:8][cH:9][cH:10][cH:11][cH:12]1.[O:13]=[C:14]([OH:15])[C@@H:16]1[CH2:17][CH2:18][CH2:19][N:20]1([H:21])",
+      "product_smiles": "[CH3:1][C:2](=[CH2:3])[N:20]2[CH2:19][CH2:18][CH2:17][C@H:16]2[C:14](=[O:13])[OH:15].[O:4]([H:21])([H:22]).[O:5]=[CH:6][c:7]1[cH:8][cH:9][cH:10][cH:11][cH:12]1",
+      "charge": 0,
+      "multiplicity": 1,
+      "electronic_character": "closed_shell",
+      "atom_map": [],
+      "reaction_center": []
+    },
+    "calculations": {
+      "g16": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      }
+    },
+    "conformers": {
+      "reactant": {
+        "kind": "generate",
+        "generation": "ETKDGv3",
+        "seed": 20261015,
+        "optimization": {
+          "ref": "g16"
+        }
+      },
+      "product": null,
+      "guidance": {
+        "ring_order": [],
+        "distance_filters": []
+      }
+    },
+    "guess": null,
+    "ts_optimization": {
+      "ref": "g16"
+    },
+    "verification": {
+      "frequency": {
+        "ref": "g16"
+      },
+      "irc": {
+        "ref": "g16"
+      },
+      "irc_log": null,
+      "reactant_endpoint": {
+        "seed": null,
+        "optimization": {
+          "ref": "g16"
+        },
+        "frequency": {
+          "ref": "g16"
+        }
+      },
+      "product_endpoint": {
+        "seed": null,
+        "optimization": {
+          "ref": "g16"
+        },
+        "frequency": {
+          "ref": "g16"
+        }
+      }
+    },
+    "execution": {
+      "cpus": 8,
+      "memory_mb": 8192,
+      "limits": null
+    }
+  },
+  "input_binding": {},
+  "structures": {
+    "reactant": {
+      "role": "reactant",
+      "source_kind": "generate",
+      "input_revision": 1,
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0004/build/input_0001/reactant/generated_seed.xyz",
+      "xyz_sha256": "0d8cdd1ca49f67e6687cee9d222f053c2763ddd547e613480233d5279558cd80",
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0004/build/input_0001/reactant/generated_seed.mol",
+      "mol_sha256": "c540005626db7787861aa56695c4306ce7c81f6387b1442884532ee0d5b321e0",
+      "structure_digest": "2cc0b535ddf6f6159a750f1bc8f954030806c89d696abf48d8e302b3fa731039",
+      "atom_count": 41,
+      "components": 3,
+      "index_base": 1,
+      "atoms": [
+        {
+          "number": 1,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 1
+        },
+        {
+          "number": 2,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 2
+        },
+        {
+          "number": 3,
+          "symbol": "O",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 3
+        },
+        {
+          "number": 4,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 4
+        },
+        {
+          "number": 5,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 6,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 7,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 8,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 9,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 10,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 11,
+          "symbol": "O",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 5
+        },
+        {
+          "number": 12,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 6
+        },
+        {
+          "number": 13,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 7
+        },
+        {
+          "number": 14,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 8
+        },
+        {
+          "number": 15,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 9
+        },
+        {
+          "number": 16,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 10
+        },
+        {
+          "number": 17,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 11
+        },
+        {
+          "number": 18,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 12
+        },
+        {
+          "number": 19,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 20,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 21,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 22,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 23,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 24,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 25,
+          "symbol": "O",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 13
+        },
+        {
+          "number": 26,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 14
+        },
+        {
+          "number": 27,
+          "symbol": "O",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 15
+        },
+        {
+          "number": 28,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 16
+        },
+        {
+          "number": 29,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 17
+        },
+        {
+          "number": 30,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 18
+        },
+        {
+          "number": 31,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 19
+        },
+        {
+          "number": 32,
+          "symbol": "N",
+          "isotope": 0,
+          "component": null,
+          "origin": "input_atom",
+          "input_atom_number": 20
+        },
+        {
+          "number": 33,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 34,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 35,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 36,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 37,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 38,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 39,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 40,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        },
+        {
+          "number": 41,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": "added_hydrogen",
+          "input_atom_number": null
+        }
+      ],
+      "smiles_heavy_atoms": [
+        {
+          "position": 1,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 1
+        },
+        {
+          "position": 2,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 2
+        },
+        {
+          "position": 3,
+          "symbol": "O",
+          "isotope": 0,
+          "atom_map_label": 4
+        },
+        {
+          "position": 4,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 3
+        },
+        {
+          "position": 5,
+          "symbol": "O",
+          "isotope": 0,
+          "atom_map_label": 5
+        },
+        {
+          "position": 6,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 6
+        },
+        {
+          "position": 7,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 7
+        },
+        {
+          "position": 8,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 8
+        },
+        {
+          "position": 9,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 9
+        },
+        {
+          "position": 10,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 10
+        },
+        {
+          "position": 11,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 11
+        },
+        {
+          "position": 12,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 12
+        },
+        {
+          "position": 13,
+          "symbol": "O",
+          "isotope": 0,
+          "atom_map_label": 13
+        },
+        {
+          "position": 14,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 14
+        },
+        {
+          "position": 15,
+          "symbol": "O",
+          "isotope": 0,
+          "atom_map_label": 15
+        },
+        {
+          "position": 16,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 16
+        },
+        {
+          "position": 17,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 17
+        },
+        {
+          "position": 18,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 18
+        },
+        {
+          "position": 19,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 19
+        },
+        {
+          "position": 20,
+          "symbol": "N",
+          "isotope": 0,
+          "atom_map_label": 20
+        }
+      ],
+      "binding_status": "unverified",
+      "graph_error": "",
+      "table_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0004/build/atom_tables/reactant_1_b25d067e02dc.json"
+    }
+  },
+  "failed_attempt": {
+    "attempt_id": "1:candidate_opt:928",
+    "failure_class": "conformer_optimization_failed",
+    "purpose": "candidate_opt",
+    "job_id": 928,
+    "input_revision": 1,
+    "evidence_refs": [
+      "/home/ly/Cloudra-mechanism-agent/ts/ts_0004/jobs/declaration_0001/candidate_opt/seed-opt.log"
+    ],
+    "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0004/jobs/declaration_0001/candidate_opt/seed-opt.gjf",
+    "log_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0004/jobs/declaration_0001/candidate_opt/seed-opt.log",
+    "input_sha256": "2bc8fb03ab7401182c50799ef3b9913cba1d712cf57b5b670591a574f983b779",
+    "log_sha256": "e3286543d054fd48cab499cea8bca605156f0e7ff318253b4c21d19c393c7694",
+    "diagnostics": []
+  },
+  "method_checks": {
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0004/jobs/declaration_0001/candidate_opt/seed-opt.gjf": {
+      "input_revision": 1,
+      "purpose": "candidate_opt",
+      "actual": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source": "stage_declaration",
+      "differences": [],
+      "matched": true
+    }
+  },
+  "stage": "build",
+  "stage_records": [
+    {
+      "stage": "declare",
+      "status": "done",
+      "detail": "reaction declared; each calculation requires its own method",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "build",
+      "status": "blocked",
+      "detail": "candidate_opt job 928 failed; revise or retry through ts_resume.",
+      "artifacts": [],
+      "source_input_revision": 1
+    }
+  ],
+  "terminal": null,
+  "blocked": {
+    "failure_class": "conformer_optimization_failed",
+    "stage": "build",
+    "message": "candidate_opt job 928 failed; revise or retry through ts_resume.",
+    "atom_details": [],
+    "needs": [
+      "conformers.reactant"
+    ],
+    "issues": []
+  },
+  "intervention_count": 0,
+  "path_kind": "not_attempted",
+  "guidance_attempt": 0,
+  "active_attempt_dir": "",
+  "current_seed_xyz_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0004/build/input_0001/reactant/generated_seed.xyz",
+  "current_seed_mol_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0004/build/input_0001/reactant/generated_seed.mol",
+  "current_reactant_prepared_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0004/build/input_0001/reactant/prepared_structure.json",
+  "current_ts_guess_path": "",
+  "guidance_manifest_path": "",
+  "effective_reaction_center": [],
+  "job_id": null,
+  "job_input_path": "",
+  "waiting_for": "",
+  "scan_step": null,
+  "job_steps": [
+    {
+      "purpose": "candidate_opt",
+      "job_id": 928,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0004/jobs/declaration_0001/candidate_opt/seed-opt.gjf",
+      "state": "failed",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 1,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": null
+    }
+  ],
+  "evidence_candidates": [
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0004/build/input_0001/reactant/generated_seed.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0004/build/input_0001/reactant/generated_seed.mol",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0004/build/input_0001/reactant/prepared_structure.json",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0004/build/input_0001/reactant/generated_seed.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0004/build/input_0001/reactant/generated_seed.mol",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0004/build/input_0001/reactant/prepared_structure.json"
+  ],
+  "revision": 8
+}

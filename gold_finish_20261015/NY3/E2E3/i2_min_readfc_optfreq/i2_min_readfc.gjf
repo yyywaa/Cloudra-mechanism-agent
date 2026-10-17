@@ -1,0 +1,20 @@
+%chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/i2_min_readfc_optfreq/i2_min_readfc.chk
+%nproc=8
+%mem=10GB
+#p opt=(readfc,maxcycles=200) freq b3lyp/def2svp empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)
+
+NY3 E2E3 I2 minimum re-optimization B' (readfc from job 990 chk): geometry block identical to i2_min_candA.xyz sha256 1715f6d7d77e93bb5200a71b23db31fc84cb45564b1d48f6bbab2e7ee3c0ef85; chk copied from E2E3/freq_i2_candA/i2_candA_freq.chk sha256 343c0fd5576fdf3c491e98e1933e0a60b9cbd3582bb60f656a8c2521005b8f17 (its last frame == this geometry, verified); PRE-STAGED, not submitted
+
+0 1
+Na     -0.38094000     -1.19589500     -0.19073800
+C      -3.21888000      0.65065400      0.11912200
+O      -2.07736100     -0.06297500     -0.01943700
+H      -3.53506500      1.23446800     -0.79484900
+H      -4.13805500      0.04354100      0.36846800
+H      -3.19887300      1.43504200      0.93147000
+C       2.48130000      0.18009100      0.13295900
+O       1.87488100     -0.86377100      0.19019400
+O       1.87872700      1.31896300     -0.18031000
+H       3.56950200      0.25969900      0.33643500
+H       2.50833600      2.05989900     -0.17946300
+

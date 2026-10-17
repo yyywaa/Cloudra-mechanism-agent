@@ -1,0 +1,13 @@
+%chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/T2_H3O_monomer_optfreq.chk
+%nproc=8
+%mem=10240MB
+#p opt freq B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight
+
+HL1_E1 T2 separated-reference monomer: H3O+ (smiles [OH3+]) unconstrained Opt+Freq; gas, q=+1 m=1
+
+1 1
+O        0.00106634    -0.00017663     0.22263576
+H       -0.44419719     0.83489765    -0.07142353
+H       -0.50142050    -0.80174584    -0.07245002
+H        0.94455135    -0.03297518    -0.07876220
+

@@ -1,0 +1,23 @@
+%chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job09_ircend_a/job09_ircend_a_optfreq.chk
+%nproc=8
+%mem=10GB
+#p opt freq B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)
+
+smiles: C=O.CN.O | NI5_E1 IRC end A (REVERSE path, irc_end_a.xyz sha 7fc97e94, r(C1-N6)=3.1341 A) unconstrained Opt+Freq @B3LYP-D3BJ/def2SVP CPCM(Water)
+
+0 1
+C       -1.29618400    -1.30972600     0.44548600
+O       -1.60717500    -0.65243400    -0.52431500
+H       -1.51122800    -2.40224200     0.49219800
+H       -0.76245400    -0.86828500     1.31162100
+C        2.14943200    -0.44700700    -0.53015400
+N        1.52397500     0.03427600     0.69632400
+H        1.37185700    -0.80568000    -1.22483400
+H        2.80833800    -1.30505700    -0.31514800
+H        2.75680200     0.30208200    -1.08024200
+H        0.90646500     0.82245500     0.47668900
+H        2.23555000     0.39606400     1.33239200
+O       -0.72044300     1.97855900    -0.11038200
+H       -1.10905800     1.11348000    -0.35679000
+H       -1.08905600     2.14112900     0.77001100
+

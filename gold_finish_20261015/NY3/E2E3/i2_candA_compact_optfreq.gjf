@@ -1,0 +1,20 @@
+%chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/i2_candA_compact_optfreq.chk
+%nproc=8
+%mem=10GB
+#p opt freq b3lyp/def2svp empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)
+
+NY3 E2E3 candA-compact I2 (H6 on O1 rotated away from O3, Na bridging O1/O3) opt+freq B3LYP/def2SVP GD3BJ CPCM(water)
+
+0 1
+Na       3.26135308    -0.85540885    -1.71469631
+C        0.81290000    -0.90640000     0.93230000
+O        1.61260000    -0.39780000     0.00700000
+H        0.51050000    -1.96080000     0.81460000
+H        1.18290000    -0.91440000     1.97160000
+H       -0.17080000    -0.42590000     1.06910000
+C        1.29910000     1.49570000    -2.62090000
+O        1.62510000     2.19590000    -1.67150000
+O        1.11290000     0.16980000    -2.55430000
+H        1.11870000     1.85880000    -3.64410000
+H        0.85317372    -0.19768967    -3.45745913
+

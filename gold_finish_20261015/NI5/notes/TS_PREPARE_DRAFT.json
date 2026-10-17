@@ -1,0 +1,150 @@
+{
+  "_status": "DRAFT — placeholders <...> must be filled from real verified artifacts before submitting; atom indices must be re-checked against ts_inspect's current atom table",
+  "run": "NI5_E1 TS1 (C-N addition) via ts_prepare",
+  "input": {
+    "reaction": {
+      "reactant_smiles": "C=O.CN.O",
+      "product_smiles": "C[NH2+]C[O-].O",
+      "charge": 0,
+      "multiplicity": 1,
+      "electronic_character": "closed_shell",
+      "atom_map": [
+        2,
+        1,
+        6,
+        5,
+        3,
+        4,
+        10,
+        11,
+        7,
+        8,
+        9,
+        12,
+        13,
+        14
+      ],
+      "_atom_map_source": "reaction_mapping(reactant=C=O.CN.O @ complex_candidate_002.xyz, product=C[NH2+]C[O-].O @ intermediate complex_candidate_000.xyz); mapping_status=unique, binding_status=complete",
+      "reaction_center": [
+        [
+          1,
+          6
+        ]
+      ],
+      "_reaction_center_note": "1-based, bound reactant full coordinate order (incl. explicit H): 1 = carbonyl C (= task map 1), 6 = amine N (= task map 3); => task's 'C1-N6'"
+    },
+    "calculations": {
+      "dft": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)"
+      }
+    },
+    "conformers": {
+      "reactant": {
+        "kind": "file",
+        "xyz_path": "<verified RC minimum xyz (seed)>",
+        "mol_path": "<matching mol>",
+        "evidence_refs": [
+          "<absolute RC opt/freq log path>"
+        ],
+        "optimization": {
+          "ref": "dft"
+        }
+      },
+      "product": {
+        "kind": "file",
+        "xyz_path": "<verified intermediate minimum xyz (seed)>",
+        "mol_path": "<matching mol>",
+        "evidence_refs": [
+          "<absolute intermediate opt/freq log path>"
+        ],
+        "optimization": {
+          "ref": "dft"
+        }
+      }
+    },
+    "guess": {
+      "kind": "scan",
+      "calculation": {
+        "ref": "dft"
+      },
+      "scans": [
+        {
+          "coord_type": "bond",
+          "atoms": [
+            1,
+            6
+          ],
+          "scan_start": "<current r(C1-N6) of the reactant seed>",
+          "scan_end": 1.6,
+          "scan_steps": "<n>"
+        }
+      ],
+      "_alt": {
+        "kind": "provided",
+        "xyz_path": "<scan internal-maximum frame xyz>",
+        "evidence_refs": [
+          "<absolute scan log path>"
+        ]
+      },
+      "_note": "use provided+real provenance file if the UP scan yields an internal maximum"
+    },
+    "ts_optimization": {
+      "ref": "dft"
+    },
+    "verification": {
+      "frequency": {
+        "ref": "dft"
+      },
+      "irc": {
+        "ref": "dft"
+      },
+      "reactant_endpoint": {
+        "seed": {
+          "kind": "file",
+          "xyz_path": "<RC seed xyz>",
+          "evidence_refs": [
+            "<RC log>"
+          ]
+        },
+        "optimization": {
+          "ref": "dft"
+        },
+        "frequency": {
+          "ref": "dft"
+        }
+      },
+      "product_endpoint": {
+        "seed": {
+          "kind": "file",
+          "xyz_path": "<intermediate seed xyz>",
+          "evidence_refs": [
+            "<intermediate log>"
+          ]
+        },
+        "optimization": {
+          "ref": "dft"
+        },
+        "frequency": {
+          "ref": "dft"
+        }
+      }
+    },
+    "execution": {
+      "cpus": 8,
+      "memory_mb": 10000
+    }
+  },
+  "_acceptance_checklist": [
+    "TS: exactly 1 imaginary frequency, mode dominated by C1-N6 (log_parser watch_pairs=[[1,6]] imaginary_modes/watch_pair_fraction)",
+    "IRC: both directions reach RC and intermediate (direction interval + endpoint geometry/bond-length evidence)",
+    "both IRC endpoints: unconstrained Opt+Freq, 0 imaginary frequencies, identity/proton positions re-checked",
+    "barrier = E(TS1) - E(RC) pure electronic, same Gaussian batch, raw energy lines, x 627.5095 kcal/mol"
+  ],
+  "_open_decisions": [
+    "3-component annotation (C=O.CN.O) vs reference node SMILES C=O.CN — awaiting coordinator ruling",
+    "if no internal maximum and no zero-imaginary RC minimum exists in any tested topology -> report missing measurement per BRIEF §4, do not fill values"
+  ]
+}

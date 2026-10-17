@@ -1,0 +1,550 @@
+{
+  "status": "ok",
+  "mol": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGgAAAIABBiAgAAAABAYgKAAAAAMECCAoAAAAAwIGICAAAAAEASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCCAoAAAAAwIGICgAAAADBAggKAAAAAMCBiAkAAAAAgQGICAAAAAEBiAgAAAABAYgIAAAAAQHICAAAAADASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAAAIBCAIDAQAEAAAFAAAGAAAHAwAIAwAJAwALCigCDAsgDQsADg0ADw4AEA8AERAAEQ0AEgwAEw0AFA4AFQ4AFg8AFw8AGBAAGRAAGhEAQgEAAAAFDQ4PEBFAmQIAAAEAAAABAAAAABs1UMaIPmTnP84DE959xOi/wTZejFM0zD+2rw8K14DtP7xZvJEEp+6/PSpy/+Q29L+P5S4xZ5a4P7EChdFWPPm/aUFwIJYn/7/SodgStd8BQIpcrP1x1N+/1ow3ygqB/b9hyQCfx1LUvyzBngk6Nu6/foshrja03j9CWFAKBfHvP9esYR66b88/up/T1MJL4D9FrK5Su8D1PxACWr2rz/e/56AaXIo96D/Qvx0SUDkIQKY5E8J84PK/2ksPTvV++L/LHoUX81wBQFAVqnoqSt+/q5jPcft7B8D6OFoAmK4DQHMP9Q3PgeA/UhCKikgJ+L/p9qAE88QLwGR3sIs69fY/QObNlbevrj+TiLKC2CgFwH+qndMfhfM/ZtutX7wE6r8q8uyqAF8GwBGUmx9Qw8Y/59HNAgGL+r8UTmdEDJT2v4+NVYOGlgBA4ai0hVbQ8b9cQFHCBqz8v+3970mHTQpAw0X2pR05/78NSa5USUX0v5EeJKOIrQdAuO2eD+mtCsDUNcz7uv+Yv/7GsgtVNQFA3SSKMAVICMBZJ1Ju2hjZv5Fya6Xy4vQ/dnfD7VNM/r/cg9kOAcEMwBpbCqbkn9K/DTcGBUFp9b8aEcG+KBfvv0MmRdDA7AJA6L7tj7Wqw7+qYhRJ5WT0v8zdWXSvtBBAyv6jvAAc+b/cmguMw+wGwLMd9/MMAAxAN3L9dXWJ/7/Pg3lIzPb/v4Vrhn0V1AJAMniLMAISD8DpHEJOCdjwv3AZcuF83A5A83E66y9fD8BKBmXcDgbTP+rJjGNf0vg/a2CYRF8iD8COmFrteMvpP4FIrZT5cQZAtFvdZ1L6BcBRdeA/jmLsv+9cx56AgN4/wP1kGk8iAsA/AgAAAAAAEgIAAAAAABM6JQEAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAACAAAAF9DSVBDb2RlAAEAAABTCAEAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAABABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAExY=",
+  "message": "2 connected components assembled (reaction mode): 8 complex candidate(s). 8 complex candidate(s) from 32 sampled placements (reaction mode). Candidates satisfy the 1.0 A inter-fragment collision criterion, the dissociation limit (1.7x the vdW contact distance), guided relaxation; strict qualification and clustering follow.",
+  "has_coordinates": true,
+  "components": [
+    {
+      "component_id": "frag0",
+      "mol": "776t3gAAAAAQAAAAAwAAAAAAAAAKAAAACQAAAIABBiAgAAAABAYgKAAAAAMECCAoAAAAAwIGICAAAAAEASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAAAIBCAIDAQAEAAAFAAAGAAAHAwAIAwAJAwBCAAAAAEABAQAAAQAAAAEAAAAACoZqHuMKk/S/h/UQ1hFyuj+PNuVejMmyP6qdWi/Llq0/dETPBHqLwT/RC4el10zjvznu/thrC8Y//c7sh1ok2j+1NyoZMML8v7Xy7kXxEvQ/nvPJtZ23xr9plsmgQDHQPztFuK1QjQDA47f/ylBP1j8yhhUlncfkvwklYvuw7PS/iv5duQnX6j9QPjObzDPsPyfpO2pXi/e/tK4qy3O97L/KAVzxJAreP0Yuo6oUkfI//zQv/L8D879gRH+njgblP8A9+SKLUQFAmBJAndcKv79D2JoYEW7Wvxa0DZl0MPU/jmbZBTaS4T/0O874Tg/xPz8CAAAAAAASIwAAAAEADQAAAF9GaWxlQ29tbWVudHMACwAAAG9wdCBzdGVwPTE3EzpeAAAAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAAAAAAAAAABABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAAAAAAAAAAAAAAAAAAAAAAAAAABMW",
+      "source_atom_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "embed_status": "embedded",
+      "optimization_status": "converged",
+      "engine": "MMFF94",
+      "trajectory_id": "frag0-mmff94-attempt1",
+      "final_energy": 1.6522605800023245,
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/component_frag0.mol",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/component_frag0.xyz",
+      "diagnostics": []
+    },
+    {
+      "component_id": "frag1",
+      "mol": "776t3gAAAAAQAAAAAwAAAAAAAAARAAAAEQAAAIABCCAoAAAAAwIGICgAAAADBAggKAAAAAMCBiAkAAAAAgQGICAAAAAEBiAgAAAABAYgIAAAAAQHICAAAAADASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAKAICASADAQAEAwAFBAAGBQAHBgAHAwAIAgAJAwAKBAALBAAMBQANBQAOBgAPBgAQBwBCAQAAAAUDBAUGB0CpAQAAAQAAAAEAAAAAEYtSgyzEcwNA3ep2c96M979DQ+AE0K/JvwdEdTBMRv8/3NmGMm9h1r+4exMv28XAv21ihjVQLwVA5PKCrZmm5j8T6SYK95jjv/R0RJ9UouQ/ZhSANOUoqT/ifVwZ7j7hP3y/gbHI/tW/2a4qO1qi8b/EVz1qRxnmP2tMHZVwcPu/XOnmuSiu37/quVl4/fLZP0nuyAUKZfe/UHBNTB/I7z9+rjuMSrvPP9PmHjXrOLq/+kLVWsWP8D8xEqeE4VPRvwkCT+bHgQtAq6ynkXQZ0z/8d07LlVPwv5MBf3j6Tew/5d9v6RRL3j88kgFwVlr4P0R8DiQ8k9O/E8ciaC8m+L9x8qwk1lD7P5uArvbAKsO/ALWH24Lb/r8fSBEocOhkvxDiKYxD7wDAm2x3yZNQ7b/EPiPWbcXgvxZyv6RJcgPAJkgMgZuU5r+tgLsVD0zzP76OnblPZgHAb9JKEfRe9z8KWi2yb/jbv7zGUxgyWvi/eOjYWwQP+D8T6e0Si3XzP2ibLAuJktQ/8ExexeRP/z8e8Orh7H/Gvz8CAAAAAAASIwAAAAEADQAAAF9GaWxlQ29tbWVudHMACwAAAG9wdCBzdGVwPTE3EzrHAAAAAAAAAAAAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAgAAABfQ0lQQ29kZQABAAAAUwgBAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAABABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABMW",
+      "source_atom_indices": [
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "embed_status": "embedded",
+      "optimization_status": "converged",
+      "engine": "MMFF94",
+      "trajectory_id": "frag1-mmff94-attempt1",
+      "final_energy": 24.022650247442037,
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/component_frag1.mol",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/component_frag1.xyz",
+      "diagnostics": []
+    }
+  ],
+  "atom_identities": [
+    {
+      "index": 0,
+      "symbol": "C",
+      "component_id": "frag0",
+      "origin": "input_atom",
+      "input_atom_index": 0,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 1,
+      "symbol": "C",
+      "component_id": "frag0",
+      "origin": "input_atom",
+      "input_atom_index": 1,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 2,
+      "symbol": "O",
+      "component_id": "frag0",
+      "origin": "input_atom",
+      "input_atom_index": 2,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 3,
+      "symbol": "C",
+      "component_id": "frag0",
+      "origin": "input_atom",
+      "input_atom_index": 3,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 4,
+      "symbol": "H",
+      "component_id": "frag0",
+      "origin": "input_atom",
+      "input_atom_index": 4,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 5,
+      "symbol": "H",
+      "component_id": "frag0",
+      "origin": "input_atom",
+      "input_atom_index": 5,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 6,
+      "symbol": "H",
+      "component_id": "frag0",
+      "origin": "input_atom",
+      "input_atom_index": 6,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 7,
+      "symbol": "H",
+      "component_id": "frag0",
+      "origin": "input_atom",
+      "input_atom_index": 7,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 8,
+      "symbol": "H",
+      "component_id": "frag0",
+      "origin": "input_atom",
+      "input_atom_index": 8,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 9,
+      "symbol": "H",
+      "component_id": "frag0",
+      "origin": "input_atom",
+      "input_atom_index": 9,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 10,
+      "symbol": "O",
+      "component_id": "frag1",
+      "origin": "input_atom",
+      "input_atom_index": 10,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 11,
+      "symbol": "C",
+      "component_id": "frag1",
+      "origin": "input_atom",
+      "input_atom_index": 11,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 12,
+      "symbol": "O",
+      "component_id": "frag1",
+      "origin": "input_atom",
+      "input_atom_index": 12,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 13,
+      "symbol": "C",
+      "component_id": "frag1",
+      "origin": "input_atom",
+      "input_atom_index": 13,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 14,
+      "symbol": "C",
+      "component_id": "frag1",
+      "origin": "input_atom",
+      "input_atom_index": 14,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 15,
+      "symbol": "C",
+      "component_id": "frag1",
+      "origin": "input_atom",
+      "input_atom_index": 15,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 16,
+      "symbol": "C",
+      "component_id": "frag1",
+      "origin": "input_atom",
+      "input_atom_index": 16,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 17,
+      "symbol": "N",
+      "component_id": "frag1",
+      "origin": "input_atom",
+      "input_atom_index": 17,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 18,
+      "symbol": "H",
+      "component_id": "frag1",
+      "origin": "input_atom",
+      "input_atom_index": 18,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 19,
+      "symbol": "H",
+      "component_id": "frag1",
+      "origin": "input_atom",
+      "input_atom_index": 19,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 20,
+      "symbol": "H",
+      "component_id": "frag1",
+      "origin": "input_atom",
+      "input_atom_index": 20,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 21,
+      "symbol": "H",
+      "component_id": "frag1",
+      "origin": "input_atom",
+      "input_atom_index": 21,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 22,
+      "symbol": "H",
+      "component_id": "frag1",
+      "origin": "input_atom",
+      "input_atom_index": 22,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 23,
+      "symbol": "H",
+      "component_id": "frag1",
+      "origin": "input_atom",
+      "input_atom_index": 23,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 24,
+      "symbol": "H",
+      "component_id": "frag1",
+      "origin": "input_atom",
+      "input_atom_index": 24,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 25,
+      "symbol": "H",
+      "component_id": "frag1",
+      "origin": "input_atom",
+      "input_atom_index": 25,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 26,
+      "symbol": "H",
+      "component_id": "frag1",
+      "origin": "input_atom",
+      "input_atom_index": 26,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    }
+  ],
+  "candidate_paths": [
+    "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_000.xyz",
+    "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_000.mol",
+    "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_001.xyz",
+    "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_001.mol",
+    "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_002.xyz",
+    "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_002.mol",
+    "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_003.xyz",
+    "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_003.mol",
+    "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_004.xyz",
+    "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_004.mol",
+    "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_005.xyz",
+    "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_005.mol",
+    "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_006.xyz",
+    "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_006.mol",
+    "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_007.xyz",
+    "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_007.mol"
+  ],
+  "component_paths": [
+    "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/component_frag0.mol",
+    "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/component_frag1.mol"
+  ],
+  "assembly": {
+    "status": "ok",
+    "message": "8 complex candidate(s) from 32 sampled placements (reaction mode). Candidates satisfy the 1.0 A inter-fragment collision criterion, the dissociation limit (1.7x the vdW contact distance), guided relaxation; strict qualification and clustering follow.",
+    "parameters": {
+      "orientations": 32,
+      "min_interfragment_distance": 1.0,
+      "max_interfragment_vdw_factor": 1.7,
+      "reaction_center_candidates": 8,
+      "reaction_center_window": [
+        1.6,
+        3.0
+      ],
+      "energy_window_kcal": 6.0,
+      "rmsd_threshold": 0.5,
+      "relaxation_steps": 2000
+    },
+    "mode": "reaction",
+    "components": 2,
+    "sampled_placements": 32,
+    "collision_rejected": 0,
+    "collapsed_after_relaxation": 0,
+    "dissociated_after_relaxation": 0,
+    "unconverged_after_relaxation": 0,
+    "optimized_placements": 8,
+    "candidates": [
+      {
+        "candidate_id": 0,
+        "mol": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGgAAAIABBiAgAAAABAYgKAAAAAMECCAoAAAAAwIGICAAAAAEASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCCAoAAAAAwIGICgAAAADBAggKAAAAAMCBiAkAAAAAgQGICAAAAAEBiAgAAAABAYgIAAAAAQHICAAAAADASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAAAIBCAIDAQAEAAAFAAAGAAAHAwAIAwAJAwALCigCDAsgDQsADg0ADw4AEA8AERAAEQ0AEgwAEw0AFA4AFQ4AFg8AFw8AGBAAGRAAGhEAQgEAAAAFDQ4PEBFAmQIAAAEAAAABAAAAABs1UMaIPmTnP84DE959xOi/wTZejFM0zD+2rw8K14DtP7xZvJEEp+6/PSpy/+Q29L+P5S4xZ5a4P7EChdFWPPm/aUFwIJYn/7/SodgStd8BQIpcrP1x1N+/1ow3ygqB/b9hyQCfx1LUvyzBngk6Nu6/foshrja03j9CWFAKBfHvP9esYR66b88/up/T1MJL4D9FrK5Su8D1PxACWr2rz/e/56AaXIo96D/Qvx0SUDkIQKY5E8J84PK/2ksPTvV++L/LHoUX81wBQFAVqnoqSt+/q5jPcft7B8D6OFoAmK4DQHMP9Q3PgeA/UhCKikgJ+L/p9qAE88QLwGR3sIs69fY/QObNlbevrj+TiLKC2CgFwH+qndMfhfM/ZtutX7wE6r8q8uyqAF8GwBGUmx9Qw8Y/59HNAgGL+r8UTmdEDJT2v4+NVYOGlgBA4ai0hVbQ8b9cQFHCBqz8v+3970mHTQpAw0X2pR05/78NSa5USUX0v5EeJKOIrQdAuO2eD+mtCsDUNcz7uv+Yv/7GsgtVNQFA3SSKMAVICMBZJ1Ju2hjZv5Fya6Xy4vQ/dnfD7VNM/r/cg9kOAcEMwBpbCqbkn9K/DTcGBUFp9b8aEcG+KBfvv0MmRdDA7AJA6L7tj7Wqw7+qYhRJ5WT0v8zdWXSvtBBAyv6jvAAc+b/cmguMw+wGwLMd9/MMAAxAN3L9dXWJ/7/Pg3lIzPb/v4Vrhn0V1AJAMniLMAISD8DpHEJOCdjwv3AZcuF83A5A83E66y9fD8BKBmXcDgbTP+rJjGNf0vg/a2CYRF8iD8COmFrteMvpP4FIrZT5cQZAtFvdZ1L6BcBRdeA/jmLsv+9cx56AgN4/wP1kGk8iAsA/AgAAAAAAEgIAAAAAABM6JQEAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAACAAAAF9DSVBDb2RlAAEAAABTCAEAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAABABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAExY=",
+        "placement_index": 16,
+        "energy_kcal": 24.194180825276213,
+        "rel_energy_kcal": 0.0,
+        "min_interfragment_distance": 2.299297463686626,
+        "reaction_center_distances": {},
+        "reaction_center_in_window": false,
+        "constraint_released": false,
+        "cluster_id": 0,
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_000.xyz",
+        "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_000.mol",
+        "trajectory_id": "placement016-mmff94-attempt1"
+      },
+      {
+        "candidate_id": 1,
+        "mol": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGgAAAIABBiAgAAAABAYgKAAAAAMECCAoAAAAAwIGICAAAAAEASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCCAoAAAAAwIGICgAAAADBAggKAAAAAMCBiAkAAAAAgQGICAAAAAEBiAgAAAABAYgIAAAAAQHICAAAAADASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAAAIBCAIDAQAEAAAFAAAGAAAHAwAIAwAJAwALCigCDAsgDQsADg0ADw4AEA8AERAAEQ0AEgwAEw0AFA4AFQ4AFg8AFw8AGBAAGRAAGhEAQgEAAAAFDQ4PEBFAmQIAAAEAAAABAAAAABtbMg40v1kAwGWfEYPQsvG/0+seoEut0z8mUoMe9wDzvzwAAbDUm+G/qf5Mccqk6b8pPg6G+or6v9fwHB5G4sc/wd8aL8rX+r8ckVSN4unNP7DGEvKgvfC/pBoJ7TC2679g5mwcHhgIwMr38Wt5I+O/2JzZXRpE1D9VJOxxr9r4v0QUwKnzVO6/ywBCcXtW9D8EEsMNsZ8BwBN3ecZYZQHABsHOA3Ahwj+21PcYYubNP0QMLOB1/gDAhDTh8KK88L/tnCDEb1LoP3awP2VPqeG/O5GP0bP6+r97NJMBsPPnP05zFDJFaOq/vDBl0zptsj8u4kDXTM0GQMLs/U918QBA6XUNgu+u5z9E9zuXLPn8P0kOb2fh7wFAOSHg48GwvD+ha5tQT3j8P1eqiZdYCf8/N0asuNlH87/JJJ5eLsHeP0ZeVQIVPAZA47EU//vh4z+qiMUcsTXcP049ffAcAAhAeww74tkIAUDtHzw9K4vvv2YJ0ImzNQVAUevwUg1XBEBlijHK3jv7v0pjIGnLmwJArZPfpi/p8z+AEsGpjBHkv1hOjUTmHv0/EOfQeHMQ2T+bFLpv6XoFQJHr1YKr8vk/yINWZdlZ9r+E1xRAXNDRP2LqTMnhzQ1Aj1THFnlLuj9KAiw78ZjlPxNzKaWtKhBAJIRcUzUBA0AQvM6QNmjyP1232le57QJATnbpIIFiBUDZnlvr7yzvv+MEUNSPcfw/8CLcIKSkCUBS/+bQxoH3v82yIY+HygtAWCahX9ygCEDV80rfBPoDwP0WqEw9dPk/6rIUy5w+9j8sVQLv1igBwIzmCxFg1QlAnPH0pI3Y6T+Av2eP0wTtv0BJiNRnwv0/Jyi3VZAZ478/AgAAAAAAEgIAAAAAABM6JQEAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAACAAAAF9DSVBDb2RlAAEAAABTCAEAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAABABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAExY=",
+        "placement_index": 3,
+        "energy_kcal": 25.585607838440335,
+        "rel_energy_kcal": 1.3914270131641224,
+        "min_interfragment_distance": 2.1293102396630204,
+        "reaction_center_distances": {},
+        "reaction_center_in_window": false,
+        "constraint_released": false,
+        "cluster_id": 1,
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_001.xyz",
+        "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_001.mol",
+        "trajectory_id": "placement003-mmff94-attempt1"
+      },
+      {
+        "candidate_id": 2,
+        "mol": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGgAAAIABBiAgAAAABAYgKAAAAAMECCAoAAAAAwIGICAAAAAEASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCCAoAAAAAwIGICgAAAADBAggKAAAAAMCBiAkAAAAAgQGICAAAAAEBiAgAAAABAYgIAAAAAQHICAAAAADASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAAAIBCAIDAQAEAAAFAAAGAAAHAwAIAwAJAwALCigCDAsgDQsADg0ADw4AEA8AERAAEQ0AEgwAEw0AFA4AFQ4AFg8AFw8AGBAAGRAAGhEAQgEAAAAFDQ4PEBFAmQIAAAEAAAABAAAAABuixcHnlkHpv1HRiH4tDLu/Bzb0Ze6l9b/tetVucVflP6P2zbsiwNA/FUjwOOKr879+O2OQb4X4P2YdsFcnE9G/MSalInAI/79SFi4RB+LvP0nU393+Y/Y/jaXXQYcK07/n5+bJrX71v1hUl9tewOc/tclEU7c2/L8g78+Pywvzv82WVl0P69e/doXhKBnb179FhJunSMLsv1BSFtGLqe6/YfyNows5AMCvgHUmgJHiP2oUTs2RN/M/N7J4La0v5j/CIv3VN6YAQGKcfGTfC/g/UbkWmDvpyr+HsPdBH5HiP5YL94yengJAEqVAgFhP5r+Uyy9YeHb3v+dp031qOg7AOoQ1DdCt7z/xkR5PXOzdvxbYSNQumgvAdKTNW/ao1z9MsKM7g/Hev63M7cgXmwvAY4GlPyps7781R2E5X5rsP2CMJYSAmwjALPXL8woM7j/hs1Ab+xvtPzfLo9+YdAfAcUUdFzWnA0C1pMh7y0X+P6DjiMB6x/y/evOHRXrjBUC769rVyoUDQG7o1/m9jva/aN1LWqMA9j/5hLbi5nb1PzSqmdo94Pu/Uui78qoE3j/B6ZQ62mH2v1EqalZCtQ3AJRupXHlU878Aw4E5E8j5P1mj0wj8yA7A4whIUjY85D+NqK/NBtzzP7UO7O1n5Q7AYxr006tzB0BB+KkGyLiyvwRQELq1dQXAyYFct1r7BkD1Ltct3sb1PyEyV2Hcju6/YYyAg/6KCUAmE4y25X8FQE5RuCBA2gDAPHdfShdgC0DzkarKaKwFQNtTHKSpg9a/Xy2l3PJK9T/yHep1d6UKQOnijEjTAgDA+/Kbz4IY8j9CwRO4Uv36P9tc5nhVMP2/bs6ymMm7378/AgAAAAAAEgIAAAAAABM6JQEAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAACAAAAF9DSVBDb2RlAAEAAABTCAEAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAABABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAExY=",
+        "placement_index": 24,
+        "energy_kcal": 25.585615875019805,
+        "rel_energy_kcal": 1.391435049743592,
+        "min_interfragment_distance": 2.1293102122704357,
+        "reaction_center_distances": {},
+        "reaction_center_in_window": false,
+        "constraint_released": false,
+        "cluster_id": 2,
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_002.xyz",
+        "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_002.mol",
+        "trajectory_id": "placement024-mmff94-attempt1"
+      },
+      {
+        "candidate_id": 3,
+        "mol": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGgAAAIABBiAgAAAABAYgKAAAAAMECCAoAAAAAwIGICAAAAAEASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCCAoAAAAAwIGICgAAAADBAggKAAAAAMCBiAkAAAAAgQGICAAAAAEBiAgAAAABAYgIAAAAAQHICAAAAADASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAAAIBCAIDAQAEAAAFAAAGAAAHAwAIAwAJAwALCigCDAsgDQsADg0ADw4AEA8AERAAEQ0AEgwAEw0AFA4AFQ4AFg8AFw8AGBAAGRAAGhEAQgEAAAAFDQ4PEBFAmQIAAAEAAAABAAAAABvYVB3wFpPQv67tbx5nJvu/IgnZKR+07T9mdi03T4vhPwaMui2drOO/e7Fql/OG0D/taSt8JtnLP6NVp/QAS8K/2A5EjK3N6r+I7DXayYz9P90hrUT0Qc6/u/+0exiE7T9am+TftFTSP8OiwBBVIwXAG0CrMdr26z+O+l+HMYXzvzdrdMqh8vy/BDgsDBjX2j8h9JXuXEfcv3R0V3Jg6fa/kpXqh5mP/z8jCaX9Ior6PysvJ7lh47g/HycPSioh/z8kCJO+biAEQFIRcFcDnPG/URXvRIK77T/QcOKLt5YCQKDuo2wGX+I/liotiOlk1z85ehxp7KfzP1sZUF6PqgxAmCdU4+RICEBnG0GTCPrmP0lxpLmuoQlAvmzpVsfl/z+wVUzFymv3P92MuUGN9whAL/Tq+i3R6z8BdHarsMPnv06kjlaMxwZA784Zle4T/D8mkFX05035v+8TAftdYQZAY1vh8x43CECxi52PYqsEwHIZKfGRu/o/j7IAG5tdBkAL6gr5YIYCwIZwxEWmDvM/NFnPccsX9j/E3Q7kpZvsv2xw0COTs/c/mkx3+EQo8z8DkAXFCeQCQNRzHtT7DAtAOT4a5g+R8j+AgyHrpZfyvx8t6Q9UtwxAVziS2mMC8T+tRoUJtMUAwOrZ4L+IAQ5AeC0t/y2FCUDisG/lRJTvv1XC90onswRAE02wLeViD0C3XxrSYTsDwGTiy0Xepus/6U8cvMchDEBYVU5EAO8MwB0rDmhSFABAFqrRV1leB0BQqbTeTFQEwECPOH2bfMA/Khn0JGor9D+pRQOed1gHwOLNeMUBEvw/TgIENMcQ5T+FSVolUxrlv2iOnt09+/c/ZHYLAkInyT8/AgAAAAAAEgIAAAAAABM6JQEAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAACAAAAF9DSVBDb2RlAAEAAABTCAEAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAABABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAExY=",
+        "placement_index": 12,
+        "energy_kcal": 25.585625585682752,
+        "rel_energy_kcal": 1.3914447604065394,
+        "min_interfragment_distance": 2.129302172718665,
+        "reaction_center_distances": {},
+        "reaction_center_in_window": false,
+        "constraint_released": false,
+        "cluster_id": 3,
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_003.xyz",
+        "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_003.mol",
+        "trajectory_id": "placement012-mmff94-attempt1"
+      },
+      {
+        "candidate_id": 4,
+        "mol": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGgAAAIABBiAgAAAABAYgKAAAAAMECCAoAAAAAwIGICAAAAAEASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCCAoAAAAAwIGICgAAAADBAggKAAAAAMCBiAkAAAAAgQGICAAAAAEBiAgAAAABAYgIAAAAAQHICAAAAADASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAAAIBCAIDAQAEAAAFAAAGAAAHAwAIAwAJAwALCigCDAsgDQsADg0ADw4AEA8AERAAEQ0AEgwAEw0AFA4AFQ4AFg8AFw8AGBAAGRAAGhEAQgEAAAAFDQ4PEBFAmQIAAAEAAAABAAAAABvAZe5FzIf4vzCCG16jRPG/5XX82Dfy5j/aHVQELWfcv7VifzdhR+q/1WNFlAuv0r+K0tCZlWLkv9xMLsqz3u6/8yNus1Ya+L9ateo5+JTtP0vCPNbNduC/aO4m9tyi0D+Kmvaec/IDwCXbFFZ38fK/st1SNUI/yj+ENHtu64v5v4CnrxD5Is+/F+jDthOw9j+srbrUXQj1v7RrJftjBgDA8NuqV6Ih9D9DI2b9K5n0P0CSMpQ1//W/3MBZteB96j/mfxSkweH5P6WilrUvP9S/YPD0BU324b//BO+vdhDsP/+u49CFYdc/M6LQvob97D/wb4xEv3/5PzlwvpmQnw5AOqd6AQn3ur+N0okCqdPuP2b3dIE6wQhABKLnGo4067/Zt9Bqqdv5P+qNVyiKnQFAMmWqVD4L+r8hL2feCU/hv+E5thuBrQhAfEK5TCJZ8b/WjLlfDx/1v8sWOpjU1g9AQpsFSi1KwL90Hpf9Qw0FwKW45oM98AlARM4ADZ71vz/OMkNLgoMEwN/+huWCEgBAUI9QqRg96L9idZt2+Q7yv++ejS455/s/V0u98P8Q67+Xd0xODHUEQIIOQnfbjwJAvgckyGkr9r+e4C4koyLnv0fCYkhVNgtAJ/7mjKD0AMC08Dvp4xL4vz1hN8G/2BNABch6+yl54r+T9RuHyJHpvyZK2FW6lRBALOyUUihS6j/SWsn2TpIFwMHIV1aPpwdAEUnrPv/n8j/691AhiAMMwLvKO5ug5w5AkT1KNAAmvL9ws+CvtuwIwNKpp2fStfI/KYwqxU/41L9st3oyNdEHwPKbV6ETwAFAW/Fhe8gF/L+WjafDJ6Ptv68BXNXAPPI/MoN1GVNx+r8/AgAAAAAAEgIAAAAAABM6JQEAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAACAAAAF9DSVBDb2RlAAEAAABTCAEAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAABABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAExY=",
+        "placement_index": 7,
+        "energy_kcal": 25.5856320212745,
+        "rel_energy_kcal": 1.391451195998286,
+        "min_interfragment_distance": 2.1293138058634367,
+        "reaction_center_distances": {},
+        "reaction_center_in_window": false,
+        "constraint_released": false,
+        "cluster_id": 4,
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_004.xyz",
+        "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_004.mol",
+        "trajectory_id": "placement007-mmff94-attempt1"
+      },
+      {
+        "candidate_id": 5,
+        "mol": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGgAAAIABBiAgAAAABAYgKAAAAAMECCAoAAAAAwIGICAAAAAEASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCCAoAAAAAwIGICgAAAADBAggKAAAAAMCBiAkAAAAAgQGICAAAAAEBiAgAAAABAYgIAAAAAQHICAAAAADASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAAAIBCAIDAQAEAAAFAAAGAAAHAwAIAwAJAwALCigCDAsgDQsADg0ADw4AEA8AERAAEQ0AEgwAEw0AFA4AFQ4AFg8AFw8AGBAAGRAAGhEAQgEAAAAFDQ4PEBFAmQIAAAEAAAABAAAAABvQ+jWfUajkv0baf4gLQPc/zH0njBK5zr+iDT+DZQPcP+hOBfWZ6tk/i2KsepORyb+MBKi5VPT4P6KU2yod3eM/y4Apcbi/5b/LcRJKqtnGPyqEyoe5Fuq/l2puQD+15D/r0YGj0+ncv59CcoFsPAFA/M23Npvi8L/5xDF4uQ/lv+wZvJ5d5f8/Q8amKqm15j81uMkTPub5vzhpoa6Fje8/Ll/GrPIX2r9M4PsLBELrvzKzIh5de/K/3xmjYq6f4D/z48DtRDXrP7SyMlT99fm/qv3s3Zj21T+BStSvHn/WPxSidRaNJuK/Ok6wfYMn+z9lgqAJjv/jP3GkUv5ehgBALflg8jwiDsA78X/obGXmP+0dSYEbROs/jDhWHVxQDcC78oTNqzr+P4Kz2lv+Ds4/YwZcnEfNC8DXftNtDWDcv2fb60FCR8O/qthVkMqPDcAuS2hQRzb9vzPu9dbjq90/ABLuKfnMDsD+hcCRWwsGwDlIm3xVv96/f1wqVXu6CMDWA44x84n9vzY1tbj6gvi/umq994DJA8AhFrUrkavhv0nDhqJsi+u/BEdIox4lA8CZ8l2okbwDQPO/WaeYQu4/2xjZ5Hz+CMCdcQD10V/Qv1QSNhgQnOu/Fmcc8XMJEsCbWau8ouQAwOxcKSb2PeE/0ijkIm6eE8CU6o9mFzX+v8WObgIMh/c/k1t/JIZdC8AvfT8sWFsKwDBRSAq8PrM/nVbXax2FAsDjirf0PvsLwLUPa54R9u2/Uc61Se4IDsCqRVVOipsBwODWqoeiqP2/DxdKQS7Z97/TjoT+73z8vyC9Zr3LTwPA5HqxH6P4CMDk1STJax/MPzs0QDUedPi/kXsbQ76kAsA/AgAAAAAAEgIAAAAAABM6JQEAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAACAAAAF9DSVBDb2RlAAEAAABTCAEAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAABABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAExY=",
+        "placement_index": 15,
+        "energy_kcal": 26.012978995098486,
+        "rel_energy_kcal": 1.8187981698222728,
+        "min_interfragment_distance": 2.5195855476567095,
+        "reaction_center_distances": {},
+        "reaction_center_in_window": false,
+        "constraint_released": false,
+        "cluster_id": 5,
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_005.xyz",
+        "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_005.mol",
+        "trajectory_id": "placement015-mmff94-attempt1"
+      },
+      {
+        "candidate_id": 6,
+        "mol": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGgAAAIABBiAgAAAABAYgKAAAAAMECCAoAAAAAwIGICAAAAAEASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCCAoAAAAAwIGICgAAAADBAggKAAAAAMCBiAkAAAAAgQGICAAAAAEBiAgAAAABAYgIAAAAAQHICAAAAADASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAAAIBCAIDAQAEAAAFAAAGAAAHAwAIAwAJAwALCigCDAsgDQsADg0ADw4AEA8AERAAEQ0AEgwAEw0AFA4AFQ4AFg8AFw8AGBAAGRAAGhEAQgEAAAAFDQ4PEBFAmQIAAAEAAAABAAAAABtzI6cOewvgvzbJyGEZivc/+ctYsgYs9L86nR8VdFbiPygDXL0Q1t0/JiFDvm7E7b8kl6h+CWH4PxeIh1zI79A/aRyylNwv+79EkmsHSz3iP3YN7fSI/7q/2MdY0LzB3T+G6OCLT2Thv/S4NSgwBPo/g7u0Xcq7AsA0mAhIQ2nRv7DAk0h8WANAFCsfTdWD6L8xDUGWQ5v3v5CsJi6Ov/E/rkL9UR+O7b8qiu+Pftvcv/bHX2OJOdW/RnaInX7/6D8ekyTxy27yP4ozYm/yffC/+gcMeLX33j/2SiOP6CnwP01z5Z244eM/chYl6Htu8j/u5dGe21nMv4EEaKpJrJ0/LPwISMQNE8Cg7ctxiIe5v2EmzBH0s+6/ux2UFeQ7EMCFNod/XrzxPyVCvZBckPi/BBXJBUndDsBkA2fxGRHzvxY5WNUI+Pq/ZOVF+qtNCsB49y69S50EwKRWxCkgIvG/fiXWSgNPC8AQy7y8AwoKwGHNLaMi6fW/yuXFdmmgAMDI+EFqto8BwD8+IMosewDArc2t2ny7879UQ/3JGwruv4Wr8n26v/m/47U79uIw/b8KOvwo4+z7Px/LdWWOV+q/vVo3mLpSEMBC0egNs2nzvwjTaDLZ2AXAm9vhkof6DMDVLgXOghAJwAT0dzovLfi/kasqPBD+EMC1NffBPFUEwPj07pQKx4k/+u6EQH+fDMCvpusr06IMwAacup0Wttu/zmI2kNbC+b9hvvx62YwQwCkDJjC5CADAvQWHOPSmAcBH0ZbaHCsCwDPrdfBKlfy/ajFzVH63xr+eUZzTCUwCwLBxIGicMgnAVUlN0jcG9b9AYeRteTLFv4p3VYTb7AHAhr5RGkql+b8/AgAAAAAAEgIAAAAAABM6JQEAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAACAAAAF9DSVBDb2RlAAEAAABTCAEAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAABABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAExY=",
+        "placement_index": 30,
+        "energy_kcal": 26.012985953223655,
+        "rel_energy_kcal": 1.8188051279474422,
+        "min_interfragment_distance": 2.5196177052947086,
+        "reaction_center_distances": {},
+        "reaction_center_in_window": false,
+        "constraint_released": false,
+        "cluster_id": 6,
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_006.xyz",
+        "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_006.mol",
+        "trajectory_id": "placement030-mmff94-attempt1"
+      },
+      {
+        "candidate_id": 7,
+        "mol": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGgAAAIABBiAgAAAABAYgKAAAAAMECCAoAAAAAwIGICAAAAAEASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCCAoAAAAAwIGICgAAAADBAggKAAAAAMCBiAkAAAAAgQGICAAAAAEBiAgAAAABAYgIAAAAAQHICAAAAADASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAAAIBCAIDAQAEAAAFAAAGAAAHAwAIAwAJAwALCigCDAsgDQsADg0ADw4AEA8AERAAEQ0AEgwAEw0AFA4AFQ4AFg8AFw8AGBAAGRAAGhEAQgEAAAAFDQ4PEBFAmQIAAAEAAAABAAAAABtlL4GfAtTtvyHsK9N8UOM/5sPYtC8yrL+dd7Bmp0ffPzoBEzxqLMw/cL9wntkG2b9A0Ko9DxjsP2NAvnT7tMU/ZYmjKPMD+b8DIztT1k/3P+GG4As6NsE/LAa/LVdx6D9lnjxJekf5v5GsOrjDPto/tjsbKYE+7b9Ebo3Go/ruv8kpcBRvqvo/RzghW8AEyT8E532Tx6r0v6wm5LdFqo4/A71t2KNb6T81bR0rS7LwP6ng4+X6pd+/fWdMADjl+D+MwpBFYzEDQONGgw90gtO/zqgOQoFD2z/6eyvkh1T6P0ZHqVyROPI/P48kJn9q8j+i4yZOeGoHwLpnGB8Mzw3Ag70SxNbrAMADw43nQ7QBwN+IUML05gfARmxLupRG97+3KrmYA9cFwPoaOJ+XygLA3b0qkOke2L+CUyn8L1Pov2GVns1T4ATAlMqj3sLH+785XqwmjTCav8aoqXhR/wzAjSMZytHpBMB/zdX6NNHyP3ORm2KoTBDAK1edogyp/L920GGLfSD2P5SjdbqOmwfApwYPAIBy6b9HkEyv/XGVP3C20wamnATA4+1Ewz97378FUgVEECYNwIciCH/bmAXAL7QZDjU21b9sbUdETK/ov0WKjlvbK/q/Ejm3ZdjgAcDS6PpYEPXUP9cUWR3CCgnALUtI/Sw4DMBvVffxOjHkv6TPL6ok8RHAtSRLzaVQB8CiOv7ASvXtP3qzliTjCBTAdn2DUwtH9L/DMCLqN3kAQL62CSiOAhHANFh/uzlMA8BNtqHW9b3+P1i9wRdlVwrA3Ox295zNtz+pYQM5+B7/P/VsiKGKEAHA7o+fkOAR9L9oymi1RkfIv6mLlkv6pf2/pP8R3fF9xT8/AgAAAAAAEgIAAAAAABM6JQEAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAACAAAAF9DSVBDb2RlAAEAAABTCAEAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAABABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAExY=",
+        "placement_index": 10,
+        "energy_kcal": 33.84369166886012,
+        "rel_energy_kcal": 9.649510843583904,
+        "min_interfragment_distance": 2.251785881532781,
+        "reaction_center_distances": {},
+        "reaction_center_in_window": false,
+        "constraint_released": false,
+        "cluster_id": 7,
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_007.xyz",
+        "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_007.mol",
+        "trajectory_id": "placement010-mmff94-attempt1"
+      }
+    ],
+    "candidate_paths": [
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_000.xyz",
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_000.mol",
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_001.xyz",
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_001.mol",
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_002.xyz",
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_002.mol",
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_003.xyz",
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_003.mol",
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_004.xyz",
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_004.mol",
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_005.xyz",
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_005.mol",
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_006.xyz",
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_006.mol",
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_007.xyz",
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/complex_candidate_007.mol"
+    ],
+    "trajectory_ids": [
+      "placement010-mmff94-attempt1",
+      "placement030-mmff94-attempt1",
+      "placement003-mmff94-attempt1",
+      "placement024-mmff94-attempt1",
+      "placement015-mmff94-attempt1",
+      "placement016-mmff94-attempt1",
+      "placement007-mmff94-attempt1",
+      "placement012-mmff94-attempt1"
+    ],
+    "trajectory_manifest_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/trajectories.json",
+    "artifact_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/assembly/assembly.json",
+    "diagnostics": [
+      "reaction mode: placements are guided by the reaction center pairs derived from the reactant/product mapping; intra-fragment geometry stays rigid during placement",
+      "kept the best 8 of 32 sampled placements by maximum distance-window deviation; windows=[(1, 17, 2.2, 2.5), (17, 26, 1.0, 1.1), (1, 2, 1.32, 1.45)]",
+      "placement 10: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+      "placement 30: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+      "placement 3: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+      "placement 24: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+      "placement 15: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+      "placement 16: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+      "placement 7: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+      "placement 12: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+      "8 guided placement(s) retained for strict qualification before 0.5 A heavy-atom RMSD clustering"
+    ]
+  },
+  "trajectory_ids": [
+    "frag0-mmff94-attempt1",
+    "frag1-mmff94-attempt1"
+  ],
+  "trajectory_manifest_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/trajectories.json",
+  "artifact_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/E1a_seed_search/guided_assembly/prepared_structure.json",
+  "electronic_state": {
+    "charge": 0,
+    "multiplicity": 1,
+    "electronic_character": null,
+    "electron_count": 94,
+    "localized_radical_electrons": 0,
+    "n_alpha": 47,
+    "n_beta": 47,
+    "is_open_shell": false,
+    "requires_spin_aware_geometry": false
+  },
+  "diagnostics": [
+    "reaction mode: placements are guided by the reaction center pairs derived from the reactant/product mapping; intra-fragment geometry stays rigid during placement",
+    "kept the best 8 of 32 sampled placements by maximum distance-window deviation; windows=[(1, 17, 2.2, 2.5), (17, 26, 1.0, 1.1), (1, 2, 1.32, 1.45)]",
+    "placement 10: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+    "placement 30: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+    "placement 3: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+    "placement 24: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+    "placement 15: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+    "placement 16: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+    "placement 7: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+    "placement 12: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+    "8 guided placement(s) retained for strict qualification before 0.5 A heavy-atom RMSD clustering"
+  ]
+}

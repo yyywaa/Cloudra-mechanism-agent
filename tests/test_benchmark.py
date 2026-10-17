@@ -1988,7 +1988,10 @@ def test_aqueous_imine_barrier_stays_separate_from_gas_phase_task():
     gas_edges = tasks["NI1"].gold.mechanism_graph.edges
     aqueous_edges = tasks["NI5"].gold.mechanism_graph.edges
     assert [e.barrier_kcal_mol for e in gas_edges] == [27.9, 57.67]
-    assert [e.barrier_kcal_mol for e in aqueous_edges] == [None, 3.59, 31.2]
+    # 2026-10-15 回填：E1（C-N 加成）barrier 由缺测补为 0.93（Gaussian 16
+    # B3LYP-D3(BJ)/def2-SVP + CPCM(Water)，相对本步起点 RC-A，纯电子能；
+    # 依据 ts/ts_0006 全链 + gold_finish_20261015/NI5/BACKFILL_DRAFT.md §9）。
+    assert [e.barrier_kcal_mol for e in aqueous_edges] == [0.93, 3.59, 31.2]
     assert [e.to_node for e in aqueous_edges[:2]] == ["NI5_I1", "NI5_I2"]
     assert [1, 3] in aqueous_edges[0].bond_changes.form
     assert [3, 5] in aqueous_edges[1].bond_changes.break_
@@ -2052,7 +2055,11 @@ def test_pinacol_dehydration_and_migration_are_separate_edges():
 
     task = gen_normal_tasks.parse_normal_md(gen_normal_tasks.DEFAULT_SRC, only={"R1"})[0]
     edges = task.gold.mechanism_graph.edges
-    assert [e.barrier_kcal_mol for e in edges] == [None, None, 5.16, 5.74]
+    # 2026-10-15 NR1 包（本轮改口径，Gaussian 16 B3LYP-D3BJ/def2SVP、气相）：
+    # E1 按「无独立鞍点 / 无垒」记 0.0（证据 gold_finish_20261015/NR1/E1/E1_FINAL_EVIDENCE.md）；
+    # E2 仍缺测 = None（无合格独立鞍点，证据 gold_finish_20261015/NR1/E2/E2_FINAL_EVIDENCE.md）。
+    # 本次改动仅限本测试中 R1 的这一条期望值（参照 NI5 包同一文件同类改动的先例）。
+    assert [e.barrier_kcal_mol for e in edges] == [0.0, None, 5.16, 5.74]
     assert [4, 6] in edges[1].bond_changes.break_
     assert [7, 8] in edges[2].bond_changes.break_
     assert [4, 8] in edges[2].bond_changes.form

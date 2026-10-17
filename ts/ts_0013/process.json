@@ -1,0 +1,836 @@
+{
+  "format_version": 6,
+  "run_id": "ts_0013",
+  "pipeline_id": "986c412135b0f96157d8c2bb1fa2047797d3258a2d4b2813d2a0d281978f0b84",
+  "declaration_revision": 2,
+  "optimization_checkpoints": {},
+  "budget_action_keys": {},
+  "budget_reservations": {},
+  "attempt_history": [
+    {
+      "declaration_revision": 1,
+      "selected_candidate_id": null,
+      "job_steps": [
+        {
+          "purpose": "candidate_opt",
+          "job_id": 1006,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/jobs/declaration_0001/candidate_opt/seed-opt.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "b3lyp",
+            "basis_set": "def2svp",
+            "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 1,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null
+        },
+        {
+          "purpose": "product_seed_opt",
+          "job_id": 1011,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/jobs/declaration_0001/product_seed_opt/seed-opt.gjf",
+          "state": "failed",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "b3lyp",
+            "basis_set": "def2svp",
+            "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 1,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null
+        }
+      ],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "blocked",
+          "detail": "product_seed_opt job 1011 failed; revise or retry through ts_resume.",
+          "artifacts": [],
+          "source_input_revision": 1
+        }
+      ],
+      "reason": "B branch after B' failure (job 1016 readfc, NStep=100, l9999 08:42:15): the registered I2-side start minimum (i2_min_candA.xyz) cannot be re-optimized at the run route, so the I2-side product conformer is switched to candD_classB (Na+ chelating formate O1/O5, methoxide far; GFN2-xTB/ALPB minimum, sha256 78448225332a095326025a2c3beaa891c287746889656f7cba6d83bd4856c840, prep/i2 file order). This changes the E2 product endpoint (E2 barrier reference = I1, unchanged) minimum: the old I2 energy -466.986020418 (job 990) must not be mixed with the new one. Same mol and heavy_atom_binding as before; atom_map/reaction_center unchanged.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "[Na+].CO[C@H]([O-])O",
+          "product_smiles": "[Na+].C[O-].C(=O)O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "atom_map": [
+            0,
+            1,
+            2,
+            6,
+            7,
+            8,
+            3,
+            5,
+            4,
+            9,
+            10
+          ],
+          "reaction_center": [
+            [
+              3,
+              2
+            ],
+            [
+              3,
+              5
+            ]
+          ]
+        },
+        "calculations": {
+          "g16": {
+            "engine": "gaussian",
+            "method": "b3lyp",
+            "basis_set": "def2svp",
+            "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/i1_dft_min_ref.xyz",
+            "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/i1.mol",
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/E2E3_ENDPOINTS_PROVENANCE.md"
+            ],
+            "optimization": {
+              "ref": "g16"
+            },
+            "heavy_atom_binding": {
+              "indices": [
+                1,
+                2,
+                3,
+                4,
+                6,
+                5
+              ]
+            }
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/i2_min_candA.xyz",
+            "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/build/art_I2_src/assembly/complex_candidate_000.mol",
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/E2E3_ENDPOINTS_PROVENANCE.md"
+            ],
+            "optimization": {
+              "ref": "g16"
+            },
+            "heavy_atom_binding": {
+              "indices": [
+                1,
+                2,
+                3,
+                7,
+                8,
+                9
+              ]
+            }
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": {
+          "kind": "provided",
+          "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/ts_e2_guess.xyz",
+          "evidence_refs": [
+            "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/TS_E2_GUESS_PROVENANCE.md"
+          ]
+        },
+        "ts_optimization": {
+          "ref": "g16"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "g16"
+          },
+          "irc": {
+            "ref": "g16"
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "g16"
+            },
+            "frequency": {
+              "ref": "g16"
+            }
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "g16"
+            },
+            "frequency": {
+              "ref": "g16"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 8,
+          "memory_mb": 10240,
+          "limits": null
+        }
+      },
+      "terminal": null,
+      "blocked": {
+        "failure_class": "conformer_optimization_failed",
+        "stage": "build",
+        "message": "product_seed_opt job 1011 failed; revise or retry through ts_resume.",
+        "atom_details": [],
+        "needs": [
+          "conformers.product"
+        ],
+        "issues": []
+      },
+      "failed_attempt": {
+        "attempt_id": "1:product_seed_opt:1011",
+        "diagnostics": [],
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/jobs/declaration_0001/product_seed_opt/seed-opt.log"
+        ],
+        "failure_class": "conformer_optimization_failed",
+        "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/jobs/declaration_0001/product_seed_opt/seed-opt.gjf",
+        "input_revision": 1,
+        "input_sha256": "a408d306cfa7e242cd3ab41b5041850571671c4ca207936d646d1974c03164d3",
+        "job_id": 1011,
+        "log_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/jobs/declaration_0001/product_seed_opt/seed-opt.log",
+        "log_sha256": "83723dbcc8af9a215a054cae193d5be396c27805f13d59464c1421df6962144a",
+        "purpose": "product_seed_opt"
+      }
+    }
+  ],
+  "catalog_id": null,
+  "partition_revision": null,
+  "candidate_attempts": [],
+  "cards_path": "",
+  "product_seed_candidate_id": null,
+  "product_seed_xyz_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/build/input_0002/product/seed.xyz",
+  "product_seed_mol_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/build/input_0002/product/seed.mol",
+  "selected_candidate_id": null,
+  "run_dir": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013",
+  "workspace_dir": "/home/ly/Cloudra-mechanism-agent",
+  "owner_conversation_id": "prj_15b00532a66347c3",
+  "owner_session_id": "as_a396e35616564357",
+  "input": {
+    "reaction": {
+      "reactant_smiles": "[Na+].CO[C@H]([O-])O",
+      "product_smiles": "[Na+].C[O-].C(=O)O",
+      "charge": 0,
+      "multiplicity": 1,
+      "electronic_character": "closed_shell",
+      "atom_map": [],
+      "reaction_center": [
+        [
+          3,
+          2
+        ],
+        [
+          3,
+          5
+        ]
+      ]
+    },
+    "calculations": {
+      "g16": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      }
+    },
+    "conformers": {
+      "reactant": {
+        "kind": "file",
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/i1_dft_min_ref.xyz",
+        "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/i1.mol",
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/E2E3_ENDPOINTS_PROVENANCE.md"
+        ],
+        "optimization": {
+          "ref": "g16"
+        },
+        "heavy_atom_binding": {
+          "indices": [
+            1,
+            2,
+            3,
+            4,
+            6,
+            5
+          ]
+        }
+      },
+      "product": {
+        "kind": "file",
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/i2_seed_candD_classB.xyz",
+        "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/build/art_I2_src/assembly/complex_candidate_000.mol",
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/I2_BACKUP_SEEDS_PROVENANCE.md",
+          "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/I2_DFT_VERDICT.md",
+          "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/I2_SEED_NOTE.md"
+        ],
+        "optimization": {
+          "ref": "g16"
+        },
+        "heavy_atom_binding": {
+          "indices": [
+            1,
+            2,
+            3,
+            7,
+            8,
+            9
+          ]
+        }
+      },
+      "guidance": {
+        "ring_order": [],
+        "distance_filters": []
+      }
+    },
+    "guess": {
+      "kind": "provided",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/ts_e2_guess.xyz",
+      "evidence_refs": [
+        "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/TS_E2_GUESS_PROVENANCE.md"
+      ]
+    },
+    "ts_optimization": {
+      "ref": "g16"
+    },
+    "verification": {
+      "frequency": {
+        "ref": "g16"
+      },
+      "irc": {
+        "ref": "g16"
+      },
+      "irc_log": null,
+      "reactant_endpoint": {
+        "seed": null,
+        "optimization": {
+          "ref": "g16"
+        },
+        "frequency": {
+          "ref": "g16"
+        }
+      },
+      "product_endpoint": {
+        "seed": null,
+        "optimization": {
+          "ref": "g16"
+        },
+        "frequency": {
+          "ref": "g16"
+        }
+      }
+    },
+    "execution": {
+      "cpus": 8,
+      "memory_mb": 10240,
+      "limits": null
+    }
+  },
+  "input_binding": {},
+  "structures": {
+    "reactant": {
+      "role": "reactant",
+      "source_kind": "file",
+      "input_revision": 2,
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/jobs/declaration_0002/candidate_opt/optimized_seed.xyz",
+      "xyz_sha256": "fdf9531006a29ef733ec58bedec5c822826cb464c63c1af1742265e43315590c",
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/build/input_0002/reactant/seed.mol",
+      "mol_sha256": "c4165dfc33a88e26990c32b4c3911259ffc1b092b67aeeb1d595bea33feea184",
+      "structure_digest": "d594c48b3eea90da6e21b7591fc3621fdff4e0db5968112cfff77da17789a446",
+      "atom_count": 11,
+      "components": 2,
+      "index_base": 1,
+      "atoms": [
+        {
+          "number": 1,
+          "symbol": "Na",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 2,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 3,
+          "symbol": "O",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 4,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 5,
+          "symbol": "O",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 6,
+          "symbol": "O",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 7,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 8,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 9,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 10,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 11,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        }
+      ],
+      "smiles_heavy_atoms": [
+        {
+          "position": 1,
+          "symbol": "Na",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 2,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 3,
+          "symbol": "O",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 4,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 5,
+          "symbol": "O",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 6,
+          "symbol": "O",
+          "isotope": 0,
+          "atom_map_label": 0
+        }
+      ],
+      "binding_status": "unverified",
+      "graph_error": "",
+      "table_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/build/atom_tables/reactant_2_7d4ad8de5b2e.json"
+    },
+    "product": {
+      "role": "product",
+      "source_kind": "file",
+      "input_revision": 2,
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/build/input_0002/product/seed.xyz",
+      "xyz_sha256": "78448225332a095326025a2c3beaa891c287746889656f7cba6d83bd4856c840",
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/build/input_0002/product/seed.mol",
+      "mol_sha256": "af67740f8c76f18f0517573c8cb5590aa8bb603d3d1c706df624ebd1ce46f816",
+      "structure_digest": "a16512400dd5559ce6c09d49dd8ef038ca61b66477eb801c3d0fc9056a15b350",
+      "atom_count": 11,
+      "components": 3,
+      "index_base": 1,
+      "atoms": [
+        {
+          "number": 1,
+          "symbol": "Na",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 2,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 3,
+          "symbol": "O",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 4,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 5,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 6,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 7,
+          "symbol": "C",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 8,
+          "symbol": "O",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 9,
+          "symbol": "O",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 10,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        },
+        {
+          "number": 11,
+          "symbol": "H",
+          "isotope": 0,
+          "component": null,
+          "origin": null,
+          "input_atom_number": null
+        }
+      ],
+      "smiles_heavy_atoms": [
+        {
+          "position": 1,
+          "symbol": "Na",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 2,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 3,
+          "symbol": "O",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 4,
+          "symbol": "C",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 5,
+          "symbol": "O",
+          "isotope": 0,
+          "atom_map_label": 0
+        },
+        {
+          "position": 6,
+          "symbol": "O",
+          "isotope": 0,
+          "atom_map_label": 0
+        }
+      ],
+      "binding_status": "unverified",
+      "graph_error": "",
+      "table_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/build/atom_tables/product_2_bc2f35a52301.json"
+    }
+  },
+  "seed_molecules": {
+    "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAALAAAACQAAAIABCyAKAAAAAQEGACAAAAAECAAgAAAAAgYAJAAAAAEECAAgAAAAAggAIgAAAP8BAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQsBAgACAwADBAADBQABBgABBwABCAADCQAECgBCAAAAAEAZAQAAAQAAAAEAAAAAC091yM1wAwBAeekmMQgs5j/koe9uZYnOv+HP8GYNXvi/q5Se6SVG9j8bu0T11sCuPxhd3hyu1dG/tRfRdkzd5z/pKXKIuDllP+W4UzpY/9G/yQImcOtu5r/myTUFMjvaP4hlM4ek1vK/95LGaB0V9r9U4GQbuAPevxhftMcL6e0/doh/2NIj8r+W6gJeZtjYP3Gsi9toAALAuhCrP8Iw7j8VxEDXvoDkvwlP6PUncf+/y4Rf6ueN9T/eO2pMiDnxP0vnw7MEGfa/eJyiI7mcA0Bu+x711yvKvyi37XvUX+q/zvxqDhBM5r8smzkktVD2P8MN+PwwQuO/l+ZWCKux+r8HDJI+rSLzvz8CAAAAAAASbwAAAAQABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABM6dQAAAAAAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAgAAABfQ0lQQ29kZQABAAAAUggBAAAAAAAAAAAAAAAAAAAAAAAAAAAAABM7JAAAAAAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABARMW",
+    "product": "776t3gAAAAAQAAAAAwAAAAAAAAALAAAACAAAAIABCyAKAAAAAQEGACAAAAAECAAiAAAA/wEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEGACgAAAADBAgAKAAAAAMCCAAoAAAAAwIBACgAAAABAQEAKAAAAAEBCwECAAEDAAEEAAEFAAYHKAIGCCAGCQAICgBCAAAAAEAZAQAAAQAAAAEAAAAAC+2/KQcOAwNAfEmdXxjZzD8n2KCrhHnwv04KVkkiA6C/QuSZPAo8/L/56ewiVDIDQCscWsdlmuE/CGiuFWX98b86gJd8YNX1P8gzP2lupte/UDZINapLBsA3ASO7FA8BQDTcHaVUuuQ/lRMn1i0b/r/Gz5A7ticKQNnQatSFsO2/OBZvv9er87+HwV9A7TcGQPthfH8g/Pg/hXEe6zWf9z9vFkizJhQJwC5mGRwEyQJAohTGeaxH/j9X8Jn0EJgCwHTYVEi/zvY/bmTDPxGwyT8SedwB6PkKwJ1zhbFk0u0/UaGZqw9RAUDyv2xtp84NwHrnSBVigeg/WXy3N8fSlr+nnbNorj0QwD8CAAAAAAASbwAAAAQABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABM6QQAAAAAAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEzsgAAAAAAABAQAAAQEAAAEBAAABAQAAAQIAAAEBAAABAQAAAQETFg=="
+  },
+  "failed_attempt": {
+    "attempt_id": "2:product_seed_opt:1024",
+    "failure_class": "conformer_optimization_failed",
+    "purpose": "product_seed_opt",
+    "job_id": 1024,
+    "input_revision": 2,
+    "evidence_refs": [
+      "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/jobs/declaration_0002/product_seed_opt/seed-opt.log"
+    ],
+    "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/jobs/declaration_0002/product_seed_opt/seed-opt.gjf",
+    "log_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/jobs/declaration_0002/product_seed_opt/seed-opt.log",
+    "input_sha256": "3613b6af9a68cf8915df01e04ec9689756b31d931a9e684d786ee9ef837b0fdc",
+    "log_sha256": "4669c8fde682133d7b7b219815a4723d05b12e94b3e2f2e39cc2fdc1146824bf",
+    "diagnostics": []
+  },
+  "method_checks": {
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/jobs/declaration_0001/candidate_opt/seed-opt.gjf": {
+      "actual": {
+        "basis_set": "def2svp",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "method": "b3lyp",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 1,
+      "matched": true,
+      "purpose": "candidate_opt",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/jobs/declaration_0001/product_seed_opt/seed-opt.gjf": {
+      "actual": {
+        "basis_set": "def2svp",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "method": "b3lyp",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 1,
+      "matched": true,
+      "purpose": "product_seed_opt",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/jobs/declaration_0002/candidate_opt/seed-opt.gjf": {
+      "input_revision": 2,
+      "purpose": "candidate_opt",
+      "actual": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source": "stage_declaration",
+      "differences": [],
+      "matched": true
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/jobs/declaration_0002/product_seed_opt/seed-opt.gjf": {
+      "input_revision": 2,
+      "purpose": "product_seed_opt",
+      "actual": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source": "stage_declaration",
+      "differences": [],
+      "matched": true
+    }
+  },
+  "stage": "build",
+  "stage_records": [
+    {
+      "stage": "declare",
+      "status": "done",
+      "detail": "reaction declared; each calculation requires its own method",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "build",
+      "status": "blocked",
+      "detail": "product_seed_opt job 1024 failed; revise or retry through ts_resume.",
+      "artifacts": [],
+      "source_input_revision": 2
+    }
+  ],
+  "terminal": null,
+  "blocked": {
+    "failure_class": "conformer_optimization_failed",
+    "stage": "build",
+    "message": "product_seed_opt job 1024 failed; revise or retry through ts_resume.",
+    "atom_details": [],
+    "needs": [
+      "conformers.product"
+    ],
+    "issues": []
+  },
+  "intervention_count": 1,
+  "path_kind": "not_attempted",
+  "guidance_attempt": 0,
+  "active_attempt_dir": "",
+  "current_seed_xyz_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/jobs/declaration_0002/candidate_opt/optimized_seed.xyz",
+  "current_seed_mol_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/build/input_0002/reactant/seed.mol",
+  "current_reactant_prepared_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/build/input_0002/reactant/atom_table.json",
+  "current_ts_guess_path": "",
+  "guidance_manifest_path": "",
+  "effective_reaction_center": [],
+  "job_id": null,
+  "job_input_path": "",
+  "waiting_for": "",
+  "scan_step": null,
+  "job_steps": [
+    {
+      "purpose": "candidate_opt",
+      "job_id": 1020,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/jobs/declaration_0002/candidate_opt/seed-opt.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 2,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": null
+    },
+    {
+      "purpose": "product_seed_opt",
+      "job_id": 1024,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/jobs/declaration_0002/product_seed_opt/seed-opt.gjf",
+      "state": "failed",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 2,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": null
+    }
+  ],
+  "evidence_candidates": [
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/build/input_0002/reactant/seed.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/build/input_0002/reactant/seed.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/build/input_0002/product/seed.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/build/input_0002/reactant/seed.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0013/build/input_0002/product/seed.xyz"
+  ],
+  "revision": 23
+}

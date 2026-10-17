@@ -1,0 +1,211 @@
+{
+  "reaction": {
+    "reactant_smiles": "[CH3:1][C:2](=[O:4])[CH2:3]([H:22]).[O:5]=[CH:6][c:7]1[cH:8][cH:9][cH:10][cH:11][cH:12]1.[O:13]=[C:14]([OH:15])[C@@H:16]1[CH2:17][CH2:18][CH2:19][N:20]1([H:21])",
+    "product_smiles": "[CH3:1][C:2](=[CH2:3])[N:20]2[CH2:19][CH2:18][CH2:17][C@H:16]2[C:14](=[O:13])[OH:15].[O:4]([H:21])([H:22]).[O:5]=[CH:6][c:7]1[cH:8][cH:9][cH:10][cH:11][cH:12]1",
+    "charge": 0,
+    "multiplicity": 1,
+    "electronic_character": "closed_shell",
+    "atom_map": [
+      3,
+      1,
+      0,
+      31,
+      30,
+      29,
+      28,
+      27,
+      25,
+      24,
+      26,
+      7,
+      8,
+      4,
+      5,
+      6,
+      38,
+      39,
+      36,
+      37,
+      34,
+      35,
+      33,
+      32,
+      2,
+      40,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23
+    ],
+    "reaction_center": [
+      [
+        1,
+        2
+      ],
+      [
+        3,
+        9
+      ],
+      [
+        31,
+        40
+      ],
+      [
+        1,
+        3
+      ],
+      [
+        1,
+        31
+      ],
+      [
+        2,
+        40
+      ],
+      [
+        2,
+        9
+      ]
+    ]
+  },
+  "calculations": {
+    "g16": {
+      "engine": "gaussian",
+      "method": "b3lyp",
+      "basis_set": "def2svp",
+      "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso)",
+      "frequency_mode": "auto",
+      "orca_blocks": null,
+      "end_setting": ""
+    }
+  },
+  "conformers": {
+    "reactant": {
+      "kind": "file",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/lane1/RC_S_canonical.xyz",
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/lane1/RC_S_canonical.mol",
+      "evidence_refs": [
+        "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/TS_GUESS_PROVENANCE.md"
+      ],
+      "optimization": {
+        "ref": "g16"
+      },
+      "heavy_atom_binding": {
+        "indices": [
+          1,
+          2,
+          3,
+          4,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32
+        ]
+      }
+    },
+    "product": {
+      "kind": "file",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/build/I1_S_start.xyz",
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/build/I1_S_start_bonded.mol",
+      "evidence_refs": [
+        "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/I1_PRODUCT_PROVENANCE.md"
+      ],
+      "optimization": {
+        "ref": "g16"
+      },
+      "heavy_atom_binding": {
+        "indices": [
+          3,
+          2,
+          1,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          25,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35
+        ]
+      }
+    },
+    "guidance": {
+      "ring_order": [],
+      "distance_filters": []
+    }
+  },
+  "guess": {
+    "kind": "provided",
+    "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/lane1/TS_guess_merged_canonical.xyz",
+    "evidence_refs": [
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/TS_GUESS_PROVENANCE.md"
+    ]
+  },
+  "ts_optimization": {
+    "ref": "g16"
+  },
+  "verification": {
+    "frequency": {
+      "ref": "g16"
+    },
+    "irc": {
+      "ref": "g16"
+    },
+    "irc_log": null,
+    "reactant_endpoint": {
+      "seed": null,
+      "optimization": {
+        "ref": "g16"
+      },
+      "frequency": {
+        "ref": "g16"
+      }
+    },
+    "product_endpoint": {
+      "seed": null,
+      "optimization": {
+        "ref": "g16"
+      },
+      "frequency": {
+        "ref": "g16"
+      }
+    }
+  },
+  "execution": {
+    "cpus": 8,
+    "memory_mb": 8192,
+    "limits": null
+  }
+}

@@ -1,0 +1,138 @@
+{
+  "reaction": {
+    "reactant_smiles": "[CH3:1][C:2]1([CH3:3])[O:4][O:5]1.[CH2:6]=[CH2:7]",
+    "product_smiles": "[CH3:1][C:2](=[O:5])[CH3:3].[CH2:6]1[O:4][CH2:7]1",
+    "charge": 0,
+    "multiplicity": 1,
+    "electronic_character": null,
+    "atom_map": [
+      5,
+      2,
+      6,
+      4,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      0,
+      1,
+      3,
+      7,
+      8,
+      9,
+      10
+    ],
+    "reaction_center": [
+      [
+        3,
+        0
+      ],
+      [
+        3,
+        1
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        3,
+        4
+      ]
+    ]
+  },
+  "calculations": {
+    "formal": {
+      "engine": "gaussian",
+      "method": "B3LYP",
+      "basis_set": "def2SVP",
+      "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)",
+      "frequency_mode": "analytic",
+      "orca_blocks": null,
+      "end_setting": ""
+    }
+  },
+  "conformers": {
+    "reactant": {
+      "kind": "file",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3_R2/fallback_O2/o2_seed.xyz",
+      "mol_path": null,
+      "evidence_refs": [],
+      "optimization": {
+        "ref": "formal"
+      },
+      "heavy_atom_binding": {
+        "indices": [
+          6,
+          3,
+          7,
+          4,
+          5,
+          1,
+          2
+        ]
+      }
+    },
+    "product": {
+      "kind": "file",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3_R2/fallback_O2/build/art_prod/assembly/complex_candidate_000.xyz",
+      "mol_path": null,
+      "evidence_refs": [],
+      "optimization": {
+        "ref": "formal"
+      },
+      "heavy_atom_binding": {
+        "indices": [
+          1,
+          2,
+          4,
+          3,
+          11,
+          13,
+          12
+        ]
+      }
+    },
+    "guidance": {
+      "ring_order": [],
+      "distance_filters": []
+    }
+  },
+  "guess": {
+    "kind": "provided",
+    "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3_R2/fallback_O2/o2_butterfly_seed.xyz",
+    "evidence_refs": [
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3_R2/fallback_O2/o2_butterfly_seed.xyz",
+      "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3_R2/fallback_O2/O2_BUTTERFLY_SEED.md"
+    ]
+  },
+  "ts_optimization": {
+    "ref": "formal"
+  },
+  "verification": {
+    "frequency": {
+      "ref": "formal"
+    },
+    "irc": {
+      "ref": "formal"
+    },
+    "irc_log": null,
+    "reactant_endpoint": {
+      "seed": null,
+      "optimization": null,
+      "frequency": null
+    },
+    "product_endpoint": {
+      "seed": null,
+      "optimization": null,
+      "frequency": null
+    }
+  },
+  "execution": {
+    "cpus": 8,
+    "memory_mb": 10240,
+    "limits": null
+  }
+}

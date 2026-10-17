@@ -1,0 +1,93 @@
+{
+  "count": 8,
+  "trajectories": [
+    {
+      "trajectory_id": "placement024-mmff94-attempt1",
+      "component_id": "placement024",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 1,
+      "frame_count": 2,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement024-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement024-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement024-mmff94-attempt1/frames.jsonl"
+    },
+    {
+      "trajectory_id": "placement000-mmff94-attempt1",
+      "component_id": "placement000",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 1,
+      "frame_count": 2,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement000-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement000-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement000-mmff94-attempt1/frames.jsonl"
+    },
+    {
+      "trajectory_id": "placement006-mmff94-attempt1",
+      "component_id": "placement006",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 1,
+      "frame_count": 2,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement006-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement006-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement006-mmff94-attempt1/frames.jsonl"
+    },
+    {
+      "trajectory_id": "placement016-mmff94-attempt1",
+      "component_id": "placement016",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 1,
+      "frame_count": 2,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement016-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement016-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement016-mmff94-attempt1/frames.jsonl"
+    },
+    {
+      "trajectory_id": "placement018-mmff94-attempt1",
+      "component_id": "placement018",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 1,
+      "frame_count": 2,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement018-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement018-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement018-mmff94-attempt1/frames.jsonl"
+    },
+    {
+      "trajectory_id": "placement007-mmff94-attempt1",
+      "component_id": "placement007",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 1,
+      "frame_count": 2,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement007-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement007-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement007-mmff94-attempt1/frames.jsonl"
+    },
+    {
+      "trajectory_id": "placement014-mmff94-attempt1",
+      "component_id": "placement014",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 1,
+      "frame_count": 2,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement014-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement014-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement014-mmff94-attempt1/frames.jsonl"
+    },
+    {
+      "trajectory_id": "placement013-mmff94-attempt1",
+      "component_id": "placement013",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 1,
+      "frame_count": 2,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement013-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement013-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/guided_assembly/assembly/trajectories/placement013-mmff94-attempt1/frames.jsonl"
+    }
+  ]
+}

@@ -1,0 +1,1532 @@
+{
+  "chosen": {
+    "iso": 3,
+    "rms_heavy": 2.2275422787725567,
+    "rms_all": 2.547468236188037,
+    "md5": "954a61340bf368d35f8cfb531169a5f9",
+    "order_seed_to_P_1based": [
+      3,
+      2,
+      25,
+      1,
+      29,
+      28,
+      30,
+      35,
+      34,
+      33,
+      32,
+      31,
+      14,
+      15,
+      16,
+      12,
+      13,
+      36,
+      24,
+      41,
+      40,
+      39,
+      38,
+      37,
+      11,
+      9,
+      10,
+      8,
+      7,
+      6,
+      5,
+      4,
+      27,
+      23,
+      21,
+      22,
+      19,
+      20,
+      17,
+      18,
+      26
+    ],
+    "bond_mismatch": [
+      [
+        7,
+        8,
+        "DOUBLE",
+        "AROMATIC"
+      ],
+      [
+        8,
+        9,
+        "SINGLE",
+        "AROMATIC"
+      ],
+      [
+        9,
+        10,
+        "DOUBLE",
+        "AROMATIC"
+      ],
+      [
+        10,
+        11,
+        "SINGLE",
+        "AROMATIC"
+      ],
+      [
+        11,
+        12,
+        "DOUBLE",
+        "AROMATIC"
+      ],
+      [
+        7,
+        12,
+        "SINGLE",
+        "AROMATIC"
+      ]
+    ]
+  },
+  "n_iso_heavy": 4,
+  "n_complete": 192,
+  "key_bonds": [
+    {
+      "bond": "C2-N4",
+      "seed_atoms_1based": [
+        2,
+        32
+      ],
+      "seed_A": 5.628,
+      "e3_atoms_1based": [
+        2,
+        4
+      ],
+      "P_A": 3.3308,
+      "seed_minus_P": 2.2972
+    },
+    {
+      "bond": "C2-O25",
+      "seed_atoms_1based": [
+        2,
+        3
+      ],
+      "seed_A": 1.2356,
+      "e3_atoms_1based": [
+        2,
+        25
+      ],
+      "P_A": 1.2172,
+      "seed_minus_P": 0.0184
+    },
+    {
+      "bond": "N4-H26",
+      "seed_atoms_1based": [
+        32,
+        41
+      ],
+      "seed_A": 1.0259,
+      "e3_atoms_1based": [
+        4,
+        26
+      ],
+      "P_A": 1.02,
+      "seed_minus_P": 0.0059
+    },
+    {
+      "bond": "O25-H26",
+      "seed_atoms_1based": [
+        3,
+        41
+      ],
+      "seed_A": 4.4918,
+      "e3_atoms_1based": [
+        25,
+        26
+      ],
+      "P_A": 3.137,
+      "seed_minus_P": 1.3548
+    },
+    {
+      "bond": "O10-H27",
+      "seed_atoms_1based": [
+        27,
+        33
+      ],
+      "seed_A": 0.9934,
+      "e3_atoms_1based": [
+        10,
+        27
+      ],
+      "P_A": 1.0112,
+      "seed_minus_P": -0.0178
+    }
+  ],
+  "seed_product_side_bondtable": true,
+  "top2": [
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275422787725567,
+      "md5": "954a61340bf368d35f8cfb531169a5f9"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275422787725567,
+      "md5": "fc9335c1a818b1a2f6f9666060d4d2f7"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275422787725567,
+      "md5": "061f745fadc47f0d4704099e4c8421ff"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275422787725567,
+      "md5": "3bc2e33316d9bb1893e9a482ea129770"
+    }
+  ],
+  "all_candidates": [
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5475,
+      "nmism": 6,
+      "md5": "954a61340bf368d35f8cfb531169a5f9"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5472,
+      "nmism": 6,
+      "md5": "fc9335c1a818b1a2f6f9666060d4d2f7"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.526,
+      "nmism": 6,
+      "md5": "061f745fadc47f0d4704099e4c8421ff"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5259,
+      "nmism": 6,
+      "md5": "3bc2e33316d9bb1893e9a482ea129770"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5495,
+      "nmism": 6,
+      "md5": "a9b7e95d8589c806609e71cb7741b0bf"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5496,
+      "nmism": 6,
+      "md5": "c2bc61328193d68b29c79af3d55dccf8"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5276,
+      "nmism": 6,
+      "md5": "f291576f8392b2338eef52a73b83461b"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5281,
+      "nmism": 6,
+      "md5": "c7df12fab6de4e588ca76330e15c5534"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.544,
+      "nmism": 6,
+      "md5": "eef6be6b875245de257f8b11028d06b5"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5442,
+      "nmism": 6,
+      "md5": "3293a7a842421d57c395699bf048f9a3"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5221,
+      "nmism": 6,
+      "md5": "4e49a70496786c5db55da025123aa79f"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5226,
+      "nmism": 6,
+      "md5": "182df06f7d56d2bfeba187b1f6513cab"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5455,
+      "nmism": 6,
+      "md5": "c636cff1fee181aa24037becf2f03e6b"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5461,
+      "nmism": 6,
+      "md5": "ee91a502776d129ac4eb22e91ec201a0"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5233,
+      "nmism": 6,
+      "md5": "5d8dbddc0e1ebb27df6b44ed467dda57"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5242,
+      "nmism": 6,
+      "md5": "fb5ad1498bf5d6fdba4d7a2028c998e1"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5498,
+      "nmism": 6,
+      "md5": "f8cc2808d8e37e7e7d068484b4c858d6"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5492,
+      "nmism": 6,
+      "md5": "a2edd9e9f7b6dc99f1c2a137763c84ba"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5284,
+      "nmism": 6,
+      "md5": "c8630c4bbfe9ddc7ebe0aadf0cba4a74"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5281,
+      "nmism": 6,
+      "md5": "e6373d4efa7a721d4c1f70bfab5075ef"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5521,
+      "nmism": 6,
+      "md5": "b9481acb1bcff193ac2d602f2061fa5f"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.552,
+      "nmism": 6,
+      "md5": "668abdb2640ba8710ab28d6ff0559b10"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5304,
+      "nmism": 6,
+      "md5": "ec4a94e5c8c1d5f82daa03696d7404f7"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5306,
+      "nmism": 6,
+      "md5": "d0919d711362648b8d777c95d9b497fd"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5467,
+      "nmism": 6,
+      "md5": "385ba808de6a17e995584212167dc1e1"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5466,
+      "nmism": 6,
+      "md5": "3b96d5cb59a6295536105cbba73333c8"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5249,
+      "nmism": 6,
+      "md5": "241eca842bbb0e455d3d9135dc4a68c2"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5251,
+      "nmism": 6,
+      "md5": "b4716f06d79baba2f07c08d107962506"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5484,
+      "nmism": 6,
+      "md5": "5ac2d20a6c81937ad825d22228e6c752"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5488,
+      "nmism": 6,
+      "md5": "91cdd82286b176350558c290af2156e2"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5264,
+      "nmism": 6,
+      "md5": "bba9e7683153e9e2058f8d61bc36e1f7"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.527,
+      "nmism": 6,
+      "md5": "15b0e1ef093c28ea00ee77424d573910"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5718,
+      "nmism": 6,
+      "md5": "175dc9eb251be3d528b4240e5b981d03"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5716,
+      "nmism": 6,
+      "md5": "504a5a9ed8cc36e2727fb44085bf66d2"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5505,
+      "nmism": 6,
+      "md5": "77e82589f970fb24a4eebff7d7cfe9f5"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5504,
+      "nmism": 6,
+      "md5": "0e5ae44f9ad16a9420f476b66b73d06b"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5737,
+      "nmism": 6,
+      "md5": "408a04f54ab2f22c276fae550f0c2d18"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5739,
+      "nmism": 6,
+      "md5": "eaca47a90ac6f0310f90861ffbb5efed"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5521,
+      "nmism": 6,
+      "md5": "22553b782bb0c02452f16722f25dbd02"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5525,
+      "nmism": 6,
+      "md5": "a62e52e70b9b2aeef666765c6d321906"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5683,
+      "nmism": 6,
+      "md5": "20a9270e143e8c1bb679ed32ca62f15e"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5685,
+      "nmism": 6,
+      "md5": "91084bd6f38686a1481c986a5c3cb97a"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5466,
+      "nmism": 6,
+      "md5": "952613eecd0e21326dc7d83e542d2870"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.547,
+      "nmism": 6,
+      "md5": "d0e37f5781cd6c3afb44109a43ef2851"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5697,
+      "nmism": 6,
+      "md5": "03180ccb09860a8af01196c1f150874e"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5703,
+      "nmism": 6,
+      "md5": "fc5e221402cd6846b35af02ec7bd4659"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5477,
+      "nmism": 6,
+      "md5": "1f7dc60b004f828d3c37b3621d5c9c22"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5486,
+      "nmism": 6,
+      "md5": "e8b13a5fabf3ea8ff7527fb07cf16fa9"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5772,
+      "nmism": 6,
+      "md5": "9ef1569a68edd34a5072dd0103a2f40f"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5765,
+      "nmism": 6,
+      "md5": "4df73cfdfa93405b9c266463d4c7ad41"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5561,
+      "nmism": 6,
+      "md5": "0a0d89050f6ab2f738b34b8f54796b20"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5557,
+      "nmism": 6,
+      "md5": "ee14de6d57bb53bd818455e61b5f4674"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5796,
+      "nmism": 6,
+      "md5": "ab507da8bd0877d768bac4b120c5e419"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5794,
+      "nmism": 6,
+      "md5": "e1dfbdc95cf0cd0c220d01d68f8db1f8"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5582,
+      "nmism": 6,
+      "md5": "e622281a7682bf76841748a21d67ae4f"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5583,
+      "nmism": 6,
+      "md5": "f6506b59b44862da70432988649db6a7"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5742,
+      "nmism": 6,
+      "md5": "229cc83645f06f9e63c167050fdc5a51"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.574,
+      "nmism": 6,
+      "md5": "f59c006c3dbf6c3b3f409ef3a23d6214"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5528,
+      "nmism": 6,
+      "md5": "e8ff4cf537bab292076df4bf41329a5d"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5529,
+      "nmism": 6,
+      "md5": "33868de7f741563f13d40738650203c9"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5761,
+      "nmism": 6,
+      "md5": "10d4383c04907d77a0036ec23d3e97fb"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5763,
+      "nmism": 6,
+      "md5": "1b170437cea98ff9d98598e525b623cd"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5544,
+      "nmism": 6,
+      "md5": "b341249dd2df6d8a5ff9866db28d9bcb"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5549,
+      "nmism": 6,
+      "md5": "0ecc01c587f4f595ebda610ea11a20fe"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5546,
+      "nmism": 6,
+      "md5": "7e4872799591bb18421e52741afdf264"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.554,
+      "nmism": 6,
+      "md5": "89274c5121e2c2b27083c0b3ff3795a5"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5332,
+      "nmism": 6,
+      "md5": "949754115670fa59890c8215e6b6c6af"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5329,
+      "nmism": 6,
+      "md5": "72c7d405edd5894d15d2fde0a559b124"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5568,
+      "nmism": 6,
+      "md5": "6e755c0cb2c9410cb1cd2b37b461fde2"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5567,
+      "nmism": 6,
+      "md5": "f4e43949cf3567182d10249cd386e556"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5351,
+      "nmism": 6,
+      "md5": "cb5936d54487d574eb5b34dbdc4d6c31"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5352,
+      "nmism": 6,
+      "md5": "4f5f576821c7e2cbdf9d678e631151e2"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5514,
+      "nmism": 6,
+      "md5": "3accbb95753d53c5373615c574f225d9"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5512,
+      "nmism": 6,
+      "md5": "96c4ceb855425d463012357b6b36aaf9"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5296,
+      "nmism": 6,
+      "md5": "20e40f51197e8bf79f8a604cec721711"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5298,
+      "nmism": 6,
+      "md5": "bca86f4536beda86601aebd0f6979d04"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5531,
+      "nmism": 6,
+      "md5": "08e839c09c153a79f8cf1bf21c273936"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5534,
+      "nmism": 6,
+      "md5": "3392ca9f57f470eeb1a18c0628007c28"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.531,
+      "nmism": 6,
+      "md5": "8f2b4a324804b7799f9cd047b88539f4"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5316,
+      "nmism": 6,
+      "md5": "f77d5728faf84e50f96d36c181027fd0"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5576,
+      "nmism": 6,
+      "md5": "078693a0494c1f9235e914a913b88749"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5569,
+      "nmism": 6,
+      "md5": "fddc0f766807400f72eabcb85ed7cbaa"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5365,
+      "nmism": 6,
+      "md5": "10ad33fcc22551c3742a4bbb1740f8c2"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.536,
+      "nmism": 6,
+      "md5": "e2fcc5979b04ad6ee34aad01cb0e2d56"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5601,
+      "nmism": 6,
+      "md5": "963d182448d0e6deffc01d54952212e1"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5598,
+      "nmism": 6,
+      "md5": "c819d63b3bea073c08a05b01cf5b273d"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5386,
+      "nmism": 6,
+      "md5": "4159ddf72dd8972abdda02d0676bd908"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5386,
+      "nmism": 6,
+      "md5": "d0e837a5f9afe7e137cc787ef21f318a"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5547,
+      "nmism": 6,
+      "md5": "ee3df3cc950e27c352b7bb3e99c945b1"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5544,
+      "nmism": 6,
+      "md5": "29d1a13e52bc8a964ac75f3958e9dbeb"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5331,
+      "nmism": 6,
+      "md5": "966e6ebeac0b389a2bb4a5fb87f20d04"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5331,
+      "nmism": 6,
+      "md5": "d4d86fcb178c664ce0954bb310c5ff3f"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5566,
+      "nmism": 6,
+      "md5": "0d3c0676ec1f36f28d1a978adafe9535"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5567,
+      "nmism": 6,
+      "md5": "9cf66610bf7c297000755b6cb1049091"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5347,
+      "nmism": 6,
+      "md5": "c96b8c05e8799d19f00095d2083a20af"
+    },
+    {
+      "iso": 3,
+      "rms_heavy": 2.2275,
+      "rms_all": 2.5352,
+      "nmism": 6,
+      "md5": "a0c86755d0b66578604069ff474711ea"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6792,
+      "nmism": 6,
+      "md5": "6f18e28ef9a2cd4f0825cee6575a6f82"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6717,
+      "nmism": 6,
+      "md5": "11a3f68185de366248edab46f0633839"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6644,
+      "nmism": 6,
+      "md5": "d46a9d12c5bcd379764d63c7940477d3"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6572,
+      "nmism": 6,
+      "md5": "5815c4201988366bb0c4a41d716960ed"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6895,
+      "nmism": 6,
+      "md5": "187da1c5c84fcb37f84df0a7fe0182c6"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6825,
+      "nmism": 6,
+      "md5": "20536693aeb23059fe2808969ec73321"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6744,
+      "nmism": 6,
+      "md5": "a6cdb4ee788880243eea553c9d6174f3"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6676,
+      "nmism": 6,
+      "md5": "1cb0af3215b1c4ad81e11bd160c38eda"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6849,
+      "nmism": 6,
+      "md5": "da95a7532cffc5d39a233f0da5d9cb80"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6779,
+      "nmism": 6,
+      "md5": "d12fa7c6e8c508a5ee162d3c5c4c76ea"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6697,
+      "nmism": 6,
+      "md5": "1a373ce98a8cfa99fbae05c345303eba"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.663,
+      "nmism": 6,
+      "md5": "a3dc01e2f118c42bc090170b6699bc7d"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6946,
+      "nmism": 6,
+      "md5": "38869e430eec68ed960169ccfe289628"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6881,
+      "nmism": 6,
+      "md5": "6ce6f030a20dbbf0a2dbaf6c27e47df7"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6791,
+      "nmism": 6,
+      "md5": "341319f8167335bf14646fac3d93329e"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6729,
+      "nmism": 6,
+      "md5": "3f5b93d671397eeae6f0e830b68fda62"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6756,
+      "nmism": 6,
+      "md5": "d6c51657bf9a660ec6690ed73cfae2be"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6679,
+      "nmism": 6,
+      "md5": "96927b8de0593420aa71c0ff0a29b1c7"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6609,
+      "nmism": 6,
+      "md5": "a89b79a399c09107eeb623da244e33bb"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6535,
+      "nmism": 6,
+      "md5": "f20fb2fa3d2172df6dbbc09c46670af9"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6861,
+      "nmism": 6,
+      "md5": "ae03da01aeef04731f0413f37d601c66"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6789,
+      "nmism": 6,
+      "md5": "e25529dce34dc15d86a0eb4fd9411912"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6711,
+      "nmism": 6,
+      "md5": "f77ccbecff7cd9ec8ea2fdba909383ce"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6642,
+      "nmism": 6,
+      "md5": "a4e0adea022e153263490942c1c5dfbe"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6816,
+      "nmism": 6,
+      "md5": "60432769c990a0b230ac1fb78971fbec"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6744,
+      "nmism": 6,
+      "md5": "0e13cc3dd1abf6e885ebfea70c6e4a5f"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6665,
+      "nmism": 6,
+      "md5": "de53b056057a190c52a90a058a9ed84f"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6596,
+      "nmism": 6,
+      "md5": "aa4477d7c1152f3dc9cb4d830a4864ff"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6916,
+      "nmism": 6,
+      "md5": "c5a36d0f83be4a8dd3a9fd096f571431"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6849,
+      "nmism": 6,
+      "md5": "308595703ab79243adf4f5242118ef9f"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6762,
+      "nmism": 6,
+      "md5": "e5d69dade4552cedeefe356225f62f27"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6697,
+      "nmism": 6,
+      "md5": "943e9c6acc910c45679ba824ab1b4f0e"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.7034,
+      "nmism": 6,
+      "md5": "09f9e9a6fcccaa574a908955a8b5929e"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.696,
+      "nmism": 6,
+      "md5": "c2d0492bed92b6878b3857a0498dd4ac"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6887,
+      "nmism": 6,
+      "md5": "0e564a602c96b61bfc7c624bc1b369c2"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6816,
+      "nmism": 6,
+      "md5": "69e11d1cdb7b5f0971ca2c5f5fa6b586"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.7136,
+      "nmism": 6,
+      "md5": "d9185f714e60c185e59bc792d10b3e0a"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.7066,
+      "nmism": 6,
+      "md5": "4381fea1ca1f87e2ffc14e6138bb8aea"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6985,
+      "nmism": 6,
+      "md5": "6ed634ceb922620b7d10a3960300410b"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6918,
+      "nmism": 6,
+      "md5": "569989475f71b9109d6f34d5dd42dfbc"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.709,
+      "nmism": 6,
+      "md5": "04c4f456fb0d1eedde9579d692c8c88f"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.7021,
+      "nmism": 6,
+      "md5": "4c60fda799abb29d190f95345c5faec5"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6938,
+      "nmism": 6,
+      "md5": "239d165cf637551867633282792f9d26"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6872,
+      "nmism": 6,
+      "md5": "0a31bb9505e041cca090c0ec2e8d238f"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.7185,
+      "nmism": 6,
+      "md5": "3fdce281d2b8c54b15ee375b73146848"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.7121,
+      "nmism": 6,
+      "md5": "23b39e434aa953afe36524acc1487a35"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.7031,
+      "nmism": 6,
+      "md5": "ce3a99aec526ad2cc95118c305fea0ed"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6969,
+      "nmism": 6,
+      "md5": "e0fbd14635f9a3b0cd08788529d1d263"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6988,
+      "nmism": 6,
+      "md5": "6cf5a4b3c4d0ec677ccb5a41624a60f3"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.691,
+      "nmism": 6,
+      "md5": "757b9f5274d4455a3b7ffeed08815ca7"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6844,
+      "nmism": 6,
+      "md5": "66291a4f63b2fc16b3b4158d3274547a"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6769,
+      "nmism": 6,
+      "md5": "962cc394e1cbc7c3cdf93bcb4fbaf34c"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.7095,
+      "nmism": 6,
+      "md5": "25a6f577d48bb7873b15ffec61388f00"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.7022,
+      "nmism": 6,
+      "md5": "8994a0bb2793c362f89575f9a8730633"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6948,
+      "nmism": 6,
+      "md5": "083d9f5c75ae73b279aa6f23f468a704"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6877,
+      "nmism": 6,
+      "md5": "d22e98296325d39971f27f2ea0278597"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.705,
+      "nmism": 6,
+      "md5": "e12d58621688da33615607150866019f"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6977,
+      "nmism": 6,
+      "md5": "a362760f591f101cf71478d9ad7750c2"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6903,
+      "nmism": 6,
+      "md5": "327deae0368cc7dc9a4610bbe2ce3f6c"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6832,
+      "nmism": 6,
+      "md5": "240126c91806d37bb75b7131d92f2efc"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.7152,
+      "nmism": 6,
+      "md5": "796a6c014ec68c23af13bc88348704b7"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.7083,
+      "nmism": 6,
+      "md5": "de316468f556b5dae64823090c04f0dd"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.7001,
+      "nmism": 6,
+      "md5": "945079b0ebcf4dd79352994593b701df"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6935,
+      "nmism": 6,
+      "md5": "651f61e04745845ca39c3141aca5fd81"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6819,
+      "nmism": 6,
+      "md5": "f95292fd9eae477955137a9dc819bd57"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6742,
+      "nmism": 6,
+      "md5": "3bf72aeb9a189dd7f16e111505e747d9"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6672,
+      "nmism": 6,
+      "md5": "42898011e216c451e9eb37beb1769d40"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6598,
+      "nmism": 6,
+      "md5": "a8b2ae677c9178c458e5053e7bbbf38f"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6924,
+      "nmism": 6,
+      "md5": "8d2d6075715c529df8cd1a61424c0872"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6851,
+      "nmism": 6,
+      "md5": "91fcb323d7fbf5cb46bfbda3d1925105"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6773,
+      "nmism": 6,
+      "md5": "4513ff830d5738d989b6c6e26211d533"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6704,
+      "nmism": 6,
+      "md5": "66e7282c6c26572c62999422714b5ca7"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6878,
+      "nmism": 6,
+      "md5": "808624e90cd7246d8b6852cec5664b32"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6806,
+      "nmism": 6,
+      "md5": "655dd33dd7816e39a138bcd538319d4a"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6727,
+      "nmism": 6,
+      "md5": "3b2cd0cfd16f3ede011e69a1aca833cd"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6658,
+      "nmism": 6,
+      "md5": "3d30df592073d8fe372f1c98373ab6f6"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6977,
+      "nmism": 6,
+      "md5": "6aad52c06ffa17e85c628b045655e3cf"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6909,
+      "nmism": 6,
+      "md5": "3ce50470baadd427e2445799a4c377fd"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6823,
+      "nmism": 6,
+      "md5": "41290371115befc5a66ddabbb37b3b26"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6758,
+      "nmism": 6,
+      "md5": "fe46eeb784b43e50e386b243345d8654"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6808,
+      "nmism": 6,
+      "md5": "6ed8ff59f0fbdb7d1867e7922e02e043"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6729,
+      "nmism": 6,
+      "md5": "b0bbd5ed5bde96cc4b411cfbe9319424"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6664,
+      "nmism": 6,
+      "md5": "8d11befd9eedbbbc0fc1c8222a8b4c48"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6587,
+      "nmism": 6,
+      "md5": "52ad0a4d0f54838807499530be59feca"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6916,
+      "nmism": 6,
+      "md5": "99e0105f8760391b8db4e1ec9f24328e"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6841,
+      "nmism": 6,
+      "md5": "73b7af7f5aaa596cecbd317fd0c6204b"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6769,
+      "nmism": 6,
+      "md5": "3a09d4bab080418d47cb82d43ddcb595"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6697,
+      "nmism": 6,
+      "md5": "a2264b2489a6ebea588be2c4df7ea979"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6871,
+      "nmism": 6,
+      "md5": "a954a62fe0df0402c357b7d663571925"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6796,
+      "nmism": 6,
+      "md5": "fe6d2316a7aa9fb0234fde514e3e1cf3"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6722,
+      "nmism": 6,
+      "md5": "8afc4d36df8cb1219360493730dea10c"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6651,
+      "nmism": 6,
+      "md5": "643a3f09a0aa8835e135514bf2159413"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6973,
+      "nmism": 6,
+      "md5": "cce58e31ce7301d40c97ff6401c581b7"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6903,
+      "nmism": 6,
+      "md5": "030f7f4386e8cd39c0f1ad6574946e15"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6821,
+      "nmism": 6,
+      "md5": "7ef1b8a4a351e9cc8e3fa95fda9a140f"
+    },
+    {
+      "iso": 1,
+      "rms_heavy": 2.2916,
+      "rms_all": 2.6754,
+      "nmism": 6,
+      "md5": "1f2d9b18fdba88254a6f1481f3df1873"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "verified_at": "2026-10-15T18:20+08:00",
+  "coordinator_session": "as_84bdf87a0f94416c",
+  "jobs": {
+    "907": {
+      "role": "HI1_E1 reactant complex (RC) minimum",
+      "species": "(S)-proline+acetone+benzaldehyde",
+      "log": "gold_finish_20261015/HI1/E1/runs/RC_optfreq/RC_optfreq.log",
+      "log_sha256": "fa28545612332f69c60c0b778cd5dd1907b22b8ad36f6b1da7811da1295563ba",
+      "ca_cip": "S",
+      "imaginary_freq_count": 0,
+      "e_hartree": -939.308829219
+    },
+    "908": {
+      "role": "HI1_I1 minimum (WRONG ENANTIOMER)",
+      "species": "enamine+water+benzaldehyde",
+      "log": "gold_finish_20261015/HI1/E1/runs/I1_optfreq/I1_optfreq.log",
+      "log_sha256": "d35b0abfdb25154e54d848bdbcf2bd7af387fb63a7f4a2229325d557d1d933eb",
+      "ca_cip": "R",
+      "imaginary_freq_count": 0,
+      "e_hartree": -939.308218263,
+      "input_gjf": "gold_finish_20261015/HI1/E1/runs/I1_optfreq/I1_optfreq.gjf",
+      "input_equals_job51_raw": "maxdev 0.0000 A"
+    },
+    "924": {
+      "role": "shared (S)-HI1_I1 baseline (pending)",
+      "input": "gold_finish_20261015/HI1/E2EM1/runs/I1_optfreq/I1_S_optfreq.gjf",
+      "input_sha256": "8b843b95bb55f46921f9aa23f9c172d906261b881e433db4c419605913cef0a9",
+      "start_geometry": "gold_finish_20261015/HI1/E1/build/I1_S_start.xyz",
+      "start_ca_cip": "S"
+    }
+  },
+  "tool": {
+    "path": "gold_finish_20261015/HI1/shared/tools/hi1_cip_tools.py",
+    "note": "extracts last Gaussian Standard orientation; RDKit DetermineBonds + AssignCIPLabels"
+  }
+}

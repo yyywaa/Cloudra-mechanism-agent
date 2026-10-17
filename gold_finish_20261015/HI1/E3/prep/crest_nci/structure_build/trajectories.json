@@ -1,0 +1,27 @@
+{
+  "count": 2,
+  "trajectories": [
+    {
+      "trajectory_id": "frag0-mmff94-attempt1",
+      "component_id": "frag0",
+      "status": "not_converged",
+      "engine": "MMFF94",
+      "iterations": 20000,
+      "frame_count": 20001,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/prep/crest_nci/structure_build/trajectories/frag0-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/prep/crest_nci/structure_build/trajectories/frag0-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/prep/crest_nci/structure_build/trajectories/frag0-mmff94-attempt1/frames.jsonl"
+    },
+    {
+      "trajectory_id": "frag1-mmff94-attempt1",
+      "component_id": "frag1",
+      "status": "converged",
+      "engine": "MMFF94",
+      "iterations": 32,
+      "frame_count": 33,
+      "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/prep/crest_nci/structure_build/trajectories/frag1-mmff94-attempt1/trajectory.json",
+      "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/prep/crest_nci/structure_build/trajectories/frag1-mmff94-attempt1/frames.xyz",
+      "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/prep/crest_nci/structure_build/trajectories/frag1-mmff94-attempt1/frames.jsonl"
+    }
+  ]
+}

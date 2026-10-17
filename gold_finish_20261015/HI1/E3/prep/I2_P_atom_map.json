@@ -1,0 +1,203 @@
+{
+  "note": "HI1_E3 step HI1_I2 -> HI1_P : complete concrete atom map. product_atom_map is in PRODUCT-coordinate order; each value is a 1-based index in the REACTANT (I2) working order. Derived by hand from the role tables; validate with reaction_mapping on concrete xyz before ts_prepare use.",
+  "reactant": {
+    "species": "HI1_I2 = iminium-alkoxide + explicit water",
+    "smiles": "CC(C[C@H]([O-])c1ccccc1)=[N+]1CCC[C@H]1C(=O)O.O",
+    "working_order_source": "shared structure builder order of SMILES C=C(C)N1CCC[C@H]1C(=O)O.O.O=Cc1ccccc1 (41 atoms), preserved by the Gaussian geometry-prep job",
+    "index_roles": {
+      "1": "C map3 (acetone alpha-CH2 / enamine terminal CH2)",
+      "2": "C map2 (iminium C)",
+      "3": "C map1 (CH3)",
+      "4": "N map20",
+      "5": "C map17 ring CH2",
+      "6": "C map18 ring CH2",
+      "7": "C map19 ring CH2",
+      "8": "C map16 proline C-alpha (target S)",
+      "9": "C map14 carboxyl C",
+      "10": "O map13 carboxyl C=O",
+      "11": "O map15 carboxyl OH",
+      "12": "H on 1",
+      "13": "H on 1",
+      "14": "H on 3",
+      "15": "H on 3",
+      "16": "H on 3",
+      "17": "H on 5",
+      "18": "H on 5",
+      "19": "H on 6",
+      "20": "H on 6",
+      "21": "H on 7",
+      "22": "H on 7",
+      "23": "H on 8 (C-alpha H)",
+      "24": "H on 11 (carboxyl H)",
+      "25": "O map4 (explicit water O)",
+      "26": "H map21 (water H)",
+      "27": "H map22 (water H)",
+      "28": "O map5 (alkoxide O)",
+      "29": "C map6 (aldol C, target S)",
+      "30": "C map7",
+      "31": "C map8",
+      "32": "C map9",
+      "33": "C map10",
+      "34": "C map11",
+      "35": "C map12",
+      "36": "H on 29",
+      "37": "H phenyl",
+      "38": "H phenyl",
+      "39": "H phenyl",
+      "40": "H phenyl",
+      "41": "H phenyl"
+    }
+  },
+  "product": {
+    "species": "HI1_P = (S)-aldol + (S)-proline",
+    "smiles": "CC(=O)C[C@H](O)c1ccccc1.O=C(O)[C@@H]1CCCN1",
+    "concrete_file": "gold_finish_20261015/HI1/E3/prep/structure_build_P/assembly/complex_candidate_000.xyz",
+    "index_roles": {
+      "1": "CH3",
+      "2": "ketone C",
+      "3": "ketone O",
+      "4": "CH2",
+      "5": "aldol CH (S)",
+      "6": "aldol OH O",
+      "7": "ipso C",
+      "8": "phenyl C",
+      "9": "phenyl C",
+      "10": "phenyl C",
+      "11": "phenyl C",
+      "12": "phenyl C",
+      "13": "H methyl",
+      "14": "H methyl",
+      "15": "H methyl",
+      "16": "H on 4",
+      "17": "H on 4",
+      "18": "H on 5",
+      "19": "H on 6 (aldol OH H)",
+      "20": "H phenyl",
+      "21": "H phenyl",
+      "22": "H phenyl",
+      "23": "H phenyl",
+      "24": "H phenyl",
+      "25": "O carboxyl C=O",
+      "26": "C carboxyl",
+      "27": "O carboxyl OH",
+      "28": "C proline C-alpha (S)",
+      "29": "C ring CH2",
+      "30": "C ring CH2",
+      "31": "C ring CH2",
+      "32": "N",
+      "33": "H on 27 (carboxyl H)",
+      "34": "H on 28",
+      "35": "H on 29",
+      "36": "H on 29",
+      "37": "H on 30",
+      "38": "H on 30",
+      "39": "H on 31",
+      "40": "H on 31",
+      "41": "H on 32 (proline N-H)"
+    }
+  },
+  "product_atom_map": [
+    3,
+    2,
+    25,
+    1,
+    29,
+    28,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    14,
+    15,
+    16,
+    12,
+    13,
+    36,
+    27,
+    37,
+    38,
+    39,
+    40,
+    41,
+    10,
+    9,
+    11,
+    8,
+    5,
+    6,
+    7,
+    4,
+    24,
+    23,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    26
+  ],
+  "concrete_watch_pairs_in_reactant_order": {
+    "break": [
+      [
+        2,
+        4
+      ],
+      [
+        25,
+        26
+      ],
+      [
+        25,
+        27
+      ]
+    ],
+    "form": [
+      [
+        2,
+        25
+      ],
+      [
+        4,
+        26
+      ],
+      [
+        28,
+        27
+      ]
+    ]
+  },
+  "declared_bond_changes_map_numbers": {
+    "break": [
+      [
+        2,
+        20
+      ],
+      [
+        4,
+        21
+      ],
+      [
+        4,
+        22
+      ]
+    ],
+    "form": [
+      [
+        2,
+        4
+      ],
+      [
+        20,
+        21
+      ],
+      [
+        5,
+        22
+      ]
+    ]
+  },
+  "caveat": "the two water H (reactant 26/27) are chemically equivalent; the map fixes 26 -> proline N-H and 27 -> aldol OH to match the declared bond_changes. If the physical TS sends the other H to N, the label swap is a bookkeeping change only (report which physical H went where)."
+}

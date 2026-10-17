@@ -1,0 +1,4 @@
+holder: HI1 coordinator as_84bdf87a0f94416c (takeover of lane3 token; lane3 session as_3509ff4f56ea402c = state failed)
+original hold since 2026-10-15T16:50+08:00 (lane3); takeover 2026-10-15T18:20+08:00, documented in hub post gold-finish-20261015
+job: (S)-HI1_I1 Opt+Freq baseline, input gold_finish_20261015/HI1/E2EM1/runs/I1_optfreq/I1_S_optfreq.gjf (Cα=S verified), 8 cpus / 8192 MB
+release after the job reaches a terminal state

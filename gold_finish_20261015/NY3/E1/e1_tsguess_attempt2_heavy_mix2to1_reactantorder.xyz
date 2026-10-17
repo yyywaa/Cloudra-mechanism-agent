@@ -1,0 +1,13 @@
+11
+NY3 E1 attempt-2 guess: MACHINE construction - heavy atoms linear-mixed p6:p5 = 2:1, all H re-attached rigidly to their p6 parent (O-H kept intact). sources p6=gold_finish_20261015/NY3/E1/e1_tsguess_revscan_p6_reactantorder.xyz 0.667 + p5=gold_finish_20261015/NY3/E1/e1_tsguess_revscan_p5_reactantorder.xyz 0.333
+Na    -1.88764633    -0.59331133     0.83157933
+O      0.65638333    -1.03516933     1.06974967
+H      1.37498633    -1.68173633     1.03006167
+C      1.60289467     1.37764400    -0.16386433
+O      0.28677067     0.99036100    -0.48543033
+C      0.07764600    -0.31449600    -0.76408300
+O     -1.06893567    -0.71016833    -0.94131767
+H      1.75963067     0.90389600     0.81596567
+H      2.35358767     1.00459800    -0.88275233
+H      1.68372767     2.47031400    -0.09777533
+H      0.96598900    -0.93200600    -1.00460900

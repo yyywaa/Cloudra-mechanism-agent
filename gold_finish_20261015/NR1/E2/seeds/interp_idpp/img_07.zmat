@@ -1,0 +1,31 @@
+# Z-matrix (internal coordinates), generated along molecular-graph spanning tree
+# Units: bond length in Å, angle/dihedral in degrees
+# Format: index name | parent r=... | parent a=... | parent d=...
+# Parent is an atom label (e.g. C2) or absolute reference (origin/e_z/e_x)
+
+  4  C4     | origin  r=2.1845  | e_z     a=43.83  | e_x     d=-43.52
+  5  C5     | C4      r=1.4987  | e_z     a=6.85  | e_x     d=-0.48
+ 12  H12    | C4      r=1.0927  | C5      a=117.55  | e_x     d=54.08
+ 13  H13    | C4      r=1.0923  | C5      a=111.88  | e_x     d=-76.38
+ 14  H14    | C4      r=1.0927  | C5      a=114.58  | e_x     d=163.97
+  6  C6     | C5      r=1.4944  | C4      a=112.88  | H12     d=-145.49
+  8  C8     | C5      r=1.5088  | C4      a=115.72  | H12     d=70.34
+ 15  H15    | C6      r=1.0938  | C5      a=115.00  | C4      d=43.91
+ 16  H16    | C6      r=1.0927  | C5      a=113.15  | C4      d=-75.13
+ 17  H17    | C6      r=1.0894  | C5      a=117.40  | C4      d=158.30
+  9  C9     | C8      r=1.5246  | C5      a=118.33  | C4      d=102.96
+ 10  C10    | C8      r=1.5178  | C5      a=116.78  | C4      d=-38.69
+ 11  O11    | C8      r=1.3906  | C5      a=103.35  | C4      d=-157.21
+ 20  H20    | C9      r=1.0964  | C8      a=111.36  | C5      d=62.86
+ 21  H21    | C9      r=1.0966  | C8      a=113.29  | C5      d=179.94
+ 22  H22    | C9      r=1.0903  | C8      a=112.54  | C5      d=-57.79
+ 23  H23    | C10     r=1.0953  | C8      a=114.01  | C5      d=-53.03
+ 24  H24    | C10     r=1.0961  | C8      a=114.11  | C5      d=-174.35
+ 25  H25    | C10     r=1.0928  | C8      a=111.00  | C5      d=65.75
+ 26  H26    | O11     r=0.9733  | C8      a=113.42  | C5      d=124.32
+  1  O1     | origin  r=2.9931  | e_z     a=119.43  | e_x     d=-129.90
+  2  H2     | O1      r=0.9905  | e_z     a=120.26  | e_x     d=89.38
+  3  H3     | O1      r=0.9758  | H2      a=98.82  | e_x     d=177.52
+  7  O7     | origin  r=3.0519  | e_z     a=103.49  | e_x     d=176.59
+ 18  H18    | O7      r=0.9889  | e_z     a=59.48  | e_x     d=1.89
+ 19  H19    | O7      r=0.9768  | H18     a=103.29  | e_x     d=-127.52

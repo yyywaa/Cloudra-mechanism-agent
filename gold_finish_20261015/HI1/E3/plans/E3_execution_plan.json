@@ -1,0 +1,145 @@
+{
+  "run": "HI1_E3 (lane2, small_mol) execution plan once QM submissions resume",
+  "method_std": {
+    "engine": "gaussian",
+    "method": "B3LYP",
+    "basis_set": "def2SVP",
+    "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=DMSO)"
+  },
+  "execution": {
+    "cpus": 8,
+    "memory_mb": 10240
+  },
+  "steps": [
+    {
+      "id": "S1",
+      "tool": "submit_compute_job",
+      "qm": true,
+      "purpose": "I2 unconstrained Opt+Freq (E3 reference minimum)",
+      "input": "generated from the job-910 final geometry",
+      "title_must_contain": "smiles: CC(C[C@H]([O-])c1ccccc1)=[N+]1CCC[C@H]1C(=O)O.O",
+      "checks": [
+        "normal termination",
+        "opt converged",
+        "0 imaginary frequencies",
+        "RDKit 3D CIP: atom8 (proline C-alpha)=S, atom29 (aldol C)=S",
+        "2 fragments (zwitterion + explicit water)"
+      ]
+    },
+    {
+      "id": "S2",
+      "tool": "ts_guess(mode=interpolate)",
+      "qm": false,
+      "purpose": "IDPP path between the I2 minimum and the P(S,S) seed using I2_P_atom_map.json; pick the frame whose C2-O4 / C2-N20 / H-transfer geometry is closest to a single concerted saddle",
+      "endpoints": {
+        "reactant": "<E3>/I2_min.xyz",
+        "product": "<E3>/prep/structure_build_P/assembly/complex_candidate_000.xyz"
+      },
+      "atom_map": "product-coordinate order, values = 1-based reactant indices (see I2_P_atom_map.json)"
+    },
+    {
+      "id": "S3",
+      "tool": "ts_prepare",
+      "qm": true,
+      "purpose": "formal E3 TS: OptTS + Freq + bidirectional IRC + both endpoint Opt/Freq",
+      "reaction": {
+        "reactant_smiles": "CC(C[C@H]([O-])c1ccccc1)=[N+]1CCC[C@H]1C(=O)O.O",
+        "product_smiles": "CC(=O)C[C@H](O)c1ccccc1.O=C(O)[C@@H]1CCCN1",
+        "charge": 0,
+        "multiplicity": 1,
+        "atom_map": "I2_P_atom_map.product_atom_map",
+        "reaction_center": [
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            25
+          ],
+          [
+            25,
+            26
+          ],
+          [
+            25,
+            27
+          ],
+          [
+            4,
+            26
+          ],
+          [
+            28,
+            27
+          ]
+        ]
+      },
+      "conformers": {
+        "reactant": {
+          "kind": "file",
+          "xyz_path": "<E3>/I2_min.xyz"
+        },
+        "product": {
+          "kind": "file",
+          "xyz_path": "<E3>/P_seed.xyz"
+        }
+      },
+      "guess": {
+        "kind": "provided",
+        "xyz_path": "<S2 ts candidate>"
+      },
+      "ts_optimization": {
+        "ref": "std"
+      },
+      "verification": {
+        "frequency": {
+          "ref": "std"
+        },
+        "irc": {
+          "ref": "std"
+        },
+        "reactant_endpoint": {
+          "optimization": {
+            "ref": "std"
+          },
+          "frequency": {
+            "ref": "std"
+          }
+        },
+        "product_endpoint": {
+          "optimization": {
+            "ref": "std"
+          },
+          "frequency": {
+            "ref": "std"
+          }
+        }
+      },
+      "execution": {
+        "cpus": 8,
+        "memory_mb": 10240
+      }
+    },
+    {
+      "id": "S4",
+      "tool": "log_parser + ts_inspect",
+      "qm": false,
+      "purpose": "acceptance chain checks: exactly 1 imaginary frequency dominated by the declared pairs (watch_pairs = the 6 concrete pairs), bidirectional IRC reaching I2 and P, 0 imaginary frequencies at both endpoints, CIP re-check, then dE# = E(TS) - E(I2 min) purely electronic, same program/batch"
+    },
+    {
+      "id": "S5",
+      "tool": "fallback",
+      "qm": true,
+      "purpose": "if OptTS fails or slides to an endpoint: ts_guess(scan_prepare) on Gaussian for one coupled coordinate (e.g. d(C2-O4) and d(C2-N20)) from a preorganized I2 conformer, submit, scan_parse, then feed the peak to ts_prepare; report falsification evidence and the adjudication questions if no single saddle is found"
+    }
+  ],
+  "discipline": [
+    "TS/IRC only through ts_prepare/ts_resume",
+    "never subtract historical ORCA energies",
+    "no value filled where measurement is missing",
+    "do not split the declared graph on my own",
+    "hold one qm_slots slot for the whole ts_prepare run",
+    "8 cpus / <=10 GB for new submissions"
+  ]
+}

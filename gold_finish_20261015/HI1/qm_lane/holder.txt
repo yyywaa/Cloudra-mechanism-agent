@@ -1,0 +1,3 @@
+holder: HI1_E1 small_mol (as_4c9dafe225a84580)
+2026-10-15: RC Opt+Freq (runs/RC_optfreq) + I1 Opt+Freq (runs/I1_optfreq), 12 cpus / 13312 MB each.
+Lane is a record only per coordinator 2026-10-15 policy (HI1 E1 and E3 lanes are independent; <=2 concurrent QM jobs per package).

@@ -1,0 +1,21 @@
+%chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E1/E1_revscan_O1C4.chk
+%nprocshared=8
+%mem=10000MB
+#p opt=modredundant b3lyp/def2svp empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)
+
+NY3 E1 reverse relaxed scan C4-O1 1.427->2.627 A (9 pts step +0.15) from I1 minimum (job 985 frame) B3LYP/def2SVP GD3BJ CPCM(water)
+
+0 1
+Na     -2.00168000      0.69287400      0.23856800
+C       1.52296200      1.39212600     -0.06006500
+O       0.27866700      0.74576400     -0.00259100
+C       0.28121000     -0.70104000     -0.40986300
+O       1.17740400     -1.38015500      0.46897700
+O      -0.93469700     -1.13374600     -0.38820800
+H       2.25020000      0.94345300      0.64071600
+H       1.96512600      1.34714600     -1.07654600
+H       1.38110700      2.45152500      0.20446300
+H       0.82419800     -0.69678500     -1.39470400
+H       0.60183100     -1.66837600      1.19596600
+
+B 4 5 S 8 0.15

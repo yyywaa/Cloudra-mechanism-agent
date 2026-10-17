@@ -1,0 +1,76 @@
+{
+  "seed_kind": "constrained_preorganization",
+  "atom_index_base": 1,
+  "ring_shape_atom_index_base": 0,
+  "status": "no_candidate",
+  "ring_order": [],
+  "effective_windows": [
+    {
+      "atoms": [
+        2,
+        9
+      ],
+      "min_ang": 1.3,
+      "max_ang": 2.6,
+      "source": "explicit"
+    },
+    {
+      "atoms": [
+        3,
+        8
+      ],
+      "min_ang": 1.55,
+      "max_ang": 2.5,
+      "source": "explicit"
+    },
+    {
+      "atoms": [
+        1,
+        9
+      ],
+      "min_ang": 2.35,
+      "max_ang": 3.1,
+      "source": "explicit"
+    },
+    {
+      "atoms": [
+        1,
+        8
+      ],
+      "min_ang": 2.55,
+      "max_ang": 3.45,
+      "source": "explicit"
+    }
+  ],
+  "forming_pairs": [],
+  "mmff_force_constant": 100.0,
+  "candidates": [],
+  "counts": {
+    "generated": 8,
+    "optimized": 8,
+    "rejected": 8,
+    "retained": 0,
+    "qualified": 0,
+    "clustered_duplicates": 0
+  },
+  "closest_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/ts_run/prep/csearch_RCbi/closest_attempt.xyz",
+  "diagnostics": [
+    "reaction mode: placements are guided by the reaction center pairs derived from the reactant/product mapping; intra-fragment geometry stays rigid during placement",
+    "kept the best 8 of 32 sampled placements by maximum distance-window deviation; windows=[(1, 8, 1.3, 2.6), (2, 7, 1.55, 2.5), (0, 8, 2.35, 3.1), (0, 7, 2.55, 3.45)]",
+    "placement 24: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+    "placement 0: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+    "placement 6: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+    "placement 16: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+    "placement 18: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+    "placement 7: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+    "placement 14: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+    "placement 13: the reaction-center constraint was not released, so the trajectory energy contains the constraint penalty; the reported candidate energy is an unconstrained MMFF94 single point on the final geometry instead",
+    "8 guided placement(s) retained for strict qualification before 0.5 A heavy-atom RMSD clustering",
+    "distance window 1-8: 8",
+    "distance window 2-9: 4",
+    "distance window 3-8: 7",
+    "closest achieved distances: {'2-9': 2.605552503733455, '3-8': 2.109829672795429, '1-9': 2.6609370431402257, '1-8': 2.543201046094034}"
+  ],
+  "constraint_targets": [],
+  "crest_run_dir": ""
+}

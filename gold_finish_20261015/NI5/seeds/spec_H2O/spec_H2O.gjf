@@ -1,0 +1,12 @@
+%chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/seeds/spec_H2O/spec_H2O.chk
+%nprocshared=8
+%mem=10GB
+#p opt freq B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)
+
+smiles: O | NI5_E1 separated component water Opt+Freq | expected_smiles: O (unverified expectation)
+
+0 1
+O       -0.00174380     0.39781029    -0.00000000
+H       -0.76258984    -0.20225205    -0.00000000
+H        0.76433364    -0.19555825     0.00000000
+

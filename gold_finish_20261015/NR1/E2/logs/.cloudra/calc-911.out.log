@@ -1,0 +1,12 @@
+[calculator] isolated GAUSS_SCRDIR=/home/ly/g16/scratch/cloudra_g16_task911_1789971
+fname=gold_finish_20261015/NR1/E2/logs/E2_I1_optfreq_c000.chk fd = -1
+
+open-new-file: No such file or directory
+Error: segmentation violation
+   rax 0000000000000000, rbx 00007fffba327e90, rcx 000011192fc4553b
+   rdx 0000000000000065, rsp 00007fffba327cf8, rbp 00000000ffffffff
+   rsi 000000000000000b, rdi 00000000001b5032, r8  0000000000000020
+   r9  0000000000000401, r10 000011192fc17980, r11 0000000000000202
+   r12 0000000000000001, r13 00007fffba328750, r14 0000000004f967d0
+   r15 ffffffffffffffff
+Segmentation fault (core dumped)

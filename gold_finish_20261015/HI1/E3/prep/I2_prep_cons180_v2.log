@@ -1,0 +1,167 @@
+ Entering Gaussian System, Link 0=/home/ly/g16/g16
+ Input=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/prep/I2_prep_cons180_v2.gjf
+ Output=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/prep/I2_prep_cons180_v2.log
+ Initial command:
+ /home/ly/g16/l1.exe "/home/ly/g16/scratch/Gau-1789677.inp" -scrdir="/home/ly/g16/scratch/"
+ Entering Link 1 = /home/ly/g16/l1.exe PID=   1789680.
+  
+ Copyright (c) 1988-2019, Gaussian, Inc.  All Rights Reserved.
+  
+ This is part of the Gaussian(R) 16 program.  It is based on
+ the Gaussian(R) 09 system (copyright 2009, Gaussian, Inc.),
+ the Gaussian(R) 03 system (copyright 2003, Gaussian, Inc.),
+ the Gaussian(R) 98 system (copyright 1998, Gaussian, Inc.),
+ the Gaussian(R) 94 system (copyright 1995, Gaussian, Inc.),
+ the Gaussian 92(TM) system (copyright 1992, Gaussian, Inc.),
+ the Gaussian 90(TM) system (copyright 1990, Gaussian, Inc.),
+ the Gaussian 88(TM) system (copyright 1988, Gaussian, Inc.),
+ the Gaussian 86(TM) system (copyright 1986, Carnegie Mellon
+ University), and the Gaussian 82(TM) system (copyright 1983,
+ Carnegie Mellon University). Gaussian is a federally registered
+ trademark of Gaussian, Inc.
+  
+ This software contains proprietary and confidential information,
+ including trade secrets, belonging to Gaussian, Inc.
+  
+ This software is provided under written license and may be
+ used, copied, transmitted, or stored only in accord with that
+ written license.
+  
+ The following legend is applicable only to US Government
+ contracts under FAR:
+  
+                    RESTRICTED RIGHTS LEGEND
+  
+ Use, reproduction and disclosure by the US Government is
+ subject to restrictions as set forth in subparagraphs (a)
+ and (c) of the Commercial Computer Software - Restricted
+ Rights clause in FAR 52.227-19.
+  
+ Gaussian, Inc.
+ 340 Quinnipiac St., Bldg. 40, Wallingford CT 06492
+  
+  
+ ---------------------------------------------------------------
+ Warning -- This program may not be used in any manner that
+ competes with the business of Gaussian, Inc. or will provide
+ assistance to any competitor of Gaussian, Inc.  The licensee
+ of this program is prohibited from giving any competitor of
+ Gaussian, Inc. access to this program.  By using this program,
+ the user acknowledges that Gaussian, Inc. is engaged in the
+ business of creating and licensing software in the field of
+ computational chemistry and represents and warrants to the
+ licensee that it is not a competitor of Gaussian, Inc. and that
+ it will not use this program in any manner prohibited above.
+ ---------------------------------------------------------------
+  
+
+ Cite this work as:
+ Gaussian 16, Revision C.01,
+ M. J. Frisch, G. W. Trucks, H. B. Schlegel, G. E. Scuseria, 
+ M. A. Robb, J. R. Cheeseman, G. Scalmani, V. Barone, 
+ G. A. Petersson, H. Nakatsuji, X. Li, M. Caricato, A. V. Marenich, 
+ J. Bloino, B. G. Janesko, R. Gomperts, B. Mennucci, H. P. Hratchian, 
+ J. V. Ortiz, A. F. Izmaylov, J. L. Sonnenberg, D. Williams-Young, 
+ F. Ding, F. Lipparini, F. Egidi, J. Goings, B. Peng, A. Petrone, 
+ T. Henderson, D. Ranasinghe, V. G. Zakrzewski, J. Gao, N. Rega, 
+ G. Zheng, W. Liang, M. Hada, M. Ehara, K. Toyota, R. Fukuda, 
+ J. Hasegawa, M. Ishida, T. Nakajima, Y. Honda, O. Kitao, H. Nakai, 
+ T. Vreven, K. Throssell, J. A. Montgomery, Jr., J. E. Peralta, 
+ F. Ogliaro, M. J. Bearpark, J. J. Heyd, E. N. Brothers, K. N. Kudin, 
+ V. N. Staroverov, T. A. Keith, R. Kobayashi, J. Normand, 
+ K. Raghavachari, A. P. Rendell, J. C. Burant, S. S. Iyengar, 
+ J. Tomasi, M. Cossi, J. M. Millam, M. Klene, C. Adamo, R. Cammi, 
+ J. W. Ochterski, R. L. Martin, K. Morokuma, O. Farkas, 
+ J. B. Foresman, and D. J. Fox, Gaussian, Inc., Wallingford CT, 2019.
+ 
+ ******************************************
+ Gaussian 16:  ES64L-G16RevC.01  3-Jul-2019
+                15-Oct-2026 
+ ******************************************
+ %chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/prep/I2_prep_c
+ ons180_v2.chk
+ %nproc=12
+ Will use up to   12 processors via shared memory.
+ %mem=14000MB
+ ----------------------------------------------------------------------
+ #p opt=modredundant B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraF
+ ine) SCF=Tight SCRF=(CPCM,Solvent=DMSO)
+ ----------------------------------------------------------------------
+ 1/18=120,19=15,26=6,38=1/1,3;
+ 2/9=110,12=2,17=6,18=5,40=1/2;
+ 3/5=43,7=101,11=2,25=1,30=1,70=2101,71=1,72=21,74=-5,75=-5,124=41/1,2,3;
+ 4//1;
+ 5/5=2,32=2,38=5,53=21/2;
+ 6/7=2,8=2,9=2,10=2,28=1/1;
+ 7//1,2,3,16;
+ 1/18=20,19=15,26=6/3(2);
+ 2/9=110/2;
+ 99//99;
+ 2/9=110/2;
+ 3/5=43,7=101,11=2,25=1,30=1,70=2105,71=1,72=21,74=-5,75=-5,124=41/1,2,3;
+ 4/5=5,16=3,69=1/1;
+ 5/5=2,32=2,38=5,53=21/2;
+ 7//1,2,3,16;
+ 1/18=20,19=15,26=6/3(-5);
+ 2/9=110/2;
+ 6/7=2,8=2,9=2,10=2,19=2,28=1/1;
+ 99/9=1/99;
+ Leave Link    1 at Thu Oct 15 17:16:09 2026, MaxMem=  1835008000 cpu:               0.3 elap:               0.0
+ (Enter /home/ly/g16/l101.exe)
+ ----------------------------------------------------------------------
+ smiles: C=C(C)N1CCC[C@H]1C(=O)O.O.O=Cc1ccccc1 | HI1_E3 geometry-prep s
+ tep 1/2: constrained opt d(C1...C29)=1.80 A from the S-proline HI1_I1 
+ precomplex (candidate_000, 3 fragments, COOH H-bonded to the aldehyde 
+ O); geometry preparation only - its energy is NOT barrier evidence
+ ----------------------------------------------------------------------
+ Symbolic Z-matrix:
+ Charge =  0 Multiplicity = 1
+ C                    -0.40663  -0.70181   1.87541 
+ C                    -0.28043  -0.50868   0.5523 
+ C                    -1.3124    0.35158  -0.14586 
+ N                     0.75336  -1.03868  -0.21926 
+ C                     0.87664  -0.87138  -1.67405 
+ C                     2.19183  -1.54642  -2.04073 
+ C                     2.29791  -2.672    -1.02668 
+ C                     1.74619  -2.0447    0.25346 
+ C                     2.87468  -1.38648   1.05005 
+ O                     3.38624  -0.29727   0.82203 
+ O                     3.28072  -2.14648   2.09119 
+ H                    -1.22284  -0.25979   2.43888 
+ H                     0.29227  -1.29626   2.45116 
+ H                    -2.08245   0.71886   0.5415 
+ H                    -0.8372    1.22753  -0.59958 
+ H                    -1.82143  -0.22017  -0.92878 
+ H                     0.88986   0.18371  -1.96562 
+ H                     0.04104  -1.37192  -2.17664 
+ H                     2.20185  -1.90514  -3.07386 
+ H                     3.0251   -0.8446   -1.91765 
+ H                     3.3225   -3.04321  -0.92747 
+ H                     1.65844  -3.5072   -1.3376 
+ H                     1.26081  -2.81035   0.86976 
+ H                     3.87926  -1.56296   2.63024 
+ O                     2.18876   2.08523   0.99492 
+ H                     1.37985   1.58522   0.78534 
+ H                     2.85695   1.38681   0.82062 
+ O                     4.19516  -0.3534    3.74675 
+ C                     3.60205   0.72135   3.81511 
+ C                     2.29562   0.84533   4.4909 
+ C                     1.58589   2.04438   4.39173 
+ C                     0.34553   2.1655    5.02003 
+ C                    -0.17934   1.09405   5.74455 
+ C                     0.53145  -0.10308   5.8411 
+ C                     1.77071  -0.23088   5.21284 
+ H                     4.01103   1.63524   3.3516 
+ H                     1.9773    2.87909   3.814 
+ H                    -0.21414   3.09438   4.93995 
+ H                    -1.14589   1.19195   6.23329 
+ H                     0.1198   -0.93646   6.40511 
+ H                     2.3212   -1.1657    5.28899 
+ Wanted a floating point number as input.
+ Found an integer as input.
+ B 1 29 1.80                                                                     
+       ?
+ Error termination via Lnk1e in /home/ly/g16/l101.exe at Thu Oct 15 17:16:08 2026.
+ Job cpu time:       0 days  0 hours  0 minutes  4.6 seconds.
+ Elapsed time:       0 days  0 hours  0 minutes -1.0 seconds.
+ File lengths (MBytes):  RWF=      6 Int=      0 D2E=      0 Chk=      1 Scr=      1

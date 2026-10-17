@@ -1,0 +1,23 @@
+%chk=/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/rc/job03_cand000/job03_cand000_optfreq.chk
+%nproc=8
+%mem=10GB
+#p opt freq B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=Water)
+
+smiles: C=O.CN.O | NI5_E1 pre-addition complex candidate 000 (open-chain topology: N-H10 donates to carbonyl O2 (1.965 A), water donates to N6 (N6...H14 1.827 A); r(C1...N6)=3.483 A) unconstrained Opt+Freq
+
+0 1
+C       -1.42977687     0.50548268    -0.69967838
+O       -0.26265511     0.88599948    -0.67903025
+H       -2.07048016     0.62256692    -1.58834009
+H       -1.90323529     0.01482001     0.16579972
+C        2.16866250    -2.00581463    -0.50191335
+N        1.32773094    -1.44405353    -1.55144417
+H        1.57317302    -2.19311539     0.39582871
+H        2.97945808    -1.31667347    -0.24923472
+H        2.60188963    -2.95301946    -0.83445921
+H        0.99889531    -0.51879424    -1.22215731
+H        1.92419091    -1.21080047    -2.34895944
+O       -1.31826127    -2.39258510    -1.68656885
+H       -1.19381034    -3.28629535    -2.04183663
+H       -0.38298090    -2.08061517    -1.63978907
+
