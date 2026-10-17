@@ -119,38 +119,16 @@ TASKS = {
         "smiles_schematic": True,
         "mapped_reactants": "[CH2:1]=[O:2].[CH3:4][N:3]([H:5])([H:6]).[O:7]([H:8])[H:9]",
         # O7/H8/H9 是接力水；沿用原 map1-6，水的氢交换用自洽参考编号表达。
-        # 显式水接力使 C-N 加成与双质子转移解耦：先得两性离子，再经
-        # 六元环水接力成羟胺。E2 的 3.59 相对加成中间体·H2O 极小值；
-        # E3 的 31.2 相对羟胺·H2O 极小值。题面净反应式省略接力水，
-        # Gold 映射结构完整保留；文献两水辅助 ≈ 26.7
-        # （Hall & Smith 1998 JPCA 102, 4930, DOI 10.1021/jp9810825）。
-        # 其归属（LEDGER 追加裁定 3）：两水辅助 ≈ 26.7 属羟胺→亚胺的 PT/脱水步（非 C-N 加成步）；
-        # C-N 加成步的文献锚为 3.5 kcal/mol（同篇；口径与本处 CPCM(水) 自算值不可直接相减）。
+        # E1 = 0.93：同批 Gaussian 16，B3LYP/def2SVP + GD3BJ + CPCM(Water)，
+        # Int(UltraFine)、SCF=Tight，q0/m1；纯电子能，相对六元接力环 RC-A 极小值。
+        # E(TS)=-286.604225293、E(RC-A)=-286.605711957 Eh；不含 ZPE/热校正。
+        # 恰 1 虚频 -164.4792 cm⁻¹，属 soft-mode-dominated C-N addition saddle。
+        # 短 IRC 每向 1 点；两侧末帧另行无约束 Opt+Freq 分别回到 RC-A/加合物，均 0 虚频。
+        # 原生日志：PR #199 的 ts/ts_0006/jobs/declaration_0005/ 下 ts_opt 与 frequency。
+        # 补强与评估：gold_finish_20261015/NI5/notes/IRC_ENDPOINT_RELAX.md、STATUS.md §13。
+        # E2/E3 仍为旧 ORCA 5.0.2 的 3.59/31.2，各相对自身起点极小值，不跨程序混减。
         "steps": [
             {
-                # E1（C–N 加成）自算能垒 = 0.93 kcal/mol。措辞与口径（2026-10-15 主协调裁定；须称
-                # soft-mode-dominated C–N addition saddle，不得写成无修饰的 “C–N 加成 TS”）：
-                # 引擎：Gaussian 16（/home/ly/g16/g16），B3LYP/def2SVP + EmpiricalDispersion=GD3BJ
-                #   + Int(UltraFine) + SCF=Tight + SCRF=(CPCM,Solvent=Water)，q0/m1；本值为纯电子能（无 ZPE/热校正），
-                #   相对本步自身起点极小值 = 题面声明的六元接力环 RC-A（E = -286.605711957 Eh，36 模 0 虚频）。
-                #   本机无 ORCA：本步数值来自 Gaussian 16，与紧随其后的 ORCA 5.0.2 值（E2 3.59 / E3 31.2）非同一程序，
-                #   不可跨程序混减；相减两端（TS 与 RC-A）取自同一批 Gaussian 16 日志。
-                # 鞍点：durable 链 ts/ts_0006（revision 75 / status=ended / result.verified=true）；job 952
-                #   ts_opt/refine.log E(TS) = -286.604225293 Eh；job 953 frequency/frequency.log 恰 1 虚频
-                #   -164.4792 cm⁻¹（soft mode）。模式归属：含真实 C–N 成键分量（与纯 C1–N6 伸缩的质量加权
-                #   |cos| = 0.3657，伸缩成分 13.4%），但振幅由醛基 H3/H4 主导（重原子占比按 |d| 15.3%、d² 3.31%、
-                #   质量加权 m·d² 31.7%；watch pair (1,6) 的 pair-projected 占比仅 1.62%）⇒ 属软模主导，偏离
-                #   BRIEF §4 第 1 条，如实标注、不硬当 TS。
-                # 连通性表述（不得写 “IRC 已双向到达端点”）：受约束单峰（job 923 内区松弛扫描沿 r(C1–N6)
-                #   1.6413→3.2413 Å 出现单一内部极大）+ 变分自洽（TS 比受约束峰低 0.074 kcal/mol，区间
-                #   0.038–0.086）+ 两端点 0 虚频身份（job 955/956 与 957/958，各 36 模 0 虚频）+ 端点松弛补强
-                #   （job 969/970，从 ts/ts_0006/verdict/irc_end_a.xyz | irc_end_b.xyz 出发做无约束 Opt+Freq）。
-                #   IRC（job 954）为原生梯度判据早停（每向 1 点，rx = ±0.119），且 run 内两端点 Opt+Freq 的
-                #   endpoint_source.json 记 kind=species_reference / irc_job_id=null ⇒ IRC 未用作连通性证据。
-                # 残留不确定性：同 R 不同扭转族差异 ±0.24 kcal/mol；参考态敏感性 RC-B -2.713 / RC-C -1.853
-                #   （与同一鞍点的连通性未测，不得相加）；相对三分离碎片（E_sum = -286.580238688 Eh）为沉没垒
-                #   TS -15.05 / RC -15.99 / 加合物 -20.89 kcal/mol。
-                # 记录：gold_finish_20261015/NI5/BACKFILL_DRAFT.md、notes/SELFCHECK.md、notes/IRC_DEEP.md。
                 "out": "[O-:2][CH2:1][N+:3]([H:5])([H:6])[CH3:4].[O:7]([H:8])[H:9]",
                 "type": "amine addition to the carbonyl -> zwitterionic C-N addition intermediate with one explicit relay water",
                 "barrier": 0.93,
