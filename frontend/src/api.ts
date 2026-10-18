@@ -72,7 +72,11 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new ApiError(code, String(message));
   }
-  return (await resp.json()) as T;
+  const data = await resp.json();
+  if (data && typeof data === 'object' && 'command_id' in data && 'accepted' in data) {
+    return assertAccepted(data) as T;
+  }
+  return data as T;
 }
 
 interface CommandResponse<T> {
@@ -82,10 +86,10 @@ interface CommandResponse<T> {
   data: T;
 }
 
-function assertAccepted<T>(resp: CommandResponse<T>, fallback: string): CommandResponse<T> {
+function assertAccepted<T>(resp: CommandResponse<T>): CommandResponse<T> {
   if (resp.accepted === false) {
-    const err = (resp.data as { error?: { message?: string } } | null)?.error;
-    throw new ApiError('rejected', err?.message ?? fallback);
+    const err = (resp.data as { error?: { code?: string; message?: string } } | null)?.error;
+    throw new ApiError(err?.code ?? 'rejected', err?.message ?? 'Command rejected');
   }
   return resp;
 }
@@ -175,17 +179,14 @@ export const api = {
       `/api/v2/projects/${projectId}/hub/posts`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
-  spawnAgent: async (
+  spawnAgent: (
     projectId: string,
     body: { role_id: string; query?: string; parent_session_id?: string | null; settings?: Record<string, unknown>; language?: string },
   ) =>
-    assertAccepted(
-      await request<CommandResponse<Agent>>(`/api/v2/projects/${projectId}/agents`, {
-        method: 'POST',
-        body: JSON.stringify(body),
-      }),
-      'Spawn rejected',
-    ),
+    request<CommandResponse<Agent>>(`/api/v2/projects/${projectId}/agents`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   getAgent: (agentId: string) => request<Agent>(`/api/v2/agents/${agentId}`),
   events: (agentId: string, limit = EVENTS_WINDOW, types?: string) =>
     request<EventEnvelope[]>(
@@ -204,24 +205,21 @@ export const api = {
   },
   eventDetail: (agentId: string, eventId: string) =>
     request<EventEnvelope>(`/api/v2/agents/${encodeURIComponent(agentId)}/events/${encodeURIComponent(eventId)}`),
-  sendMessage: async (
+  sendMessage: (
     agentId: string,
     content: string,
     images?: string[],
     imageArtifactIds?: (string | null)[],
     language?: string,
   ) =>
-    assertAccepted(
-      await request<CommandResponse<Agent>>(`/api/v2/agents/${agentId}/messages`, {
-        method: 'POST',
-        body: JSON.stringify(
-          images && images.length > 0
-            ? { content, images, image_artifact_ids: imageArtifactIds ?? [], language }
-            : { content, language },
-        ),
-      }),
-      'Message rejected',
-    ),
+    request<CommandResponse<Agent>>(`/api/v2/agents/${agentId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(
+        images && images.length > 0
+          ? { content, images, image_artifact_ids: imageArtifactIds ?? [], language }
+          : { content, language },
+      ),
+    }),
   uploadFile: (projectId: string, file: File) => {
     const form = new FormData();
     form.append('file', file);
@@ -232,14 +230,11 @@ export const api = {
       headers: {},
     });
   },
-  cancel: async (agentId: string, message?: string) =>
-    assertAccepted(
-      await request<CommandResponse<Agent>>(`/api/v2/agents/${agentId}/cancel`, {
-        method: 'POST',
-        body: JSON.stringify({ message }),
-      }),
-      'Cancel rejected',
-    ),
+  cancel: (agentId: string, message?: string) =>
+    request<CommandResponse<Agent>>(`/api/v2/agents/${agentId}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    }),
   patchSettings: (agentId: string, patch: Record<string, unknown>) =>
     request<CommandResponse<Agent>>(`/api/v2/agents/${agentId}/settings`, {
       method: 'PATCH',
@@ -269,6 +264,11 @@ export const api = {
       body: JSON.stringify({ code, code_verifier, slot }),
     }),
   runtimeConfig: () => request<RuntimeConfig>('/api/v2/runtime/config'),
+  patchSearchConfig: (changes: { search_provider?: RuntimeConfig['search_provider']; deepseek_api_key?: string }) =>
+    request<RuntimeConfig>('/api/v2/runtime/config/search', {
+      method: 'PATCH',
+      body: JSON.stringify(changes),
+    }),
   patchToolDocumentLoading: (changes: Record<string, unknown>) =>
     request<RuntimeConfig>('/api/v2/runtime/config/tool-document-loading', {
       method: 'PATCH',

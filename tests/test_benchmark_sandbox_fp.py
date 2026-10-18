@@ -110,6 +110,7 @@ def _fit_resources(program: str) -> str:
 
 _CHILD_SYNC_CHAIN_PROGRAM = _fit_resources(r"""
 const w = await tools.qm_input_writer({
+  engine: "gaussian",
   source_type: "smiles", source_value: "O",
   method: "b3lyp", basis_set: "6-31g(d)",
   task_type: [{ "sp": null }],
@@ -148,6 +149,7 @@ else { text("PARENT SUBMITTED job=" + s.data.job_id + " state=" + s.data.state);
 # 第二次同输入成功，两个编号不同、旧失败记录保留。
 _CHILD_FAIL_THEN_RESUBMIT_PROGRAM = _fit_resources(r"""
 const w = await tools.qm_input_writer({
+  engine: "gaussian",
   source_type: "smiles", source_value: "O",
   method: "b3lyp", basis_set: "6-31g(d)",
   task_type: [{ "sp": null }],
@@ -166,6 +168,7 @@ else {
 
 _CHILD_RESUBMIT_CHAIN_PROGRAM = _fit_resources(r"""
 const w = await tools.qm_input_writer({
+  engine: "gaussian",
   source_type: "smiles", source_value: "O",
   method: "b3lyp", basis_set: "6-31g(d)",
   task_type: [{ "sp": null }],
@@ -191,12 +194,12 @@ else {
 _CHILD_MALFORMED_THEN_CORRECTED_PROGRAM = r"""
 const badText = "5\ntruncated\nC 0.0 0.0 0.0\n";
 const badWrite = await tools.write({
-  path: "xyz/bad.xyz", content: badText, expected_sha256: "missing",
+  path: "xyz/bad.xyz", content: badText,
 });
 const goodText = "3\nwater\nO 0.000000 0.000000 0.117300\n" +
                  "H 0.000000 0.757200 -0.469200\nH 0.000000 -0.757200 -0.469200\n";
 const goodWrite = await tools.write({
-  path: "xyz/water.xyz", content: goodText, expected_sha256: "missing",
+  path: "xyz/water.xyz", content: goodText,
 });
 const badSource = await tools.qm_input_writer({
   source_type: "xyz_file", source_value: "xyz/bad.xyz",
@@ -215,6 +218,7 @@ text("WRITTEN bad=" + badWrite.is_success + " good=" + goodWrite.is_success +
 
 _CHILD_CORRECTED_CHAIN_PROGRAM = _fit_resources(r"""
 const w = await tools.qm_input_writer({
+  engine: "gaussian",
   source_type: "xyz_file", source_value: "xyz/water.xyz",
   method: "b3lyp", basis_set: "6-31g(d)",
   task_type: [{ "sp": null }],
@@ -247,6 +251,7 @@ if (parsed.is_success) {
 # Web 路径子 agent：提交后不轮询——ComputeNotifyBroker 回传唤醒后 query+parser。
 _CHILD_PREP_PROGRAM = _fit_resources(r"""
 const w = await tools.qm_input_writer({
+  engine: "gaussian",
   source_type: "smiles", source_value: "O",
   method: "b3lyp", basis_set: "6-31g(d)",
   task_type: [{ "sp": null }],
@@ -988,6 +993,7 @@ def _guided_child_program(core, agent) -> str:
     assert node is not None, "species R missing from the delivery graph"
     return f'''
 const w = await tools.qm_input_writer({{
+  engine: "gaussian",
   source_type: "smiles", source_value: "O",
   method: "b3lyp", basis_set: "6-31g(d)",
   task_type: [{{ "freq": null }}],
@@ -1274,6 +1280,7 @@ async function attemptWriter(args) {
   }
 }
 const bad = await attemptWriter({
+  engine: "gaussian",
   source_type: "smiles", source_value: "O", method: "b3lyp",
   basis_set: "6-31g(d)", task_type: [{ "sp": null }],
   output_path: "calc/bad_method.gjf",

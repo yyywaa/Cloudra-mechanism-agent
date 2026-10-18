@@ -1,35 +1,38 @@
-"""Y 族 + O 族登记（v3 缩减后）：Y3 甲酸甲酯 BAC2 皂化 + O3 Baeyer–Villiger。
+"""Y 族 + O 族登记：Y3 异氰酸单水水解 + O3 Baeyer–Villiger。
 
 v3（2026-09-09）收窄为两条酰基转移/氧转移网络；Y2/O2/O4/O5 剔出定稿名单留档池
 （条目见 normal.md）。竞争通道按 normal.md 约定不进 gold。
 """
 
 TASKS = {
-    # [OH-].COC=O>>O=C[O-].CO  (−1/1)  BAC2 皂化
+    # 2026-10-18：NY3 槽正式换为 HNCO + 单水中性气相水解。
+    # Gaussian16 B3LYP-D3(BJ)/def2-SVP 气相纯电子能，来源：
+    # gold_compute/queue_20261018/results/NY3/{REPORT.txt,mechanism_graph.json}。
+    # 映射：1=N、2=C、3=羰基 O、4=水 O；H5 原在 N，H6/H7 原在水。
+    # E1 将 H6 迁到 N；E3 迁的是余下的 O-H7，不照抄远端图残留的 H6 编号。
+    # E2 是 syn->anti 构象步；E3 的真实 IRC 起点是 anti，能垒仍相对稳定 syn。
+    # E1 的 36.79 相对报告 RC(-244.935406907)，直接连接的水旋转体高 5.78；
+    # IRC/构象连接的局限保留原报告，不声称该 durable run 已 strict pass。
     "Y3": {
-        "name_en": "Ester saponification: methyl formate + NaOH -> sodium formate + methanol",
-        "conditions_en": "aqueous NaOH",
-        # 2026-09-25 用户裁决：裸 OH⁻ 在 CPCM 里无对离子制衡、加成必跑成无垒
-        # （模型失真），改为 Na⁺ 制衡的中性模型（总电荷 0）重算全图。
-        # Na⁺ 在 SMILES 里作游离组分（映射号 7），不参与键变化跟踪；
-        # 计算中的真实配位位置由 agent 自决。三步能垒待 Na 模型战役回填；
-        # 旧值（15.5 文献 ΔG 裸离子 / 12.5、0.0 裸离子自算）全部作废。
-        "mapped_reactants": "[Na+:7].[O-:1][H:6].[CH3:2][O:3][CH:4]=[O:5]",
+        "name_en": "isocyanic acid hydrolysis: HNCO + one water -> ammonia + carbon dioxide",
+        "conditions_en": "gas phase, neutral closed-shell system with exactly one water molecule in total; no extra solvent, acid, counterion or catalyst; investigate carbamic-acid intermediates and connecting conformers without assuming a fixed number of elementary steps; source DOI 10.1007/s00894-010-0917-z",
+        "mapped_reactants": "[N:1]([H:5])=[C:2]=[O:3].[O:4]([H:6])[H:7]",
         "steps": [
             {
-                # OH- 加成：成 O1-C4，断 C4=O5 π → 四面体烷氧盐（Na+ 旁观）
-                "out": "[Na+:7].[CH3:2][O:3][CH:4]([O:1][H:6])[O-:5]",
-                "type": "hydroxide addition to the carbonyl carbon -> tetrahedral alkoxide intermediate (capturable; Na+ counterion present)",
+                "out": "[N:1]([H:5])([H:6])[C:2](=[O:3])[O:4][H:7]",
+                "type": "concerted water addition and O-H to N proton transfer -> syn carbamic acid; barrier referenced to the reported HNCO-water RC minimum",
+                "barrier": 36.79,
             },
             {
-                # 消除 MeO-：断 C4-O3，成 C4=O5 π → 甲酸 + 甲醇盐（Na+ 旁观）
-                "out": "[Na+:7].[CH3:2][O-:3].[CH:4](=[O:5])[O:1][H:6]",
-                "type": "methoxide elimination: C-OMe cleavage with C=O pi reformation -> formic acid + methoxide (Na+ counterion present)",
+                "out": "[N:1]([H:5])([H:6])[C:2](=[O:3])[O:4][H:7]",
+                "type": "carbamic acid O-H conformational transition from syn to anti",
+                "conformational": True,
+                "barrier": 11.06,
             },
             {
-                # 质子转移：断 O1-H6，成 O3-H6 → 甲酸根 + 甲醇（Na+ 旁观）
-                "out": "[Na+:7].[CH3:2][O:3][H:6].[CH:4](=[O:5])[O-:1]",
-                "type": "proton transfer from formic acid to methoxide -> formate + methanol (Na+ counterion present)",
+                "out": "[N:1]([H:5])([H:6])[H:7].[O:3]=[C:2]=[O:4]",
+                "type": "anti carbamic acid decomposition by C-N cleavage and O-H7 to N proton transfer with C-O double-bond formation -> ammonia and carbon dioxide; barrier referenced to stable syn carbamic acid",
+                "barrier": 43.13,
             },
         ],
     },

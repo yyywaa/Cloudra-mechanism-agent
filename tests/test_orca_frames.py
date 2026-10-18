@@ -13,6 +13,59 @@ ORCA_FIXTURES = Path(__file__).parent / "fixtures" / "orca"
 GAUSSIAN_FIXTURES = Path(__file__).parent / "fixtures" / "gaussian"
 
 
+def test_frequency_without_cartesian_table_uses_native_input_echo():
+    """Actual IA8 NumFreq output has inline input coordinates but no Cartesian table."""
+    from cloudra.tools.core.irc_evidence import probe_log
+    from cloudra.tools.core.irc_path import parse_xyz
+
+    path = ORCA_FIXTURES / 'ch2oo_numfreq_input_echo.out'
+    n_imag, geometry = probe_log(path)
+    assert n_imag == 1
+    assert geometry is not None
+    assert geometry[0] == ['C', 'O', 'O', 'H', 'H']
+    assert geometry[1][0] == pytest.approx([-.423508, -.004670, .002086])
+    assert parse_xyz(orca_frames.final_xyz_from_text(path.read_text())) == geometry
+
+
+def test_optimization_input_echo_is_never_a_final_geometry():
+    text = (ORCA_FIXTURES / 'ch2oo_numfreq_input_echo.out').read_text()
+    text = text.replace('! NumFreq GFN2-xTB TightSCF', '! Opt GFN2-xTB TightSCF')
+    assert orca_frames.final_xyz_from_text(text) == ''
+
+
+def test_irc_anchor_can_use_its_native_input_echo(tmp_path):
+    from cloudra.tools.core.irc_evidence import irc_start_geometry
+
+    text = (ORCA_FIXTURES / 'ch2oo_numfreq_input_echo.out').read_text()
+    text = text.replace('! NumFreq GFN2-xTB TightSCF', '! IRC GFN2-xTB TightSCF')
+    text += 'Intrinsic Reaction Coordinate Calculation\n* FORWARD IRC *\n* BACKWARD IRC *\n'
+    path = tmp_path / 'irc.out'
+    path.write_text(text)
+    geometry = irc_start_geometry(path)
+    assert geometry is not None
+    assert geometry[0] == ['C', 'O', 'O', 'H', 'H']
+    assert geometry[1][0] == pytest.approx([-.423508, -.004670, .002086])
+
+
+def test_orca_xtb_optts_short_dipole_block_retains_final_geometry():
+    """IA8 job 739: cclib assumes dipole contribution rows absent in GFN2-xTB."""
+    frames = orca_frames.extract_frames(str(ORCA_FIXTURES / "ch2oo_optts_gfn2_orca611.out"))
+    assert len(frames) == 10
+    assert frames[-1].converged is True
+    assert frames[-1].frequencies_cm == []  # Optimization alone cannot verify a TS.
+    assert frames[-1].scf_energy_hartree == pytest.approx(-11.083861872140)
+    rows = [line.split() for line in frames[-1].xyz.splitlines()[2:]]
+    assert [row[0] for row in rows] == ["C", "O", "O", "H", "H"]
+    for row, expected in zip(rows, [
+        [-0.423530, -0.004703, 0.002036],
+        [0.591597, -0.682213, -0.372134],
+        [1.476819, 0.188463, 0.229121],
+        [-1.261767, -0.509001, 0.485509],
+        [-0.434262, 1.076129, -0.083405],
+    ], strict=True):
+        assert [float(value) for value in row[1:]] == pytest.approx(expected)
+
+
 def test_final_frame_energy_matches_orca_hartree_line():
     log = ORCA_FIXTURES / "dvb_opt_orca42.out"
     frames = orca_frames.extract_frames(str(log))

@@ -14,6 +14,7 @@ import inspect
 import json
 import logging
 import math
+from pathlib import Path
 from typing import Any, Iterable
 
 from pydantic import ValidationError
@@ -37,7 +38,7 @@ from cloudra.runtime_v2.schemas import (
 )
 from cloudra.runtime_v2.tool_catalog import javascript_instructions
 from cloudra.runtime_v2.turn_pipeline import DeltaSink, LLMResponse
-from cloudra.tools.capabilities import is_direct_only, visual_tools
+from cloudra.tools.capabilities import is_direct_only, supervisor_access_for, visual_tools
 from cloudra.tools.name_hints import hint_unknown_tool, is_retired_tool_name
 
 logger = logging.getLogger(__name__)
@@ -978,7 +979,7 @@ async def _close_stream(response: Any) -> None:
 class _LegacyAgentBridge:
     """Duck-typed old-Agent surface required by existing tool classes."""
 
-    def __init__(self, agent: AgentSession, workspace_dir: str | None) -> None:
+    def __init__(self, agent: AgentSession, workspace_dir: str | None, event_log=None) -> None:
         self._runtime_agent = agent
         self.id = agent.id
         self.name = agent.role_id
@@ -999,6 +1000,16 @@ class _LegacyAgentBridge:
         self.orchestration_mode = agent.settings.orchestration_mode.value
         self.session_id = agent.id
         self._permissions = agent.capabilities.permissions
+        self._event_log = event_log
+
+    def known_file_sha256(self, absolute_path: str) -> str | None:
+        """Internal known-version binding; tool arguments carry no concurrency hash."""
+        if self._event_log is None:
+            return None
+        root = Path(self.working_directory).resolve()
+        target = Path(absolute_path).resolve()
+        relative = target.relative_to(root).as_posix()
+        return self._event_log.known_file_sha256(self.conversation_id, self.id, relative, str(target))
 
     def permission_all(self):
         """Legacy IntFlag projection of the v2 capability permission set."""
@@ -1041,9 +1052,9 @@ class LegacyToolExecutor:
         ``dag/supervisor_tools.py`` re-checks the ``supervisor_access``
         projection and enforces the path/action guards (evidence reads stay
         inside the workspace/artifact roots, hub actions are whitelisted,
-        hub call can create an independent peer). Direct controls (stop) are runtime
-        lifecycle, not supervised business tools — they take the normal
-        path below.
+        hub call can create an independent peer). Top-level tools with a
+        Supervisor capability still use this executor; lifecycle controls
+        without one (stop) take the normal path below.
         """
         from cloudra.dag.supervisor_tools import SupervisorToolExecutor, dumps_result
         from cloudra.persistence.paths import data_dir
@@ -1057,7 +1068,7 @@ class LegacyToolExecutor:
             artifact_root=str(data_dir() / "artifacts"),
         )
         executor.bind_run(
-            agent=_LegacyAgentBridge(agent, workspace),
+            agent=_LegacyAgentBridge(agent, workspace, self.core.event_log),
             session=Session(id=agent.id, path=""),
         )
         payload = await executor.execute(call.name, call.arguments, session_id=agent.id)
@@ -1071,7 +1082,9 @@ class LegacyToolExecutor:
         from cloudra.runtime_v2.subagent_bridge import NATIVE_TOOL_NAMES, handle_native_tool
         from cloudra.tools import get_tools_lst
 
-        if agent.role_id == "supervisor" and not is_direct_only(call.name):
+        if agent.role_id == "supervisor" and (
+            not is_direct_only(call.name) or supervisor_access_for(call.name) != "none"
+        ):
             return await self._execute_supervisor(agent, call)
 
         if call.name in NATIVE_TOOL_NAMES:
@@ -1111,7 +1124,7 @@ class LegacyToolExecutor:
         # 经构造器拿到调用者身份（不再需要 object.__setattr__ 绕过 pydantic 校验）；
         # 不声明它的工具（log_parser 等无状态工具）按原样构造。
         if "subagent" in getattr(entry.cls, "model_fields", {}):
-            actor = _LegacyAgentBridge(agent, project.workspace_dir)
+            actor = _LegacyAgentBridge(agent, project.workspace_dir, self.core.event_log)
             tool = entry.instantiate(subagent=actor)
         else:
             tool = entry.instantiate()

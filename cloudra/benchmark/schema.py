@@ -23,7 +23,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from cloudra.runtime_v2.schemas import MethodPolicy, OrchestrationMode
 
@@ -53,12 +53,8 @@ class NodeRole(str, Enum):
 class MechanismNode(BaseModel):
     """One species occurrence or transition state in a mechanism graph.
 
-    `smiles` 是列表但多分子物种只占一条：按「节点即络合物」约定（用户裁决），
-    多分子物种（预反应络合物、离子-偶极络合物）表达为点连接的单条络合物
-    SMILES（``["C=O.CN"]``）。解析时 >1 个组分的列表自动折叠成该形态
-    （``_fold_complex_components``），gold 图与交付图同口径——交付图写组分
-    列表（``["C=O","CN"]``）不再构成另一个物种，证据文件的 ``smiles:`` 注释
-    也用同一络合物形态即可绑定。单组分与空列表（TS 节点）不动。
+    点连接的单条 SMILES（``["C=O.CN"]``）表示络合物；多个列表成员
+    （``["C=O", "CN"]``）表示分离物种。解析保留该区别，不自动合并。
     `accessible=false` 声明该物种/TS 在允许的方法级别下不可达：图分只要求标志
     与 gold 一致（不一致等同缺失），不要求证据绑定。
 
@@ -76,11 +72,6 @@ class MechanismNode(BaseModel):
     accessible: bool = True
     label: str = ""
     properties: dict[str, float | str] = Field(default_factory=dict)
-
-    @field_validator("smiles", mode="after")
-    @classmethod
-    def _fold_complex_components(cls, v: list[str]) -> list[str]:
-        return complex_smiles(v)
 
 
 class BondChangeSet(BaseModel):
@@ -114,7 +105,7 @@ class BondChangeSet(BaseModel):
 class MechanismEdge(BaseModel):
     """One elementary step connecting two species nodes via a TS node.
 
-    ``barrier_kcal_mol`` 逐边承载能垒（kcal/mol，相对该步起点最小值；easy 单步
+    ``barrier_kcal_mol`` 逐边承载能垒（kcal/mol，相对对应稳定中间体；easy 单步
     题即"相对反应物络合物"）：gold 侧 = 参考答案能垒，交付侧 = agent 声明的值。
     评分不读最终消息散文：harness 从交付日志逐边推出能垒，gold 边与交付步
     **按端点物种对应匹配**（gold 的 ``<任务>_E<n>`` 边 id 是题库内部约定、
@@ -176,8 +167,8 @@ class GoldMechanismGraph(BaseModel):
     def edge_effectively_accessible(self, edge: MechanismEdge) -> bool:
         """边的有效可达性：``edge.accessible`` 且经由的 TS 节点（``via``）也可达。
 
-        gold 只在节点上标 ``accessible=false``（边从不标），交付侧按协议句可以把
-        不可达标在节点或边上——两侧同口径折叠成「有效可达性」再判定：经由不可达
+        gold 和交付均可把不可达标在节点或边上；正式 IMP 负边显式标为 false。
+        两侧同口径折叠成「有效可达性」再判定：经由不可达
         TS 的步在允许方法下同样算不了，视同不可达边；``via`` 为空的边不做端点
         检查。图分的标志一致性闸门、accuracy 的无参考边 1.0/0.0 规则、自洽的边
         豁免三处统一走这个口径，不得各抄一份。"""
@@ -280,13 +271,10 @@ class SelfConsistencyRubric(BaseModel):
     """Layer 2 物理自检。物种身份（SMILES 一致性）由 Layer 1 的证据绑定承担，
     不在此重复检查。
 
-    TS 合格判定仅由 n_imag == 1（一阶鞍点）与 IRC 方向区间证明
-    （irc_connects_endpoints，ts_guess strict 同口径：不要求收敛到极小值，
-    但双侧端点几何须各自位于 TS 与端点验证极小值之间；几何判定唯一实现
-    在 tools/core/irc_path.py）构成；不设任何虚频绝对值下限。
-    min_abs_imag_freq_cm1 已按用户决策移除——虚频大小是否"合适"交由 IRC
-    方向证明/虚频方向判断，两者由验证层（ts_guess/IRC）实现，本层不再引入
-    虚频大小下限判断。"""
+    TS 合格判定仅由 n_imag == 1（一阶鞍点）与同一 TS 双向 IRC 的真实外帧
+    经实际优化到正确零虚频极小值的方向证明（irc_connects_endpoints）构成。
+    IRC 本身无需收敛到底；虚频模式对齐与几何区间仅作诊断，不决定验收。
+    不设任何虚频绝对值下限。"""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -358,14 +346,7 @@ class TaskSpec(BaseModel):
 
 
 def complex_smiles(components: list[str]) -> list[str]:
-    """多组分体系以络合物（点连接的单条 SMILES）表达；单组分原样返回。
-
-    query 协议要求机理图从反应物络合物起步（与 query 展示的 Reactant
-    SMILES 同形）；gold 的 R/P 节点必须用同一形态——组分列表形态会让遵循
-    协议的交付图在子图覆盖评分里被判为不同物种（毒 gold）。同一折叠由
-    `MechanismNode._fold_complex_components` 在 schema 解析时强制执行，
-    生成器显式调用本函数只是幂等对齐。
-    """
+    """生成器显式声明现有题库的络合物；schema 保留输入的物种分组。"""
     if len(components) <= 1:
         return list(components)
     return [".".join(components)]

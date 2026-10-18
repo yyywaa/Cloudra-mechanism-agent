@@ -5,12 +5,15 @@
 纯 DB 轮询：每 tick 先按已加载项目 SELECT "终态且 notified_at IS NULL"
 （不按结束时间截断，宕机窗口不丢），再扫一小批未加载行只为把已删除
 项目的死信落 ``notified_at``。只投递 ``conversation_id in core.projects``
-的行（未加载项目跳过、不落 notified_at，项目打开时 ``ensure_project`` 立即
-扫该项目；**已硬删除的项目**——事件日志里有 project.deleted tombstone——
+的行（未加载项目跳过、不落 notified_at；**已硬删除的项目**——事件日志里有 project.deleted tombstone——
 永不加载，记 warning 并落 notified_at 终结）。每批逐作业持久化通知并落
 ``notified_at``；普通作业逐个通知，同轮已投递通知合并唤醒，不等待其他作业。
-TS 流水线中间作业由系统自动推进，仅受阻或终态才通知并唤醒所属 Agent。
+TS 流水线中间作业由系统自动推进；受阻、终态或 ts_guess 报告可疑虚频方向时
+通知并唤醒所属 Agent。方向建议不阻止 IRC，也不自动取消计算。
 投递失败不落 notified_at，下一 tick 自然重试。
+首次看到已加载项目时，从既有运行文件找回管线编号，按编号读取权威进度；
+已确认但未推进的终态作业按编号重新挂回既有通知队列，复用持久化失败重试，
+不另起后台任务，不定期遍历文件或查询未结束管线清单。
 
 锁纪律（细粒度，防跨进程 "database is locked"）：同步 SQLite 全部经
 ``asyncio.to_thread`` 卸载出事件循环，逐作业单行 UPDATE，不持长事务。
@@ -49,7 +52,7 @@ class ComputeNotifyBroker:
         self.core = core
         self.poll_interval = poll_interval
         self._poll_task: asyncio.Task | None = None
-        # ensure_project and the periodic loop can run at the same time. A
+        # Project delivery and the periodic loop can run at the same time. A
         # single scan/delivery owner prevents both from selecting an unacked
         # row and committing the same notice twice.
         self._poll_lock = asyncio.Lock()
@@ -57,6 +60,7 @@ class ComputeNotifyBroker:
         # （不重复投递通知）；收齐后一次性补发"证据已可复查"。
         # task_id -> (project_id, session_id, recovered)
         self._snapshot_retries: dict[int, tuple[str, str | None, bool]] = {}
+        self._recovered_projects: set[str] = set()
 
     async def start(self) -> None:
         if self._poll_task is not None:
@@ -68,15 +72,6 @@ class ComputeNotifyBroker:
         if task is not None:
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
-
-    async def ensure_project(self, project_id: str) -> None:
-        """项目打开时立即扫一次该项目，不等下个 tick。"""
-        if project_id in self.core.projects:
-            from cloudra.services.ts_pipeline_context import use_runtime_authority
-            from cloudra.tools.core.ts_pipeline_driver import reconcile_processes
-            with use_runtime_authority(self.core):
-                await asyncio.to_thread(reconcile_processes,ComputeDB(),project_id)
-        await self._poll_project(project_id)
 
     async def _poll_loop(self) -> None:
         while True:
@@ -96,17 +91,14 @@ class ComputeNotifyBroker:
         """每 tick 先扫已加载项目，再扫一小批未加载行只为终结已删除项目。
 
         已加载项目单独 SELECT，不被其它会话的未通知积压占满 LIMIT。
-        未加载且未删除的行仍跳过、不落 notified_at，项目打开时
-        ``ensure_project`` 立即扫该项目。已被硬删除的项目（事件日志里有
+        未加载且未删除的行仍跳过、不落 notified_at。已被硬删除的项目（事件日志里有
         project.deleted tombstone）记 warning 并落 notified_at 终结。
         """
         loaded = list(self.core.projects)
+        self._recovered_projects.intersection_update(loaded)
 
         if loaded:
-            rows = await asyncio.to_thread(
-                self._pending_terminal_jobs, conversation_ids=loaded
-            )
-            await self._deliver_batch(rows)
+            await self._poll_loaded_projects(loaded)
 
         parked = await asyncio.to_thread(self._pending_terminal_jobs)
         for conversation_id, task_id, _state, _session_id in parked:
@@ -126,8 +118,20 @@ class ComputeNotifyBroker:
         async with self._poll_lock:
             if project_id not in self.core.projects:
                 return  # 项目未加载无投递目标
-            rows = await asyncio.to_thread(self._pending_terminal_jobs, project_id)
-            await self._deliver_batch(rows)
+            await self._poll_loaded_projects([project_id])
+
+    async def _poll_loaded_projects(self, project_ids: list[str]) -> None:
+        from cloudra.persistence.paths import project_workspace_dir
+        from cloudra.tools.core.ts_pipeline_driver import recover_project_jobs
+
+        for project_id in project_ids:
+            if project_id in self._recovered_projects:
+                continue
+            workspace = self.core.projects[project_id].workspace_dir or str(project_workspace_dir(project_id))
+            await asyncio.to_thread(recover_project_jobs, ComputeDB(), project_id, workspace)
+            self._recovered_projects.add(project_id)
+        rows = await asyncio.to_thread(self._pending_terminal_jobs, conversation_ids=project_ids)
+        await self._deliver_batch(rows)
 
     async def _deliver_batch(
         self, rows: list[tuple[str, int, str, str | None]]
@@ -201,10 +205,16 @@ class ComputeNotifyBroker:
         from cloudra.tools.core.ts_pipeline_driver import handle_process_job_terminal
         with use_runtime_authority(self.core):
             pipeline = await asyncio.to_thread(handle_process_job_terminal, ComputeDB(), task_id)
-        if pipeline is not None and pipeline['status'] in ('waiting', 'running'):
+        # 已持久化的通知继续走 ack/wake；重试时告警可能已随修订变成历史。
+        target_id = await asyncio.to_thread(self._delivery_target, project_id, task_id)
+        frequency = next((step.get('frequency_analysis') or {} for step in
+                          (pipeline or {}).get('record', {}).get('job_steps', [])
+                          if step.get('purpose') == 'frequency' and step.get('job_id') == task_id), {})
+        alignment = frequency.get('mode_alignment') or {}
+        if (pipeline is not None and pipeline['status'] in ('waiting', 'running')
+                and target_id is None and alignment.get('status') not in {'misaligned', 'undecidable'}):
             await asyncio.to_thread(self._mark_notified, task_id)
             return
-        target_id = await asyncio.to_thread(self._delivery_target, project_id, task_id)
         if target_id is None:
             view = None
             record = None
@@ -356,7 +366,16 @@ class ComputeNotifyBroker:
                 observation += f" {reason}"
             lines.append('Physical Reality: ' + observation)
             inspect = f"ts_inspect(run_id={view['run_id']!r})"
-            if verified:
+            frequency = view.get('frequency_analysis') or {}
+            alignment = frequency.get('mode_alignment') or {}
+            if (frequency.get('job_id') == task_id
+                    and alignment.get('status') in {'misaligned', 'undecidable'}):
+                lines.append('Advisory from ts_guess: ' + str(alignment.get('message') or alignment['status']))
+                next_action = (f'Use {inspect} to review the mode and current jobs. '
+                    'This check is advisory and may be wrong; it does not block or cancel jobs. '
+                    'Decide whether to keep the pipeline running or call ts_stop with a reason, '
+                    'then revise the guess with ts_resume when appropriate.')
+            elif verified:
                 next_action = ('Submit the verified native logs through the DAG evidence tools.'
                     if view.get('details_path') else f'Use {inspect} for the verified evidence, then submit its native logs through the DAG evidence tools.')
             elif blocked.get('failure_class') == 'scan_no_candidate':
@@ -399,7 +418,7 @@ class ComputeNotifyBroker:
     def _reaction_window(record: dict | None, view: dict, purpose: str, engine: str) -> str:
         """Display existing current declarations, never infer connectivity from coordinates."""
         parts = []
-        value = (record or {}).get('input', {}) if (record or {}).get('format_version') == 6 else {}
+        value = (record or {}).get('input', {}) if (record or {}).get('format_version') == 7 else {}
         reaction = value.get('reaction') or {}
         for role in ('reactant', 'product'):
             facts = []

@@ -71,11 +71,10 @@ def _declaration(**overrides) -> TsInput:
         "multiplicity": 1,
         "method": "b3lyp/def2svp",
         "reaction_center": REACTION_CENTER,
-        "atom_map": ATOM_MAP,
     }
     # Historical fixture literals below use human-readable 1-based ring/map rows;
     # the process core now receives only normalized zero-based declarations.
-    for field in ("atom_map", "ring_order"):
+    for field in ("ring_order",):
         if field in overrides:
             overrides[field] = [i - 1 for i in overrides[field]]
     if "distance_filters" in overrides:
@@ -203,48 +202,12 @@ def test_evidence_candidates_never_include_per_iteration_frames(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_missing_atom_map_blocks_with_an_actionable_request(tmp_path):
-    """原子映射歧义必须显式呈现：缺 atom_map 就阻塞，并要求补齐——不猜。"""
-    record = _start(tmp_path, atom_map=[])
-    assert record.terminal is None
-    blocked = record.blocked
-    assert blocked is not None
-    assert blocked.stage == "map"
-    assert blocked.failure_class == "atom_map_missing"
-    assert blocked.needs == ["reaction.atom_map"]
-    assert "ambiguous" in blocked.message
 
 
-def test_missing_atom_map_block_carries_endpoint_numbering(tmp_path):
-    """缺 atom_map 的阻塞必须自诊断：atom_details 直接给出两端 built XYZ 的
-    路径与 1-based 元素序列（atom_map 的编号参照系），并指向 reaction_mapping
-    草稿通道——agent 不该靠猜编号再试一轮。"""
-    record = _start(tmp_path, atom_map=[])
-    blocked = record.blocked
-    details = "\n".join(blocked.atom_details)
-    assert "reactant atoms (1-based): 1=F, 2=C, 3=Cl, 4=H, 5=H, 6=H" in details
-    assert "product atoms (1-based): 1=C, 2=F, 3=H, 4=H, 5=H, 6=Cl" in details
-    assert ".xyz" in details
-    assert "reaction_mapping" in blocked.message
-    assert "hydrogen" in blocked.message.lower()
 
 
-def test_negative_internal_atom_map_is_diagnosed(tmp_path):
-    """含 0 的映射点名 0-based 笔误：重试引导必须说清错在哪，不只是"不对"。"""
-    record = _start(tmp_path, atom_map=[1, 0, 3, 4, 5, 2])
-    blocked = record.blocked
-    assert blocked.failure_class == "atom_map_not_a_permutation"
-    assert "negative" in blocked.message
 
 
-def test_heavy_atom_only_map_is_diagnosed(tmp_path):
-    """只覆盖重原子的映射（reaction_mapping 的 heavy_atom_map 形态）被点名：
-    atom_map 必须覆盖每个氢。"""
-    record = _start(tmp_path, atom_map=[2, 1, 3])
-    blocked = record.blocked
-    assert blocked.failure_class == "atom_map_not_a_permutation"
-    assert "heavy-atom" in blocked.message
-    assert "hydrogen" in blocked.message.lower()
 
 
 def test_missing_reaction_center_blocks_with_a_reason(tmp_path):
@@ -263,7 +226,7 @@ def test_out_of_range_reaction_center_blocks_with_built_atom_numbering(tmp_path)
         reactant_smiles="[F-].N",
         product_smiles="[F-].N",
         reaction_center=[(0, 5)],
-        atom_map=[1,2,3,4,5],
+
     )
 
     assert record.run_id == "ts_0001"
@@ -286,7 +249,7 @@ def test_m16_product_reaction_center_reports_its_five_built_atoms(tmp_path):
         product_smiles="O=C=O.[H][H]",
         charge=0,
         reaction_center=[(4, 5)],
-        atom_map=[1, 2, 3, 4, 5],
+        selected_candidate=0,
     )
 
     assert record.blocked is not None
@@ -310,7 +273,7 @@ def test_single_fragment_reaction_center_is_checked_after_atom_mapping(tmp_path)
         product_smiles="OC=O",
         charge=0,
         reaction_center=[(4, 5)],
-        atom_map=[1, 2, 3, 4, 5],
+
     )
 
     assert record.blocked is not None
@@ -352,9 +315,9 @@ def test_built_endpoints_are_delivered_through_the_shared_builder(tmp_path):
 
 
 def test_load_record_round_trips_from_disk(tmp_path):
-    record = _start(tmp_path, atom_map=[])
+    record = _start(tmp_path)
     reloaded = load_record(str(tmp_path), record.run_id)
-    assert reloaded.blocked.stage == "map"
+    assert reloaded.blocked.stage == "guess"
     assert reloaded.run_id == record.run_id
 
 
@@ -367,13 +330,13 @@ def test_only_blocked_and_terminal_events_are_emitted(tmp_path):
     """阶段推进不推事件（避免污染上下文）；阻塞与终态才推。"""
     events: list[tuple[str, dict]] = []
     start(
-        TsStartRequest(request_key='fixture-prepare', input=_declaration(atom_map=[]), workspace_dir=str(tmp_path)),
+        TsStartRequest(request_key='fixture-prepare', input=_declaration(), workspace_dir=str(tmp_path)),
         event_sink=lambda name, payload: events.append((name, payload)),
     )
     assert [name for name, _ in events] == ["ts.blocked"]
     payload = events[0][1]
-    assert payload["blocked"]["needs"] == ["reaction.atom_map"]
-    assert payload["blocked"]["failure_class"] == "atom_map_missing"
+    assert payload["blocked"]["needs"] == ["guess"]
+    assert payload["blocked"]["failure_class"] == "executable_missing"
 
 
 def test_terminal_event_carries_evidence_candidates(tmp_path):
@@ -418,22 +381,8 @@ def test_submit_without_owner_is_refused(tmp_path):
 
 
 
-def test_wrong_atom_map_blocks_with_element_level_detail(tmp_path):
-    """错映射必须点名到原子地报出来，而不是让路径搜索拿着错序去跑。"""
-    record = _start(tmp_path, atom_map=[1, 2, 3, 4, 5, 6])
-    assert record.terminal is None
-    blocked = record.blocked
-    assert blocked.stage == "map"
-    assert blocked.failure_class == "atom_map_element_mismatch"
-    assert blocked.needs == ["reaction.atom_map"]
-    # 每个错配都要说清是哪个原子对不上哪个元素
-    assert blocked.atom_details
-    assert any("but the map points it at reactant atom" in d for d in blocked.atom_details)
 
 
-def test_atom_map_must_be_a_permutation(tmp_path):
-    record = _start(tmp_path, atom_map=[1, 1, 2, 3, 4, 5])
-    assert record.blocked.failure_class == "atom_map_not_a_permutation"
 
 
 def test_atom_count_mismatch_blocks_before_any_path_search(tmp_path):
@@ -442,7 +391,7 @@ def test_atom_count_mismatch_blocks_before_any_path_search(tmp_path):
     注意顺序：电荷不符会在 build 阶段先落 invalid_input（那是"输入不成立"），
     这里刻意用一个电荷正确、原子数不同的产物，才能单独测原子数这条。
     """
-    record = _start(tmp_path, product_smiles="[F-]", atom_map=[1])
+    record = _start(tmp_path, product_smiles="[F-]")
     assert record.terminal is None
     assert record.blocked.stage == "map"
     assert record.blocked.failure_class == "atom_count_mismatch"
@@ -932,8 +881,9 @@ def test_gaussian_refinement_input_merges_keywords_without_duplicate_opt(tmp_pat
 
     source = tmp_path / "guess.xyz"
     source.write_text("3\nguess\nO 0.0 0.0 0.0\nH 0.96 0.0 0.0\nH -0.24 0.93 0.0\n", encoding="utf-8")
-    record = _start(tmp_path, engine="gaussian", keywords="opt=(ts,calcfc,noeigen,maxstep=10) nosymm")
-    record.current_ts_guess_path = str(source)
+    record = _start(tmp_path, reactant_smiles="O", product_smiles="O", charge=0, reaction_center=[], engine="gaussian", keywords="opt=(ts,calcfc,noeigen,maxstep=10) nosymm")
+    from cloudra.tools.core.ts_process import _accept_candidate
+    _accept_candidate(record, str(source))
     record.path_kind = "provided"
     job1 = Path(record.run_dir) / "jobs" / "job_0001"
     job1.mkdir(parents=True, exist_ok=True)
@@ -995,7 +945,7 @@ def test_product_geometry_rejects_a_different_declared_product_graph(tmp_path):
 
     record = _start(
         tmp_path, reactant_smiles="CC", product_smiles="CO", charge=0,
-        reaction_center=[], atom_map=[],
+        reaction_center=[],
         product_geometry=RotatedConformer(kind="rotate_about_bond", atoms=(0, 1), degrees=180).model_dump(),
     )
     assert record.terminal == "invalid_input"
@@ -1130,12 +1080,12 @@ def test_same_smiles_endpoints_are_distinguished_by_declared_geometry(tmp_path):
     )
     # map 阶段按"构造保证恒等"通过，且不再要求 atom_map
     assert record.stage_record("map").status == "done"
-    assert "identity by construction" in record.stage_record("map").detail
+    assert record.structures.product_to_reactant == tuple(range(record.structures.reactant.GetNumAtoms()))
     del json
 
 
 # ---------------------------------------------------------------------------
-# verdict 第二道闸：IRC 双侧几何及端点区间证明才可 verified
+# verdict：真实 IRC 双侧外帧优化到正确极小值；区间分析只作建议
 # ---------------------------------------------------------------------------
 
 
@@ -1223,7 +1173,7 @@ def test_gaussian_outer_frame_preserves_native_working_atom_order(tmp_path):
     from cloudra.tools.core.ts_process import TsJobStep, _endpoint_seed_atoms, _refinement_log_path
 
     record = _start(tmp_path, reactant_smiles='C#N', product_smiles='[NH+]#[C-]',
-                    charge=0, atom_map=[2, 1, 3], reaction_center=[(0, 1)])
+                    charge=0,  reaction_center=[(0, 1)])
     job_dir = Path(record.run_dir) / 'jobs' / 'gaussian_irc_seed'
     (job_dir / '.cloudra').mkdir(parents=True)
     step = TsJobStep(purpose='irc', job_id=9200, input_path=str(job_dir / 'irc.gjf'), state='done',
@@ -1293,8 +1243,8 @@ def test_symmetric_working_mol_keeps_bound_atom_rows(tmp_path):
         xyz_path.write_text(Chem.MolToXYZBlock(graph))
     record = TsProcessRecord(run_id='symmetric', run_dir=str(tmp_path), workspace_dir=str(tmp_path),
         input=_declaration(reactant_smiles='CC', product_smiles='CC', charge=0,
-                           atom_map=[i + 1 for i in mapping], reaction_center=[(0, 1)]),
-        product_seed_xyz_path=str(native_xyz), product_seed_mol_path=str(native_mol))
+                            reaction_center=[(0, 1)]),
+        structures=dict(reactant=working, product=mol, product_to_reactant=tuple(mapping)))
 
     atoms = _endpoint_seed_atoms(record, 'product', EndpointSeed(
         kind='file', xyz_path=str(working_xyz), mol_path=str(working_mol), evidence_refs=[str(working_xyz)],
@@ -1406,10 +1356,24 @@ def _sn2_minima(record, symbols):
 def _install_endpoint_minimum_jobs(record, monkeypatch, symbols, reactant, product,
                                    *, reactant_opt_converged=True,
                                    reactant_freqs=None, origins=None):
-    """Only external QM parsing is replaced; verdict and interval proof stay real."""
+    """Keep native TS geometry, endpoint provenance and species checks real."""
     from types import SimpleNamespace
 
     from cloudra.tools.core.ts_process import TsJobStep, _refinement_log_path
+
+    frequency = next(step for step in record.job_steps if step.purpose == 'frequency')
+    irc = next(step for step in record.job_steps if step.purpose == 'irc')
+    ts_path = Path(frequency.input_path).parent / 'optimized.xyz'
+    if ts_path.is_file():
+        ts_rows = '\n'.join(ts_path.read_text().splitlines()[2:])
+        ts_geometry = ('O   R   C   A\nCARTESIAN COORDINATES (ANGSTROEM)\n'
+                       '---------------------------------\n' + ts_rows + '\n\n')
+        Path(_refinement_log_path(record, frequency)).write_text(
+            ts_geometry + 'VIBRATIONAL FREQUENCIES\n 0: -500.0 cm**-1\n'
+            ' 1: 120.0 cm**-1\n 2: 300.0 cm**-1\n\nORCA TERMINATED NORMALLY\n')
+        Path(_refinement_log_path(record, irc)).write_text(
+            ts_geometry + 'Intrinsic Reaction Coordinate Calculation\n'
+            '* FORWARD IRC *\n* BACKWARD IRC *\nORCA TERMINATED NORMALLY\n')
 
     endpoint_freqs = [120.0, 300.0] if reactant_freqs is None else reactant_freqs
     for role, positions, opt_id, freq_id, number in (
@@ -1459,16 +1423,22 @@ def _install_endpoint_minimum_jobs(record, monkeypatch, symbols, reactant, produ
             f"{symbol} {position[0]:.8f} {position[1]:.8f} {position[2]:.8f}"
             for symbol, position in zip(symbols, positions)
         )
+        initial_rows = '\n'.join(source_xyz.splitlines()[2:])
         Path(_refinement_log_path(record, opt_step)).write_text(
+            "* O   R   C   A *\n"
             "GEOMETRY OPTIMIZATION CYCLE\n"
             "CARTESIAN COORDINATES (ANGSTROEM)\n"
             "---------------------------------\n"
-            f"{coordinate_rows}\n\n"
+            f"{initial_rows}\n\n"
             + (
                 "THE OPTIMIZATION HAS CONVERGED\n" if (
                     role != "reactant" or reactant_opt_converged
                 ) else "The optimization did not converge\n"
-            ),
+            )
+            + "CARTESIAN COORDINATES (ANGSTROEM)\n"
+            "---------------------------------\n"
+            f"{coordinate_rows}\n\n"
+            "ORCA TERMINATED NORMALLY\n",
             encoding="utf-8",
         )
         Path(_refinement_log_path(record, freq_step)).write_text(
@@ -1494,11 +1464,8 @@ def _install_endpoint_minimum_jobs(record, monkeypatch, symbols, reactant, produ
     monkeypatch.setattr("cloudra.dag.evidence_ingest.snapshot_evidence_file", snapshot)
 
 
-def test_verdict_verified_requires_and_passes_interval_proof(tmp_path, monkeypatch):
-    """freq(1 imag) + IRC 双侧几何 + 区间证明通过 → verified。
-
-    区间证明是本次新增的必要条件：端点几何各自位于 TS 与对应声明极小值之间。
-    """
+def test_verdict_verified_keeps_passing_interval_as_advisory(tmp_path, monkeypatch):
+    """A valid endpoint lineage also reports its consistent geometric interval."""
     from cloudra.tools.core.ts_process import _verdict
 
     record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
@@ -1513,12 +1480,12 @@ def test_verdict_verified_requires_and_passes_interval_proof(tmp_path, monkeypat
     _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
     # The original build geometry is only a path seed. Corrupting its shape
     # must not replace the separately optimized endpoint reference in proof.
-    from cloudra.tools.core.ts_process import _read_built_xyz
 
-    record.current_seed_mol_path = _read_built_xyz(record, "reactant")[3]
     raw_seed = Path(record.run_dir) / "raw_search_seed.xyz"
     raw_seed.write_text(_xyz_text(symbols, b, "not a minimum"), encoding="utf-8")
-    record.current_seed_xyz_path = str(raw_seed)
+    from cloudra.tools.core.molecule import with_positions
+    from cloudra.tools.core.structure_artifacts import read_xyz_atoms
+    record.structures.reactant = with_positions(record.structures.reactant, [point for _, point in read_xyz_atoms(raw_seed)])
 
     record = _verdict(record)
     assert record.terminal == "verified", record.stage_record("verdict").detail
@@ -1582,7 +1549,7 @@ def test_verdict_accepts_reversed_irc_side_identity_with_matching_provenance(
 @pytest.mark.parametrize('origins', [
     {'reactant': 'reactant', 'product': 'product'},
 ])
-def test_explicit_species_seed_can_match_swapped_irc_directions(tmp_path, monkeypatch, origins):
+def test_explicit_species_seed_does_not_prove_irc_endpoint_lineage(tmp_path, monkeypatch, origins):
     from cloudra.tools.core.ts_process import _verdict
 
     record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
@@ -1591,7 +1558,8 @@ def test_explicit_species_seed_can_match_swapped_irc_directions(tmp_path, monkey
     _install_fake_irc_endpoints(monkeypatch, symbols, 0.25 * a + 0.75 * b, 0.75 * a + 0.25 * b)
     _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b, origins=origins)
     result = _verdict(record)
-    assert result.terminal == 'verified', result.stage_record('verdict').detail
+    assert result.terminal == 'candidate_only'
+    assert 'outer-frame' in result.stage_record('verdict').detail
 
 
 def test_endpoint_cannot_label_an_optimized_minimum_as_native_outer_frame(tmp_path, monkeypatch):
@@ -1613,9 +1581,31 @@ def test_endpoint_cannot_label_an_optimized_minimum_as_native_outer_frame(tmp_pa
     assert _verdict(record).terminal == 'candidate_only'
 
 
+def test_verdict_rejects_opt_log_starting_from_a_different_geometry(tmp_path, monkeypatch):
+    from cloudra.tools.core.ts_process import _refinement_log_path, _verdict
+
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    a, b = _sn2_minima(record, symbols)
+    (job_dir / 'optimized.xyz').write_text(_xyz_text(symbols, 0.5 * (a + b), 'TS'))
+    _install_fake_irc_endpoints(monkeypatch, symbols, 0.75 * a + 0.25 * b, 0.25 * a + 0.75 * b)
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
+    opt = next(step for step in record.job_steps if step.purpose == 'reactant_opt')
+    source_rows = '\n'.join(Path(opt.endpoint_source.source_path).read_text().splitlines()[2:])
+    wrong_rows = '\n'.join(_xyz_text(symbols, a).splitlines()[2:])
+    opt_log = Path(_refinement_log_path(record, opt))
+    opt_log.write_text(opt_log.read_text().replace(source_rows, wrong_rows, 1))
+    # The archived source/hash and final Opt/Freq geometries remain correct;
+    # the native Opt actually started elsewhere and cannot prove this IRC side.
+
+    result = _verdict(record)
+
+    assert result.terminal == 'candidate_only'
+    assert 'native optimization' in result.stage_record('verdict').detail.lower()
+
+
 @pytest.mark.parametrize('explicit_role', ['reactant', 'product'])
 @pytest.mark.parametrize('swapped', [False, True])
-def test_actual_mixed_seed_branches_keep_native_side_constraints(tmp_path, monkeypatch, explicit_role, swapped):
+def test_mixed_seed_branches_do_not_prove_both_irc_endpoint_lineages(tmp_path, monkeypatch, explicit_role, swapped):
     from cloudra.tools.core.ts_process import _verdict
     record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
     a, b = _sn2_minima(record, symbols)
@@ -1626,7 +1616,8 @@ def test_actual_mixed_seed_branches_keep_native_side_constraints(tmp_path, monke
     origins[explicit_role] = explicit_role
     _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b, origins=origins)
     result = _verdict(record)
-    assert result.terminal == 'verified', result.stage_record('verdict').detail
+    assert result.terminal == 'candidate_only'
+    assert 'outer-frame' in result.stage_record('verdict').detail
 
 
 def test_verdict_rejects_two_irc_sides_optimized_to_same_species(tmp_path, monkeypatch):
@@ -1659,8 +1650,7 @@ def test_wrong_input_mol_does_not_hide_observed_endpoint_species(tmp_path, monke
     _install_endpoint_minimum_jobs(record, monkeypatch, symbols, b, b)
     # Deliberately wrong input MOL triggers the old early return before geometry feedback.
     product = Chem.MolFromMolFile(_read_built_xyz(record, 'product')[3], removeHs=False)
-    Chem.MolToMolFile(Chem.RenumberAtoms(product, [1, 0, 5, 2, 3, 4]),
-                     _read_built_xyz(record, 'reactant')[3])
+    record.structures.reactant = Chem.RenumberAtoms(product, [1, 0, 5, 2, 3, 4])
 
     result = _verdict(record)
 
@@ -1669,7 +1659,7 @@ def test_wrong_input_mol_does_not_hide_observed_endpoint_species(tmp_path, monke
     assert 'CF.[Cl-]' in result.stage_record('verdict').detail
 
 
-def test_verdict_rejects_identity_pairing_that_contradicts_irc_side_provenance(
+def test_verdict_uses_actual_optimized_origins_over_interval_pairing(
     tmp_path, monkeypatch,
 ):
     from cloudra.tools.core.ts_process import _verdict
@@ -1679,8 +1669,8 @@ def test_verdict_rejects_identity_pairing_that_contradicts_irc_side_provenance(
     (job_dir / "optimized.xyz").write_text(
         _xyz_text(symbols, 0.5 * (a + b), "TS geometry"), encoding="utf-8",
     )
-    # The IRC goes A→reactant/B→product, but the recorded optimization origins
-    # claim A→product/B→reactant. The two facts cannot be combined into proof.
+    # Pair distances prefer A→reactant/B→product, but actual optimizations
+    # establish A→product/B→reactant; geometry is only advisory.
     _install_fake_irc_endpoints(
         monkeypatch, symbols, 0.75 * a + 0.25 * b, 0.25 * a + 0.75 * b,
     )
@@ -1688,14 +1678,11 @@ def test_verdict_rejects_identity_pairing_that_contradicts_irc_side_provenance(
         origins={'reactant': 'B', 'product': 'A'})
 
     result = _verdict(record)
-    assert result.terminal == "candidate_only"
-    assert "provenance" in result.stage_record("verdict").detail
+    assert result.terminal == "verified", result.stage_record("verdict").detail
+    assert "advisory" in result.stage_record("verdict").detail.lower()
 
 
-@pytest.mark.parametrize("defect", ["missing_side", "wrong_direction"])
-def test_partial_irc_still_requires_two_valid_directions(
-    tmp_path, monkeypatch, defect,
-):
+def test_partial_irc_still_requires_both_native_outer_frames(tmp_path, monkeypatch):
     from cloudra.tools.Chemtool.ts_guess import TsGuess
     from cloudra.tools.core import orca_frames
     from cloudra.tools.core.ts_process import _verdict
@@ -1709,17 +1696,14 @@ def test_partial_irc_still_requires_two_valid_directions(
     (job_dir / "optimized.xyz").write_text(
         _xyz_text(symbols, 0.5 * (a + b), "TS geometry"), encoding="utf-8",
     )
-    if defect == "missing_side":
-        monkeypatch.setattr(TsGuess, "_extract_irc_endpoints", staticmethod(
-            lambda *_args, **_kwargs: None,
-        ))
-    else:
-        _install_fake_irc_endpoints(monkeypatch, symbols, 0.75 * a + 0.25 * b, a)
+    monkeypatch.setattr(TsGuess, "_extract_irc_endpoints", staticmethod(
+        lambda *_args, **_kwargs: None,
+    ))
     _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
 
     result = _verdict(record)
     assert result.terminal == "candidate_only"
-    assert "interval proof" in result.stage_record("verdict").detail
+    assert "bidirectional" in result.stage_record("verdict").detail
 
 
 def test_verdict_rejects_raw_endpoint_guesses_even_when_irc_interval_matches(
@@ -1854,7 +1838,7 @@ def test_endpoint_identity_accepts_an_ionic_contact_pair(tmp_path):
 
     record = _start(
         tmp_path, reactant_smiles="[Na+].[Cl-]", product_smiles="[Na+].[Cl-]",
-        charge=0, reaction_center=[], atom_map=[],
+        charge=0, reaction_center=[],
     )
     assert _endpoint_identity_error(
         record, "reactant", (["Na", "Cl"], [[0.0, 0.0, 0.0], [2.4, 0.0, 0.0]]),
@@ -1870,7 +1854,7 @@ def test_endpoint_identity_detects_bond_order_change_with_same_bond_pairs(
 
     record = _start(
         tmp_path, reactant_smiles="C=CC", product_smiles="C=CC", charge=0,
-        reaction_center=[], atom_map=[],
+        reaction_center=[],
     )
     symbols, positions, _xyz, _mol = _read_built_xyz(record, "reactant")
     original = irc_path.perceive_bonds
@@ -1978,11 +1962,8 @@ def test_unreadable_gaussian_endpoint_opt_log_finishes_candidate_only(
     assert "unreadable" in result.stage_record("verdict").detail.lower()
 
 
-def test_verdict_converged_irc_without_connectivity_is_candidate_only(tmp_path, monkeypatch):
-    """IRC 双侧有几何但端点不在 TS 与声明极小值之间 → candidate_only。
-
-    「IRC 跑完了」本身不构成「落回声明的极小值」的证据。
-    """
+def test_verdict_accepts_actual_outer_frame_minima_when_interval_fails(tmp_path, monkeypatch):
+    """Real A/B optimizations to the correct minima outweigh pair-distance intervals."""
     import numpy as np
 
     from cloudra.tools.core.ts_process import _verdict
@@ -2000,10 +1981,59 @@ def test_verdict_converged_irc_without_connectivity_is_candidate_only(tmp_path, 
     _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
 
     record = _verdict(record)
-    assert record.terminal == "candidate_only"
+    assert record.terminal == "verified", record.stage_record("verdict").detail
     detail = record.stage_record("verdict").detail
-    assert "interval proof" in detail
-    assert "UNVERIFIED" in detail
+    assert "advisory" in detail.lower()
+    assert "warning" in detail.lower()
+    assert "inspect the trajectory" in detail.lower()
+
+
+def test_verdict_keeps_lineage_verified_when_interval_analysis_errors(tmp_path, monkeypatch):
+    import cloudra.tools.core.ts_process as process
+
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    a, b = _sn2_minima(record, symbols)
+    (job_dir / 'optimized.xyz').write_text(_xyz_text(symbols, 0.5 * (a + b), 'TS'))
+    _install_fake_irc_endpoints(monkeypatch, symbols, 0.75 * a + 0.25 * b, 0.25 * a + 0.75 * b)
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
+
+    def unreadable_interval(*_args, **_kwargs):
+        raise ValueError('interval analysis failed')
+
+    monkeypatch.setattr(process, '_irc_interval_proof', unreadable_interval)
+    result = process._verdict(record)
+
+    assert result.terminal == 'verified', result.stage_record('verdict').detail
+    assert 'warning' in result.stage_record('verdict').detail.lower()
+    assert 'inspect the trajectory' in result.stage_record('verdict').detail.lower()
+
+
+def test_verdict_rejects_endpoint_lineage_from_a_different_ts(tmp_path, monkeypatch):
+    import hashlib
+
+    from cloudra.tools.core.ts_process import _refinement_log_path, _verdict
+
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    a, b = _sn2_minima(record, symbols)
+    (job_dir / 'optimized.xyz').write_text(_xyz_text(symbols, 0.5 * (a + b), 'TS'))
+    _install_fake_irc_endpoints(monkeypatch, symbols, 0.75 * a + 0.25 * b, 0.25 * a + 0.75 * b)
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
+    irc = next(step for step in record.job_steps if step.purpose == 'irc')
+    irc_log = Path(_refinement_log_path(record, irc))
+    wrong_rows = '\n'.join(_xyz_text(symbols, a).splitlines()[2:])
+    irc_log.write_text('O   R   C   A\nCARTESIAN COORDINATES (ANGSTROEM)\n'
+                       '---------------------------------\n' + wrong_rows + '\n\n'
+                       'Intrinsic Reaction Coordinate Calculation\n'
+                       '* FORWARD IRC *\n* BACKWARD IRC *\nORCA TERMINATED NORMALLY\n')
+    digest = hashlib.sha256(irc_log.read_bytes()).hexdigest()
+    for step in record.job_steps:
+        if step.endpoint_source is not None:
+            step.endpoint_source = step.endpoint_source.model_copy(update={'irc_log_sha256': digest})
+
+    result = _verdict(record)
+
+    assert result.terminal == 'candidate_only'
+    assert 'same frequency-verified TS' in result.stage_record('verdict').detail
 
 
 # ---------------------------------------------------------------------------
@@ -2149,8 +2179,7 @@ def test_file_complex_assembly_uses_bound_structure_components(tmp_path):
         {"index": i, "symbol": symbol} for i, symbol in enumerate(["F", "C", "Cl", "H", "H", "H"])]}))
     record = TsProcessRecord(run_id="file-complex", run_dir=str(tmp_path), workspace_dir=str(tmp_path),
         owner_conversation_id="test", owner_session_id="test", input=_declaration(reaction_center=[]),
-        current_reactant_prepared_path=str(prepared),
-        structures={"reactant": {"components": 2}})
+        structures=dict(reactant=__import__("rdkit").Chem.MolFromSmiles(REACTANT)))
     result = _assemble(record)
     assert result.blocked is not None
     assert result.blocked.failure_class == "reaction_center_missing"
@@ -2176,11 +2205,11 @@ def test_ts_interval_reference_reordering_retains_unresolved_molecular_propertie
     _install_fake_irc_endpoints(monkeypatch, symbols, 0.75 * reactant + 0.25 * product,
                                 0.25 * reactant + 0.75 * product)
     _install_endpoint_minimum_jobs(record, monkeypatch, symbols, reactant, product)
-    native = record.seed_molecules['product']
+    native = record.structures.product
     reference = read_molecule(input_text=Chem.MolToXYZBlock(native), input_format='xyz', charge=-1)
     reference.SetIntProp('reference_revision', 7)
     reference.SetProp('_source_note', 'original coordinate reference')
-    record.seed_molecules['product'] = reference
+    record.structures.product = reference
     before = serialize_molecule(reference)
 
     def inspect_references(*_args, reference_molecules, **_kwargs):
@@ -2197,3 +2226,12 @@ def test_ts_interval_reference_reordering_retains_unresolved_molecular_propertie
         (symbols, reactant), (symbols, product), {})
     assert accepted, detail
     assert serialize_molecule(reference) == before
+
+
+def test_unique_mapping_is_owned_without_agent_transport(tmp_path):
+    record = _start(tmp_path)
+    assert record.structures.product_to_reactant == tuple(ATOM_MAP)
+    assert record.stage_record('map').status == 'done'
+    data = record.model_dump(mode='json')
+    assert 'atom_map' not in data['input']['reaction']
+    assert not {'input_binding', 'seed_molecules', 'current_seed_xyz_path', 'current_ts_guess_path'} & data.keys()

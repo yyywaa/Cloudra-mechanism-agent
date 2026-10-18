@@ -502,13 +502,13 @@ class _GraphElement(BaseModel):
 
 
 class SpeciesNode(_GraphElement):
-    """delivery 图上的物种体系状态节点（整个络合物体系的状态）。"""
+    """物种体系状态：点连接字符串是络合物，列表是分离物种。"""
 
     node_id: str
     node_type: Literal["species", "occurrence"] = "species"
     name: str = ""
     label: str = ""
-    smiles: str | None = None
+    smiles: str | list[str] | None = None
     status: str = "pending"
     evidence_level: DeliveryEvidenceLevel = "proposed"
     reason: str = ""
@@ -1058,11 +1058,11 @@ _STAGE_GLOSSARY = (
     "- single_point: a single-point energy of a species.\n"
     "- ts_guess: advisory scan/guess for a transition structure; NEVER satisfies ts_opt/frequency.\n"
     "- ts_opt: transition-state optimization converging to a first-order saddle point.\n"
-    "- short_irc: an IRC path from the saddle whose delivery requires a geometric "
-    "direction proof (the ts_guess verify strict criterion): both IRC endpoint "
-    "geometries must lie between the TS and the corresponding verified endpoint "
-    "minima — convergence or point counts alone never suffice. Supply the "
-    "TS/frequency and verified endpoint-minimum evidence for that proof; "
+    "- short_irc: both real IRC directions must start at the same verified TS. "
+    "Native converged Opt logs must start at the two IRC outer frames and end "
+    "at the declared source/target minima, with matching zero-imaginary-frequency "
+    "logs (combined Opt/Freq or separate files). Geometric interval checks are "
+    "advisory; IRC itself need not converge to the minima. Supply those native logs; "
     "missing evidence remains a scientific delivery gap.\n"
     "- endpoint_a: the TARGET-node side of the step (the product); bind a normally "
     "terminated, frequency-verified minimum (0 imaginary frequencies).\n"

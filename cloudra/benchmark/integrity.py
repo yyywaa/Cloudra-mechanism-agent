@@ -109,9 +109,8 @@ class _DeliveredEdge(MechanismEdge):
 # file extensions we treat as computational evidence worth parsing for SMILES
 _EVIDENCE_SUFFIXES = {".gjf", ".com", ".inp", ".xyz", ".log", ".out", ".sdf", ".mol", ".json"}
 
-# 超过该大小的文件只做类型分类、不整读扫 SMILES，也不进 Layer 2 的帧解析
-# （两层共享同一上限：超大文件在 Layer 1 没贡献绑定，cclib 整读只会拖住评分器）
-MAX_SCAN_BYTES = 20 * 1024 * 1024
+# Bound incidental metadata discovery, not eligibility of native scientific logs.
+MAX_METADATA_BYTES = 20 * 1024 * 1024
 
 # `smiles:` 注释行是交付协议的一部分（query 明确要求证据文件携带）。
 # 容忍 JSON/YAML 引号与注释前缀："smiles": "X"、smiles: 'X'、# smiles: X。
@@ -121,7 +120,7 @@ class EvidenceFile:
     path: str
     smiles_found: list[str] = field(default_factory=list)
     kind: str = ""  # 'gaussian'|'orca'|'xyz'|'json'|'unknown'
-    size: int = 0   # 字节数；Layer 2 据此跳过超过 MAX_SCAN_BYTES 的文件
+    size: int = 0   # 原始字节数，仅作文件信息，不是科学资格条件
 
 
 @dataclass
@@ -260,10 +259,18 @@ def scan_evidence_files(sandbox: Path, exclude: Optional[Path] = None) -> list[E
         kind = _classify(p)
         try:
             size = p.stat().st_size
-            if size > MAX_SCAN_BYTES:
-                text = ""  # 超大日志不整读；保留分类结果，SMILES 扫描跳过
+            if kind in {'gaussian', 'orca'} and p.suffix.lower() in {'.log', '.out'}:
+                # Native logs are not JSON. Discover annotations one line at a
+                # time instead of making a second full-size in-memory copy.
+                with p.open(encoding='utf-8', errors='replace') as stream:
+                    smiles = list(dict.fromkeys(identity for line in stream
+                        if 'smiles' in line.lower() for identity in _smiles_in_text(line)))
+                text = ''
+            elif size > MAX_METADATA_BYTES:
+                text, smiles = '', []
             else:
                 text = p.read_text(encoding="utf-8", errors="replace")
+                smiles = _smiles_in_text(text)
         except Exception:
             continue
         # 机理图形状的 JSON（顶层 nodes+edges）一律不是证据：交付图的多份改名
@@ -277,7 +284,7 @@ def scan_evidence_files(sandbox: Path, exclude: Optional[Path] = None) -> list[E
                 continue
         files.append(EvidenceFile(
             path=str(p.relative_to(sandbox)),
-            smiles_found=_smiles_in_text(text),
+            smiles_found=smiles,
             kind=kind,
             size=size,
         ))
@@ -337,7 +344,6 @@ def _species_file_qualities(
         q = 0.0
         for fs in f.smiles_found:
             # A similar fingerprint cannot replace missing molecular components.
-            # Separate component evidence is handled by _component_union_coverage.
             if len(fs.split(".")) != len(species_smiles.split(".")):
                 continue
             if species_substitution_cost([species_smiles], [fs], cfg) <= match_threshold:
@@ -352,36 +358,6 @@ def _species_file_qualities(
     return best, paths
 
 
-def _component_union_coverage(
-    species_smiles: str,
-    files: list[EvidenceFile],
-    cfg: GedConfig,
-    match_threshold: float,
-    partial_quality: float,
-) -> tuple[float, list[str]]:
-    """逐组分联合覆盖兜底（用户裁决：络合物优化不干净时允许拆开交付）。
-
-    仅在整络合物标注绑不上时启用：把络合物 SMILES 按 "." 拆成单组分，每个
-    组分走与整绑相同的结构比对（指纹/哈希 + protonation variant，不走字符串
-    相等）——每个组分都至少被一个证据文件标注则联合覆盖成立，返回
-    (最弱组分质量, 覆盖文件并集)；任一组分无覆盖返回 (0.0, [])。单组分物种
-    无此通道（与整绑同义）。"""
-    components = species_smiles.split(".")
-    if len(components) <= 1:
-        return 0.0, []
-    quality = 1.0
-    paths: list[str] = []
-    for comp in components:
-        q, qpaths = _species_file_qualities(
-            comp, files, cfg, match_threshold, partial_quality
-        )
-        if not qpaths:
-            return 0.0, []
-        quality = min(quality, q)
-        paths.extend(qpaths)
-    return quality, sorted(set(paths))
-
-
 def bind_graph_to_evidence(
     graph: GoldMechanismGraph,
     files: list[EvidenceFile],
@@ -391,31 +367,12 @@ def bind_graph_to_evidence(
     *,
     sandbox: Path,
 ) -> list[NodeBinding]:
-    """Bind each accessible non-TS node to evidence files whose parsed SMILES
-    match the node's claimed SMILES. A node's SMILES list holds whole species:
-    a multi-molecule complex is ONE dot-joined complex SMILES (``C=O.CN``) —
-    the schema folds component lists into that form at parse time
-    (``MechanismNode._fold_complex_components``). Binding is two-layered:
+    """Bind each declared species to matching evidence for its complete identity.
 
-    1. 整络合物优先：evidence ``smiles:`` annotations are matched against the
-       whole dot-joined complex (the delivery contract's primary form);
-    2. 逐组分联合覆盖兜底（用户裁决：络合物在允许方法下优化不干净时允许拆开
-       交付）：整络合物绑不上时拆成单组分，每个组分都至少被一个证据文件标注
-       （同一结构比对/protonation 通道）则该物种也算覆盖——图拓扑不受影响，
-       节点仍是单个络合物。
-
-    The node binds when every listed species is matched (either layer) by at
-    least one evidence file. Binding is graded: fingerprint/hash-level matches
-    give quality 1.0; protonation/charge-state-only variants give
-    `partial_quality` (the node's quality is its weakest species — 兜底通道下
-    即最弱组分). TS nodes carry no SMILES and are bound indirectly via their
-    edge's endpoints: a TS counts as evidenced only when at least one edge
-    routes through it (`via`) and both endpoint species of that edge are
-    themselves bound to evidence; its quality inherits the weaker endpoint.
-
-    `accessible=false` 的节点（含 TS）是"允许方法下不可达"的显式声明：不参与
-    绑定、不产出 NodeBinding；via 边任一端点不可达时该 TS 随之绑不上
-    （端点不在绑定集合里）。"""
+    A dot-connected entry requires whole-complex geometry. Multiple entries
+    describe separated species and each needs its own matching evidence.
+    Inaccessible nodes are exempt; TS nodes retain explicit evidence lineage.
+    """
     cfg = cfg or GedConfig()
     sandbox = Path(sandbox)
     available = files
@@ -423,7 +380,7 @@ def bind_graph_to_evidence(
     verified = []
     for evidence in files:
         identities = []
-        if evidence.size <= MAX_SCAN_BYTES and (evidence.kind == 'xyz' or normal_log(sandbox / evidence.path, max_scan_bytes=MAX_SCAN_BYTES)):
+        if evidence.kind == 'xyz' or normal_log(sandbox / evidence.path):
             for identity in evidence.smiles_found:
                 try:
                     if _geometry_species(str(sandbox / evidence.path), identity):
@@ -454,8 +411,8 @@ def bind_graph_to_evidence(
                 path = (sandbox / raw).resolve() if isinstance(raw, str) else None
                 relative = str(path.relative_to(sandbox.resolve())) if path is not None else None
                 evidence = next((item for item in available if item.path == relative
-                                 and item.kind in {'gaussian', 'orca'} and item.size <= MAX_SCAN_BYTES), None)
-                if evidence and node.smiles and normal_log(path, max_scan_bytes=MAX_SCAN_BYTES):
+                                 and item.kind in {'gaussian', 'orca'}), None)
+                if evidence and node.smiles and normal_log(path):
                     identities = next(item.smiles_found for item in files if item.path == relative)
                     identities = list(identities)
                     identities.extend(identity for identity in node.smiles if _geometry_species(str(path), identity))
@@ -479,11 +436,6 @@ def bind_graph_to_evidence(
             q, qpaths = _species_file_qualities(
                 species_smiles, files, cfg, match_threshold, partial_quality
             )
-            if not qpaths:
-                # 整络合物标注绑不上 → 逐组分联合覆盖兜底（两层语义见 docstring）
-                q, qpaths = _component_union_coverage(
-                    species_smiles, files, cfg, match_threshold, partial_quality
-                )
             if qpaths:
                 nb.bound_files.extend(qpaths)
             else:
@@ -505,7 +457,7 @@ def bind_graph_to_evidence(
             try:
                 path = (sandbox / raw).resolve() if isinstance(raw, str) else None
                 relative = str(path.relative_to(sandbox.resolve())) if path is not None else None
-                if any(f.path == relative and f.kind in {'gaussian', 'orca'} and f.size <= MAX_SCAN_BYTES for f in available) and normal_log(path, max_scan_bytes=MAX_SCAN_BYTES):
+                if any(f.path == relative and f.kind in {'gaussian', 'orca'} for f in available) and normal_log(path):
                     endpoint_quality = max((min(by_id[e.from_node].quality, by_id[e.to_node].quality)
                                             for e in graph.edges if e.via == ts_id and e.from_node in by_id and e.to_node in by_id), default=0.0)
                     nb.bound_files, nb.matched, nb.quality = [relative], True, endpoint_quality
@@ -524,8 +476,7 @@ def bind_graph_to_evidence(
                     _identify_by_declared_energy,
                 )
                 declared = _declared_node_energy_hartree(node)
-                candidates = [f.path for f in available if f.kind in {'gaussian', 'orca'}
-                              and f.size <= MAX_SCAN_BYTES]
+                candidates = [f.path for f in available if f.kind in {'gaussian', 'orca'}]
                 selected = _identify_by_declared_energy(sandbox, candidates, declared) if declared is not None else None
                 nb.bound_files = [selected] if selected else []
                 break

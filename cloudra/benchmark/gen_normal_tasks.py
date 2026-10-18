@@ -69,6 +69,7 @@ from cloudra.benchmark.schema import (
     SystemSpec,
     TaskSpec,
     Tier,
+    complex_smiles,
 )
 from cloudra.infra.config import get_config
 
@@ -219,9 +220,9 @@ def _validate_task(pid: str, entry: dict, pool_reactants: list[str], pool_produc
         maps = _map_numbers(entry["mapped_reactants"])
         if len(maps) != len(set(maps)):
             errors.append("mapped_reactants 映射号重复")
-        prev = entry["mapped_reactants"]
         steps = entry["steps"]
         for k, step in enumerate(steps, 1):
+            prev = entry["mapped_reactants"] if k == 1 else steps[k - 2]["out"]
             out = step["out"]
             if sorted(_map_numbers(prev)) != sorted(_map_numbers(out)):
                 errors.append(f"第 {k} 步原子不守恒（映射号集合变化）")
@@ -238,14 +239,14 @@ def _validate_task(pid: str, entry: dict, pool_reactants: list[str], pool_produc
             weight = step.get("weight", 1.0)
             if not float(weight) > 0:
                 errors.append(f"第 {k} 步 weight 必须为正: {weight}")
-            prev = out
-        mapped_p = sorted(_unmap_canonical(steps[-1]["out"]))
-        products_match = Counter(pool_p) <= Counter(mapped_p) if schematic else mapped_p == pool_p
-        if not products_match:
-            errors.append(
-                f"末步产物去映射后与池内产物不一致: "
-                f"{mapped_p} != {pool_p}"
-            )
+        if steps:
+            mapped_p = sorted(_unmap_canonical(steps[-1]["out"]))
+            products_match = Counter(pool_p) <= Counter(mapped_p) if schematic else mapped_p == pool_p
+            if not products_match:
+                errors.append(
+                    f"末步产物去映射后与池内产物不一致: "
+                    f"{mapped_p} != {pool_p}"
+                )
     except ValueError as e:
         errors.append(str(e))
     return errors
@@ -259,16 +260,18 @@ def _validate_task(pid: str, entry: dict, pool_reactants: list[str], pool_produc
 def _build_graph(pid: str, entry: dict) -> GoldMechanismGraph:
     tid = f"N{pid}"
     nodes = [MechanismNode(id=f"{tid}_R", role=NodeRole.REACTANT,
-                          smiles=_unmap_canonical(entry["mapped_reactants"]), label="reactant")]
+                          smiles=complex_smiles(_unmap_canonical(entry["mapped_reactants"])), label="reactant")]
     edges: list[MechanismEdge] = []
-    prev_mapped, prev_id = entry["mapped_reactants"], nodes[0].id
-    n = len(entry["steps"])
-    for k, step in enumerate(entry["steps"], 1):
+    steps = entry["steps"]
+    n = len(steps)
+    for k, step in enumerate(steps, 1):
+        prev_mapped = entry["mapped_reactants"] if k == 1 else steps[k - 2]["out"]
+        prev_id = nodes[0].id if k == 1 else f"{tid}_I{k - 1}"
         last = k == n
         node = MechanismNode(
             id=f"{tid}_P" if last else f"{tid}_I{k}",
             role=NodeRole.PRODUCT if last else NodeRole.INTERMEDIATE,
-            smiles=_unmap_canonical(step["out"]),
+            smiles=complex_smiles(_unmap_canonical(step["out"])),
             label="product" if last else f"intermediate {k}",
         )
         ts = MechanismNode(id=f"{tid}_TS{k}", role=NodeRole.TRANSITION_STATE, smiles=[], label=f"TS{k}")
@@ -285,7 +288,6 @@ def _build_graph(pid: str, entry: dict) -> GoldMechanismGraph:
             )
         )
         nodes.extend([ts, node])
-        prev_mapped, prev_id = step["out"], node.id
     return GoldMechanismGraph(nodes=nodes, edges=edges)
 
 

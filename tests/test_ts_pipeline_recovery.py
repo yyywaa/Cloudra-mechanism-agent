@@ -13,8 +13,15 @@ def checkpoint(tmp_path):
     record.stage = "guess"
     record.waiting_for = ""
     record.job_steps = [ts_process.TsJobStep(purpose="path", job_id=job, input_path=record.job_steps[0].input_path)]
-    record.current_seed_xyz_path = "/fixture/seed.xyz"
-    record.current_ts_guess_path = "/fixture/old-ts.xyz"
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+
+    from cloudra.tools.core.reaction_state import ReactionStructures
+
+    molecule = Chem.AddHs(Chem.MolFromSmiles(record.input.reaction.reactant_smiles))
+    assert AllChem.EmbedMolecule(molecule, randomSeed=42) == 0
+    record.structures = ReactionStructures(reactant=molecule, product=molecule,
+        candidate=molecule, product_to_reactant=tuple(range(molecule.GetNumAtoms())))
     record.path_kind = "xtb_path"
     from cloudra.tools.core.ts_inputs import XtbPathGuess
     record.input.guess = XtbPathGuess(kind="xtb_path",method="GFN2-xTB",refinement_runs=3)
@@ -48,13 +55,12 @@ def test_scan_submission_recovers_exact_input_after_checkpoint_crash(tmp_path, m
         scans=[{"coord_type": "bond", "atoms": [0, 1], "scan_start": 1, "scan_end": 2, "scan_steps": 5}],
     )
     save_process_record(db, process_id=pid, record=record.model_dump(mode="json"))
-    monkeypatch.setattr(
-        ts_process, "_read_built_xyz", lambda *args: (["H", "H"], [[0, 0, 0], [1, 0, 0]], "seed.xyz", "")
-    )
-
     def prepare(self, request):
+        from cloudra.tools.core.molecule import to_xyz
+
         path = Path(request.output_path)
-        ts_process._write_immutable_input(str(path), "! Opt B3LYP def2SVP\n%geom Scan B 0 1 = 1., 2., 5 end end\n* xyz 0 1\nH 0 0 0\nH 1 0 0\n*\n")
+        geometry = '\n'.join(to_xyz(record.structures.reactant).splitlines()[2:])
+        ts_process._write_immutable_input(str(path), f"! Opt B3LYP def2SVP\n%geom Scan B 0 1 = 1., 2., 5 end end\n* xyz 0 1\n{geometry}\n*\n")
         return SimpleNamespace(is_success=True, input_file_path=str(path))
 
     monkeypatch.setattr("cloudra.tools.Chemtool.ts_guess.TsGuess._scan_prepare", prepare)
@@ -102,8 +108,11 @@ def test_frequency_gate_checks_first_order_saddle_before_irc_spend(tmp_path, mon
     )
 
     def writer(record, folder):
+        from cloudra.tools.core.molecule import to_xyz
+
         target = Path(folder) / "irc.inp"
-        target.write_text("! IRC B3LYP def2SVP\n* xyz 0 1\nH 0 0 0\nH 1 0 0\n*\n")
+        geometry = '\n'.join(to_xyz(record.structures.candidate).splitlines()[2:])
+        target.write_text(f"! IRC B3LYP def2SVP\n* xyz 0 1\n{geometry}\n*\n")
         return "", str(target)
 
     monkeypatch.setattr(ts_process, "_write_irc_input", writer)
@@ -135,8 +144,6 @@ def test_scientific_job_failure_reaches_cards_and_rejects_unchanged_candidate(tm
     record.selected_candidate_id = candidate.candidate_id
     record.job_steps[0].purpose = stage
     if stage == "path":
-        monkeypatch.setattr(ts_process, "_read_built_xyz", lambda *args: (["H"], [[0, 0, 0]], "", ""))
-        record.input.reaction.atom_map = [0]
         monkeypatch.setattr(
             ts_process,
             "_queued_path",
@@ -189,6 +196,7 @@ def test_remote_path_pullback_continues_to_budgeted_ts_submission(tmp_path, monk
 
     from cloudra.runtime import chem_task
     from cloudra.services.compute_admission import AdmissionOutcome
+    from cloudra.tools.core.molecule import to_xyz
     from cloudra.tools.core.xtb_path_runner import XtbPathResult
 
     db, pid, record = checkpoint(tmp_path)
@@ -200,7 +208,7 @@ def test_remote_path_pullback_continues_to_budgeted_ts_submission(tmp_path, monk
         chem_task.ChemTask(task="xtb_path", reactant_xyz="x", product_xyz="y", cpus=1).model_dump_json()
     )
     seed = remote / "ts.xyz"
-    seed.write_text("2\nsynthetic remote TS seed\nH 0 0 0\nH 0 0 0.74\n")
+    seed.write_text(to_xyz(record.structures.reactant, comment="synthetic remote TS seed"))
     monkeypatch.setattr(
         "cloudra.tools.core.xtb_path_runner.run_xtb_path",
         lambda *args: XtbPathResult(
@@ -220,14 +228,13 @@ def test_remote_path_pullback_continues_to_budgeted_ts_submission(tmp_path, monk
     with db.connect() as con:
         con.execute("UPDATE compute_jobs SET state='done'")
     record.blocked = None
-    record.input.reaction.atom_map = [0, 1]
-    monkeypatch.setattr(ts_process, "_read_built_xyz", lambda *args: (["H", "H"], [[0, 0, 0], [0, 0, 0.74]], "", ""))
     monkeypatch.setattr(
         "cloudra.services.compute_admission.admit_job",
         lambda **_: AdmissionOutcome(ok=True, node_id="fixture", scheduler="local"),
     )
     result = ts_process._guess(record)
-    assert Path(result.current_ts_guess_path) == local / "ts.xyz"
+    assert result.structures.candidate is not None
+    assert str(local / "ts.xyz") in result.evidence_candidates
     assert result.blocked is None
     result = ts_process._submit(result)
     assert result.blocked is None
@@ -240,21 +247,23 @@ def test_remote_path_pullback_continues_to_budgeted_ts_submission(tmp_path, monk
 def test_reaction_center_change_without_ring_invalidates_geometry_dependencies(tmp_path):
     from cloudra.tools.core.ts_inputs import TsResumeRequest
     from cloudra.tools.core.ts_revision import plan_input_revision, revise_record
-    from tests.test_ts_stage_inputs import record_fixture
-    record = record_fixture(tmp_path, stage='guess', current_seed_xyz_path='old.xyz', current_ts_guess_path='old-ts.xyz')
+    from tests.test_ts_revision_identity import molecular_fixture
+    record, _ = molecular_fixture(tmp_path)
+    record.stage = 'guess'
+    record.input.reaction.reaction_center = []
     record.input.conformers.guidance.ring_order=[]
     record.job_steps=[ts_process.TsJobStep(purpose='path',job_id=7,state='done')]
     request=TsResumeRequest(changes={'reaction':{'reaction_center':[(0,1)]}},reason='change assembly centre',request_key='assembly',expected_revision=record.revision)
     result=revise_record(record,request,plan_input_revision(record,request))
     assert result.stage=='build'
-    assert result.current_seed_xyz_path==''
-    assert result.current_ts_guess_path==''
+    assert result.structures.reactant is not None
+    assert result.structures.candidate is None
     assert not result.job_steps
     assert result.attempt_history[-1].job_steps[-1].purpose=='path'
 
 
 @pytest.mark.parametrize("note", ["", "retain the existing scan"])
-def test_same_input_retry_is_replayed_once_and_keeps_authorized_budget(tmp_path, monkeypatch, note):
+def test_same_input_retry_is_replayed_once_and_can_retry_again(tmp_path, monkeypatch, note):
     from cloudra.services.compute_admission import AdmissionOutcome
     from cloudra.services.ts_pipeline_store import get_revision_receipt
     from cloudra.tools.core.ts_inputs import TsResumeRequest
@@ -263,8 +272,7 @@ def test_same_input_retry_is_replayed_once_and_keeps_authorized_budget(tmp_path,
 
     monkeypatch.setattr("cloudra.services.compute_admission.admit_job", lambda **_:
         AdmissionOutcome(ok=True, node_id="fixture", scheduler="local"))
-    db, initial, old_step = waiting_fixture_stage(tmp_path, purpose="scan",
-        limits={"source": "explicit_user", "max_interventions": 1})
+    db, initial, old_step = waiting_fixture_stage(tmp_path, purpose="scan")
     with db.connect() as con:
         con.execute("UPDATE compute_jobs SET state='failed' WHERE id=?", (old_step.job_id,))
     state = handle_process_job_terminal(db, old_step.job_id)
@@ -285,12 +293,14 @@ def test_same_input_retry_is_replayed_once_and_keeps_authorized_budget(tmp_path,
         con.execute("UPDATE compute_jobs SET state='failed' WHERE id=?", (retried.scan_step.job_id,))
     state = handle_process_job_terminal(db, retried.scan_step.job_id)
     failed_again = ts_process.TsProcessRecord.model_validate(state['record'])
-    with pytest.raises(ValueError, match='intervention limit exhausted'):
-        ts_process.resume(failed_again, TsResumeRequest(changes={}, reason='Another retry',
-            request_key='over-budget', expected_revision=failed_again.revision))
+    retried_again = ts_process.resume(failed_again, TsResumeRequest(changes={}, reason='Another retry',
+        request_key='retry-again', expected_revision=failed_again.revision))
+    assert retried_again.intervention_count == 2
+    assert retried_again.scan_step.job_id not in (old_step.job_id, retried.scan_step.job_id)
+    assert retried_again.attempt_history[-1].failed_attempt == failed_again.failed_attempt
     assert Path(old_step.input_path).read_bytes() == old_input
     with db.connect() as con:
-        assert con.execute("SELECT COUNT(*) FROM compute_jobs").fetchone()[0] == 2
+        assert con.execute("SELECT COUNT(*) FROM compute_jobs").fetchone()[0] == 3
 
 
 pytestmark = pytest.mark.usefixtures("ts_producer_authority")

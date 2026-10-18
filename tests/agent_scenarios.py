@@ -30,11 +30,13 @@
 | 计算完成通知 + 后台等待 | 高通量仍在运行时消费单个结果，再回到等待状态；配置预算的 TS 终态通知能唤醒并落盘 |
 | 工具进度持久化 | 阶段记录落盘失败立即终止 Agent，不重试工具副作用 |
 | YOLO 审批结构校验 | 非布尔结论不得写入文件 |
-| TS 故障检查点 + 干预预算 | 重复相同 scan 续接保留原故障、不耗尽预算 |
-| TS fixture 频率门禁 + 终态事件 | 真实零虚频日志阻止 IRC，重复 resume 保留故障与预算 |
+| TS 故障检查点 + 重复恢复 | 重复相同 scan 续接保留原故障与同一重试作业 |
+| TS fixture 频率门禁 + 终态事件 | 真实零虚频日志阻止 IRC，重复 resume 保留故障与原流程 |
+| TS 完成后的频率恢复 | 原生日志解析器断言不阻断频率提交，保留既有 TS 作业和科学待验证状态 |
+| TS 连续 IRC 输入修订 | 同一流程可连续修订三次，重复输入不重复提交，原科学失败与日志保留 |
 | TS 构象文件修订 | 相对路径绑定工作区；更换结构清除旧绑定并保留同一流程 |
 | TS 同结构文件替换 | 复制同一结构后保留映射和初猜声明，无需 Agent 重复填写 |
-| TS 结构编号覆盖 | 源文件、Agent 原子表与任务声明统一到旧编号，显式新编号只转换一次 |
+| TS 结构编号转换 | 内部分子与Agent视图使用同一编号，源文件保持原样，显式新编号只转换一次 |
 """
 
 from __future__ import annotations
@@ -240,6 +242,69 @@ def compute_result_recovery_steps() -> list[Step]:
 def budgeted_ts_result_recovery_steps(run_id: str) -> list[Step]:
     """配置预算的 TS 终态通知唤醒后，读取真实回执再结束当前运行。"""
     return [Step(tools=[("ts_inspect", {"run_id": run_id})]), Step(stop=True)]
+
+
+def ts_completed_optimization_frequency_resume_steps(run_id: str, ready: asyncio.Event) -> list[Step]:
+    """完成 TS 优化后修订频率设置，沿真实恢复入口提交独立频率作业。"""
+    return [Step(wait_for=ready, tools=[("ts_resume", {
+        "run_id": run_id,
+        "changes": {"verification": {"frequency": {"frequency_mode": "numeric", "keywords": "TightSCF"}}},
+        "reason": "Use numerical frequencies on the completed TS optimization geometry",
+    })]), Step(stop=True)]
+
+
+def ts_repeated_irc_input_repair_steps(
+    run_id: str, frequency_ready: asyncio.Event, irc_ready: asyncio.Event,
+) -> list[Step]:
+    """先修复不合格频率，再连续修订 IRC 输入；重发最后一次输入不新增作业。"""
+    steps = ts_completed_optimization_frequency_resume_steps(run_id, frequency_ready)[:-1]
+    for keywords in ("TightSCF", "VeryTightSCF", "TightSCF SlowConv", "TightSCF SlowConv"):
+        steps.append(Step(wait_for=irc_ready, tools=[("ts_resume", {
+            "run_id": run_id,
+            "changes": {"verification": {"irc": {"keywords": keywords}}},
+            "reason": "Repair the queued IRC input settings",
+        })]))
+    return [*steps, Step(stop=True)]
+
+
+def queued_native_ts_optimization(workspace: Path, seed: str, project_id: str, owner_id: str):
+    """Bind one real TS input/job before replaying its native completed log."""
+    from cloudra.persistence.database import ComputeDB
+    from cloudra.services.ts_pipeline_context import use_pipeline_database
+    from cloudra.services.ts_pipeline_store import create_process
+    from cloudra.tools.core import ts_process
+    from cloudra.tools.core.molecule import read_molecule
+    from cloudra.tools.core.reaction_state import ReactionStructures
+    from tests.ts_fixtures import calculation_input
+
+    db = ComputeDB().init()
+    declaration = calculation_input(reactant_smiles="C=[O+][O-]", product_smiles="C1OO1", method="GFN2-xTB")
+    state = create_process(db, request_key="native-log-fixture", payload={
+        "project_id": project_id, "owner_id": owner_id, "workspace_dir": str(workspace),
+        "input": declaration.model_dump(mode="json"),
+    })
+    folder = workspace / "ts" / "ts_0001" / "jobs" / "initial"
+    folder.mkdir(parents=True)
+    geometry = folder / "candidate.xyz"
+    geometry.write_text(seed)
+    molecule = read_molecule(str(geometry))
+    record = ts_process.TsProcessRecord(run_id="ts_0001", pipeline_id=state["process_id"],
+        workspace_dir=str(workspace), run_dir=str(folder.parent.parent), input=declaration,
+        owner_conversation_id=project_id, owner_session_id=owner_id, stage="refine",
+        structures=ReactionStructures(reactant=molecule, product=molecule, candidate=molecule,
+            product_to_reactant=tuple(range(molecule.GetNumAtoms()))))
+    error, input_path = ts_process._write_refinement_input(record, str(folder))
+    assert error == ""
+    with use_pipeline_database(db):
+        error, job_id = ts_process._submit_step(record, "ts_opt", input_path, "orca")
+        assert error == ""
+        step = ts_process.TsJobStep(purpose="ts_opt", job_id=job_id, input_path=input_path,
+            state="ready", actual_calculation=declaration.ts_optimization,
+            source_input_revision=record.declaration_revision)
+        record.job_steps = [step]
+        record.waiting_for = f"job:{job_id}"
+        ts_process.save_record(record)
+    return db, record, step
 
 
 def supervisor_feedback_recovery_steps() -> list[Step]:
@@ -486,7 +551,14 @@ class ScenarioHarness:
 TS_SCENARIOS = ('ts_prepare_once_auto_complete', 'ts_failed_scan_retry_same_run', 'ts_readonly_inspection',
                 'ts_resume_scan_without_freeze', 'ts_d1_atom_binding_native_scan_recovery',
                 'ts_conformer_source_revision_same_run', 'ts_same_structure_source_keeps_declarations',
-                'ts_canonical_source_overwrite')
+                'ts_source_reorder_keeps_imported_state', 'ts_queued_refinement_revision_same_run',
+                'ts_stop_prevents_automatic_progression', 'ts_stopped_attempt_resumes_same_run',
+                'ts_file_seed_preoptimization_can_be_removed_after_failure',
+                'ts_acknowledged_completion_recovers_without_resume',
+                'ts_run_scan_revision_inherits_shared_input_settings',
+                'ts_resume_native_cclib_assertion_keeps_completed_ts',
+                'ts_resume_repeated_irc_repairs_preserve_scientific_failure',
+                'ts_mode_advisory_wakes_owner_while_irc_continues')
 
 
 def d1_component_order_files(workspace: Path) -> tuple[Path, Path]:
@@ -536,3 +608,33 @@ def stale_review_resubmit_steps(ts_file, resubmit, finish, park) -> list[Step]:
 def supervisor_stale_file_review_steps(review_id: str) -> list[Step]:
     """Read a removed target's review through the real Supervisor tool, then finish."""
     return [Step(tools=[('dag_view_evidence', {'review_id': review_id})]), Step(stop=True)]
+
+
+def named_agent_communication_steps() -> list[Step]:
+    """Launch a named instance, then address that instance through the real Hub."""
+    return [
+        Step(tools=[("subagent_launcher", {
+            "role_id": "explorer", "display_name": "lane_ts_scout",
+            "query": "Inspect the assigned transition-state evidence", "is_wait": False,
+        })]),
+        Step(tools=[("agent_hub", {
+            "action": "call", "to": "lane_ts_scout", "message": "Report the assigned evidence",
+        })]),
+        Step(stop=True),
+    ]
+
+
+def ts_separated_product_recovery_steps(
+    run_id: str, component_logs: list[str], ready: asyncio.Event,
+) -> list[Step]:
+    """Inspect a candidate, supply component evidence, then read the durable verdict."""
+    return [
+        Step(wait_for=ready, tools=[('ts_inspect', {'run_id': run_id})]),
+        Step(tools=[('ts_resume', {
+            'run_id': run_id,
+            'changes': {'verification': {'product_endpoint': {'component_logs': component_logs}}},
+            'reason': 'Verify the separated products using their independent frequency evidence',
+        })]),
+        Step(tools=[('ts_inspect', {'run_id': run_id})]),
+        Step(stop=True),
+    ]

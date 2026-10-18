@@ -10,13 +10,82 @@ pytestmark = pytest.mark.usefixtures("ts_producer_authority")
 
 
 @pytest.mark.parametrize('basis, expected', [
+    ('def2-SVP', 'def2SVP'), ('DEF2-svp', 'def2SVP'),
+    ('def2-TZVP', 'def2TZVP'), ('def2-TZVPP', 'def2TZVPP'),
+    ('def2-QZVP', 'def2QZVP'), ('def2-QZVPP', 'def2QZVPP'),
+    (' def2-SVP ', 'def2SVP'), ('def2SVP', 'def2SVP'),
+    ('6-31+G(d,p)', '6-31+G(d,p)'), ('aug-cc-pVDZ', 'aug-cc-pVDZ'),
+    ('GenECP', 'GenECP'), ('def2-TZVPD', 'def2-TZVPD'),
+    ('ma-def2-SVP', 'ma-def2-SVP'), ('', ''),
+])
+def test_gaussian_writer_renders_known_basis_aliases_only(basis, expected):
+    request = QmInputWriter_input_schema(
+        charge=0, engine='gaussian', source_type='xyz_file', source_value='unused.xyz',
+        output_path='unused.gjf', method='B3LYP', basis_set=basis,
+        task_type=[{'opt': None}, {'freq': None}],
+        keywords='EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight',
+    )
+    method = 'B3LYP' + (f'/{expected}' if expected else '')
+    assert QmInputWriter._build_route(request) == (
+        f'#p opt freq {method} EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight'
+    )
+    assert request.basis_set == basis.strip()
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('rdkit_chemistry')
+async def test_gaussian_writer_saves_native_basis_without_changing_declaration(tmp_path):
+    from cloudra.tools.core.calculation_intent import compare_calculation_input
+
+    source = tmp_path / 'water.xyz'
+    source.write_text('3\nwater\nO 0 0 0\nH 1 0 0\nH 0 1 0\n')
+    target = tmp_path / 'optfreq.gjf'
+    request = QmInputWriter_input_schema(
+        charge=0, engine='gaussian', source_type='xyz_file', source_value=str(source),
+        output_path=str(target), method='B3LYP', basis_set='def2-SVP',
+        task_type=[{'opt': None}, {'freq': None}], mem='10GB', nproc=8,
+        keywords='EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight',
+    )
+    result = await QmInputWriter().tool_call(request, None)
+    assert result.is_success, result.message
+    content = target.read_text()
+    assert '#p opt freq B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight\n' in content
+    assert '%mem=10GB\n' in content and '%nproc=8\n' in content
+    assert result.calculation.basis_set == 'def2-SVP'
+    assert result.calculation.method == 'B3LYP'
+    assert result.calculation.keywords == request.keywords
+    assert compare_calculation_input(content, result.calculation.model_dump(), charge=0, multiplicity=1) == []
+
+
+@pytest.mark.usefixtures('rdkit_chemistry')
+def test_gaussian_scan_renders_native_basis_and_preserves_keywords(tmp_path):
+    from cloudra.tools.Chemtool.ts_guess import TsGuess, TsGuess_input_schema
+
+    target = tmp_path / 'scan.gjf'
+    request = TsGuess_input_schema(
+        charge=0,  mode='scan_prepare', engine='gaussian',
+        input_text='3\nwater\nO 0 0 0\nH 1 0 0\nH 0 1 0\n',
+        output_path=str(target), method='B3LYP', basis_set='def2-SVP',
+        keywords='EmpiricalDispersion=GD3BJ SCF=Tight SCRF=(CPCM,Solvent=Water)',
+        scans=[{'atoms': [1, 2], 'scan_end': 2, 'scan_steps': 4}],
+    )
+    result = TsGuess()._scan_prepare(request)
+    assert result.is_success, result.message
+    content = target.read_text()
+    assert ('#p opt=(modredundant,maxstep=10) B3LYP/def2SVP '
+            'EmpiricalDispersion=GD3BJ SCF=Tight SCRF=(CPCM,Solvent=Water)\n') in content
+    assert 'B 1 2 S 4 0.250000\n' in content
+    assert request.basis_set == 'def2-SVP'
+
+
+@pytest.mark.parametrize('basis, expected', [
     ('def2svp', 'def2-SVP'), ('DEF2TZVPP', 'def2-TZVPP'),
     (' def2svp ', 'def2-SVP'), ('\tDEF2TZVPP\n', 'def2-TZVPP'),
     ('def2-SVP', 'def2-SVP'), ('cc-pVDZ', 'cc-pVDZ'), ('', ''),
 ])
 def test_orca_writer_renders_basis_alias_and_preserves_declared_keywords(basis, expected):
     request = QmInputWriter_input_schema(
-        engine='orca', source_type='xyz_file', source_value='unused.xyz',
+        charge=0, engine='orca', source_type='xyz_file', source_value='unused.xyz',
         output_path='unused.inp', method='b3lyp', basis_set=basis, task_type=[{'opt': 'ts'}],
         keywords='D3BJ RIJCOSX def2/J TightSCF CPCM(DCM)',
     )
@@ -38,21 +107,20 @@ def test_scan_to_ts_followups_keep_declared_method_basis_and_keywords(tmp_path, 
     for i,position in enumerate(positions):
         conf.SetAtomPosition(i,position)
     mol.AddConformer(conf)
-    graph=tmp_path/'water.mol'
-    graph.write_text(Chem.MolToMolBlock(mol))
     extras = 'D3BJ RIJCOSX def2/J TightSCF CPCM(DCM)'
     declaration = calculation_input(basis_set='def2svp',
-        engine='orca', reactant_smiles='O', product_smiles='O', method='b3lyp', keywords=extras, atom_map=[0,1,2],
+        engine='orca', reactant_smiles='O', product_smiles='O', method='b3lyp', keywords=extras,
         scan={'basis_set': 'def2svp', 'method': 'b3lyp', 'keywords': extras,
               'scans': [{'atoms': [0, 1], 'scan_end': 2, 'scan_steps': 5}]},
     )
     record = process.TsProcessRecord(run_id='scan', run_dir=str(tmp_path), workspace_dir=str(tmp_path),
         input=declaration, owner_conversation_id='test', stage='guess')
-    monkeypatch.setattr(process, '_read_built_xyz', lambda *_: (['O', 'H', 'H'], positions, str(xyz), str(graph)))
+    from cloudra.tools.core.reaction_state import ReactionStructures
+    record.structures = ReactionStructures(reactant=mol, product=mol, product_to_reactant=(0, 1, 2))
     monkeypatch.setattr(process, '_submit_step', lambda *_: ('', 42))
     process._guess(record)
     paths = [record.scan_step.input_path]
-    record.current_ts_guess_path = str(xyz)
+    record.structures.candidate = Chem.Mol(mol)
     record.path_kind = 'scan'
     opt_dir = tmp_path / 'opt'
     opt_dir.mkdir()
@@ -103,9 +171,9 @@ def test_scan_to_ts_followups_keep_declared_method_basis_and_keywords(tmp_path, 
 
 
 @pytest.mark.parametrize('method,basis_set,keywords,expected', [
-    ('b3lyp', 'def2svp', 'RIJCOSX def2/J', '! OPT b3lyp def2-SVP RIJCOSX def2/J'),
-    ('b3lyp', 'def2svp', 'RIJK def2/JK', '! OPT b3lyp def2-SVP RIJK def2/JK'),
-    ('MP2', 'cc-pVDZ', 'cc-pVDZ/C', '! OPT MP2 cc-pVDZ cc-pVDZ/C'),
+    ('b3lyp', 'def2svp', 'RIJCOSX def2/J', '! Opt b3lyp def2-SVP RIJCOSX def2/J'),
+    ('b3lyp', 'def2svp', 'RIJK def2/JK', '! Opt b3lyp def2-SVP RIJK def2/JK'),
+    ('MP2', 'cc-pVDZ', 'cc-pVDZ/C', '! Opt MP2 cc-pVDZ cc-pVDZ/C'),
 ])
 def test_scan_keeps_auxiliary_basis_slashes(tmp_path, method, basis_set, keywords, expected):
     from cloudra.tools.Chemtool.ts_guess import TsGuess, TsGuess_input_schema
@@ -113,7 +181,7 @@ def test_scan_keeps_auxiliary_basis_slashes(tmp_path, method, basis_set, keyword
     xyz = tmp_path / 'water.xyz'
     xyz.write_text('3\nwater\nO 0 0 0\nH 1 0 0\nH 0 1 0\n')
     target = tmp_path / 'scan.inp'
-    result = TsGuess()._scan_prepare(TsGuess_input_schema(mode='scan_prepare', engine='orca',
+    result = TsGuess()._scan_prepare(TsGuess_input_schema(charge=0, mode='scan_prepare', engine='orca',
         input_path=str(xyz), method=method, basis_set=basis_set, keywords=keywords, output_path=str(target),
         scans=[{'atoms': [0, 1], 'scan_end': 2, 'scan_steps': 3}]))
     assert result.is_success

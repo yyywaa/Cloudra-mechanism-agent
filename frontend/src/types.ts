@@ -127,6 +127,8 @@ export interface RuntimeConfig {
   config_file: string;
   coordinator: RuntimeConfigSlot;
   follower: RuntimeConfigSlot;
+  search_provider: 'deepseek' | 'auto' | 'tavily' | 'brave' | 'bing' | 'duckduckgo';
+  deepseek_api_key_set: boolean;
   tool_document_loading: ToolDocumentLoadingConfig;
 }
 
@@ -213,19 +215,15 @@ export interface KgSearchResponse {
 
 export interface KgHealthChannel {
   ok: boolean;
-  url?: string;
-  model?: string | null;
-  count?: number;
   entities?: number;
   relations?: number;
-  cards?: number;
+  sources?: number;
   error?: string;
 }
 
 export interface KgHealth {
-  semantic: KgHealthChannel;
   graph: KgHealthChannel;
-  fuzzy: KgHealthChannel;
+  content: KgHealthChannel;
 }
 
 export interface ComputeJob {

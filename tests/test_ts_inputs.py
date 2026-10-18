@@ -7,7 +7,7 @@ def input_payload():
         "reaction": {
             "reactant_smiles": "CCO", "product_smiles": "CCO",
             "charge": 0, "multiplicity": 1,
-            "atom_map": [1, 2, 3], "reaction_center": [],
+            "selected_candidate": None, "reaction_center": [],
         },
         "conformers": {
             "reactant": {"kind": "file", "xyz_path": "reactant.xyz"},
@@ -25,6 +25,16 @@ def input_payload():
         },
         "execution": {"cpus": 2, "memory_mb": 2048},
     }
+
+
+def test_execution_does_not_accept_an_intervention_quota():
+    from cloudra.tools.core.ts_inputs import TsExecutionLimits, TsInputChanges
+
+    assert "max_interventions" not in TsExecutionLimits.model_json_schema()["properties"]
+    with pytest.raises(ValidationError):
+        TsInputChanges.model_validate({"execution": {"limits": {
+            "source": "agent-chosen limit", "max_interventions": 2,
+        }}})
 
 
 def test_input_changes_cover_every_input_group():
@@ -58,10 +68,11 @@ def test_omitted_null_and_empty_list_have_distinct_effects():
 
     current = TsInput.model_validate(input_payload())
     updated = apply_input_changes(current, TsInputChanges.model_validate({
-        "guess": None, "reaction": {"atom_map": []},
+        "guess": None, "reaction": {"reaction_center": [], "selected_candidate": None},
     }))
     assert updated.guess is None
-    assert updated.reaction.atom_map == []
+    assert updated.reaction.selected_candidate is None
+    assert updated.reaction.reaction_center == []
     assert updated.ts_optimization.method == "b3lyp"
     with pytest.raises(ValidationError):
         apply_input_changes(current, TsInputChanges.model_validate({"reaction": {"reactant_smiles": None}}))
@@ -99,13 +110,13 @@ def test_switching_engine_preserves_bound_atom_identity():
     from cloudra.tools.core.ts_inputs import TsInput, TsInputChanges, apply_input_changes, normalize_ts_input_atoms
 
     current = normalize_ts_input_atoms(TsInput.model_validate(input_payload()), atom_tables={})
-    assert current.reaction.atom_map == [0, 1, 2]
+    assert current.reaction.selected_candidate is None
     assert current.conformers.guidance.ring_order == [0, 1, 2]
     assert current.guess.scans[0].atoms == [0, 1]
     changed = apply_input_changes(current, TsInputChanges.model_validate({
         "ts_optimization": {"replace": {"engine": "gaussian", "method": "b3lyp", "basis_set": "def2svp", "keywords": ""}},
     }))
-    assert changed.reaction.atom_map == [0, 1, 2]
+    assert changed.reaction.selected_candidate is None
     assert changed.guess.scans[0].atoms == [0, 1]
 
 
@@ -129,7 +140,7 @@ def test_scan_numbering_belongs_to_scan_engine_and_checks_bound_range():
     payload["guess"]["scans"][0]["atoms"] = [1, 2]
     value = normalize_ts_input_atoms(TsInput.model_validate(payload), atom_tables={"reactant": ["C", "C", "O"]})
     assert value.guess.scans[0].atoms == [0, 1]
-    payload["reaction"]["atom_map"] = [1, 2, 4]
+    payload["reaction"]["reaction_center"] = [[1, 4]]
     with pytest.raises(ValueError, match="bound atom table"):
         normalize_ts_input_atoms(TsInput.model_validate(payload), atom_tables={"reactant": ["C", "C", "O"]})
 

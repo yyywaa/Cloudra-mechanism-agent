@@ -67,7 +67,7 @@ def _live_sessions(core, project_id: str) -> list[AgentSession]:
 def _resolve_live_target(
     core, project_id: str, target: str, *, wakeable_role_only: bool = False, author: AgentSession | None = None
 ) -> AgentSession | None:
-    """Resolve explicit ids; role calls may skip failed/cancelled sessions."""
+    """Resolve ids/roles first, then fall back to a display name."""
     t = target.strip()
     if not t:
         return None
@@ -86,11 +86,20 @@ def _resolve_live_target(
             if not wakeable_role_only or parent.state not in {AgentState.FAILED, AgentState.CANCELLED}:
                 return parent
     matches = [a for a in sessions if a.role_id == clean]
+    if matches:
+        if wakeable_role_only:
+            matches = [
+                a for a in matches if a.state not in {AgentState.FAILED, AgentState.CANCELLED}
+            ]
+        return matches[-1] if matches else None
+    name_matches = [a for a in sessions if a.display_name.strip().lower() == clean]
     if wakeable_role_only:
-        matches = [
-            a for a in matches if a.state not in {AgentState.FAILED, AgentState.CANCELLED}
+        wakeable = [
+            a for a in name_matches if a.state not in {AgentState.FAILED, AgentState.CANCELLED}
         ]
-    return matches[-1] if matches else None
+        if wakeable:
+            return wakeable[-1]
+    return name_matches[-1] if name_matches else None
 
 
 async def _notify(
@@ -182,7 +191,7 @@ async def _post(core, author: AgentSession, args: dict[str, Any]) -> ToolResult:
         to_agent and _resolve_live_target(core, author.project_id, to_agent, author=author) is None
         and core.roles.get(to_agent.lstrip("@").lower()) is None
     ):
-        return _err(f"Addressee {to_agent!r} is neither a project session nor a known role_id.")
+        return _err(f"Addressee {to_agent!r} is neither a project session, display_name, nor a known role_id.")
     parent_id = args.get("parent_id") or None
     retry_post_id = str(args.get("post_id") or "").strip()
     if retry_post_id:
@@ -458,9 +467,9 @@ async def _search(core, author: AgentSession, args: dict[str, Any]) -> ToolResul
     posts = [post for _, _, post in scored[:limit]]
     # The library layer: registered knowledge providers (GraphRAG plugins)
     # are queried on every hub search — same tool, no extra interface.
-    from cloudra.runtime_v2.knowledge import render_library_hits, search_library
+    from cloudra.runtime_v2.knowledge import registered_providers, render_library_hits, search_library
 
-    library = await search_library(keyword, limit=5)
+    library, library_errors = await search_library(keyword, limit=5)
 
     # The skills layer: match domain skills on demand
     matched_skills = []
@@ -492,9 +501,8 @@ async def _search(core, author: AgentSession, args: dict[str, Any]) -> ToolResul
     )
     sources_status = {
         "project_posts": "available",
-        "library": "available" if _providers_present() else (
-            "no_hits" if not library else "available"
-        ),
+        "library": ('partial' if len(library_errors) < len(registered_providers()) else 'unavailable')
+        if library_errors else ('available' if registered_providers() else 'no_hits'),
         "skills": "available" if matched_skills else "no_hits",
     }
 
@@ -510,15 +518,13 @@ async def _search(core, author: AgentSession, args: dict[str, Any]) -> ToolResul
 
     if library:
         summary_parts.append(f"Library hits ({len(library)}):\n{render_library_hits(library)}")
+    if library_errors:
+        summary_parts.append('Library source errors:\n' + '\n'.join(
+            f'- {name}: {error}' for name, error in library_errors.items()))
 
     summary = "\n\n".join(summary_parts)
-    return _ok(summary, posts=posts, library=library, skills=matched_skills, sources_status=sources_status)
-
-
-def _providers_present() -> bool:
-    from cloudra.runtime_v2.knowledge import registered_providers
-
-    return bool(registered_providers())
+    return _ok(summary, posts=posts, library=library, library_errors=library_errors,
+               skills=matched_skills, sources_status=sources_status)
 
 
 def _directory(core, author: AgentSession) -> ToolResult:
@@ -575,7 +581,7 @@ async def _call(core, author: AgentSession, args: dict[str, Any]) -> ToolResult:
         matches = difflib.get_close_matches(role_id, valid_roles, n=2, cutoff=0.35)
         suggestion = f" Did you mean '{matches[0]}'?" if matches else ""
         return _err(
-            f"Target {raw_to!r} is neither a live session nor a known role.{suggestion} "
+            f"Target {raw_to!r} is neither a project session, display_name, nor a known role.{suggestion} "
             f"Available roles: {valid_roles}."
         )
     if role_id == "supervisor":

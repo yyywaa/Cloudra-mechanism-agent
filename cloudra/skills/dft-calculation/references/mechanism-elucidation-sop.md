@@ -1,6 +1,6 @@
 # 机理计算 SOP
 
-**当前临时限制优先于下文手工路线：** 手动 TS/IRC 提交已关闭，必须通过 `ts_prepare` / `ts_resume` 提交与续跑。普通探索扫描仍可独立执行；扫描峰后的 TS 精修和 IRC 不能手动提交。流程不支持所需情况时报告工具缺口并修补，不改用 `bash` 直接执行引擎。下文引擎与初猜说明保留作为科学参考。
+**当前提交入口：** 可用 `ts_prepare` / `ts_resume` 管理持久化 TS 流程，也可把准备好的手动 TS/IRC 输入交给 `submit_compute_job`。提交成功不等于科学通过；两条路径均须核对原生日志、频率和真实 IRC 端点证据，并完成 DAG 绑定。普通探索扫描仍可独立执行。
 
 本流程回答四个问题：现在缺什么证据、下一次计算解决什么、什么结果才算成功、失败后是否值得继续。引擎参数分别见 `orca-inputs.md` / `gaussian-inputs.md`；方法知识见 `method-selection.md`。具体反应的坐标选择查 `reaction-class-geometry.md`，再读对应领域文件。
 
@@ -21,16 +21,10 @@
 
 ### 用 AgentHub 复用知识和已有工作
 
-**鼓励主动使用 `agent_hub search` 与文献检索**：`agent_hub` 同时检索当前项目的帖子和已接入的本地化学知识库；**科学判断需要外部依据时（标准态/准谐振协议、泛函适用性、能垒是否可信、失败模式的机理解释），再走 researcher / `literature-search` 查原始文献或综述，不要凭记忆拍数。** 规划候选机理、拿不准引擎参数、遇到新的失败而准备重试时，先查是否已有可用知识或同伴结果，再决定计算。查询围绕反应类、方法/引擎和具体问题，避免只搜“计算失败”。例如：
+遇到具体知识缺口，需要本地知识或项目经验帮助时，按需加载 `get_skill(skill_name="knowledge-search")`。**科学判断需要外部依据时（标准态/准谐振协议、泛函适用性、能垒是否可信、失败模式的机理解释），再走 researcher / `literature-search` 查原始文献或综述，不要凭记忆拍数。**
 
-```json
-{"action":"search","keyword":"ORCA ExtOpt 数值 Hessian","limit":5}
-```
-
-- 同时查看返回的 `posts` 和 `library`；“没有论坛帖子”不等于“知识库没有命中”。`browse` 是项目话题概览，`read` 读取指定话题，二者不代替知识库检索。
 - 采用命中建议前核对来源、证据等级、是否被证伪，以及体系、电荷/自旋、方法和软件版本是否适用。知识卡片能指导操作，不能代替本次计算的原始证据或覆盖用户当前的计算要求。只有当前 Benchmark 项目使用该题实际的 MethodPolicy；普通研究项目没有默认方法/基组白名单，不从全局配置、示例或历史任务推断限制。
 - 得到可复用的参数设置、已验证路径、错误物种或失败策略时，用 `post`、`kind="finding"` 记录：**问题/条件 → 结果与适用范围 → 作业/工具调用/文件指针 → 对下一步的影响**。已有同话题时复用话题名；影响同伴正在做的工作时填写 `to_agent` 定向通知。帖子保存在项目论坛，不能声称自动写入了全局知识库。
-- 相同问题复用已读结果；出现新证据或诊断方向再检索。没有命中或知识库不可用时，继续用已有 skill、原始证据和需要时的官方资料推进，不把检索变成每次工具调用前的固定仪式。
 
 ## 2. 从结构到结论
 
@@ -58,22 +52,24 @@
 - **身份**：具体 XYZ/mol/sdf 是否与声明端点相符。`mismatch` 时先核实实际连接、原子组成、电荷/立体信息；暂停把该结构当作目标物种的后续计算。错误产物可作为新候选单独保存，不能改写原目标 SMILES 来让验证变绿。若确是声明错误，记录依据后显式修订。
 - **原子对应**：用于路径插值的全原子编号是否可执行。两端 identity 都 `match` 而 `binding_status=inconclusive`，可能仅是对称映射不唯一。保留身份结论；依据原子来源/标号/机理选择映射，不能反复用相同输入重跑，也不能把重原子 map 或 `internal_generated` map 用到任意显式氢 XYZ。
 
-`ts_guess interpolate` 需要 `binding_status=complete`、`binding_source=concrete` 的 `atom_map`。传顶层、已转为坐标序号的 `watch_pairs`，不是 SMILES 序号的 `graph_watch_pairs`。映射尚未完成时，身份明确的独立极小点计算仍可继续。
+`ts_guess` 引用已有 `run_id` 时读取该 run 已确认的完整两端结构和原子对应，不再接收复制的 `atom_map` 或另一组端点文件。独立插值/路径分析导入完整 MOL/SDF 图后使用同一映射内核；真实歧义需选择具体的完整候选，不能凭 XYZ 元素序列默认同序。`watch_pairs` 仍指当前具体结构的坐标原子号，不是 SMILES 图序号。映射尚未完成时，身份明确的独立极小点计算仍可继续。
 
 ### 2.2 选一个能回答问题的初猜路线
 
-**首选 TS 状态机**：同一路径只 `ts_prepare` 一次，`input` 分为 reaction / conformers / guess / ts_optimization / verification / execution。构象来源和优化、探索扫描、正式 TS 与各项验证方法分别显式指定；缺失则停在点名字段的 checkpoint。成功作业由系统自动续接。用 `ts_inspect` 读取状态、实际方法和证据；用带 run_id/changes/reason 的 `ts_resume` 修订同一个 run；失败后可直接修订或重试，保留失败历史并重新执行科学验证。在途作业不允许修订。`reaction.atom_map` 是含氢全原子的 1-based 产物→反应物映射；结构编号 1-based，ORCA 原生扫描编号 0-based。元素排列通过不能消除具体结构身份或对称绑定歧义；须保留实际结构图、坐标与输入版本。扫描峰仅是候选，正式 TS 无约束精修与频率/双向 IRC/两端 Opt/Freq 仍必需。QST2/QST3 禁令及既有科学验收规则不变。
+**首选 TS 状态机**：同一路径只 `ts_prepare` 一次，`input` 分为 reaction / conformers / guess / ts_optimization / verification / execution。构象来源显式指定；`kind="file"` 直接使用外部几何，`optimization` 省略或为 `null` 时不做额外的 build 预优化。探索扫描、正式 TS 与各项验证方法分别声明，缺少当前阶段必需输入时才停在点名字段的 checkpoint。清除旧预优化只需 `ts_resume` 局部提交 `changes:{conformers:{product:{optimization:null}}}`（或 reactant）；省略的源字段保留，`null` 清除可选设置。成功作业由系统自动续接。用 `ts_inspect` 读取状态、实际方法和证据；用带 run_id/changes/reason 的 `ts_resume` 修订同一个 run；失败后可直接修订或重试，保留失败历史并重新执行科学验证。在途作业不允许修订。全原子对应由程序维护，唯一完整映射自动采用；真实歧义先用 `ts_inspect` 查看，再用 `reaction.selected_candidate` 或 `reaction_mapping(run_id, selected_candidate)` 选择，不搬运映射数组。结构编号 1-based，ORCA 原生扫描编号 0-based。元素排列通过不能消除具体结构身份或对称绑定歧义；须保留实际结构图、坐标与输入版本。扫描峰仅是候选，正式 TS 无约束精修与频率/双向 IRC/两端 Opt/Freq 仍必需。QST2/QST3 禁令及既有科学验收规则不变。
+
+已有 run 的 `ts_guess(mode="xtb_path"/"scan")` 通过既有修订事务更新初猜意图，由自动队列提交计算；不另开执行通道，缺少当前研究必需的方法、坐标或约束时如实点名。`mode="interpolate"` 只生成几何图像，再作为 provided 初猜交回同一修订流程；`mode="provided"` 需候选路径及来源证据。普通探索扫描、扫描解析和频率/IRC 验证可继续独立运行。xTB 失败保留原始诊断；缺失引擎时显式回退插值，并复用已经换序的两端，不二次映射。
 
 | 已知信息 | 主路线 | 检查什么 |
 | --- | --- | --- |
-| **默认**：端点可声明（SMILES + `atom_map`，最好加 `reaction_center`） | **`ts_prepare` 自动流程**；阻塞时按点名修订声明再 `ts_resume` | 用 ts_inspect 只读检查；按所需字段和恢复证据修订同一个 run |
+| **默认**：端点可声明（SMILES + 构象源，必要时声明 `reaction_center`） | **`ts_prepare` 自动流程**；阻塞时按点名修订声明再 `ts_resume` | 用 ts_inspect 只读检查；按所需字段和恢复证据修订同一个 run |
 | 流程接不住（声明不齐、需手工耦合坐标） | **柔性（relaxed）扫描**：固定扫描坐标，各点放松其余自由度 | `internal_coordinates` 确认原子序号 → `scan_prepare` → 提交 → `scan_parse`；检查内部峰值、连续性、每帧实际结构；**导出峰帧做无约束 TS**，不要把扫描收敛当驻点 |
 | 两端结构可信且全原子对应已绑定 | IDPP 插值；需要时用支持的路径优化方法 | 插值只给几何路径，推荐帧不代表能量最高点；必须实际求能/优化 |
 | 两个键变化明显耦合，1D 扫描滑谷/单调 | 先用 `internal_coordinates` 核对坐标与预组织；换坐标/构象，或有依据的耦合扫描/路径搜索 | 写出缺失自由度与预计成本；不直接堆大网格；不要在未复核二面角的构象上重扫 |
 
 粗扫先用能覆盖相关结构的允许方法。一个扫描点通常包含多次能量/梯度评估，不能按“一点=一个单点”估价。可从十几个点定位区域，再局部加密；端点边界的最高点不能直接当作峰顶。低级别路径上的高级别单点仅重评该组几何，不能称为高级别 relaxed scan。
 
-ORCA 的 `ts_guess scan_prepare` **当前只支持一条扫描坐标**；这不是 ORCA 原生能力的上限。需要原生多维扫描/NEB 时先核对安装版本和可用接口。
+ORCA 的 `ts_guess scan_prepare` 支持一条扫描坐标，或两条 typed 坐标：`scan_mode="grid"` 声明独立二维曲面，`scan_mode="concerted"` 声明步数相同的耦合路径。坐标和冻结项分别使用 `scans`、`freeze`，不要另塞原生 `%geom`。需要更高维扫描/NEB 时先核对安装版本和可用接口。
 
 ### 2.3 从初猜精修为无约束 TS
 
@@ -93,9 +89,9 @@ ORCA 的 `ts_guess scan_prepare` **当前只支持一条扫描坐标**；这不�
 
 **步数上限或 IRC 自身未收敛不自动触发延长。** 若两侧最外帧经优化后已经证明正确的极小点身份与方向，就保留短程路径证据；若 partial 几何仍不能判定方向或端点身份，才有针对性地延长未决的一侧。不能把达到步数上限称为收敛，也不能把短 IRC 单独称作完整路径或动力学证明；如实标注 partial 范围。原生参数与轨迹文件见 [ORCA IRC](https://www.faccts.de/docs/orca/6.1/manual/contents/structurereactivity/irc.html)。
 
-`ts_guess mode=verify, strict=True` 检查双向外帧与两侧 optimized endpoint 的方向关系；`pass` 不是整条机理的真值判定。端点提取**支持 Gaussian IRC 日志与 ORCA 原生端点/轨迹**（`*_IRC_F.xyz` / `*_IRC_B.xyz`，缺失时回退 `*_IRC_F_trj.xyz` / `*_IRC_B_trj.xyz` 末帧；见 `orca-inputs.md`）。ORCA 仍须保留主日志与轨迹文件作原始证据。解析失败应报告工具限制或补交缺失文件，不能重跑相同计算“直到通过”，也不能伪造 strict pass。
+`ts_guess mode=verify, strict=True` 用 `reactant_logs` / `product_logs` 提供两端真实 Opt/Freq 日志（可合并或分开），核验同一 TS 的双向 IRC 外帧确实分别优化到正确的零虚频极小值；`reactant_path` / `product_path` 或对应文本声明预期结构，单独提供参考结构不能证明来源。`pass` 不是整条机理的真值判定。端点提取**支持 Gaussian IRC 日志与 ORCA 原生端点/轨迹**（`*_IRC_F.xyz` / `*_IRC_B.xyz`，缺失时回退 `*_IRC_F_trj.xyz` / `*_IRC_B_trj.xyz` 末帧；见 `orca-inputs.md`）。ORCA 仍须保留主日志与轨迹文件作原始证据。解析失败应报告工具限制或补交缺失文件，不能重跑相同计算“直到通过”，也不能伪造 strict pass。
 
-当前 `log_parser` 的 IRC 字段（点数/收敛/端点能量）只是信息字段；`short_irc` 阶段绑定的 harness 闸门是**几何方向区间证明**（与 `ts_guess verify strict` 同口径：双侧 IRC 端点几何各自位于 TS 与对应验证极小值之间），不看收敛标志或点数。材料取自同边 ts_opt/frequency 与 endpoint_a/b（或物种 geometry）阶段已绑证据的日志，缺材料会被拒并写明缺什么——先补端点优化证据再绑。不得为凑点数或 IRC 原生收敛标志重跑；方向或端点身份未决才延长。若工具/复核仍拒绝，检查其具体理由，提供原始结构与收敛记录；所需阶段未完成时保留交付缺口。
+当前 `log_parser` 的 IRC 字段（点数/收敛/端点能量）只是信息字段；`short_irc`、TS 流程与 Benchmark 统一接受**同一 TS → 双向 IRC 真实末帧 → 两端收敛优化 → 正确零虚频极小值**的计算证据。几何区间只作提示，区间异常或不可判时明确警告并建议检查轨迹，不否决真实优化链。材料取自同边 ts_opt/frequency 与 endpoint_a/b（或物种 geometry）阶段已绑证据的日志，分开的 Opt 和 Freq 日志都要保留，缺材料会被拒并写明缺什么。分离产物仍按完整产物图与各组分的独立极小值证明，不冒充已验证络合物。不得为凑点数或 IRC 原生收敛标志重跑；来源、方向或端点身份未决才补对应证据。若工具/复核仍拒绝，检查具体理由，提供原始结构与收敛记录；所需阶段未完成时保留交付缺口。
 
 ### 2.5 计算所需的能量差
 
@@ -130,7 +126,7 @@ ORCA 的 `ts_guess scan_prepare` **当前只支持一条扫描坐标**；这不�
 
 ## 4. 失败后怎么决定
 
-每次重试前写一句：**观测 → 假设原因 → 改什么 → 哪个结果会证伪该假设**。新故障优先通过 AgentHub 检索本地知识和同伴经验；已查过的相同问题复用结果。没有新诊断、新结构或新路径时，不增加同类作业。
+每次重试前写一句：**观测 → 假设原因 → 改什么 → 哪个结果会证伪该假设**。遇到具体知识缺口时，按需加载 `knowledge-search`。没有新诊断、新结构或新路径时，不增加同类作业。
 
 | 现象 | 有信息增益的动作 | 不应做的事 |
 | --- | --- | --- |

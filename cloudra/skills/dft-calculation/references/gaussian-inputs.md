@@ -14,6 +14,21 @@ Use with the mechanism SOP; these are Gaussian routes, not ORCA syntax. Set `eng
 
 `NoEigenTest` suppresses an optimizer curvature test; it does not establish that a saddle is valid — it transfers all saddle validation to the final freq, which then becomes mandatory. Add it only when a diagnosed early curvature rejection warrants continuing from a credible guess. `MaxStep=10` or a tighter grid may address a specific step-size/numerical problem; do not stack them onto every failed job. **QST2/QST3 are banned** (synchronous-transit interpolation fails systematically and has no path correction); the ceiling is mapped interpolation/NEB, with relaxed scans as the workhorse — see `ts-search-playbook.md`.
 
+`Opt=(MaxCycles=N)` is an input declaration, not proof of the optimizer's actual step allowance. Cloudra preserves explicit optimization limits and explicit IOps; it does not impose a 100-step cap or automatically add an IOp to override the engine. Read the native log's `Step number ... out of a maximum of ...` and termination reason. A route echo or `1/6=N` alone does not establish the allowance used by the optimizer. Reaching the step limit is not convergence or evidence that the reaction is impossible.
+
+The original [Gaussian 09 IOps Reference, Second Edition (Gaussian, Inc.; July 2013, Rev. D.01)](https://tungsten.ch.uj.edu.pl/doc/g09doc/iops2.pdf) distinguishes requested `NStep` (`IOp(1/6)`, printed page 5) from allocated L103 `MaxStp` (`IOp(1/152)`, printed page 35); the latter's default depends on the number of variables and `NStep`, and a positive N provides capacity for at least N steps. This is **Gaussian 09 documentation**, not verification of the behavior of the installed Gaussian 16 release. Confirm any G16 IOp workaround against that release's documentation and native output; do not infer a platform override from a smaller reported allowance or change convergence criteria to bypass a failed optimization.
+
+For a first-hand G16 usage example, [Gureev and Popov, J. Phys. Chem. A 2026, 130, 2817–2829](https://pubs.acs.org/doi/10.1021/acs.jpca.6c00814) explicitly report combining `Opt=MaxCycles=200` with `IOp(1/152=200)`. This is the research authors' reported method, not an engine-vendor guarantee for every G16 release or a reproduction of a particular stalled optimization. If deliberately choosing that combination, supply it manually using these existing `qm_input_writer` fields alongside the complete structure, calculation and resource inputs:
+
+```json
+{
+  "task_type": [{"opt": "maxcycles=200"}],
+  "keywords": "iop(1/152=200)"
+}
+```
+
+The number 200 is an explicit example, not a default or a convergence recommendation. Cloudra passes the requested combination through; check the generated route and the installed engine's actual step allowance before interpreting the outcome.
+
 ## 2. Complete TS example
 
 An illustrative closed-shell neutral DFT candidate, with a chosen gas-phase method:
@@ -45,7 +60,7 @@ Submit with `submit_compute_job`, `job_type="gaussian"`, `memory_mb=4096`, `is_a
 
 **TS-seed hierarchy:** `ts_prepare` first; the relaxed scan below is the agent-side fallback when the process cannot take the case. Either way, read real atom indices with `internal_coordinates` first — do not start from a SMILES minimum and hope OptTS finds a saddle.
 
-Use `ts_guess mode=scan_prepare` with `engine="gaussian"`, `input_path`, `scans`, `method="b3lyp"`, `basis_set="def2svp"`, `keywords`, `charge`, `spin`, `nprocs`, `output_path`. Each scan entry has `coord_type`, 1-based `atoms`, `scan_end` and `scan_steps`. **Omit `scan_start` for Gaussian**: the current generator uses it to calculate the increment but does not move the input geometry to that value. Gaussian starts from the actual XYZ coordinate. To start elsewhere, prepare that geometry using the supported structure tools first. The tool handles modredundant formatting and supports one or two scan coordinates. It has no memory argument and emits no `%mem`: add the intended Link 0 memory setting with an authorized file edit before submission, and match the scheduler reservation. Native trailing settings use `end_setting`; ORCA blocks do not belong in a Gaussian configuration. Returned configuration describes a prepared input, not a completed scan.
+Use `ts_guess mode=scan_prepare` with `engine="gaussian"`, `input_path`, `scans`, `method="b3lyp"`, `basis_set="def2svp"`, `keywords`, `charge`, `multiplicity`, `nproc`, `mem` and `output_path`. These electronic-state and resource fields have the same meanings as `qm_input_writer`; coordinate-only XYZ input requires an explicit total charge. `mem` is total job memory (for example `"4GB"`), and the shared writer emits `%mem` and `%nproc`. The checkpoint defaults to the output file's basename with `.chk` in the same directory. Match the scheduler reservation to the generated resources. Each scan entry has `coord_type`, 1-based `atoms`, `scan_end` and `scan_steps`. **Omit `scan_start` for Gaussian** unless it matches the actual input coordinate: a mismatch is rejected, and the generator does not move the input geometry. To start elsewhere, prepare that geometry using the supported structure tools first. The tool handles modredundant formatting and supports one or two scan coordinates; two coordinates form an independent grid with `scan_mode` omitted, from which no TS candidate is selected automatically. Native trailing settings use `end_setting`; ORCA blocks do not belong in a Gaussian configuration. For an existing run, supply `run_id` and scan intent; the run supplies its charge, multiplicity and execution resources. Returned configuration describes a prepared input, not a completed scan.
 
 For a relaxed scan, unscanned degrees of freedom optimize at each point. The resulting constrained maximum is a seed. Extract it, build a fresh TS job, and remove `Opt=ModRedundant`/freeze lines. Do not use the scan's convergence to claim an unconstrained stationary point. Read scan notes and structural continuity, not only the maximum energy.
 

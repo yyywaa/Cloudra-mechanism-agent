@@ -9,8 +9,8 @@ graph element** (species node / TS-bearing edge), not the sandbox directory:
   effective accessibility applies (an edge routed via an inaccessible TS node
   counts as declared inaccessible; ``GoldMechanismGraph.edge_effectively_accessible``).
 - For each element, usable bound evidence must cover its required checks:
-  one verified minimum covers a species; a separately evidenced complex
-  needs a verified minimum for every component under Layer 1 binding rules.
+  one verified minimum covers a whole species or complex; separated species
+  need a verified minimum for each declared list member.
   One first-order saddle plus one direction-proven IRC
   covers a TS edge. Trial-and-error leftovers in the sandbox are never
   judged — unbound files do not exist for this layer — and a superseded
@@ -21,37 +21,35 @@ Required evidence per element:
 - species node (reactant/product/intermediate): one bound QM log whose
   frequency block shows zero imaginary frequencies (a verified minimum),
   or a separate normally terminated frequency log at that same geometry;
-  verified minimum logs must jointly cover every component of a complex;
+  verified minimum logs must cover each separated species; a dot-connected
+  complex requires its own whole-system minimum;
 - edge via a TS node (candidate pool = bound files of the TS node and both
   endpoints): one bound log with exactly one imaginary frequency
   (``ts_first_order_saddle``) and one bound IRC log passing the strict
-  path-direction proof (``irc_connects_endpoints``) — same criterion as
-  ``ts_guess verify strict=True``: convergence to a minimum is NOT required,
-  but both sides' endpoint geometries (Gaussian: outermost frames on the
-  rx<0/rx>0 sides; ORCA: endpoint files or outermost trajectory frames —
-  an unconverged direction's last frame is a legitimate partial endpoint)
-  must each lie geometrically between the TS and a corresponding verified
-  endpoint minimum. Each rubric flag gates its own check;
+  path-direction proof (``irc_connects_endpoints``): both IRC directions start
+  at that TS, and native optimization logs connect their outer frames to the
+  corresponding zero-imaginary-frequency endpoint minima. IRC itself need not
+  converge to either minimum. Geometric intervals are advisory diagnostics.
+  Each rubric flag gates its own check;
 - edge without ``via``: covered once both endpoint species are covered;
 - TS node: rides on its edges — covered when at least one accessible edge
   through it is covered, otherwise it must itself be declared inaccessible.
 
 Species identity (SMILES consistency) follows Layer 1's evidence-binding
-rules, reapplied to eligible minimum logs for complexes. Only ORCA/Gaussian
-logs at or below MAX_SCAN_BYTES are parsed (aligned with Layer 1, which never
-read them either).
+rules, reapplied to eligible minimum logs for complexes. ORCA/Gaussian logs
+are judged from their native evidence; file size is not a scientific verdict.
 """
 
 from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
+from itertools import combinations
 from pathlib import Path
 from typing import Optional
 
 from cloudra.benchmark.graph_similarity import GedConfig
 from cloudra.benchmark.integrity import (
-    MAX_SCAN_BYTES,
     EvidenceFile,
     NodeBinding,
     bind_graph_to_evidence,
@@ -69,21 +67,15 @@ from cloudra.tools.core.irc_evidence import (
     freqs_for as _freqs_for,
 )
 from cloudra.tools.core.irc_evidence import (
-    gaussian_irc_endpoints_from_frames,
-    iter_direction_verdicts,
-    normal_log,
-)
-from cloudra.tools.core.irc_evidence import (
     imag_freqs as _imag_freqs,
-)
-from cloudra.tools.core.irc_evidence import (
-    irc_frames_for as _irc_frames_for,
 )
 from cloudra.tools.core.irc_evidence import (
     last_geometry as _last_geometry,
 )
 from cloudra.tools.core.irc_evidence import (
-    orca_irc_endpoint_geometries as _orca_irc_endpoint_geometries,
+    normal_log,
+    verify_short_irc_direction,
+    verify_short_irc_pair,
 )
 
 
@@ -107,26 +99,16 @@ class SelfConsistencyReport:
     notes: list[str] = field(default_factory=list)
 
 
-def _gaussian_irc_endpoint_geometries(path: Path):
-    """ts_guess strict 同口径的 Gaussian IRC 端点：rx<0 / rx>0 两侧各自最外侧
-    的带坐标帧（不要求收敛到极小值）。
-
-    实现唯一来源是 tools/core/irc_evidence（帧选取逻辑）；本 wrapper 保持
-    逐点帧走模块级 ``_irc_frames_for`` 的读取通道（测试在该名字上拦截）。"""
-    return gaussian_irc_endpoints_from_frames(_irc_frames_for(path))
-
-
 class _LogProbe:
     """按路径缓存的日志探针：同一绑定文件可能被多个元素引用，只解析一次。
 
-    只解析 Layer 1 意义上可读的 QM 日志（gaussian/orca 且 ≤ MAX_SCAN_BYTES）；
+    只解析正常终止的 QM 日志（gaussian/orca）；
     其余一律返回 None——绑定了不可解析文件不等于有可用证据。"""
 
     def __init__(self, sandbox: Path, files_by_path: dict[str, EvidenceFile]):
         self._sandbox = sandbox
         self._files = files_by_path
         self._cache: dict[str, tuple[Optional[int], Optional[tuple]]] = {}
-        self._irc_cache: dict[str, Optional[tuple]] = {}
 
     def _parse(self, rel_path: str) -> tuple[Optional[int], Optional[tuple]]:
         """(虚频数, 末帧几何)。虚频数 None = 无频率块/文件不可解析。"""
@@ -136,8 +118,7 @@ class _LogProbe:
             if (
                 f is not None
                 and f.kind in ("gaussian", "orca")
-                and f.size <= MAX_SCAN_BYTES
-                and normal_log(self._sandbox / rel_path, max_scan_bytes=MAX_SCAN_BYTES)
+                and normal_log(self._sandbox / rel_path)
             ):
                 path = self._sandbox / rel_path
                 frames, _irc_meta = _frames_for(path)
@@ -154,20 +135,6 @@ class _LogProbe:
     def last_geometry(self, rel_path: str) -> Optional[tuple]:
         """末帧几何 (symbols, positions)；无坐标帧返回 None。"""
         return self._parse(rel_path)[1]
-
-    def irc_endpoint_geometries(self, rel_path: str) -> Optional[tuple]:
-        """双侧 IRC 端点几何 ((symbols, positions) × 2)，ts_guess strict 口径。"""
-        if rel_path not in self._irc_cache:
-            result = None
-            f = self._files.get(rel_path)
-            if f is not None and f.size <= MAX_SCAN_BYTES and normal_log(self._sandbox / rel_path, max_scan_bytes=MAX_SCAN_BYTES):
-                path = self._sandbox / rel_path
-                if f.kind == "gaussian":
-                    result = _gaussian_irc_endpoint_geometries(path)
-                elif f.kind == "orca":
-                    result = _orca_irc_endpoint_geometries(path)
-            self._irc_cache[rel_path] = result
-        return self._irc_cache[rel_path]
 
     def ts_witness(self, anchor, pool):
         from cloudra.tools.core.irc_path import same_geometry
@@ -188,7 +155,7 @@ class _LogProbe:
 
     def irc_atom_binding(self, rel_path: str):
         evidence = self._files.get(rel_path)
-        if evidence is None or evidence.kind != 'orca' or evidence.size > MAX_SCAN_BYTES:
+        if evidence is None or evidence.kind != 'orca':
             return None
         path = self._sandbox / rel_path
         if not (path.parent / 'irc_endpoints.json').is_file():
@@ -204,53 +171,59 @@ def _strict_irc_proof(
     from_files: list[str],
     to_files: list[str],
     charge: int = 0,
-    *, ts_files: list[str] | None = None,
-) -> Optional[tuple[str, ...]]:
-    """在绑定证据里完成 ts_guess strict 同口径的路径方向证明：找一组
-    (TS 几何, 双侧 IRC 端点, 两端物种的验证极小值几何)，使两个 IRC 端点
-    各自位于 TS 与对应极小值之间（direct/swapped 配对）。任一组合成立即
-    返回用作证据的 IRC 日志路径，否则 None。
-
-    原子序无关：每组几何经 align_atom_order 重排进 TS 坐标序（距离指纹 +
-    Hungarian，元素多重集不符的组合才跳过）——agent 用不同原子序重优化的
-    端点极小值不再被误拒。"""
+    *, ts_files: list[str] | None = None, product_smiles: list[str] | None = None,
+    reactant_smiles: list[str] | None = None,
+) -> Optional[tuple[list[str], list[str]]]:
+    """Reconstruct the same native IRC→Opt→Freq proof used by DAG and tools."""
     from cloudra.tools.core.irc_evidence import irc_start_geometry
     from cloudra.tools.core.irc_path import same_geometry
 
-    ts_geos = [(p, witness, probe.last_geometry(p)) for p in sorted(ts_files if ts_files is not None else pool)
-               for witness in (probe.ts_witness(p, pool),) if witness is not None]
-    from_geos = [
-        (p, witness, geo) for p in sorted(from_files)
-        for witness in (probe.minimum_witness(p, pool),)
-        if witness is not None
-        for geo in (probe.last_geometry(p),)
-        if geo is not None
-    ]
-    to_geos = [
-        (p, witness, geo) for p in sorted(to_files)
-        for witness in (probe.minimum_witness(p, pool),)
-        if witness is not None
-        for geo in (probe.last_geometry(p),)
-        if geo is not None
-    ]
-    if not (ts_geos and from_geos and to_geos):
-        return None
-    for p in sorted(pool):
-        ends = probe.irc_endpoint_geometries(p)
-        if ends is None:
-            continue
-        anchor = irc_start_geometry(probe._sandbox / p)
-        binding = probe.irc_atom_binding(p)
-        for ts_path, frequency_path, ts in ts_geos:
-            if not same_geometry(ts, anchor):
+    ts_candidates = [(p, witness) for p in sorted(ts_files if ts_files is not None else pool)
+                     for witness in (probe.ts_witness(p, pool),) if witness is not None]
+
+    def endpoint_candidates(anchors):
+        candidates = set()
+        for anchor in anchors:
+            witness = probe.minimum_witness(anchor, pool)
+            if witness is None:
                 continue
-            matched_binding = binding if binding and hashlib.sha256(
-                (probe._sandbox / frequency_path).read_bytes()).hexdigest() == binding.get('ts_log_sha256') else None
-            for from_path, from_frequency, source in from_geos:
-                for to_path, to_frequency, target in to_geos:
-                    if any(v['is_decidable'] and v['is_match'] for v in
-                           iter_direction_verdicts(ends, [ts], [source], [target], charge=charge, atom_binding=matched_binding)):
-                        return ts_path, frequency_path, p, from_path, from_frequency, to_path, to_frequency
+            candidates.update((anchor, witness))
+            geometry = probe.last_geometry(witness)
+            candidates.update(path for path in pool
+                              if same_geometry(geometry, probe.last_geometry(path)))
+        return sorted(candidates)
+
+    source = endpoint_candidates(from_files)
+    target = endpoint_candidates(to_files)
+    if not (ts_candidates and source and target):
+        return None
+    irc_logs = [path for path in sorted(pool)
+                if normal_log(probe._sandbox / path)
+                and irc_start_geometry(probe._sandbox / path) is not None]
+
+    def absolute(paths):
+        return [probe._sandbox / path for path in paths]
+
+    for ts_path, frequency_path in ts_candidates:
+        bindings = {}
+        for path in irc_logs:
+            binding = probe.irc_atom_binding(path)
+            if binding and hashlib.sha256((probe._sandbox / frequency_path).read_bytes()).hexdigest() == binding.get('ts_log_sha256'):
+                bindings[str(probe._sandbox / path)] = binding
+                bindings[str(probe._sandbox / frequency_path)] = binding
+        options = dict(atom_bindings=bindings, product_smiles=product_smiles,
+                       reactant_smiles=reactant_smiles)
+        for path in irc_logs:
+            passed, details = verify_short_irc_direction(probe._sandbox / path,
+                absolute([frequency_path]), absolute(target), absolute(source),
+                charge=charge, **options)
+            if passed:
+                return list(dict.fromkeys([ts_path, frequency_path, path, *source, *target])), details
+        for forward, reverse in combinations(irc_logs, 2):
+            passed, details = verify_short_irc_pair(probe._sandbox / forward, probe._sandbox / reverse,
+                absolute([frequency_path]), absolute(target), absolute(source), charge=charge, **options)
+            if passed:
+                return list(dict.fromkeys([ts_path, frequency_path, forward, reverse, *source, *target])), details
     return None
 
 
@@ -278,8 +251,7 @@ def audit_self_consistency(
 
     files_by_path = {f.path: f for f in evidence_files}
     probe = _LogProbe(sandbox, files_by_path)
-    qm_paths = [f.path for f in evidence_files if f.kind in {'gaussian', 'orca'}
-                and f.size <= MAX_SCAN_BYTES]
+    qm_paths = [f.path for f in evidence_files if f.kind in {'gaussian', 'orca'}]
     bmap = {b.node_id: b for b in bindings}
     species_covered: dict[str, bool] = {}
     edge_checks: dict[str, ElementCheck] = {}
@@ -305,7 +277,7 @@ def audit_self_consistency(
                     for witness in (probe.minimum_witness(p, qm_paths),)
                     if witness is not None
                 }
-                if any("." in species for species in node.smiles):
+                if len(node.smiles) > 1 or any("." in species for species in node.smiles):
                     # Recheck component coverage using verified bound anchors;
                     # replacing anchors with Freq paths loses explicit references.
                     minimum_files = [files_by_path[p] for p in minimum_witnesses]
@@ -323,7 +295,7 @@ def audit_self_consistency(
                             for path in (anchor, minimum_witnesses[anchor])
                         ))
                     else:
-                        chk.notes.append("verified minima do not cover the whole complex or every component")
+                        chk.notes.append("verified minima do not cover every declared species; a complex needs its own minimum")
                 else:
                     for p, witness in minimum_witnesses.items():
                         chk.covered = True
@@ -400,11 +372,14 @@ def audit_self_consistency(
                 if to_binding and to_binding.matched else []
             )
             proof = _strict_irc_proof(probe, sorted(pool), from_files, to_files, charge,
-                                      ts_files=ts_files)
+                ts_files=ts_files,
+                product_smiles=next(node.smiles for node in graph.nodes if node.id == edge.to_node),
+                reactant_smiles=next(node.smiles for node in graph.nodes if node.id == edge.from_node))
             if proof is not None:
                 irc_ok = True
                 saddle_ok = True
-                chk.evidence_used = list(dict.fromkeys(proof))
+                chk.evidence_used, details = proof
+                chk.notes.extend(details)
         chk.covered = saddle_ok and irc_ok
         if not saddle_ok:
             chk.notes.append(
@@ -413,8 +388,8 @@ def audit_self_consistency(
             )
         if not irc_ok:
             chk.notes.append(
-                "no IRC with endpoints proven to lie between the TS and the "
-                "endpoint minima among bound evidence"
+                "no same-TS bidirectional IRC whose outer frames are connected by native "
+                "converged optimization logs to the declared verified endpoint minima"
             )
 
     # TS 节点随边覆盖：至少一条 accessible 的边经由它且被覆盖；否则必须自我声明豁免
