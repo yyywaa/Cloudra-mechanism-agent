@@ -1136,3 +1136,21 @@ ls-remote 确认 c6b5f71ced52e8e14eb05cf80dd45de5ff69f573
 ```
 只提交了文字交付物（REPORT.txt / mechanism_graph.json / CURRENT_STATE.md / 看板 / 台账），
 `.log`/`.chk` 由既有 `.gitignore` 覆盖，大体积轨迹 `.xyz` 与 `jobs/` 留本地。
+
+## D91 **最后一条边的机械障碍：`ts_0040` 将在第 169 步被砍，且离收敛很远**（2026-10-18 08:3x）
+`ts/ts_0040/jobs/declaration_0002/ts_opt/`（HI1 的 regio TS，`stage=refine`）：
+```
+route: #p opt=(TS,calcfc,noeigen) B3LYP/def2SVP empiricaldispersion=gd3bj int(ultrafine) scf=tight
+       ↑ 无 maxcycle
+步数: 167 / 169        ← 还有 2 步就到上限
+Optimization completed = 0
+末次收敛表：
+  Maximum Force        0.014551  (阈 0.000450)   NO   ← 差 32 倍
+  RMS     Force        0.002628  (阈 0.000300)   NO   ← 差 8.8 倍
+  Maximum Displacement 0.218655  (阈 0.001800)   NO   ← 差 121 倍
+  RMS     Displacement 0.055423  (阈 0.001200)   NO   ← 差 46 倍
+末能量: -598.211509567
+```
+⇒ **按当前 route，这条边在本次优化里不可能收敛**：剩余 2 步、四项判据都差 10–121 倍。
+**机械处置建议（不涉及科学判断）**：重提时把 `maxcycle` 写进 `opt=(...)` 内（D83 已确认裸写会 QPErr），例如 `opt=(TS,calcfc,noeigen,maxcycle=400)`；若想省算力，可从 `declaration_0002` 的最末帧起算并 `opt=(TS,readfc,...)`（有 chk 时）。
+**声明**：本条只陈述日志原文与算术倍数，**不判断该 TS 是否应该存在、也不判断哪个 maxcycle 值合适**。

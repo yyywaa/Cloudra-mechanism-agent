@@ -9,11 +9,13 @@
   ]
  },
  "selectivity": {
-  "value_kcal_mol": 4.94,
+  "value_kcal_mol": 5.4,
   "favored": "C10 同侧（endo）",
-  "definition": "ΔΔE‡ = ΔE‡(exo) − ΔE‡(endo) = 11.89 − 6.95，两侧都用同一分离参考 E_ref",
-  "caveat": "只与分离参考口径一起使用；不许用各面自己的络合物作分母。e_endo 端点为待补状态，选择性结论按「约 5 kcal/mol 量级、倾向 C10 同侧（endo）」表述",
-  "value_statement": "约 5 kcal/mol 量级（两位差值的算术结果 4.94 = 11.89 - 6.95，不作有效数字声明；B3LYP-D3BJ/def2-SVP 单点能本征不确定度 ±1–2 kcal/mol）"
+  "definition": "ΔΔE‡ = ΔE‡(exo) − ΔE‡(endo) = 16.18 − 10.77，两面各自相对本通道稳定中间体（预络合物）作分母（2026-10-18 用户裁决：分母统一按稳定中间体）",
+  "value_kcal_mol_separated_reference": 4.94,
+  "separated_reference_note": "若两面都用同一分离参考 E_ref = -441.013264959，则 ΔE‡ = 6.95 / 11.89、ΔΔE‡ = 4.94；该口径保留为对照，不与上面 5.40 混用",
+  "caveat": "两个口径给出同一方向（endo 较低），数值差 0.46 kcal/mol 来自两通道预络合物本身相差 0.68 kcal/mol；两 RC 的 BSSE/CP 均未做，故不据 ΔΔ 讨论更细的差别",
+  "value_statement": "约 5 kcal/mol 量级（16.18 − 10.77 = 5.40；分离参考口径 4.94），不作有效数字声明；B3LYP-D3BJ/def2-SVP 单点能本征不确定度 ±1–2 kcal/mol"
  },
  "nodes": [
   {
@@ -75,6 +77,7 @@
     },
     "max_single_atom_fraction": 0.3494,
     "mode_alignment": "aligned",
+    "barrier_to_own_complex_kcal_mol": 10.77,
     "barrier_to_E_ref_kcal_mol": 6.95,
     "evidence_log": [
      "/home/ly/Cloudra-mechanism-agent/ts/ts_0036/jobs/declaration_0006/ts_opt/refine.log",
@@ -106,7 +109,7 @@
     "mode_alignment": "aligned",
     "barrier_to_E_ref_kcal_mol": 11.89,
     "barrier_to_own_complex_kcal_mol": 16.18,
-    "barrier_caveat": "16.18 只用本通道络合物作对照，不作选择性分母",
+    "barrier_caveat": "16.18 即现行主口径（分母 = 本通道稳定中间体/预络合物）；分离参考对照值 11.89 保留在 barrier_to_E_ref_kcal_mol",
     "evidence_log": [
      "/home/ly/Cloudra-mechanism-agent/ts/ts_0037/jobs/declaration_0001/ts_opt/refine.log",
      "/home/ly/Cloudra-mechanism-agent/ts/ts_0037/jobs/declaration_0001/frequency/frequency.log",
@@ -180,9 +183,10 @@
     ]
    },
    "channel": "C10 反侧（exo）：产物 sdist -1.2691、d(工作7,工作18) 3.7068",
-   "barrier_kcal_mol": 11.89,
+   "barrier_kcal_mol": 16.18,
+   "barrier_separated_reference_kcal_mol": 11.89,
    "properties": {
-    "barrier_definition": "纯电子能 ΔE‡ = E(TS) - E_ref，E_ref = -441.013264959（分离参考）",
+    "barrier_definition": "纯电子能 ΔE‡ = E(TS) - E(本通道预络合物) = -440.994316600 - (-441.020095712) = +0.025779112 Ha = 16.18 kcal/mol。对分离参考 E_ref = -441.013264959 的对照值为 11.89（barrier_separated_reference_kcal_mol）",
     "ts": {
      "E": -440.9943166,
      "job": 1231,
@@ -262,7 +266,7 @@
    "channel": "C10 同侧（endo）",
    "properties": {
     "status": "TS 已验（唯一虚频 -375.5525 + 成键对投影 (18,1)+0.2807/(20,2)+0.1438 + 最大单原子份额 0.3494 非转子）；反应物端 0 虚频（-441.019350272，57 模，declaration_0009/job 1322）；产物端 0 虚频（-441.098273730，57 模，job 1324 独立外框弛豫，与 #1228 同一极小值）",
-    "barrier_definition": "纯电子能 ΔE‡ = E(TS) - E_ref = -441.002183678 - (-441.013264959) = +0.011081281 Ha = +6.95 kcal/mol（x627.509474；该数只由 TS 与分离参考决定，不依赖端点证明）",
+    "barrier_definition": "纯电子能 ΔE‡ = E(TS) - E(本通道预络合物) = -441.002183678 - (-441.019350272) = +0.017166594 Ha = 10.77 kcal/mol；对分离参考 E_ref = -441.013264959 的对照值为 6.95（barrier_to_E_ref_kcal_mol）",
     "ts": {
      "E": -441.002183678,
      "job": 1230,
@@ -354,7 +358,9 @@
      "conclusion": "该臂收敛到 C10 同侧（endo）产物极小值 #1228，身份由 RMSD 0.0005 Å 与 sdist/d 双重确认"
     }
    },
-   "barrier_kcal_mol": 6.95
+   "barrier_kcal_mol": 10.77,
+   "barrier_separated_reference_kcal_mol": 6.95,
+   "barrier_denominator": {"species": "HL1_RC_endo (本通道预络合物/IRC 反应物侧外框, 0 虚频, 57 模)", "energy_hartree": -441.019350272, "why": "用户裁决：分母 = 该步稳定中间体（本通道预络合物）；该 RC 节点另一独立优化值 -441.019015104 给出同一 10.77（差 0.2 cm-1 量级）"}
   }
  ]
 }

@@ -9,10 +9,12 @@
       "properties": {
         "label": "erythro substrate (2R,7R)",
         "cip": "C2=R, C7=R",
-        "energy_hartree": -598.229013613,
+        "energy_hartree": -598.235079186,
+        "energy_hartree_conformer_guess_parent": -598.229013613,
         "n_imag": 0,
-        "job": 1224,
-        "evidence_log": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/HI1/jobs/HI1_erythro_R_optfreq.log"
+        "job": 1328,
+        "evidence_log": "/home/ly/Cloudra-mechanism-agent/ts/ts_0038/jobs/declaration_0002/reactant_frequency/reactant_frequency.log",
+        "conformers": "energy_hartree is the STABLE intermediate of this substrate (job 1328 opt + job 1330 freq: 93 modes, 0 imaginary, NT 07:56:02). The 3.81 kcal/mol higher conformer (job 1224, -598.229013613) is the TS-guess parent and is kept as energy_hartree_conformer_guess_parent. Per the batch rule the denominator is the stable intermediate, not the guess-parent conformer."
       }
     },
     {
@@ -24,10 +26,12 @@
       "properties": {
         "label": "threo substrate (2R,7S)",
         "cip": "C2=R, C7=S",
-        "energy_hartree": -598.231556225,
+        "energy_hartree": -598.233321696,
+        "energy_hartree_conformer_guess_parent": -598.231556225,
         "n_imag": 0,
-        "job": 1225,
-        "evidence_log": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/HI1/jobs/HI1_threo_R_optfreq.log"
+        "job": 1329,
+        "evidence_log": "/home/ly/Cloudra-mechanism-agent/ts/ts_0039/jobs/declaration_0002/reactant_frequency/reactant_frequency.log",
+        "conformers": "energy_hartree is the STABLE intermediate of this substrate (job 1329 opt + job 1331 freq: 93 modes, 0 imaginary, NT 08:00:37). The 1.11 kcal/mol higher conformer (job 1225, -598.231556225) is the TS-guess parent and is kept as energy_hartree_conformer_guess_parent."
       }
     },
     {
@@ -40,7 +44,9 @@
         "n_imag": 1,
         "imaginary_cm": -940.1938,
         "run": "ts_0038",
-        "evidence_log": "/home/ly/Cloudra-mechanism-agent/ts/ts_0038/jobs/declaration_0002/frequency/frequency.log"
+        "verdict": "verified",
+        "evidence_log": "/home/ly/Cloudra-mechanism-agent/ts/ts_0038/jobs/declaration_0002/frequency/frequency.log",
+        "irc_log": "/home/ly/Cloudra-mechanism-agent/ts/ts_0038/jobs/declaration_0002/irc/irc.log"
       }
     },
     {
@@ -53,7 +59,9 @@
         "n_imag": 1,
         "imaginary_cm": -1069.2742,
         "run": "ts_0039",
-        "evidence_log": "/home/ly/Cloudra-mechanism-agent/ts/ts_0039/jobs/declaration_0002/frequency/frequency.log"
+        "verdict": "verified",
+        "evidence_log": "/home/ly/Cloudra-mechanism-agent/ts/ts_0039/jobs/declaration_0002/frequency/frequency.log",
+        "irc_log": "/home/ly/Cloudra-mechanism-agent/ts/ts_0039/jobs/declaration_0002/irc/irc.log"
       }
     },
     {
@@ -64,12 +72,15 @@
       ],
       "properties": {
         "label": "Z-2-phenyl-2-butene + N,N-dimethylhydroxylamine",
-        "ez": "Z (read from the computed TS 3D geometry: dih(C1,C2,C7,C9ipso)=-3.5 deg, C1 cis to Ph; confirmed on the optimised alkene, job 1325)",
+        "ez": "Z, read from the computed 3D product-endpoint geometry (re-perceived as C/C=C(/C)c1ccccc1.CN(C)O); TS dihedral dih(C1,C2,C7,C9ipso)=-3.5 deg",
+        "energy_hartree": -598.246098329,
+        "n_imag": 0,
+        "evidence_log": "/home/ly/Cloudra-mechanism-agent/ts/ts_0038/jobs/declaration_0002/product_frequency/product_frequency.log",
         "component_energies_hartree": {
           "Z-2-phenyl-2-butene": -388.041751586,
           "CN(C)O": -210.188833713
         },
-        "evidence_log": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/HI1/jobs/HI1_Z_2phenyl2butene_optfreq.log"
+        "note": "the complex energy is BSSE-contaminated at def2-SVP and is not used for thermochemistry"
       }
     },
     {
@@ -80,12 +91,15 @@
       ],
       "properties": {
         "label": "E-2-phenyl-2-butene + N,N-dimethylhydroxylamine",
-        "ez": "E (read from the computed TS 3D geometry: dih(C1,C2,C7,C8)=-5.5 deg, Ph trans to C1; confirmed on the optimised alkene, job 1326)",
+        "ez": "E, read from the computed 3D product-endpoint geometry (re-perceived as C/C=C(\\C)c1ccccc1.CN(C)O); TS dihedral dih(C1,C2,C7,C8)=-5.5 deg",
+        "energy_hartree": -598.245557178,
+        "n_imag": 0,
+        "evidence_log": "/home/ly/Cloudra-mechanism-agent/ts/ts_0039/jobs/declaration_0002/product_frequency/product_frequency.log",
         "component_energies_hartree": {
           "E-2-phenyl-2-butene": -388.042170053,
           "CN(C)O": -210.188833713
         },
-        "evidence_log": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/HI1/jobs/HI1_E_2phenyl2butene_optfreq.log"
+        "note": "same BSSE caveat"
       }
     },
     {
@@ -94,8 +108,8 @@
       "smiles": [],
       "properties": {
         "channel": "syn-Cope with C1-methyl H abstraction -> terminal alkene",
-        "status": "not converged (ts_0040 ts_opt at step 58/169)",
-        "run": "ts_0040"
+        "status": "NOT resolved: ts_0040 ts_opt hit the Gaussian step limit (l9999, 169/169), no stationary point",
+        "evidence_log": "/home/ly/Cloudra-mechanism-agent/ts/ts_0040/jobs/declaration_0002/ts_opt/refine.log"
       }
     },
     {
@@ -105,8 +119,8 @@
         "C=C[C@H](C)c1ccccc1.CN(C)O"
       ],
       "properties": {
-        "label": "3-phenylbut-1-ene + N,N-dimethylhydroxylamine (regioisomeric)",
-        "status": "no computed energy yet"
+        "label": "3-phenylbut-1-ene (7S) + N,N-dimethylhydroxylamine (regioisomeric)",
+        "status": "no computed energy"
       }
     }
   ],
@@ -139,17 +153,13 @@
         ]
       },
       "barrier_kcal_mol": 16.62,
-      "barrier_reference_minimum": {
-        "energy_Ha": -598.235079186,
-        "log": "ts/ts_0038/jobs/declaration_0002/reactant_frequency/reactant_frequency.log",
-        "line": 670,
-        "sha256_prefix": "dcd084a74d443ba6",
-        "why": "lowest verified minimum of this same substrate reached by the short-IRC reactant arm (reactant_opt job 1328, E -598.235079186, 33 atoms, 93 harmonic modes, 0 imaginary; stationarity L20028 of reactant_opt.log)"
-      },
+      "barrier_denominator": {"species": "erythro substrate (2R,7R), stable intermediate = lowest verified conformer", "job": 1328, "energy_hartree": -598.235079186, "freq_job": 1330, "n_modes": 93, "n_imag": 0, "why": "per the batch rule the denominator is the stable intermediate of the step (lowest verified, 0 imaginary), not the TS-guess-parent conformer job 1224"},
       "barrier_conformer_specific_kcal_mol": 12.82,
+      "barrier_conformer_specific_denominator": "job 1224, E = -598.229013613 (93 real modes), the conformer the TS guess was built from; 3.81 kcal/mol above the stable intermediate",
       "favored": null,
-      "channel": "syn-Cope (erythro -> Z alkene)",
-      "note": "C2-N3 and C7-Hbeta broken, C2=C7 and O6-Hbeta formed (1-based atom-map indices of the task SMILES; Hbeta = map 15 = concrete atom 25). barrier = E(TS) - E(lowest verified minimum of this substrate), pure electronic: -598.208585697 - (-598.235079186) = +0.026493489 Ha = 16.62 kcal/mol. The previously reported 12.82 kcal/mol is kept as barrier_conformer_specific_kcal_mol: it uses job 1224 (-598.229013613), the conformer the TS guess was built from, which lies 3.81 kcal/mol ABOVE the IRC-connected minimum (same stereoisomer, heavy-atom Kabsch RMSD 1.49 A, identical bond lengths and identical sign of the signed volumes at C2 and C7). favored is null on purpose: a preference between erythro and threo would require subtracting barriers of two different diastereomeric substrates, which this batch forbids."
+      "channel": "syn-Cope (erythro -> Z-2-phenyl-2-butene)",
+      "note": "1-based atom-map indices of the task SMILES (Hbeta = map 15 = concrete atom 25). barrier = E(TS) - E(stable intermediate) = -598.208585697 - (-598.235079186) = +0.026493489 Ha = +16.62 kcal/mol, pure electronic. favored is null on purpose: (i) a preference between erythro and threo would require subtracting barriers of two different diastereomeric substrates, which this batch forbids; (ii) with the stable-intermediate convention the two barriers are 16.62 and 15.85, a 0.77 kcal/mol gap that is near-degenerate at this level and is not claimed as a selectivity.",
+      "endpoints": {"reactant": {"verified": true, "energy_hartree": -598.235079186, "job_opt": 1328, "job_freq": 1330, "n_imag": 0}, "product": {"verified": true, "energy_hartree": -598.246098329, "job_opt": 1332, "job_freq": 1334, "n_imag": 0, "normal_termination": "08:27:47", "geometry": "C2=C7 1.3477 A, C2-N3 3.5712 A broken; Z alkene: dih(methyl-C2,C2,C7,ipso) = -178.9 deg vs reference Z +177.0 (E +1.8)"}, "criterion": "short IRC interval (10 points per direction) + Opt/Freq on both outer frames with 0 imaginary + identity; the IRC itself did not reach the minima, so this is the declared alternative criterion"}
     },
     {
       "id": "HI1_e2_threo_syn",
@@ -179,17 +189,13 @@
         ]
       },
       "barrier_kcal_mol": 15.85,
-      "barrier_reference_minimum": {
-        "energy_Ha": -598.233321696,
-        "log": "ts/ts_0039/jobs/declaration_0002/reactant_frequency/reactant_frequency.log",
-        "line": 670,
-        "sha256_prefix": "a143a1dbeb7e8c2c",
-        "why": "lowest verified minimum of this same substrate reached by the short-IRC reactant arm (reactant_opt job 1329, E -598.233321696, 33 atoms, 93 harmonic modes, 0 imaginary; stationarity L20773 of reactant_opt.log)"
-      },
+      "barrier_denominator": {"species": "threo substrate (2R,7S), stable intermediate = lowest verified conformer", "job": 1329, "energy_hartree": -598.233321696, "freq_job": 1331, "n_modes": 93, "n_imag": 0, "why": "same rule as e1: stable intermediate, not the guess-parent conformer job 1225"},
       "barrier_conformer_specific_kcal_mol": 14.74,
+      "barrier_conformer_specific_denominator": "job 1225, E = -598.231556225, the conformer the TS guess was built from; 1.11 kcal/mol above the stable intermediate",
       "favored": null,
-      "channel": "syn-Cope (threo -> E alkene)",
-      "note": "same bond changes, different substrate diastereomer. barrier = E(TS) - E(lowest verified minimum of this substrate), pure electronic: -598.208059052 - (-598.233321696) = +0.025262644 Ha = 15.85 kcal/mol. The previously reported 14.74 kcal/mol is kept as barrier_conformer_specific_kcal_mol: it uses job 1225 (-598.231556225), which lies 1.11 kcal/mol ABOVE the IRC-connected minimum (same (2R,7R) configuration: identical bond lengths, and the signed volumes at C2 and C7 keep their sign; heavy-atom Kabsch RMSD 2.92 A). No energy is ever subtracted across the two substrates, and favored stays null."
+      "channel": "syn-Cope (threo -> E-2-phenyl-2-butene)",
+      "note": "barrier = E(TS) - E(stable intermediate) = -598.208059052 - (-598.233321696) = +0.025262644 Ha = +15.85 kcal/mol, pure electronic. No energy is ever subtracted across the two diastereomeric substrates (their minima differ by 1.60 kcal/mol, bookkeeping only), and favored is null for the same reason as e1 plus the near-degenerate 0.77 kcal/mol gap.",
+      "endpoints": {"reactant": {"verified": true, "energy_hartree": -598.233321696, "job_opt": 1329, "job_freq": 1331, "n_imag": 0}, "product": {"verified": true, "energy_hartree": -598.245557178, "job_opt": 1333, "job_freq": 1335, "n_imag": 0, "normal_termination": "08:37:31", "geometry": "E alkene per the computed product-endpoint geometry (TS dih(C1,C2,C7,C8) = -5.5 deg)"}, "criterion": "short IRC interval (10 points per direction) + Opt/Freq on both outer frames with 0 imaginary + identity; declared alternative criterion"}
     },
     {
       "id": "HI1_e3_erythro_regio",
@@ -211,8 +217,7 @@
         ]
       },
       "channel": "regioisomeric syn-Cope (terminal alkene)",
-      "barrier_kcal_mol": null,
-      "note": "C2-N3 broken and C1=C2 formed; the migrating H is one of the three unmapped hydrogens of C1 (the task map SMILES gives it no index), so only heavy-atom bond-order changes are listed. barrier_kcal_mol is null because the TS was NOT LOCATED IN THIS ROUND (ts_0040 ts_opt job 1292 still at step 98 of a maximum of 169 at 07:42, no stationary point), not because the quantity is unobtainable; no energy is quoted, and the null must not be read as a computed preference."
+      "note": "C2-N3 broken and C1=C2 formed; the migrating H is one of the three unmapped hydrogens of C1 (the task map SMILES gives it no index), so only heavy-atom bond-order changes are listed. No barrier: ts_0040 failed at the step limit, no stationary point."
     }
   ]
 }

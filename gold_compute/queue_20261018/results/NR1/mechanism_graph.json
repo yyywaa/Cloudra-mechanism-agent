@@ -115,6 +115,8 @@
         ]
       },
       "barrier_kcal_mol": 46.32,
+      "barrier_denominator": {"species": "R_formamide (formamide, the reactant of this step; job 1210, 12 modes, 0 imaginary)", "job": 1210, "energy_hartree": -169.772982663, "why": "step start; formamide has a single amide minimum at this level, so this is also its lowest verified minimum"},
+      "note": "barrier = E(TS1) - E(R_formamide) = -169.699169421 - (-169.772982663) = +0.073813242 Ha = 46.32 kcal/mol (pure electronic, k = 627.509474)",
       "channel": "N->O proton transfer (1,3-H shift)"
     },
     {
@@ -127,6 +129,8 @@
         "form": []
       },
       "barrier_kcal_mol": 22.8,
+      "barrier_denominator": {"species": "INT1a (formimidic acid conformer A, the lowest conformer of this intermediate; job 1196, re-checked 1215, 12 modes, 0 imaginary)", "job": 1196, "energy_hartree": -169.751090026, "why": "this is already the stable intermediate of the species, so the 22.80 value complies with the stable-intermediate rule without change"},
+      "note": "barrier = E(TS2) - E(INT1a) = -169.714755466 - (-169.751090026) = +0.036334560 Ha = 22.80 kcal/mol",
       "channel": "conformational"
     },
     {
@@ -139,6 +143,9 @@
         "form": []
       },
       "barrier_kcal_mol": 7.25,
+      "barrier_denominator": {"species": "INT1b (formimidic acid conformer B, the starting node of this conformational edge; job 1187, re-checked 1200, 12 modes, 0 imaginary)", "job": 1187, "energy_hartree": -169.745424733, "why": "for a conformational edge both endpoints ARE minima of the same species, so the edge is quoted node-to-node from its own starting minimum INT1b; referencing it to INT1a instead would double-count the separate e2 barrier"},
+      "barrier_if_referenced_to_INT1a_kcal_mol": 10.8,
+      "note": "barrier = E(TS3) - E(INT1b) = -169.733877738 - (-169.745424733) = +0.011546995 Ha = 7.25 kcal/mol. If the same number were taken against INT1a (the lowest conformer of this species) it would be 10.80 kcal/mol; that variant is recorded in barrier_if_referenced_to_INT1a_kcal_mol and is NOT used, because the step starts at INT1b.",
       "channel": "conformational"
     },
     {
@@ -168,8 +175,11 @@
           ]
         ]
       },
-      "barrier_kcal_mol": 64.93,
-      "barrier_reference": "INT1c (job 1125, E = -169.744844814 Ha); pure electronic energies, no ZPE",
+      "barrier_kcal_mol": 68.85,
+      "barrier_denominator": {"species": "INT1a (formimidic acid conformer A, the stable intermediate; job 1196, E = -169.751090026 Ha, 12 modes, 0 imaginary)", "job": 1196, "energy_hartree": -169.751090026, "why": "per the batch rule the denominator of a step is the lowest verified conformer of the intermediate, NOT the higher conformer the TS happened to be connected to. INT1c is 3.92 kcal/mol above INT1a, so the barrier referenced to the stable intermediate is 68.85 instead of 64.93"},
+      "barrier_conformer_specific_kcal_mol": 64.93,
+      "barrier_conformer_specific_denominator": "INT1c (job 1125 E = -169.744844814; endpoint re-opt job 1302 E = -169.744844755), the conformer whose IRC connects to TS4; kept as a conformer-specific value, not deleted",
+      "barrier_reference": "INT1c (job 1125, E = -169.744844814 Ha) = the conformer-specific denominator; the primary barrier uses INT1a (see barrier_denominator). Pure electronic energies, no ZPE",
       "channel": "1,3-H transfer to O (N1-H4 breaks, O3-H4 forms) coupled with C2-O3 cleavage",
       "provenance": {
         "ts_opt": {"job": 1295, "log": "ts/ts_0042/jobs/declaration_0001/ts_opt/refine.log", "sha256": "e4cc52d2c4017d22df520476df64ccfef396d59d5ceb81d1e3aded538824bbbe", "scf_line": 4366},

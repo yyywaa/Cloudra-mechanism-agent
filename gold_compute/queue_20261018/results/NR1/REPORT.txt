@@ -78,3 +78,19 @@ TS4 = INT-1c-tsH2O（INT-1c → HCN + H2O，成键步）——**已定位（1 �
   job 1208 / 1209 / 1211 的 failed 均为 exit_code = -15（.cloudra/calc-*.exit.json）⇒ 调度终止（SIGTERM，服务重启），不是 Gaussian 失败；对应重提 1212 / 1213 / 1214 均正常。
   durable IRC 的 MaxPoints/StepSize 无法传入（写 keywords 被 admission 判 mismatch，写 end_setting 不进 route），三条 IRC 均被默认 10 点截断；方向证据改由逐帧距离表 + 两端 Opt+Freq + interval proof 承担。
   【新增证据，2026-10-18 06:16】把 IRC 显式改成 end_setting = IRC=(CalcFC,MaxPoints=100,StepSize=20)（run ts_0042 declaration_0005，job 1308）**仍然只跑 10 点**：日志 ts/ts_0042/jobs/declaration_0005/irc/irc.log（7950 行，sha256 a7dd13b3d572db016901fd3e8e3b1998bb95f4879db7a4921b44d663d96b6b58）在 “Point Number 10 in REVERSE path direction” 后给 “Maximum number of steps reached”，且逐帧 SCF 能量与 declaration_0002（MaxPoints=10）**逐位相同**（例：R1 −169.642162903 / R10 −169.684222684）。原因：渲染出的 route 是 `#p irc=calcfc ...`，Gaussian 用 route 里的默认 10 点，末尾那行 IRC=(...) 不覆盖。⇒ 该 run 的产物臂 IRC 区间证明（verdict 的 candidate_only 唯一原因）在现有渲染方式下无法通过，需平台侧把 MaxPoints/StepSize 写进 route 才可解。
+
+六、分母口径统一（2026-10-18 08:40）：按「稳定中间体」重写四条边的分母，e4 由 64.93 改为 68.85
+  规则：ΔE‡ = E(TS) − E(该步稳定中间体)，稳定中间体 = 该步对应物种已验证、0 虚频的最低构象；
+  不是「TS guess 所长的那个构象」。四条边的分母逐条写进 mechanism_graph.json 的 barrier_denominator：
+    e1：R_formamide（job 1210, -169.772982663, 12 模 0 虚频）=> 46.32 kcal/mol（未变）。
+    e2：INT1a（job 1196/1215, -169.751090026）=> 22.80（未变；INT1a 本来就是该物种最低构象）。
+    e3：INT1b（job 1187/1200, -169.745424733）=> 7.25（未变）。这是构象边，两端本身就是同一物种的两个极小值，
+        故按节点对节点引用；若改以 INT1a 为分母则为 10.80，已作为 barrier_if_referenced_to_INT1a_kcal_mol 记录但不采用，
+        否则会把 e2 的 22.80 重复计入。
+    e4：**分母改为 INT1a**（-169.751090026）=> ΔE‡ = -169.641371451 - (-169.751090026) = +0.109718575 Ha = **68.85 kcal/mol**。
+        理由：INT1a/1b/1c 是同一物种（甲亚胺酸）的三个构象，INT1c 是三者的最高者；按稳定中间体口径，本步分母取最低者。
+        INT1c（-169.744844814，端点复算 job 1302 = -169.744844755）高 3.92 kcal/mol（+0.006245212 Ha），
+        它作为 barrier_conformer_specific_kcal_mol = 64.93 保留、附说明，不删除、不覆盖。
+  连带说明：e4 的 reverse_barrier_kcal_mol = 49.81 与 product_relative_to_INT1c_kcal_mol = 15.12 都相对 INT1c，
+  未被改动，仍按原口径标注「相对 INT1c」；若要相对 INT1a 的产物能量，须另加 3.92 kcal/mol（本报告不做该换算）。
+  影响：NR1 的 e4 由 64.93 变为 68.85，其余三条不变；连边关系、TS 能量、虚频 -1923.6069、四列净投影与端点证明均未改动。
