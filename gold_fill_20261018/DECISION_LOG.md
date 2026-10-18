@@ -1154,3 +1154,27 @@ Optimization completed = 0
 ⇒ **按当前 route，这条边在本次优化里不可能收敛**：剩余 2 步、四项判据都差 10–121 倍。
 **机械处置建议（不涉及科学判断）**：重提时把 `maxcycle` 写进 `opt=(...)` 内（D83 已确认裸写会 QPErr），例如 `opt=(TS,calcfc,noeigen,maxcycle=400)`；若想省算力，可从 `declaration_0002` 的最末帧起算并 `opt=(TS,readfc,...)`（有 chk 时）。
 **声明**：本条只陈述日志原文与算术倍数，**不判断该 TS 是否应该存在、也不判断哪个 maxcycle 值合适**。
+
+## D92 **逐条复核评审方列的四个缺口（2026-10-18 18:5x，只做机械核对）**
+### 缺口 1「HI1 两条边：产物端优化、零虚频、E/Z 身份不完整」→ **已闭环**
+| 检查项 | 机械读数 | 判定 |
+|---|---|---|
+| 产物端优化 | `ts_0038/…/product_opt`（job 1332）、`ts_0039/…/product_opt`（1333）均 `Normal termination` | ✓ |
+| 产物端零虚频 | `product_frequency` 1334 / 1335：**93 个模式（=3N−6，N=33）**、负频 0、无 `N imaginary frequencies` 行、最低实频 **10.79 / 17.81 cm⁻¹** | ✓ |
+| E/Z 身份 | 用 RDKit 从 3D 独立指派：`ts_0038` 产物烯烃 = `[H]/C(=C(/c1ccccc1)C)C`（**Z**），与独立参考 `HI1_Z_2phenyl2butene`（−388.041751586）**SMILES 逐字一致**；`ts_0039` = `[H]/C(=C(\c1ccccc1)C)C`（**E**），与 `HI1_E_2phenyl2butene`（−388.042170053）**逐字一致** | ✓ |
+| 文档状态 | REPORT §7「FINAL BINDING」已写「both syn edges COMPLETE」，含 job 号、NT 时间、Z/E 烯烃 | ✓ |
+⇒ **评审方这条描述已过期**（依据的是 08:52 之前的版本）。
+### 缺口 2「NY3 首步：实际连到的构象与参考能垒用的构象不同」→ **已评估，但无正式构象 TS**
+- job **1298**（`E1_rot2RC_scan`）松弛一维剖面：只在 R(H4···O5)=3.61 Å 处有 **+0.27 kcal/mol** 小极大，其后单调下降 5.78 kcal/mol 到 RC；两端同一构象（RMS 0.0038 Å）。
+- 口径：e1 用 **RC(−244.935406907)** 作分母 ⇒ **+36.79**；若用旋转体(−244.926200303) 则 **+31.00**，只作分母敏感性说明。
+⇒ 缺口性质从「未补证」变为「**已用 <2 kcal/mol 的构象剖面论证同一反应物态，但未定位该构象步的形式鞍点**」（对比 E2 有 verified TS −465.6897 cm⁻¹）。
+### 缺口 3「NR1 末步」→ **TS4 已收敛**
+- `ts/ts_0042/jobs/declaration_0001/ts_opt/refine.log`：**`Optimization completed`**，step 11/22，E = **−169.641371451**
+- 同 run `frequency/frequency.log`：**1 虚频 −1923.6069**，**12 个模式（=3N−6，N=6）**，`Normal termination`
+- 余留：产物臂 IRC 区间证明受**平台渲染限制**（route 被渲染成 `#p irc=calcfc`，尾部 `IRC=(MaxPoints=100,StepSize=20)` 不生效，仍只跑 10 点；sha256 `a7dd13b3…` 已在 REPORT 记录）。
+### 缺口 3b「HL1」→ 两面四项判据已齐（REPORT §8 自查），分母已按用户裁决改为本通道 RC（16.18 / 10.77）。
+### 缺口 4「IB9 首步采用 5.65」→ **⚠ 仓库里不是 5.65**
+- 全库扫描 `ideapool/tasks/*/*.json` 的 `barrier_kcal_mol`：**没有任何一条边 ≈ 5.65**。
+- `ideapool/tasks/impossible/IB9.json` 实际写的是 **IB9_E1 = 14.74**（IB9_E2 = null）。
+- 12 道 impossible 题**全部** `allowed_methods = ["xtb","pm7"]`（不含 B3LYP），这与「参照存在软虚频、属人工采信」的说法一致，但**数值对不上**。
+⇒ **需确认**：5.65 是某个中间量 / 另一道题 / 还是应当把 IB9_E1 从 14.74 改成 5.65。我不改这个数，只报差异。
