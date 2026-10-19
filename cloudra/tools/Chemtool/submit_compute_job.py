@@ -223,6 +223,14 @@ class SubmitComputeJob(Tool):
         except ValueError as exc:
             return SubmitComputeJob_output_schema(is_success=False, message=f"Invalid resource declarations: {exc}")
 
+        # Benchmark 题目有自己的题目级 workspace（sandboxes/<task>/<batch>）。只有这种
+        # 已登记的题目边界才检查原生文件落点；普通科研项目的绝对路径语义不变。
+        benchmark_workspace = None
+        project = getattr(session, 'project', None) if session else None
+        settings = getattr(project, 'settings', None)
+        if getattr(settings, 'benchmark_task_id', None) is not None:
+            benchmark_workspace = getattr(project, 'workspace_dir', None)
+
         # 准入可能含 SSH 远端环境探测（阻塞 subprocess），一律离开事件循环线程。
         admission = await asyncio.to_thread(
             admit_job,
@@ -236,6 +244,7 @@ class SubmitComputeJob(Tool):
             solvent=user_input.solvent,
             execution_backend=user_input.execution_backend,
             node_id=user_input.node_id,
+            workspace_root=benchmark_workspace,
         )
         if not admission.ok:
             return SubmitComputeJob_output_schema(is_success=False, message=admission.message)

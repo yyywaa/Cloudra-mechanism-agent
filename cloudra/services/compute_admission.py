@@ -180,6 +180,55 @@ def _gaussian_resources(content: str) -> tuple[Optional[int], Optional[int]]:
     return cpus, memory_mb
 
 
+_NATIVE_FILE_TOKENS = ('%chk', '%oldchk', '%rwf', '%fchk', '%int', '%d2e')
+
+
+def native_file_references(content: str) -> list[tuple[str, str]]:
+    """Native Link0 file references as (token, raw_value), in declaration order.
+
+    Explicit token matching only: no regular expressions. Values may be quoted.
+    """
+    references: list[tuple[str, str]] = []
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith('%'):
+            continue
+        token, _, value = stripped.partition('=')
+        token = token.strip()
+        if token not in _NATIVE_FILE_TOKENS:
+            continue
+        value = value.strip().strip('"').strip("'")
+        if value:
+            references.append((token, value))
+    return references
+
+
+def native_path_violation(
+    content: str, *, workdir: str, workspace_root: str
+) -> Optional[str]:
+    """Explain a native file reference that lands outside the task workspace.
+
+    ``%chk`` is read and written, ``%oldchk`` is a read dependency and ``%rwf`` may be
+    split across volumes, so this only checks ownership: it never rewrites a path and
+    never requires the file to exist. Same-task cross-job reuse stays inside the
+    workspace and is therefore accepted.
+    """
+    root = Path(workspace_root).expanduser().resolve()
+    for token, raw in native_file_references(content):
+        candidate = Path(raw).expanduser()
+        if not candidate.is_absolute():
+            candidate = Path(workdir) / candidate
+        resolved = candidate.resolve()
+        if resolved.is_relative_to(root):
+            continue
+        return (
+            f'{token} {raw} resolves to {resolved}, which is outside this task workspace '
+            f'{root}. Declare the native file inside the task workspace (for example '
+            f'{root}/<subdir>/<name>.chk); native paths are never rewritten for you.'
+        )
+    return None
+
+
 def _read_declared_requirements(
     job_type: str, input_file: str
 ) -> tuple[Optional[int], Optional[int]]:
@@ -271,6 +320,7 @@ def admit_job(
     solvent: Optional[str] = None,
     execution_backend: str = "auto",
     node_id: Optional[str] = None,
+    workspace_root: Optional[str] = None,
 ) -> AdmissionOutcome:
     """跑完整套准入校验，返回结论（不落库、不拉起计算）。
 
@@ -286,9 +336,30 @@ def admit_job(
     必须与节点自身的 scheduler.type 一致，否则 fail-loud。带 SSH connection 的
     节点生效调度器落 ``ssh_local``/``ssh_slurm``（本地记账、远端执行），connection
     快照并入 scheduler_options——账本行自包含，重启/改注册表后仍可恢复。
+
+    ``workspace_root`` 只在调用方明确拥有题目级边界时传入（benchmark 题目沙箱）。
+    给定后，输入里显式声明的原生文件（``%chk``/``%oldchk``/``%rwf``/``%fchk``…）
+    解析出的落点必须位于该边界内，越界即拒绝并报出解析后的目标；不重写路径、
+    不要求文件已存在，题内跨 job 复用照常可用。普通科研项目不传该参数，语义不变。
     """
     f_path = input_file
     workdir = os.path.dirname(f_path)
+
+    if workspace_root is not None and job_type in ('gaussian', 'orca', 'shell') and os.path.exists(f_path):
+        if job_type != 'shell':
+            try:
+                with open(f_path, encoding='utf-8', errors='replace') as handle:
+                    declared_text = handle.read()
+            except OSError:
+                declared_text = ''
+            violation = native_path_violation(
+                declared_text, workdir=workdir, workspace_root=workspace_root,
+            )
+            if violation is not None:
+                return AdmissionOutcome(
+                    ok=False, input_path=f_path, workdir=workdir,
+                    message=violation,
+                )
 
     if not os.path.exists(f_path):
         return AdmissionOutcome(
