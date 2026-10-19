@@ -1,0 +1,19 @@
+%chk=irc4rev.chk
+%mem=8GB
+%nprocshared=8
+#p irc=(calcfc,reverse,maxpoints=250,stepsize=5,recalc=10) B3LYP/def2SVP EmpiricalDispersion=GD3BJ int=ultrafine
+
+smiles: [F-].CCCl
+Single-direction IRC (reverse) from the final optimized TS1 geometry of calc/ts1.log
+
+-1 1
+F     -2.76543600    -0.48477900    -0.00001300
+C     -0.73061300     1.05218600     0.00000300
+C     -0.00885900    -0.23730500     0.00003700
+Cl     1.92323100    -0.15792400    -0.00000900
+H     -1.86058100     0.52393400     0.00004400
+H     -0.51988000     1.65432800    -0.90198100
+H     -0.51987100     1.65440000     0.90194200
+H     -0.23439100    -0.83714100     0.88815600
+H     -0.23445400    -0.83708000    -0.88813500
+

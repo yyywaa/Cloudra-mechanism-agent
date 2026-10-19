@@ -1,0 +1,19 @@
+%chk=endf6.chk
+%mem=8GB
+%nprocshared=8
+#p opt=(maxcycle=200) freq B3LYP/def2SVP EmpiricalDispersion=GD3BJ int=ultrafine
+
+smiles: C=C.F.[Cl-]
+Opt+Freq starting from the irc4_fwd (forward) IRC outer frame, calc/irc4_fwd.log last geometry (product side)
+
+-1 1
+F     -3.36198900    -0.54514900    -0.00000500
+C     -1.09535500     1.24865400     0.00001300
+C     -0.35652000     0.11894800     0.00000800
+Cl     2.47736200    -0.25060300    -0.00000600
+H     -2.52470000    -0.09382200     0.00000200
+H     -1.35530700     1.76558200    -0.93077800
+H     -1.35530400     1.76557600     0.93080900
+H     -0.03281200    -0.37743700     0.91463400
+H     -0.03281500    -0.37743100    -0.91462200
+

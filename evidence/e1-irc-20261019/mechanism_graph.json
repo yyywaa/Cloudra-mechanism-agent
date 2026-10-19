@@ -1,0 +1,67 @@
+{
+  "nodes": [
+    {
+      "id": "sp_e5e50452",
+      "role": "reactant",
+      "smiles": [
+        "[F-].CCCl"
+      ],
+      "properties": {
+        "energy_hartree": -639.003420935,
+        "evidence_log": "calc/rc2.log"
+      }
+    },
+    {
+      "id": "TS1",
+      "role": "transition_state",
+      "smiles": [],
+      "properties": {
+        "energy_hartree": -639.002077473,
+        "evidence_log": "calc/ts1.log"
+      }
+    },
+    {
+      "id": "sp_1fa042e9",
+      "role": "product",
+      "smiles": [
+        "C=C.F.[Cl-]"
+      ],
+      "properties": {
+        "energy_hartree": -639.022951022,
+        "evidence_log": "calc/endpoint_fwd5.log"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "step_1b84df85",
+      "from": "sp_e5e50452",
+      "to": "sp_1fa042e9",
+      "via": "TS1",
+      "bond_changes": {
+        "break": [
+          [
+            2,
+            4
+          ],
+          [
+            3,
+            5
+          ]
+        ],
+        "form": [
+          [
+            1,
+            4
+          ],
+          [
+            2,
+            3
+          ]
+        ]
+      },
+      "channel": "E2 concerted, strongly asynchronous (proton-transfer-dominated saddle with a secondary C-Cl component; C-Cl cleavage downhill)",
+      "favored": true
+    }
+  ]
+}
