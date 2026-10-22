@@ -411,3 +411,16 @@ def test_species_geometry_check_is_not_confused_with_native_geometry():
     assert CANARY not in json.dumps(public)
     assert public['scientific_checks']['geometry']['status'] == 'failed'
     assert public['geometry'] == raw['geometry']
+
+
+def test_idpp_numerical_nonconvergence_is_not_a_scientific_verdict():
+    from cloudra.tools.Chemtool.ts_guess import TsGuess_output_schema
+
+    metadata = {'method': 'idpp', 'idpp_mode': 'standard', 'converged': False,
+                'termination': 'max_steps', 'steps': 100, 'residual': 0.2, 'tolerance': 0.1}
+    raw = TsGuess_output_schema(is_success=True, interpolation=metadata,
+        message='Numerical termination: max_steps; convergence=False.').model_dump(mode='json')
+    public = project_feedback(raw)
+    assert public['interpolation'] == metadata
+    assert public['is_success'] is True
+    assert public['message'] == raw['message']
