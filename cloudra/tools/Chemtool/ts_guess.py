@@ -1257,6 +1257,17 @@ class TsGuess(Tool):
         return True
 
     async def tool_call(self, user_input: TsGuess_input_schema, session: Session) -> TsGuess_output_schema:
+        # Standard ablation arm: geometry/path tools stay available, but the
+        # harness never returns a chemical verdict. The agent must read the
+        # native frequency/IRC logs and judge them itself.
+        if user_input.mode == "verify" or bool(user_input.strict):
+            return TsGuess_output_schema(
+                is_success=False,
+                message=(
+                    "Verification is disabled in this ablation arm. "
+                    "Inspect the native frequency/IRC logs yourself."
+                ),
+            )
         if user_input.run_id is not None:
             try:
                 return await self._run_guess(user_input, session)

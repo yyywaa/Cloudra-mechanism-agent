@@ -79,6 +79,7 @@ from cloudra.benchmark.graph_similarity import (
 from cloudra.benchmark.integrity import IntegrityReport, audit_integrity
 from cloudra.benchmark.schema import NodeRole, TaskSpec
 from cloudra.benchmark.selfconsistency import SelfConsistencyReport, audit_self_consistency
+from cloudra.runtime_v2.schemas import OrchestrationMode
 
 
 # composite 权重（2026-09-25 用户裁决）：final = 0.1·图 + 0.3·自洽 + 0.6·accuracy。
@@ -216,11 +217,15 @@ _RUNS_COLS = (
 )
 
 
+# Ablation arm baked into this branch: every benchmark task runs under it.
+ABLATION_ARM = OrchestrationMode.STANDARD
+
+
 def task_project_settings(task: TaskSpec) -> dict:
     """CLI/Web task settings shared by every agent created in the project."""
     return {
         "benchmark_task_id": task.task_id,
-        "orchestration_mode": task.prompt.orchestration_mode.value,
+        "orchestration_mode": ABLATION_ARM.value,
         "method_policy": task.method_policy.model_dump(mode="json"),
         "defaults": {"yolo": True, "unattended": True, "clean_context": True},
     }
