@@ -467,3 +467,16 @@ def test_endpoint_optimization_outer_shell_keeps_error_and_repair_advice(role):
     public = _project(view)
     assert public["message"] == f"{role} endpoint optimization observations: {error}" + suffix
     assert len(public["message"].encode()) <= len(text.encode())
+
+
+def test_idpp_numerical_nonconvergence_is_not_a_scientific_verdict():
+    from cloudra.tools.Chemtool.ts_guess import TsGuess_output_schema
+
+    metadata = {'method': 'idpp', 'idpp_mode': 'standard', 'converged': False,
+                'termination': 'max_steps', 'steps': 100, 'residual': 0.2, 'tolerance': 0.1}
+    raw = TsGuess_output_schema(is_success=True, interpolation=metadata,
+        message='Numerical termination: max_steps; convergence=False.').model_dump(mode='json')
+    public = _project(raw)
+    assert public['interpolation'] == metadata
+    assert public['is_success'] is True
+    assert public['message'] == raw['message']
