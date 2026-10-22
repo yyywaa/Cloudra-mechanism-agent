@@ -27,7 +27,7 @@ from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any
 
-from cloudra.benchmark.runner import BenchmarkStopped, task_project_settings
+from cloudra.benchmark.runner import ABLATION_ARM, BenchmarkStopped, task_project_settings
 from cloudra.benchmark.schema import TaskSpec
 from cloudra.benchmark.watch import RunWatcher
 
@@ -192,7 +192,7 @@ class RuntimeV2Backend:
                             "role_id": task.prompt.role,
                             "query": task.prompt.query,
                             "settings": {
-                                "orchestration_mode": task.prompt.orchestration_mode.value,
+                                "orchestration_mode": ABLATION_ARM.value,
                             },
                         },
                     )

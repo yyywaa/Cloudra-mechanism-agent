@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from cloudra.benchmark.runner import (
+    ABLATION_ARM,
     BenchmarkDB,
     BenchmarkRunner,
     RunResult,
@@ -335,7 +336,7 @@ class BenchmarkBatch:
                             "role_id": task.prompt.role,
                             "query": task.prompt.query,
                             "settings": {
-                                "orchestration_mode": task.prompt.orchestration_mode.value,
+                                "orchestration_mode": ABLATION_ARM.value,
                             },
                         },
                     )
@@ -389,6 +390,7 @@ class BenchmarkBatch:
                         task_id=task.task_id,
                         sandbox=str(sandbox),
                         batch_id=self.batch_id,
+                        orchestration_mode=ABLATION_ARM.value,
                     )
                     result.notes.append(f"benchmark watcher: {wait_error}")
                     st.result = result
@@ -501,6 +503,7 @@ class BenchmarkBatch:
             task_id=st.task.task_id,
             sandbox=str(self._sandbox_for(st.task.task_id)),
             batch_id=self.batch_id,
+            orchestration_mode=ABLATION_ARM.value,
         )
         result.notes.append(f"infrastructure failure: {message}")
         st.result = result
@@ -516,6 +519,7 @@ class BenchmarkBatch:
             task_id=task.task_id,
             sandbox=str(sandbox),
             batch_id=self.batch_id,
+            orchestration_mode=ABLATION_ARM.value,
         )
         result.notes.append("cancelled by batch stop")
         return result
