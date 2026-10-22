@@ -274,6 +274,11 @@ class StopAuditMixin:
 
         state = await asyncio.to_thread(self.store.delivery_state_fingerprint)
         report = await asyncio.to_thread(self.delivery_report)
+        if self.mode is OrchestrationMode.DAG_RECORD:
+            self._pending_stop = (disposition, report, None, state)
+            return StopGate(action='allow_final', report=report,
+                reason='record arm: DAG is advisory; delivery is not gated',
+                basis='dag_recorded')
         from cloudra.dag.delivery_artifact import prepare_delivery_artifact
         graph = (await asyncio.to_thread(self.engine.snapshot)).delivery
         if disposition in {'complete', 'partial'}:
@@ -503,6 +508,11 @@ class StopAuditMixin:
             raise RuntimeError('DAG evidence or review state changed after audit; re-audit the delivery.')
         if approval_id and not await self._valid_exit_approval(approval_id, disposition, report):
             raise RuntimeError('Exit approval changed after audit; re-audit the delivery.')
+        if self.mode is OrchestrationMode.DAG_RECORD:
+            await asyncio.to_thread(self.store.record_delivery_disposition,
+                self.session_id, disposition, report, expected_state=state)
+            self._pending_stop = None
+            return
         artifact = getattr(self, '_delivery_artifact', None)
         if disposition != 'user_terminated':
             from cloudra.dag.delivery_artifact import prepare_delivery_artifact
