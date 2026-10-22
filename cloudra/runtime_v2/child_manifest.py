@@ -208,6 +208,10 @@ def _next_steps(state: AgentState, last: dict[str, Any] | None) -> list[str]:
 
 def render_child_report(manifest: dict[str, Any]) -> str:
     """由 manifest 确定性渲染人类可读文本（唯一渲染点）。"""
+    from cloudra.runtime_v2.brief_errors import project_feedback, project_notice
+
+    manifest = project_feedback(manifest)
+    manifest["final_summary"] = project_notice(manifest["final_summary"])
     runs = manifest["runs"]
     last = manifest["last_run"]
     last_line = (

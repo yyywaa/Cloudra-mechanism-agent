@@ -626,17 +626,21 @@ class TurnPipeline:
             # loop only translates outcomes into turn decisions.
             outcome = await self.invocations.invoke(ctx, call)
             if outcome.decision == "wait_approval":
+                from cloudra.runtime_v2.brief_errors import brief_text
+
                 return TurnOutcome(
                     decision="wait_approval",
-                    message=outcome.error.message if outcome.error else "",
+                    message=brief_text(outcome.error.message) if outcome.error else "",
                     blocked_call=outcome.call,
                     tool_exchanges=tuple(exchanges),
                     reasoning=response.reasoning,
                 )
             if outcome.error is not None and outcome.error.code == "policy_blocked":
+                from cloudra.runtime_v2.brief_errors import brief_text
+
                 return TurnOutcome(
                     decision="continue",
-                    content=outcome.error.message,
+                    content=brief_text(outcome.error.message),
                     message=f"blocked by {outcome.error.stage}",
                     blocked_call=outcome.call,
                     tool_exchanges=tuple(exchanges),

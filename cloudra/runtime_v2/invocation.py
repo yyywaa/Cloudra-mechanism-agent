@@ -113,7 +113,7 @@ def image_paths_from_tool_result(result: ToolResult) -> list[str]:
     return []
 
 
-def tool_result_context_content(agent: AgentSession, result: ToolResult) -> object:
+def tool_result_context_content(agent: AgentSession, result: ToolResult, *, tool_name: str = "") -> object:
     """Context content for one tool result, with image re-injection.
 
     A result carrying image paths gets one stable ``image_ref`` part per path
@@ -122,7 +122,9 @@ def tool_result_context_content(agent: AgentSession, result: ToolResult) -> obje
     runner's end-of-turn commit so both write the same payload.
     """
     from cloudra.infra.media import snapshot_image_reference
+    from cloudra.runtime_v2.brief_errors import project_tool_result
 
+    result = project_tool_result(result, tool_name=tool_name)
     summary = result.summary
     paths = image_paths_from_tool_result(result)
     if not paths:

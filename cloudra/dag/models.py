@@ -1112,6 +1112,9 @@ class DagProjection(BaseModel):
         # revisions 是存储层并发控制的内部状态，不投影给模型：
         # 写工具不传 base_revisions：由 harness 固定版本并自动重试。
         payload.pop("revisions", None)
+        from cloudra.runtime_v2.brief_errors import project_feedback
+
+        payload = project_feedback(payload)
         return (
             f"[DAG orchestration] {guidance}\n"
             f"{_STAGE_GLOSSARY}\n"

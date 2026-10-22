@@ -341,7 +341,9 @@ def save_record(record: TsProcessRecord) -> str:
         save_process_record(pipeline_database(), process_id=record.pipeline_id, record=record.model_dump(mode='json'))
         record.revision = get_process(pipeline_database(), record.pipeline_id)['revision']
     path = os.path.join(record.run_dir, PROCESS_JSON_NAME)
-    atomic_write_text(path, record.model_dump_json(indent=2) + "\n")
+    from cloudra.runtime_v2.brief_errors import public_process_record
+
+    atomic_write_text(path, json.dumps(public_process_record(record.model_dump(mode="json")), indent=2) + "\n")
     atomic_write_text(
         os.path.join(record.run_dir, DECLARE_JSON_NAME),
         record.input.model_dump_json(indent=2) + "\n",

@@ -113,7 +113,10 @@ def _write_revision_exports(record):
 
     value = TsProcessRecord.model_validate(record)
     Path(value.run_dir).mkdir(parents=True, exist_ok=True)
-    atomic_write_text(str(Path(value.run_dir) / PROCESS_JSON_NAME), value.model_dump_json(indent=2) + '\n')
+    from cloudra.runtime_v2.brief_errors import public_process_record
+
+    atomic_write_text(str(Path(value.run_dir) / PROCESS_JSON_NAME),
+                      json.dumps(public_process_record(value.model_dump(mode='json')), indent=2) + '\n')
     atomic_write_text(str(Path(value.run_dir) / DECLARE_JSON_NAME), value.input.model_dump_json(indent=2) + '\n')
 
 
@@ -338,7 +341,9 @@ def stop_process(db: ComputeDB, *, process_id: str, project_id: str,
             return state.model_dump(mode='json')
 
     state = retry_on_locked(operation)
-    atomic_write_json(str(Path(state['run_dir']) / PROCESS_JSON_NAME), state)
+    from cloudra.runtime_v2.brief_errors import public_process_record
+
+    atomic_write_json(str(Path(state['run_dir']) / PROCESS_JSON_NAME), public_process_record(state))
     return state
 
 

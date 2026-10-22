@@ -40,8 +40,8 @@ def test_arm_is_shared_by_project_provenance_and_scoring(tmp_path, task_mode):
     assert settings["defaults"] == {"yolo": True, "unattended": True, "clean_context": True}
     assert benchmark_runner.provenance_config("probe", [task])["orchestration_modes"] == {task.task_id: expected}
     config = benchmark_runner.provenance_config("probe", [task])
-    assert config["experiment_arm"] == "benchmark/arm-guided"
-    assert config["error_feedback"] == "full"
+    assert config["experiment_arm"] == "benchmark/arm-guided-brief-errors"
+    assert config["error_feedback"] == "brief"
     sandbox = tmp_path / "sandbox"
     sandbox.mkdir()
     runner = benchmark_runner.BenchmarkRunner(tmp_path / "bench")

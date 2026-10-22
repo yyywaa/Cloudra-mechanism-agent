@@ -292,9 +292,12 @@ class JavaScriptRuntime:
         if problem is not None:
             error = {"code": "runtime_unavailable", "message": problem}
             await finish("failed", error, [])
+            from cloudra.runtime_v2.brief_errors import project_feedback
+
+            error = project_feedback(error, diagnostic=True)
             return ToolResult(
                 False,
-                f"JavaScript runtime unavailable: {problem}",
+                f"JavaScript runtime unavailable: {error['message']}",
                 {"execution_id": execution_id, "status": "failed", "error": error,
                  "outputs": [], "calls": []},
             )
@@ -527,7 +530,7 @@ class JavaScriptRuntime:
                 try:
                     await self._send(
                         proc, encode_tool_result_frame(
-                            request_id, _envelope(outcome, tc_id), limits=limits
+                            request_id, _envelope(outcome, tc_id), limits=limits, tool_name=name
                         )
                     )
                 except ProtocolError:
@@ -565,6 +568,10 @@ class JavaScriptRuntime:
             control_decision=control_decision,
         )
 
+        # program.finished above retains the original host diagnostic.
+        from cloudra.runtime_v2.brief_errors import project_feedback
+
+        program_error = project_feedback(program_error, diagnostic=True)
         failed_children = sum(1 for r in receipts if r["status"] != "completed")
         final_status = "failed" if program_error is not None else program_status
         summary = (

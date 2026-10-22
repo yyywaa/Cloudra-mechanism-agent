@@ -217,7 +217,8 @@ def encode_start_frame(
 
 
 def encode_tool_result_frame(
-    request_id: str, result: dict[str, Any], *, limits: ProgramLimits = ProgramLimits()
+    request_id: str, result: dict[str, Any], *, limits: ProgramLimits = ProgramLimits(),
+    tool_name: str = "",
 ) -> bytes:
     """The documented ToolResponse envelope, JSON-cloned into the guest."""
     data_size = len(
@@ -227,10 +228,23 @@ def encode_tool_result_frame(
         raise ProtocolError(
             f"tool result data of {data_size} bytes exceeds tool_result_bytes {limits.tool_result_bytes}"
         )
+    # Enforce both original payload/frame limits before shortening feedback.
+    _encode({"type": "tool_result", "request_id": request_id, "result": result}, limits=limits)
+    from cloudra.runtime_v2.brief_errors import project_tool_result
+    from cloudra.runtime_v2.policies.base import ToolResult
+
+    public = project_tool_result(ToolResult(
+        bool(result.get("is_success")), result.get("summary", ""), result.get("data", {}),
+    ), tool_name=tool_name)
+    result = {**result, "summary": public.summary, "data": public.data}
     return _encode({"type": "tool_result", "request_id": request_id, "result": result}, limits=limits)
 
 
 def encode_tool_error_frame(
     request_id: str, error: dict[str, Any], *, limits: ProgramLimits = ProgramLimits()
 ) -> bytes:
-    return _encode({"type": "tool_error", "request_id": request_id, "error": error}, limits=limits)
+    from cloudra.runtime_v2.brief_errors import project_feedback
+
+    _encode({"type": "tool_error", "request_id": request_id, "error": error}, limits=limits)
+    return _encode({"type": "tool_error", "request_id": request_id,
+                    "error": project_feedback(error, diagnostic=True)}, limits=limits)

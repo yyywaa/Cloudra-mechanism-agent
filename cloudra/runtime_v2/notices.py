@@ -32,6 +32,7 @@ from __future__ import annotations
 from collections import OrderedDict, defaultdict
 from typing import Callable
 
+from cloudra.runtime_v2.brief_errors import project_notice
 from cloudra.runtime_v2.events import EventLog
 from cloudra.runtime_v2.schemas import EventEnvelope
 
@@ -232,8 +233,8 @@ class NoticeManager:
         """当前 pin 状态的纯渲染（compact 重建上下文头部用）：不 park 批次、
         不动游标。未消费的 push 不在这里——它们走正常的增量批次通道。"""
         return [
-            {"role": "system", "content": content}
-            for content in self._pins.get(session_id, {}).values()
+            {"role": "system", "content": project_notice(content, key=key)}
+            for key, content in self._pins.get(session_id, {}).items()
             if content
         ]
 
@@ -241,6 +242,7 @@ class NoticeManager:
 
     @staticmethod
     def _render_change(change: dict) -> dict:
+        change = {**change, "content": project_notice(change["content"], key=change["key"])}
         kind = change["kind"]
         if kind == "pin_set":
             if change.get("is_update"):
@@ -281,12 +283,12 @@ class NoticeManager:
         changes = self._changes.get(session_id, [])
         if fresh:
             messages = [
-                {"role": "system", "content": content}
-                for content in self._pins.get(session_id, {}).values()
+                {"role": "system", "content": project_notice(content, key=key)}
+                for key, content in self._pins.get(session_id, {}).items()
                 if content
             ]
             messages.extend(
-                {"role": "system", "content": change["content"]}
+                {"role": "system", "content": project_notice(change["content"])}
                 for change in changes
                 if change["kind"] == "push"
                 and change["seq"] > cursor
@@ -317,7 +319,7 @@ class NoticeManager:
                 is_reflection = updates[-1]["key"].startswith(reflection_prefix)
                 if current is not None:
                     if is_reflection:
-                        content = current["content"]
+                        content = project_notice(current["content"], key=current["key"])
                         if was_delivered:
                             content = "This replaces the earlier scientific reflection:\n\n" + content
                         message = {"role": "system", "content": content}

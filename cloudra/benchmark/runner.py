@@ -241,8 +241,8 @@ def provenance_config(backend: str, tasks: list[TaskSpec]) -> dict:
     cfg = get_config()
     return {
         "backend": backend,
-        "experiment_arm": "benchmark/arm-guided",
-        "error_feedback": "full",
+        "experiment_arm": "benchmark/arm-guided-brief-errors",
+        "error_feedback": "brief",
         "orchestration_modes": {t.task_id: ABLATION_ARM.value for t in tasks},
         "models": {
             "coordinator": {"provider": cfg.coordinator.provider, "model": cfg.coordinator.model},

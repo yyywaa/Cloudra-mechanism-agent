@@ -952,9 +952,12 @@ class AgentRunner:
         vision 能力解析为 data URL 或文本降级。
         """
         from cloudra.infra.media import snapshot_image_reference
+        from cloudra.runtime_v2.brief_errors import project_notice
 
         prepared = []
         for item in messages:
+            if item.get("sender") != "user" and isinstance(item.get("content"), str):
+                item = {**item, "content": project_notice(item["content"])}
             images = [p for p in (item.get("images") or []) if isinstance(p, str) and p]
             if not images:
                 prepared.append(item)
@@ -970,11 +973,11 @@ class AgentRunner:
             prepared.append({**item, "content": parts})
         return prepared
 
-    def _tool_result_content(self, agent: AgentSession, result) -> object:
+    def _tool_result_content(self, agent: AgentSession, result, *, tool_name: str = "") -> object:
         """Context content for one tool result, with image re-injection."""
         from cloudra.runtime_v2.invocation import tool_result_context_content
 
-        return tool_result_context_content(agent, result)
+        return tool_result_context_content(agent, result, tool_name=tool_name)
 
     async def _commit_turn_output(self, agent: AgentSession, run_id: str, outcome) -> None:
         """响应消息恰好一次落进会话上下文投影（context.appended）。
@@ -1005,7 +1008,7 @@ class AgentRunner:
                 {
                     "role": "tool",
                     "tool_call_id": call.id,
-                    "content": await asyncio.to_thread(self._tool_result_content, agent, result),
+                    "content": await asyncio.to_thread(self._tool_result_content, agent, result, tool_name=call.name),
                     **({'tool_document_compact_content':result.data['tool_document_compact_content']}
                        if isinstance(result.data, dict) and result.data.get('tool_document_compact_content') else {}),
                     **({'tool_documents':[{'name':doc['name'],'revision':doc['revision']} for doc in result.data.get('documents',[])]}
