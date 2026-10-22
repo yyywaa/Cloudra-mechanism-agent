@@ -49,7 +49,7 @@ class TsInspect_input_schema(input_schema):
 
 
 class TsProcess_output_schema(TsProcessView, output_schema):
-    is_success: bool = Field(default=True, description="Tool call succeeded; this is not scientific validation. Only result.verified=true means the TS passed the recorded scientific checks.")
+    is_success: bool = Field(default=True, description="Tool call succeeded; this is not scientific validation. In this C experiment, public scientific verdict fields are null (assessment not provided), never a pass or fail claim. Internal ledger verdicts remain unchanged.")
     receipt: TsRevisionReceipt | None = Field(default=None, description='Durable accepted revision receipt. Imported source hashes identify immutable snapshots. Future references use the current atom table with each field\'s documented index base. Historical QM files retain their original numbering.')
 
 

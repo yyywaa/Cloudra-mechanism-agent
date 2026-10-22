@@ -64,7 +64,7 @@ def _digest(value: Any) -> str:
 
 
 def build_tool_documents(names: Sequence[str], *, allowed_names: Collection[str], entries: Sequence[ToolEntry]) -> tuple[ToolDocument, ...]:
-    from cloudra.runtime_v2.tool_catalog import render_tool_declaration
+    from cloudra.runtime_v2.tool_catalog import public_tool_output_schema, render_tool_declaration
 
     selected = validate_tool_names(list(names), allowed_names=allowed_names)
     by_name = {entry.tool_name: entry for entry in entries}
@@ -75,7 +75,7 @@ def build_tool_documents(names: Sequence[str], *, allowed_names: Collection[str]
         refs = tuple(ToolDocReference(skill_name=skill, reference=reference)
                      for skill, reference in entry.skill_references)
         revision = _digest({'name': name, 'summary': entry.summary, 'description': entry.tool_description,
-            'input': entry.input_schema.model_json_schema(), 'output': entry.output_schema.model_json_schema(),
+            'input': entry.input_schema.model_json_schema(), 'output': public_tool_output_schema(entry.output_schema),
             'references': [ref.model_dump() for ref in refs]})
         content = (f'# {name}\n\n{entry.tool_description}\n\n'
             f'## Input and result contract\n\n```typescript\n{render_tool_declaration(entry)}\n```\n\n'

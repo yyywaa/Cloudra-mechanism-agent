@@ -341,7 +341,11 @@ def save_record(record: TsProcessRecord) -> str:
         save_process_record(pipeline_database(), process_id=record.pipeline_id, record=record.model_dump(mode='json'))
         record.revision = get_process(pipeline_database(), record.pipeline_id)['revision']
     path = os.path.join(record.run_dir, PROCESS_JSON_NAME)
-    atomic_write_text(path, record.model_dump_json(indent=2) + "\n")
+    from cloudra.runtime_v2.scientific_feedback import public_scientific_record
+
+    # The database above remains authoritative; only the convenience export changes.
+    public = public_scientific_record(record.model_dump(mode='json'))
+    atomic_write_text(path, json.dumps(public, ensure_ascii=False, indent=2) + "\n")
     atomic_write_text(
         os.path.join(record.run_dir, DECLARE_JSON_NAME),
         record.input.model_dump_json(indent=2) + "\n",
@@ -353,6 +357,19 @@ def load_record(workspace_dir: str, run_id: str) -> TsProcessRecord:
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if data.get("format_version") != 7:
         raise ValueError("Unsupported TS input format; existing compute jobs remain intact.")
+    if data.get("pipeline_id"):
+        from cloudra.services.ts_pipeline_context import pipeline_database
+        from cloudra.services.ts_pipeline_store import get_process
+
+        # A durable process.json is a public export, not an execution checkpoint.
+        process = get_process(pipeline_database(), data["pipeline_id"])
+        authoritative = process.get("record") if process else None
+        if not isinstance(authoritative, dict):
+            raise ValueError("TS run has no authoritative pipeline record")
+        if (authoritative.get("run_id") != run_id
+                or Path(authoritative.get("workspace_dir", "")).resolve() != Path(workspace_dir).resolve()):
+            raise ValueError("TS pipeline reference belongs to a different workspace or run")
+        data = authoritative
     return TsProcessRecord.model_validate(data)
 
 def _record_stage(record: TsProcessRecord, stage: TsStage, status: StageStatus,

@@ -343,8 +343,30 @@ def _render_tool_types(name: str, entry) -> tuple[list[str], str, str]:
     input_schema = _input_schema_of(entry)
     output_schema = getattr(entry, "output_schema", None)
     decls.extend(_render_alias(args_type, _json_schema(input_schema)))
-    decls.extend(_render_alias(data_type, _json_schema(output_schema)))
+    decls.extend(_render_alias(data_type, public_tool_output_schema(output_schema)))
     return decls, args_type, data_type
+
+
+def public_tool_output_schema(schema_cls) -> dict:
+    """Document the C-only display contract without relaxing internal validation."""
+    schema = _json_schema(schema_cls)
+    verdict = schema.get("$defs", {}).get("TsVerdict")
+    if isinstance(verdict, dict):
+        properties = verdict.get("properties", {})
+        properties["verified"] = {
+            "type": "null", "description": "Automatic scientific assessment is not provided in this arm.",
+        }
+        properties["outcome"] = {"enum": ["search_failed", "invalid_input", None]}
+        if "result" in schema.get("properties", {}):
+            schema["properties"]["result"]["description"] = (
+                "Scientific acceptance is not provided in C: null is withheld, not failed. "
+                "Execution failures and evidence references remain visible."
+            )
+    properties = schema.get("properties", {})
+    if schema.get("title") == "TsGuess_output_schema":
+        properties["verification_status"] = {"enum": ["", None]}
+        properties["imag_mode_aligned"] = {"type": "null"}
+    return schema
 
 
 def _json_schema(schema_cls) -> dict:

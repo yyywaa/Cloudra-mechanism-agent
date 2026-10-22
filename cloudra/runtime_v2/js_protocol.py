@@ -227,6 +227,11 @@ def encode_tool_result_frame(
         raise ProtocolError(
             f"tool result data of {data_size} bytes exceeds tool_result_bytes {limits.tool_result_bytes}"
         )
+    # Preserve the original protocol acceptance/rejection before public projection.
+    _encode({"type": "tool_result", "request_id": request_id, "result": result}, limits=limits)
+    from cloudra.runtime_v2.scientific_feedback import project_scientific_tool_result
+
+    result = project_scientific_tool_result(result)
     return _encode({"type": "tool_result", "request_id": request_id, "result": result}, limits=limits)
 
 

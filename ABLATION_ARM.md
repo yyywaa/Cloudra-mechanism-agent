@@ -1,8 +1,8 @@
 # Ablation arm: standard
 
 The existing standard arm, synchronized with master
-`8c568ca6753ecf2cd40a90a8f0f8b5c8e19dd1d2`. Its current scope is narrower
-than "remove every automatic chemistry verdict"; the limitations below are explicit.
+`8c568ca6753ecf2cd40a90a8f0f8b5c8e19dd1d2`. Its feedback treatment is **automatic scientific judgment obfuscation**, not
+removal of chemistry calculations or alteration of the offline scientific standard.
 
 - `ts_guess` mode `verify` (including `strict`) is rejected. The independent
   saddle/IRC verifier does not run.
@@ -12,11 +12,15 @@ than "remove every automatic chemistry verdict"; the limitations below are expli
   which retains the DAG.
 - Every benchmark task in this checkout runs under `OrchestrationMode.STANDARD`
   (`ABLATION_ARM` in `cloudra/benchmark/runner.py`).
-- Known scope limits, intentionally not expanded in this synchronization:
-  `ts_prepare` / `ts_resume` / `ts_inspect` still use the automatic TS pipeline's
-  scientific verdicts, and the shared `ts_guess` schema still advertises verify
-  before execution rejects it. The common task prompt also still mentions DAG
-  evidence binding. This is not yet a clean "record minus all verification" arm.
+- TS prepare/resume/inspect calculations and internal verdicts remain unchanged.
+  Public scientific acceptance fields are neutral (`null`, not pass or fail),
+  with measurements, evidence and execution state preserved. See
+  [the exact feedback boundaries](docs/benchmark/SCIENTIFIC_FEEDBACK_ABLATION.md).
+- Known remaining differences: C still hides DAG while record retains it; the
+  input schema still lists verify although execution rejects it, and the common
+  task prompt mentions DAG binding. Unknown mixed scientific prose and legacy
+  file-only records remain intact to avoid losing evidence. This is not a pure
+  "record minus verification tools" arm, nor complete blinding.
 
 ## Launch and isolation
 
@@ -39,7 +43,9 @@ mode is intentionally overridden: project, root spawn, inherited child mode,
 batch provenance and every result path all use `runner.ABLATION_ARM`.
 Batch provenance also records the baked `experiment_arm` branch name and
 `error_feedback="full"`, so full and brief-feedback arms remain distinguishable
-without changing their orchestration mode.
+without changing their orchestration mode. C additionally records
+`scientific_feedback="neutralized_public_verdicts"` to distinguish its revised
+feedback contract from earlier C runs.
 Role, method policy, YOLO/unattended/clean-context defaults and scoring stay intact.
 
 ## Focused local checks
@@ -54,3 +60,9 @@ LLM runner, and socket connections are prohibited.
 without reading logs while interpolation, xTB-path and scan-parser dispatch remain
 available. Helpers are stubbed; no chemistry calculation is launched.
 
+
+`tests/test_scientific_feedback_projection.py` and
+`tests/test_c_feedback_boundaries.py` cover the new public projection, native
+facts, execution failures, protocol limits, raw ledger/export separation,
+workspace-scoped durable reads and unchanged standalone reads. They do not
+constitute a paid benchmark run or full-repository acceptance.

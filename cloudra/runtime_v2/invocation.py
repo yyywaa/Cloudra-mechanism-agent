@@ -122,8 +122,9 @@ def tool_result_context_content(agent: AgentSession, result: ToolResult) -> obje
     runner's end-of-turn commit so both write the same payload.
     """
     from cloudra.infra.media import snapshot_image_reference
+    from cloudra.runtime_v2.scientific_feedback import project_scientific_tool_result
 
-    summary = result.summary
+    summary = project_scientific_tool_result(result).summary
     paths = image_paths_from_tool_result(result)
     if not paths:
         return summary

@@ -243,6 +243,7 @@ def provenance_config(backend: str, tasks: list[TaskSpec]) -> dict:
         "backend": backend,
         "experiment_arm": "benchmark/arm-standard",
         "error_feedback": "full",
+        "scientific_feedback": "neutralized_public_verdicts",
         "orchestration_modes": {t.task_id: ABLATION_ARM.value for t in tasks},
         "models": {
             "coordinator": {"provider": cfg.coordinator.provider, "model": cfg.coordinator.model},

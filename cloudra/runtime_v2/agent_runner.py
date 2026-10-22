@@ -952,9 +952,12 @@ class AgentRunner:
         vision 能力解析为 data URL 或文本降级。
         """
         from cloudra.infra.media import snapshot_image_reference
+        from cloudra.runtime_v2.scientific_feedback import project_scientific_notice
 
         prepared = []
         for item in messages:
+            if item.get("sender") != "user" and isinstance(item.get("content"), str):
+                item = {**item, "content": project_scientific_notice(item["content"])}
             images = [p for p in (item.get("images") or []) if isinstance(p, str) and p]
             if not images:
                 prepared.append(item)
