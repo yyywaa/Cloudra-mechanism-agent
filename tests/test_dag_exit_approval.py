@@ -39,14 +39,17 @@ def test_stop_contract_keeps_supervisor_decision_identifiers_internal():
 
 
 @pytest.mark.asyncio
-async def test_complete_empty_graph_continue_work(tmp_path):
+async def test_complete_empty_graph_is_declared_in_record_arm(tmp_path):
     c = await _controller(tmp_path, "exit-empty", "dag_record")
     gate = await c.audit_stop("complete")
-    assert gate.action == "continue_work"
+    assert gate.action == "allow_final"
+    assert gate.basis == "declared"
+    assert not gate.report.complete
 
 
 @pytest.mark.asyncio
 async def test_reasoned_stage_dispositions_complete_scope_without_claiming_scientific_verification(tmp_path):
+    """A limited contract without required IRC can finish with an honest scope basis."""
     from cloudra.dag.engine import DagEngine
     from cloudra.dag.models import (
         AddEdge,
@@ -69,14 +72,14 @@ async def test_reasoned_stage_dispositions_complete_scope_without_claiming_scien
         ] + [AddEdge(op="add_edge", graph="delivery", edge=ElementaryStepEdge(edge_id="e", name="e",
             source_node_id="r", target_node_id="p", stages=[
                 StageState(kind=kind, status="skipped", reason="outside the declared scope")
-                for kind in ("ts_opt", "frequency", "short_irc")]))],
+                for kind in ("ts_opt", "frequency")]))],
     ))
     assert result.accepted
 
     gate = await c.audit_stop("complete")
 
     assert gate.action == "allow_final" and gate.report.complete
-    assert gate.basis == "scope_completed"
+    assert gate.basis == "declared"
 
 
 @pytest.mark.asyncio
@@ -167,7 +170,8 @@ async def test_audit_stop_reloads_store_contract_after_strengthen(tmp_path):
     )
     assert stronger.accepted
     gate = await c.audit_stop("complete")
-    assert gate.action == "continue_work"
+    # The stronger scientific contract remains visible, but is advisory in this arm.
+    assert gate.action == "allow_final" and gate.basis == "declared"
     assert gate.report is not None and not gate.report.complete
 
 
@@ -220,6 +224,7 @@ async def test_accepted_exit_review_is_reused_for_same_scope(tmp_path):
 
 
 async def _seed_complete_delivery(c, *, scope_only=False):
+    """Exercise final-review state with a contract that does not require IRC."""
     from cloudra.dag.engine import DagEngine
     from cloudra.dag.models import (
         AddEdge,
@@ -242,7 +247,8 @@ async def _seed_complete_delivery(c, *, scope_only=False):
         ] + [AddEdge(op="add_edge", graph="delivery", edge=ElementaryStepEdge(
             edge_id="step1", source_node_id="r", target_node_id="p", evidence_level="endpoint_supported",
             stages=[StageState(kind="ts_opt", status="skipped", reason="outside the approved scope")]
-            if scope_only else []))],
+            if scope_only else [StageState(kind=kind, status="supported")
+                                for kind in ("ts_opt", "frequency")]))],
     ))
     assert result.accepted
 

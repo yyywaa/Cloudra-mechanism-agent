@@ -175,7 +175,7 @@ class RunResult:
     notes: list[str] = field(default_factory=list)
     # 批次归属（Web 控制面；CLI 每次调用也是一个批次）。空串 = 旧的未挂批记录。
     batch_id: str = ""
-    # 行级消融臂标识（task.prompt.orchestration_mode）；旧行迁移为 ''。
+    # 行级消融臂标识（本分支 ABLATION_ARM）；旧行迁移为 ''。
     orchestration_mode: str = ""
 
     def to_row(self) -> tuple:
@@ -241,7 +241,9 @@ def provenance_config(backend: str, tasks: list[TaskSpec]) -> dict:
     cfg = get_config()
     return {
         "backend": backend,
-        "orchestration_modes": {t.task_id: t.prompt.orchestration_mode.value for t in tasks},
+        "experiment_arm": "benchmark/arm-record",
+        "error_feedback": "full",
+        "orchestration_modes": {t.task_id: ABLATION_ARM.value for t in tasks},
         "models": {
             "coordinator": {"provider": cfg.coordinator.provider, "model": cfg.coordinator.model},
             "follower": {"provider": cfg.follower.provider, "model": cfg.follower.model},
@@ -411,7 +413,7 @@ class BenchmarkRunner:
         res = RunResult(
             task_id=task.task_id,
             sandbox=str(sandbox),
-            orchestration_mode=task.prompt.orchestration_mode.value,
+            orchestration_mode=ABLATION_ARM.value,
         )
         ged_config = self._ged_config_for(task)
         res.undelivered = not (Path(sandbox) / ".cloudra" / "mechanism_evidence.json").is_file()
@@ -549,7 +551,7 @@ class BenchmarkRunner:
                 task_id=task.task_id,
                 sandbox=str(self.sandbox_for(task.task_id, self.batch_id)),
                 batch_id=self.batch_id,
-                orchestration_mode=task.prompt.orchestration_mode.value,
+                orchestration_mode=ABLATION_ARM.value,
             )
             res.notes.append("cancelled by batch stop" if stopped else f"task crashed: {exc!r}")
             self.db.record(res)

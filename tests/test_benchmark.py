@@ -1561,7 +1561,7 @@ def test_selfconsistency_unbound_failed_attempts_do_not_veto(tmp_path, rdkit_che
     assert report.passed, report.notes
 
 
-def test_selfconsistency_bound_multi_imag_only_fails(tmp_path):
+def test_selfconsistency_bound_multi_imag_only_fails(tmp_path, rdkit_chemistry):
     """绑到 TS 的证据全是多虚频（无一阶鞍点）→ 边不覆盖：any 语义豁免的是
     被取代的残留，不是拿高阶鞍点充数。"""
     from tests.test_irc_endpoint_optimization import write_lineage_bundle
@@ -1622,12 +1622,12 @@ def test_selfconsistency_orca_irc_uses_endpoint_sidecars(tmp_path, rdkit_chemist
     assert any('IRC' in note for note in _checks_by_id(incomplete)['E1'].notes)
 
 
-def test_selfconsistency_unbound_element_requires_inaccessible_declaration():
+def test_selfconsistency_unbound_element_requires_inaccessible_declaration(tmp_path):
     """每个 accessible 的元素都要有证据绑定；没有证据只有 accessible=false
     声明可以豁免。"""
     files: list[EvidenceFile] = []
     # 未绑定且未声明 → 挂
-    rep = audit_self_consistency(_sc_graph(), [], files, Path("."))
+    rep = audit_self_consistency(_sc_graph(), [], files, tmp_path)
     assert rep.passed is False
     assert any("species R: no evidence bound" in n for n in rep.notes)
     # 全部声明 accessible=false → 豁免通过
@@ -1640,25 +1640,25 @@ def test_selfconsistency_unbound_element_requires_inaccessible_declaration():
             {**e.model_dump(by_alias=True), "accessible": False} for e in graph.edges
         ],
     })
-    rep2 = audit_self_consistency(graph, [], files, Path("."))
+    rep2 = audit_self_consistency(graph, [], files, tmp_path)
     assert rep2.passed is True, rep2.notes
     assert all(c.declared_inaccessible for c in rep2.checks)
 
 
-def test_selfconsistency_edge_via_inaccessible_ts_is_exempt():
+def test_selfconsistency_edge_via_inaccessible_ts_is_exempt(tmp_path):
     """有效可达性传导进自洽：交付把不可达标在 TS 节点上（边保持默认
     accessible=true）时，经由它的边视同 declared_inaccessible 豁免——
     与图分/accuracy 同一口径（edge_effectively_accessible）。"""
     files: list[EvidenceFile] = []
     # TS 节点 false、边不标：边豁免；TS 节点随豁免
     graph = _sc_graph(R={"accessible": False}, TS={"accessible": False}, P={"accessible": False})
-    rep = audit_self_consistency(graph, [], files, Path("."))
+    rep = audit_self_consistency(graph, [], files, tmp_path)
     assert rep.passed is True, rep.notes
     edge = _checks_by_id(rep)["E1"]
     assert edge.declared_inaccessible and edge.covered
     assert any("effectively inaccessible" in n for n in edge.notes)
     # 对照：TS 可达且边未标 -> 边不豁免（无证据判负）
-    rep2 = audit_self_consistency(_sc_graph(R={"accessible": False}, P={"accessible": False}), [], files, Path("."))
+    rep2 = audit_self_consistency(_sc_graph(R={"accessible": False}, P={"accessible": False}), [], files, tmp_path)
     edge2 = _checks_by_id(rep2)["E1"]
     assert not edge2.declared_inaccessible and not edge2.covered
 
@@ -2262,8 +2262,14 @@ def test_backend_runs_to_terminal_and_scores_from_deliverables(tmp_path, monkeyp
     from cloudra.benchmark.backend import RuntimeV2Backend
     from cloudra.runtime_v2.adapters import legacy_default_runtime_settings
     from cloudra.runtime_v2.policies.base import ToolCall as PToolCall
-    from cloudra.runtime_v2.schemas import InvocationProtocol
+    from cloudra.runtime_v2.schemas import InvocationProtocol, OrchestrationMode
     from cloudra.runtime_v2.turn_pipeline import LLMResponse
+
+    # This transport/deliverables-only fixture deliberately exercises STANDARD.
+    # Actual branch modes and guided gates are tested in test_benchmark_arm_wiring;
+    # succeeding here is not evidence that the full experimental arm can settle.
+    monkeypatch.setattr("cloudra.benchmark.runner.ABLATION_ARM", OrchestrationMode.STANDARD)
+    monkeypatch.setattr("cloudra.benchmark.backend.ABLATION_ARM", OrchestrationMode.STANDARD)
 
     monkeypatch.setattr(
         "cloudra.runtime_v2.adapters.legacy_default_runtime_settings",
@@ -2300,6 +2306,8 @@ def test_backend_runs_to_terminal_and_scores_from_deliverables(tmp_path, monkeyp
     assert result is None
     core = backend.last_core
     agent = next(iter(core.agents.values()))
+    assert agent.settings.orchestration_mode is OrchestrationMode.STANDARD
+    assert core.require_project(agent.project_id).settings.orchestration_mode is OrchestrationMode.STANDARD
     assert agent.state.value == "succeeded"
     messages = [
         str((e.data or {}).get("content") or "")
@@ -3099,7 +3107,7 @@ def _evidence_task(**rubric_overrides):
     )
 
 
-def test_evidence_loop_engine_output_to_score(tmp_path):
+def test_evidence_loop_engine_output_to_score(tmp_path, rdkit_chemistry):
     """真实日志 fixture 走"引擎输出 → 证据文件 → 沙箱扫描 → 评分"闭环：
     只断言当前评分定义（图相似度 + 物理自检 + 能垒容差）。"""
     from cloudra.benchmark.runner import BenchmarkRunner
@@ -3131,10 +3139,7 @@ def test_evidence_loop_engine_output_to_score(tmp_path):
     # 缺能垒不清掉已有物理自检贡献。
     assert not any("accuracy fail-loud" in n for n in result.notes), result.notes
     assert result.final_score == pytest.approx(0.1 * result.graph_score + 0.3, abs=1e-4)
-    # 图相似度的化学指纹依赖 RDKit（可选依赖）：缺失时该层退化，CI（只装
-    # dev extra）就属于这种情况，因此只在 RDKit 可用时断言图分
-    if _RDKIT_AVAILABLE:
-        assert result.graph_score > 0.0, result.notes
+    assert result.graph_score > 0.0, result.notes
     # 落库（append-only；score_sandbox 只算不落库，落库由 runner/批次负责）
     runner.db.record(result)
     rows = runner.db.list_runs_for("")
@@ -3235,7 +3240,7 @@ def test_input_and_graph_files_cannot_masquerade_as_evidence(tmp_path):
     assert integ.graph_found and integ.graph_parseable
 
 
-def test_xyz_smiles_annotation_second_line_binds(tmp_path):
+def test_xyz_smiles_annotation_second_line_binds(tmp_path, rdkit_chemistry):
     """XYZ 的 smiles 注释放合法第二行即绑定；缺失注释的文件不产生绑定。"""
     from cloudra.benchmark.integrity import audit_integrity
 
@@ -3458,7 +3463,7 @@ def _derived_barrier(sandbox: Path) -> float:
     return evidence.steps[0].barrier_kcal_mol
 
 
-def test_barrier_is_derived_from_logs_and_must_be_declared(tmp_path):
+def test_barrier_is_derived_from_logs_and_must_be_declared(tmp_path, rdkit_chemistry):
     """能垒来自交付日志（TS 与起点最小值），且交付 JSON 必须逐条声明。"""
     from cloudra.benchmark.runner import BenchmarkRunner
 
@@ -3491,7 +3496,7 @@ def test_barrier_is_derived_from_logs_and_must_be_declared(tmp_path):
     assert ok.final_score == pytest.approx(1.0), ok.notes
 
 
-def test_partial_delivery_preserves_log_backed_barrier_in_composite(tmp_path):
+def test_partial_delivery_preserves_log_backed_barrier_in_composite(tmp_path, rdkit_chemistry):
     """真实日志完成一条目标边，Gold 另一条缺失不清掉其准确度贡献。"""
     from cloudra.benchmark.runner import BenchmarkRunner
 
@@ -3516,7 +3521,7 @@ def test_partial_delivery_preserves_log_backed_barrier_in_composite(tmp_path):
     assert not any("accuracy fail-loud" in note for note in result.notes)
 
 
-def test_declared_barrier_must_match_logs(tmp_path):
+def test_declared_barrier_must_match_logs(tmp_path, rdkit_chemistry):
     """无据声明且证据对不上参考 → accuracy 记 0（fail-loud，不给部分分）；
     若证据里有能对上参考的组合，则按答案定义差异小扣分（另一用例覆盖）。"""
     from cloudra.benchmark.runner import BenchmarkRunner
@@ -3548,7 +3553,7 @@ def test_declared_barrier_must_match_logs(tmp_path):
     assert any("final keeps the graph component only" in n for n in res.notes)
 
 
-def test_declared_node_energy_identifies_the_delivered_minimum(tmp_path):
+def test_declared_node_energy_identifies_the_delivered_minimum(tmp_path, rdkit_chemistry):
     """构象转换保留本地起点，energy_hartree 指认该节点交付的极小值。"""
     from cloudra.benchmark.barrier_evidence import collect_barrier_evidence
 
@@ -3588,7 +3593,7 @@ def test_declared_node_energy_identifies_the_delivered_minimum(tmp_path):
     assert step.barrier_kcal_mol == pytest.approx(23.754002305, abs=0.05)
 
 
-def test_declared_ts_energy_identifies_the_delivered_saddle(tmp_path):
+def test_declared_ts_energy_identifies_the_delivered_saddle(tmp_path, rdkit_chemistry):
     """同节点绑定多份鞍点日志：TS 节点声明的 energy_hartree 指认交付的那一份
     （优先于文件名/路径序启发式）。"""
     from cloudra.benchmark.barrier_evidence import collect_barrier_evidence
@@ -3628,7 +3633,7 @@ def test_declared_ts_energy_identifies_the_delivered_saddle(tmp_path):
     assert all(step.ts_path == 'zzz_ts.out' for step in evidence.alternatives['E1'])
 
 
-def test_scoring_ignores_prose_barrier(tmp_path):
+def test_scoring_ignores_prose_barrier(tmp_path, rdkit_chemistry):
     """散文里的能垒数字既不参与判定也不能替代声明（本次整改的核心回归）。"""
     from cloudra.benchmark.runner import BenchmarkRunner
 
@@ -3660,7 +3665,7 @@ def test_scoring_ignores_prose_barrier(tmp_path):
     assert good.accuracy_score == 1.0, good.notes
 
 
-def test_barrier_requires_a_saddle_log(tmp_path):
+def test_barrier_requires_a_saddle_log(tmp_path, rdkit_chemistry):
     """没有一阶鞍点日志（只有最小值）→ 能垒不可推 → 0 分并写明原因。"""
     from cloudra.benchmark.runner import BenchmarkRunner
 
@@ -3901,13 +3906,15 @@ def test_cli_records_batch_with_provenance(tmp_path):
     assert batch["status"] == "done"
     assert "run_timeout_s" not in batch["config"]
     assert batch["config"]["backend"] == "cli"
-    assert batch["config"]["orchestration_modes"] == {"BENCH_T": "standard"}
+    from cloudra.benchmark.runner import ABLATION_ARM
+
+    assert batch["config"]["orchestration_modes"] == {"BENCH_T": ABLATION_ARM.value}
     # 溯源只记 provider/model，绝不记 API key
     for slot in ("coordinator", "follower"):
         assert set(batch["config"]["models"][slot]) == {"provider", "model"}
     runs = db.list_runs_for(batch["batch_id"])
     assert [r["task_id"] for r in runs] == ["BENCH_T"]
-    assert runs[0]["orchestration_mode"] == "standard"
+    assert runs[0]["orchestration_mode"] == ABLATION_ARM.value
 
 
 def test_backend_persists_events_to_store(tmp_path, monkeypatch):
@@ -3994,7 +4001,7 @@ def _write_malformed_candidate(sandbox):
 
 
 @pytest.mark.parametrize('bound', [False, True])
-def test_malformed_candidate_does_not_crash_sandbox_scoring(tmp_path, bound):
+def test_malformed_candidate_does_not_crash_sandbox_scoring(tmp_path, bound, rdkit_chemistry):
     from cloudra.benchmark.runner import BenchmarkRunner
 
     sandbox = tmp_path / 'delivery'

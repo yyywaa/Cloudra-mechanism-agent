@@ -982,8 +982,9 @@ _MODE_GUIDANCE = {
         "ts_guess is advisory (never required) — it never "
         "satisfies nor blocks ts_opt/frequency — and a "
         "submit_compute_job call is never evidence (bind the finished job's parser output).\n"
-        "- Check dag_delivery_report before stop(delivery_disposition=complete); selected "
-        "delivery targets must satisfy their required stages and scientific checks."
+        "- dag_delivery_report records scientific coverage and remaining gaps for your own assessment. "
+        "In this record experiment, complete and partial both end the run without required scientific "
+        "coverage, a delivery artifact, or Supervisor approval; completion is not scientific verification."
     ),
     OrchestrationMode.DAG_GUIDED: (
         "Current orchestration mode: dag_guided (DAG-guided orchestration; Supervisor is online)\n"
