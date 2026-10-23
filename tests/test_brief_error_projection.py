@@ -424,3 +424,17 @@ def test_idpp_numerical_nonconvergence_is_not_a_scientific_verdict():
     assert public['interpolation'] == metadata
     assert public['is_success'] is True
     assert public['message'] == raw['message']
+
+
+def test_light_degeneracy_metadata_survives_public_projection():
+    from cloudra.tools.Chemtool.ts_guess import TsGuess_output_schema
+
+    metadata = {'method': 'idpp', 'idpp_mode': 'light', 'converged': None,
+                'termination': 'degenerate_geometry', 'steps': 0, 'residual': 2.5e-13,
+                'legacy_stopping_criterion_met': True}
+    raw = TsGuess_output_schema(is_success=True, interpolation=metadata,
+        message='Numerical termination: degenerate_geometry; convergence=None.').model_dump(mode='json')
+    public = project_feedback(raw)
+    assert public['interpolation'] == metadata
+    assert public['is_success'] is True
+    assert public['message'] == raw['message']
