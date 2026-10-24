@@ -1,0 +1,90 @@
+{
+  "trajectory_id": "frag0-mmff94-attempt1",
+  "component_id": "frag0",
+  "attempt": 1,
+  "engine": "MMFF94",
+  "symbols": [
+    "N",
+    "C",
+    "O",
+    "H"
+  ],
+  "random_seed": 42,
+  "frame_count": 101,
+  "iterations": 100,
+  "initial_frame": {
+    "step": 0,
+    "symbols": [
+      "N",
+      "C",
+      "O",
+      "H"
+    ],
+    "positions": [
+      [
+        -0.44125673775492363,
+        0.60133561741634,
+        -0.2248151831273639
+      ],
+      [
+        0.4921807529395962,
+        -0.14748562661030706,
+        0.2468506667861406
+      ],
+      [
+        1.3992106936465907,
+        -0.8604362924513412,
+        0.7103446061200778
+      ],
+      [
+        -1.4501347088311731,
+        0.40658630164525666,
+        0.03778224839800868
+      ]
+    ],
+    "energy": 3.3671071369920167,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 114.36057451536382
+  },
+  "final_frame": {
+    "step": 100,
+    "symbols": [
+      "N",
+      "C",
+      "O",
+      "H"
+    ],
+    "positions": [
+      [
+        -0.3814946754825507,
+        0.6029122846443894,
+        -0.23540647961116398
+      ],
+      [
+        0.44013558731898683,
+        -0.09613869686173444,
+        0.21828349280135134
+      ],
+      [
+        1.242230926837569,
+        -0.8125894711264285,
+        0.6877460157180854
+      ],
+      [
+        -1.3008718386739149,
+        0.305815883343722,
+        0.09953930926859024
+      ]
+    ],
+    "energy": -16.662853731061183,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 0.0013912119550100188
+  },
+  "convergence_code": 0,
+  "status": "converged",
+  "failure": "",
+  "notes": [],
+  "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/N_HNCO/geom/structure_build/R_complex_raw/trajectories/frag0-mmff94-attempt1/frames.xyz",
+  "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/N_HNCO/geom/structure_build/R_complex_raw/trajectories/frag0-mmff94-attempt1/frames.jsonl",
+  "json_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/N_HNCO/geom/structure_build/R_complex_raw/trajectories/frag0-mmff94-attempt1/trajectory.json"
+}

@@ -1178,3 +1178,50 @@ Optimization completed = 0
 - `ideapool/tasks/impossible/IB9.json` 实际写的是 **IB9_E1 = 14.74**（IB9_E2 = null）。
 - 12 道 impossible 题**全部** `allowed_methods = ["xtb","pm7"]`（不含 B3LYP），这与「参照存在软虚频、属人工采信」的说法一致，但**数值对不上**。
 ⇒ **需确认**：5.65 是某个中间量 / 另一道题 / 还是应当把 IB9_E1 从 14.74 改成 5.65。我不改这个数，只报差异。
+
+## D93 **备份 + 干净环境克隆 + 50 题基准可运行（2026-10-19 00:4x）**
+### ① 整理
+- 提交 `5ee42235`：台账 D92 + `ideapool/tasks/normal/NI5.json` 补 `elements=[C,H,N,O]` / `max_heavy_atoms=4`，已推 origin。
+- 未处理的 `gold_finish_20261015/` 7 个改动属旧战役历史遗留，不纳入本轮。
+
+### ② 备份（`/home/ly/cloudra_backup_20261019/`，共 782 MB）
+| 文件 | 体积 | 内容 |
+|---|---|---|
+| `cloudra_repo_all_refs_20261019.bundle` | 381 MB | `git bundle --all`，**`git bundle verify` 报 records a complete history**，含 92 个远端分支 + stash |
+| `cloudra_workdata_20261019.tar.gz` | 398 MB | `ts/` + `gold_compute/` + `gold_fill_20261018/` + `ideapool/` + `confs_output/` + `PROCESS.md`，7590 条目，`gzip -t` 通过 |
+| `gold_finish_20261015_uncommitted.patch` | 3.1 MB | 旧战役 7 个未提交文件的 diff |
+**恢复方式**：`git clone <bundle> <dir> && git remote remove origin`，再解 tar 到仓库根。
+
+### ③ 克隆最新版（`/home/ly/cloudra-bench-20261019`）
+- `git clone` origin → **master `2118932f`**（2026-10-18），465 MB / `.git` 381 MB，92 个远端分支。
+
+### ④ **题数：50 是对的，我们分支多 2 个已下线题（用户判断正确）**
+| 档位 | 我们分支 `gold-finish-artifacts` | 新克隆 `origin/master` |
+|---|---|---|
+| easy | 20 | 20 |
+| normal | 10 | 10 |
+| hard | 10 | 10 |
+| **impossible** | **12** | **10** |
+| **合计** | **52** | **50** |
+- 差集：**仅在我们分支有 `IA8.json`、`IB10.json`**（上游已下线）。easy/normal/hard 三档完全一致。
+- 我们分支合并的是较早的 master `438cfe5d`；新 master 为 `2118932f`。⇒ **D76 里「12 道 impossible」的口径已过期，应以 50（impossible 10）为准。**
+- `task_catalog()` 在新克隆返回 **50**，dry-run 落库 `runs` 表 **50 行**，`sandboxes/` **50 个目录**，三处互相印证。
+
+### ⑤ 干净环境（新克隆内独立 `.venv`，Python 3.12.3）
+- `pip install -e .` 成功（首次因 pypi 瞬时超时失败，`--timeout 120 --retries 10` 重试通过）。
+- 追加安装 `rdkit 2026.09.1` / `cclib 1.8.1` / `chemcoord 2.2.0`（`ase 3.29.0`、`numpy 2.5.4`、`scipy 1.18.1` 随基础依赖带入）。**未装 pyscf/spectrochempy/molli/pymol**（benchmark 链路不需要）。
+- `cloudra --help`、`cloudra.benchmark --help` 均可用。
+
+### ⑥ 真跑的两个前置（已确认，**不需要外部 scheduler**）
+1. **PATH**：`g16`/`xtb` 默认不在 PATH，必须 `export PATH=/home/ly/g16:/home/ly/xtb-6.5.0/bin:$PATH`；补齐后 `check_job_type('gaussian'|'xtb', workdir)` 均返回 `(True, '')`。
+2. **调度自包含**：`RuntimeV2Backend(start_scheduler=True)` 为**每个任务**起进程内 `SchedulerDaemon(worker_id=f"scheduler:{pid}:{task_id}")`，作业写入隔离 `compute.db` 并由同进程认领。**跑 benchmark 不需要、也不应再起外部 `cloudra scheduler`**（否则两套调度抢同一目录）。
+- 隔离：`--data-dir <RUN>` ⇒ `CLOUDRA_DATA_DIR=<RUN>/runtime` + `get_config().data_dir` 双钉死，`runtime-v2.db` / `compute.db` / sandboxes 全在该目录，**不污染全局 `~/.local/share/cloudra`**。LLM 凭据仍读全局 `~/.config/cloudra/config.yaml`（Coordinator/Follower = `deepseek-v4-flash`）。
+
+### ⑦ 交付：`/home/ly/cloudra-bench-20261019/run_benchmark.sh`
+```bash
+./run_benchmark.sh                        # dry-run：四档枚举 + 评分链路自检（0 额度 0 算力）
+./run_benchmark.sh real                   # 真实评测（runtime_v2 + LLM + Gaussian），并发 1
+./run_benchmark.sh real 4                 # 并发 4
+./run_benchmark.sh real 2 NR1,NY3,HI1     # 只跑指定题
+```
+内部固定传 **四个 `--tasks-dir`**（easy/normal/hard/impossible）—— 这就是「必须选四个档位、默认入口只跑 easy」的对应做法。

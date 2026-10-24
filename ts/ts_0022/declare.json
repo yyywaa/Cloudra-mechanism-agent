@@ -1,0 +1,116 @@
+{
+  "reaction": {
+    "reactant_smiles": "[O+:1]([H:2])([H:9])[H:10].[CH3:11][CH2:5]/[C:4](=[N:6]/[O:7][H:8])/[CH3:3]",
+    "product_smiles": "[O:1]([H:9])[H:10].[CH3:11][CH2:5]/[C:4](=[N:6]/[O+:7]([H:8])[H:2])/[CH3:3]",
+    "charge": 1,
+    "multiplicity": 1,
+    "electronic_character": null,
+    "selected_candidate": null,
+    "reaction_center": [
+      [
+        0,
+        1
+      ],
+      [
+        1,
+        8
+      ]
+    ]
+  },
+  "calculations": {
+    "formal": {
+      "engine": "gaussian",
+      "method": "B3LYP",
+      "basis_set": "def2SVP",
+      "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+      "frequency_mode": "auto",
+      "orca_blocks": null,
+      "end_setting": ""
+    },
+    "irc": {
+      "engine": "gaussian",
+      "method": "B3LYP",
+      "basis_set": "def2SVP",
+      "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+      "frequency_mode": "auto",
+      "orca_blocks": null,
+      "end_setting": "IRC=(MaxPoints=60,StepSize=10)"
+    }
+  },
+  "conformers": {
+    "reactant": {
+      "kind": "file",
+      "xyz_path": "gold_finish_20261015/HL1/ts_run/prep/RC_3A_seed.xyz",
+      "mol_path": "gold_finish_20261015/HL1/ts_run/prep/build_RCmap/assembly/complex_candidate_000.mol",
+      "evidence_refs": [
+        "gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md"
+      ],
+      "optimization": null
+    },
+    "product": {
+      "kind": "file",
+      "xyz_path": "gold_finish_20261015/HL1/round3/product_endpoint_seed_B_prodorder.xyz",
+      "mol_path": "gold_finish_20261015/HL1/ts_run/prep/build_PCmap/assembly/complex_candidate_000.mol",
+      "evidence_refs": [
+        "gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md"
+      ],
+      "optimization": null
+    },
+    "guidance": {
+      "ring_order": [],
+      "distance_filters": []
+    }
+  },
+  "guess": {
+    "kind": "provided",
+    "xyz_path": "gold_finish_20261015/HL1/round4/T3_scan_peak_pt8_ts_guess.xyz",
+    "evidence_refs": [
+      "gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md",
+      "gold_finish_20261015/HL1/round4/T3_ptscan_H2O9_relaxed.log",
+      "gold_finish_20261015/HL1/round4/T3_scan_curve.csv",
+      "gold_finish_20261015/HL1/round4/HL1_E1_DECISION.md"
+    ]
+  },
+  "ts_optimization": {
+    "ref": "formal"
+  },
+  "verification": {
+    "frequency": {
+      "ref": "formal"
+    },
+    "irc": {
+      "ref": "irc"
+    },
+    "irc_log": null,
+    "reactant_endpoint": {
+      "seed": {
+        "kind": "file",
+        "xyz_path": "gold_fill_20261018/HL1/HL1_E1/reactant_endpoint_seed_last_frame.xyz",
+        "mol_path": null,
+        "evidence_refs": [
+          "ts/ts_0022/jobs/declaration_0004/reactant_opt/reactant_opt.log"
+        ]
+      },
+      "optimization": {
+        "ref": "formal"
+      },
+      "frequency": {
+        "ref": "formal"
+      }
+    },
+    "product_endpoint": {
+      "seed": null,
+      "optimization": {
+        "ref": "formal"
+      },
+      "frequency": {
+        "ref": "formal"
+      }
+    }
+  },
+  "execution": {
+    "cpus": 4,
+    "memory_mb": 6144,
+    "limits": null
+  }
+}

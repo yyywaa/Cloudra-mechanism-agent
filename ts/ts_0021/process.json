@@ -1,0 +1,870 @@
+{
+  "format_version": 7,
+  "run_id": "ts_0021",
+  "pipeline_id": "a5db0ad58e41c13434ed59293e362cbafb25b9af9d0bfe06e979b4a7baab4f91",
+  "declaration_revision": 3,
+  "optimization_checkpoints": {},
+  "budget_action_keys": {},
+  "budget_reservations": {},
+  "attempt_history": [
+    {
+      "declaration_revision": 1,
+      "selected_candidate_id": null,
+      "job_steps": [],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "map",
+          "status": "blocked",
+          "detail": "product: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: C[O-].O=CO.[Na+]; concrete identity: C.C.O.O.O.[HH].[HH].[HH].[HH].[HH].[NaH]. Changing binding indices cannot repair this identity mismatch.",
+          "artifacts": [],
+          "source_input_revision": 1
+        }
+      ],
+      "reason": "product conformer MOL lacked a bond block (prep/i2.mol has 0 bonds) -> identity unconfirmed; bind the artifact MOL with the same atom order and correct I2 bond block",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "[Na+].CO[C@H]([O-])O",
+          "product_smiles": "[Na+].C[O-].C(=O)O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "selected_candidate": null,
+          "reaction_center": [
+            [
+              2,
+              1
+            ],
+            [
+              2,
+              4
+            ]
+          ]
+        },
+        "calculations": {
+          "g16": {
+            "engine": "gaussian",
+            "method": "b3lyp",
+            "basis_set": "def2svp",
+            "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/i1_dft_min_ref.xyz",
+            "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/i1.mol",
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/E2E3_ENDPOINTS_PROVENANCE.md"
+            ],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/i2_min_candA.xyz",
+            "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/i2.mol",
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/E2E3_ENDPOINTS_PROVENANCE.md",
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/I2_DFT_VERDICT.md"
+            ],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": {
+          "kind": "provided",
+          "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/ts_e2_guess.xyz",
+          "evidence_refs": [
+            "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/TS_E2_GUESS_PROVENANCE.md"
+          ]
+        },
+        "ts_optimization": {
+          "ref": "g16"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "g16"
+          },
+          "irc": {
+            "ref": "g16"
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "g16"
+            },
+            "frequency": {
+              "ref": "g16"
+            }
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "g16"
+            },
+            "frequency": {
+              "ref": "g16"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 8,
+          "memory_mb": 14336,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAALAAAACQAAAIABCyAKAAAAAQEGACAAAAAECAAgAAAAAgYAJAAAAAEECAAgAAAAAggAIgAAAP8BAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQsBAgACAwADBAADBQABBgABBwABCAADCQAECgBCAAAAAEAZAQAAAQAAAAEAAAAAC091yM1wAwDAYvVHGAYs5j/koe9uZYnOP+HP8GYNXvg/q5Se6SVG9j8bu0T11sCuvxhd3hyu1dE/tRfRdkzd5z/pKXKIuDllv+W4UzpY/9E/yQImcOtu5r/myTUFMjvav5PfopOl1vI/95LGaB0V9r9U4GQbuAPePwFr1a4J6e2/doh/2NIj8r+W6gJeZtjYv3Gsi9toAAJA0QSKWMQw7j8VxEDXvoDkPwlP6PUncf8/1v7O9uiN9T/eO2pMiDnxv0BtVKcDGfY/eJyiI7mcA0Bu+x711yvKPyi37XvUX+o/zvxqDhBM5r8smzkktVD2v9oB1xUzQuM/l+ZWCKux+r8HDJI+rSLzPz8CAAAAAAAS4gIAAAUABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAVQIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9OWTMvRTJFMy9pMV9kZnRfbWluX3JlZi54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L05ZMy9wcmVwL2kxLm1vbCJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiYjdlODM1ODU5ZjIzMTE5NGY2YjNhOTY3ZDQ0ZDUzODYxYzlkYzhiOTcxNzY5YzVlNzlmZTA4YThmZjk3YjdlYiIsICJtb2wiOiAiYzQxNjVkZmMzM2E4OGUyNjk5MGMzMmI0YzM5MTEyNTlmZmMxYjA5MmI2N2FlZWIxZDU5NWJlYTMzZmVlYTE4NCJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDAyMS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV9iN2U4MzU4NTlmMjMxMTk0Lnh5eiIsICJtb2wiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDAyMS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV9jNDE2NWRmYzMzYTg4ZTI2Lm1vbCJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfRM6dQAAAAAAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAgAAABfQ0lQQ29kZQABAAAAUggBAAAAAAAAAAAAAAAAAAAAAAAAAAAAABM7JAAAAAAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABARMW",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAALAAAAAAAAAIABCyA4AAAAAQEBBgBAAAAABAgAQAAAAAIBAEgAAAABAQEASAAAAAEBAQBIAAAAAQEGAEAAAAAECABAAAAAAggAQAAAAAIBAEgAAAABAQEASAAAAAEBC0IAAAAAQBkBAAABAAAAAQAAAAALUz9vKlJh2L/fMqfLYiLzv41eDVAaasi/4/xNKETACcDlXmBWKNLkP8TuO4bHfr4/COOncW+eAMCQMXctIR+wvxVUVP1K55O/ud+hKNBHDMAhVn+EYcDzPwdEiCtnb+m/djI4Sl6NEMBZ/RGGAUumP4DXZ876lNc/knU4ukqXCcDTLqaZ7vX2P1iQZiyazu0/toR80LPZA0Bg56bNOA3HPw68Wu7MBME/t0QuOIP//T+BdocUA6Trv0Gd8uhGWMg/isvxCkQP/j8QJVryeBr1PzElkuhlFMe/gA2IEFeODEAqc/ON6J7QP2O0jqomiNU/IAn7dhIRBEA9gbBTrHoAQDvI68Gk+Ma/PwIAAAAAABLeAgAABQAFAAAAX05hbWUAAAAAAAwAAABfTW9sRmlsZUluZm8AFgAAACAgICAgUkRLaXQgICAgICAgICAgM0QQAAAAX01vbEZpbGVDb21tZW50cwAAAAAAEgAAAF9Nb2xGaWxlQ2hpcmFsRmxhZwIAAAAAFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBRAgAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L05ZMy9FMkUzL2kyX21pbl9jYW5kQS54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L05ZMy9wcmVwL2kyLm1vbCJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiMTcxNWY2ZDdkNzdlOTNiYjUyMDBhNzFiMjNkYjMxZmM4NGNiNDU1NjRiMWQ0OGY2YmJhYjJlN2VlM2MwZWY4NSIsICJtb2wiOiAiNjk2ODQ0ODUxOWM4NzBhNjQxNWI2NzA5MGJmYWJhZmU5OGYzYjAxNmM2YzY5NDQ3NzFlMDhkNjMzOWQyNTcxOCJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDAyMS9idWlsZC9pbnB1dF8wMDAxL3Byb2R1Y3Qvc291cmNlXzE3MTVmNmQ3ZDc3ZTkzYmIueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIxL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfNjk2ODQ0ODUxOWM4NzBhNi5tb2wifSwgImlucHV0X3JldmlzaW9uIjogMX0TFg==",
+        "product_to_reactant": null,
+        "candidate": null
+      },
+      "provided_guess_binding": null,
+      "terminal": null,
+      "blocked": {
+        "failure_class": "input_identity_unconfirmed",
+        "stage": "map",
+        "message": "product: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: C[O-].O=CO.[Na+]; concrete identity: C.C.O.O.O.[HH].[HH].[HH].[HH].[HH].[NaH]. Changing binding indices cannot repair this identity mismatch.",
+        "atom_details": [
+          "reactant built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0021/structures/reactant_86e20e5aaf7891c80b2f.xyz",
+          "reactant atoms (1-based): 1=Na, 2=C, 3=O, 4=C, 5=O, 6=O, 7=H, 8=H, 9=H, 10=H, 11=H",
+          "product built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0021/structures/product_f50c8c966272a7561d48.xyz",
+          "product atoms (1-based): 1=Na, 2=C, 3=O, 4=H, 5=H, 6=H, 7=C, 8=O, 9=O, 10=H, 11=H"
+        ],
+        "needs": [
+          "conformers.product",
+          "reaction.product_smiles"
+        ],
+        "issues": [
+          {
+            "code": "endpoint_identity_mismatch",
+            "details": [
+              "product: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: C[O-].O=CO.[Na+]; concrete identity: C.C.O.O.O.[HH].[HH].[HH].[HH].[HH].[NaH]. Changing binding indices cannot repair this identity mismatch."
+            ],
+            "field": "conformers.product",
+            "role": "product"
+          }
+        ]
+      },
+      "failed_attempt": null,
+      "stop_reason": null
+    },
+    {
+      "declaration_revision": 2,
+      "selected_candidate_id": null,
+      "job_steps": [
+        {
+          "purpose": "ts_opt",
+          "job_id": 1081,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/jobs/declaration_0002/ts_opt/refine.gjf",
+          "state": "failed",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "b3lyp",
+            "basis_set": "def2svp",
+            "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 2,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              1,
+              2,
+              6,
+              7,
+              8,
+              9,
+              4,
+              3,
+              5,
+              10,
+              11
+            ],
+            "charge": 0,
+            "declaration_revision": 2,
+            "process_id": "a5db0ad58e41c13434ed59293e362cbafb25b9af9d0bfe06e979b4a7baab4f91",
+            "product_mol": "\n     RDKit          3D\n\n 11  8  0  0  0  0  0  0  0  0999 V2000\n   -0.3809   -1.1959   -0.1907 Na  0  0  0  0  0 15  0  0  0  0  0  0\n   -3.2189    0.6507    0.1191 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.0774   -0.0630   -0.0194 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.5351    1.2345   -0.7948 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -4.1381    0.0435    0.3685 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.1989    1.4350    0.9315 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.4813    0.1801    0.1330 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8749   -0.8638    0.1902 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8787    1.3190   -0.1803 O   0  0  0  0  0  0  0  0  0  0  0  0\n    3.5695    0.2597    0.3364 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.5083    2.0599   -0.1795 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  3  1  0\n  2  4  1  0\n  2  5  1  0\n  2  6  1  0\n  7  8  2  0\n  7  9  1  0\n  7 10  1  0\n  9 11  1  0\nM  CHG  2   1   1   3  -1\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n 11  9  0  0  0  0  0  0  0  0999 V2000\n   -2.0017    0.6929    0.2386 Na  0  0  0  0  0 15  0  0  0  0  0  0\n    1.5230    1.3921   -0.0601 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.2787    0.7458   -0.0026 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.2812   -0.7010   -0.4099 C   0  0  1  0  0  0  0  0  0  0  0  0\n    1.1774   -1.3802    0.4690 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9347   -1.1337   -0.3882 O   0  0  0  0  0  0  0  0  0  0  0  0\n    2.2502    0.9435    0.6407 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.9651    1.3471   -1.0765 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.3811    2.4515    0.2045 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8242   -0.6968   -1.3947 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.6018   -1.6684    1.1960 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  3  1  0\n  3  4  1  0\n  4  5  1  0\n  4  6  1  0\n  2  7  1  0\n  2  8  1  0\n  2  9  1  0\n  4 10  1  6\n  5 11  1  0\nM  CHG  2   1   1   6  -1\nM  END\n",
+            "ts_log_sha256": null
+          },
+          "frequency_analysis": null
+        }
+      ],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [],
+          "source_input_revision": 2
+        },
+        {
+          "stage": "map",
+          "status": "done",
+          "detail": "Concrete endpoint correspondence confirmed and owned by this reaction.",
+          "artifacts": [],
+          "source_input_revision": 2
+        },
+        {
+          "stage": "assemble",
+          "status": "done",
+          "detail": "2 reaction-centre pair(s) guide the assembly",
+          "artifacts": [],
+          "source_input_revision": 2
+        },
+        {
+          "stage": "guess",
+          "status": "done",
+          "detail": "Provided candidate bound; formal optimization and verification remain required.",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/path/input_0002/provided.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/path/input_0002/provenance_0000.md"
+          ],
+          "source_input_revision": 2
+        },
+        {
+          "stage": "validate",
+          "status": "done",
+          "detail": "internal validation passed",
+          "artifacts": [],
+          "source_input_revision": 2
+        },
+        {
+          "stage": "submit",
+          "status": "done",
+          "detail": "refinement job 1081 submitted as 'ready' (gaussian, b3lyp); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/jobs/declaration_0002/ts_opt/refine.gjf"
+          ],
+          "source_input_revision": 2
+        },
+        {
+          "stage": "refine",
+          "status": "blocked",
+          "detail": "refinement job 1081 (ts_opt) ended as 'failed'; plain per-engine failure classes come from the log below — the run is stopped, not silently retried",
+          "artifacts": [],
+          "source_input_revision": 2
+        }
+      ],
+      "reason": "ts_opt attempt 1 (job 1081) died in l103 FormBX after sliding to the product side (r(C4-O3)=3.31 A); replace the guess with the I1->IDPP linear interpolation at r(C4-O3)=2.04 A and correct reaction_center to 1-based [[4,3],[4,6]] (break C4-O3 / form C4=O5)",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "[Na+].CO[C@H]([O-])O",
+          "product_smiles": "[Na+].C[O-].C(=O)O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "selected_candidate": null,
+          "reaction_center": [
+            [
+              2,
+              1
+            ],
+            [
+              2,
+              4
+            ]
+          ]
+        },
+        "calculations": {
+          "g16": {
+            "engine": "gaussian",
+            "method": "b3lyp",
+            "basis_set": "def2svp",
+            "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/i1_dft_min_ref.xyz",
+            "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/i1.mol",
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/E2E3_ENDPOINTS_PROVENANCE.md"
+            ],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/i2_min_candA.xyz",
+            "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/build/art_I2_src/assembly/complex_candidate_000.mol",
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/E2E3_ENDPOINTS_PROVENANCE.md",
+              "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/I2_DFT_VERDICT.md"
+            ],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": {
+          "kind": "provided",
+          "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/ts_e2_guess.xyz",
+          "evidence_refs": [
+            "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/TS_E2_GUESS_PROVENANCE.md"
+          ]
+        },
+        "ts_optimization": {
+          "ref": "g16"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "g16"
+          },
+          "irc": {
+            "ref": "g16"
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "g16"
+            },
+            "frequency": {
+              "ref": "g16"
+            }
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "g16"
+            },
+            "frequency": {
+              "ref": "g16"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 8,
+          "memory_mb": 14336,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAALAAAACQAAAIABCyAKAAAAAQEGACAAAAAECAAgAAAAAgYAJAAAAAEECAAgAAAAAggAIgAAAP8BAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQsBAgACAwADBAADBQABBgABBwABCAADCQAECgBCAAAAAEAZAQAAAQAAAAEAAAAAC091yM1wAwDAYvVHGAYs5j/koe9uZYnOP+HP8GYNXvg/q5Se6SVG9j8bu0T11sCuvxhd3hyu1dE/tRfRdkzd5z/pKXKIuDllv+W4UzpY/9E/yQImcOtu5r/myTUFMjvav5PfopOl1vI/95LGaB0V9r9U4GQbuAPePwFr1a4J6e2/doh/2NIj8r+W6gJeZtjYv3Gsi9toAAJA0QSKWMQw7j8VxEDXvoDkPwlP6PUncf8/1v7O9uiN9T/eO2pMiDnxv0BtVKcDGfY/eJyiI7mcA0Bu+x711yvKPyi37XvUX+o/zvxqDhBM5r8smzkktVD2v9oB1xUzQuM/l+ZWCKux+r8HDJI+rSLzPz8CAAAAAAASBwMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAVQIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9OWTMvRTJFMy9pMV9kZnRfbWluX3JlZi54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L05ZMy9wcmVwL2kxLm1vbCJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiYjdlODM1ODU5ZjIzMTE5NGY2YjNhOTY3ZDQ0ZDUzODYxYzlkYzhiOTcxNzY5YzVlNzlmZTA4YThmZjk3YjdlYiIsICJtb2wiOiAiYzQxNjVkZmMzM2E4OGUyNjk5MGMzMmI0YzM5MTEyNTlmZmMxYjA5MmI2N2FlZWIxZDU5NWJlYTMzZmVlYTE4NCJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDAyMS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV9iN2U4MzU4NTlmMjMxMTk0Lnh5eiIsICJtb2wiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDAyMS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV9jNDE2NWRmYzMzYTg4ZTI2Lm1vbCJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfR8AAABjbG91ZHJhX21hcHBpbmdfYmluZGluZ19kZXJpdmVkAwETOkcBAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEAAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAECAAAAAAMAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAIAAAAX0NJUENvZGUAAQAAAFIaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAwAAAAgBAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQUAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBAAAAAAAAAAAAAAAAAAAAAAAAAATOyQAAAAAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQETFg==",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAALAAAACAAAAIABCyAKAAAAAQEGACAAAAAECAAiAAAA/wEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEGACgAAAADBAgAKAAAAAMCCAAoAAAAAwIBACgAAAABAQEAKAAAAAEBCwECAAEDAAEEAAEFAAYHKAIGCCAGCQAICgBCAAAAAEAZAQAAAQAAAAEAAAAAC1M/bypSYdi/3zKny2Ii87+NXg1QGmrIv+P8TShEwAnA5V5gVijS5D/E7juGx36+Pwjjp3FvngDAkDF3LSEfsL8VVFT9SueTv7nfoSjQRwzAIVZ/hGHA8z8HRIgrZ2/pv3YyOEpejRDAWf0RhgFLpj+A12fO+pTXP5J1OLpKlwnA0y6mme719j9YkGYsms7tP7aEfNCz2QNAYOemzTgNxz8OvFruzATBP7dELjiD//0/gXaHFAOk679BnfLoRljIP4rL8QpED/4/ECVa8nga9T8xJZLoZRTHv4ANiBBXjgxAKnPzjeie0D9jtI6qJojVPyAJ+3YSEQRAPYGwU6x6AEA7yOvBpPjGvz8CAAAAAAASMAMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAfgIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9OWTMvRTJFMy9pMl9taW5fY2FuZEEueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9OWTMvcHJlcC9idWlsZC9hcnRfSTJfc3JjL2Fzc2VtYmx5L2NvbXBsZXhfY2FuZGlkYXRlXzAwMC5tb2wifSwgImhhc2hlcyI6IHsieHl6IjogIjE3MTVmNmQ3ZDc3ZTkzYmI1MjAwYTcxYjIzZGIzMWZjODRjYjQ1NTY0YjFkNDhmNmJiYWIyZTdlZTNjMGVmODUiLCAibW9sIjogImFmNjc3NDBmOGM3NmYxOGYwNTE3NTczYzhjYjU1OTBhYThiYjYwM2QzZDFjNzA2ZGY2MjRlYmQxY2U0NmY4MTYifSwgInNuYXBzaG90cyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L3RzL3RzXzAwMjEvYnVpbGQvaW5wdXRfMDAwMi9wcm9kdWN0L3NvdXJjZV8xNzE1ZjZkN2Q3N2U5M2JiLnh5eiIsICJtb2wiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDAyMS9idWlsZC9pbnB1dF8wMDAyL3Byb2R1Y3Qvc291cmNlX2FmNjc3NDBmOGM3NmYxOGYubW9sIn0sICJpbnB1dF9yZXZpc2lvbiI6IDJ9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6EwEAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQAAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAAAAAAAAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAwAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEEAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQUAAAAAAAAAAAAAEzsgAAAAAAABAQAAAQEAAAEBAAABAQAAAQIAAAEBAAABAQAAAQETFg==",
+        "product_to_reactant": [
+          0,
+          1,
+          5,
+          6,
+          7,
+          8,
+          3,
+          2,
+          4,
+          9,
+          10
+        ],
+        "candidate": "776t3gAAAAAQAAAAAwAAAAAAAAALAAAACQAAAIABCyAKAAAAAQEGACAAAAAECAAgAAAAAgYAJAAAAAEECAAgAAAAAggAIgAAAP8BAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQsBAgACAwADBAADBQABBgABBwABCAADCQAECgBCAAAAAEAZAQAAAQAAAAEAAAAAC7j7RZ5e6ALAPu1sn8DB5T9aevopCkvqP/WfFDEVMO8/V93ZDZG5+T+EyQF5furEP0XerKDtQcu/LUEEJLMd7T++V6Xbr07SP7Ylm0BLVuS/t9OUbI629r9V07uZTdfJvy+5WdX1+NY/SGJRKkQ0/b84svo8qcPlP9mDQYCpwv2/7yyL01qy9b9FCDR9Gwe5P0fkP81e0P0/TiS5eE9A8j9VKeIZ2brkPxn2pOHONPQ/O6Gd9DoZ/T+nsd4k3YHsv3Z+egEw/eo/rHrQHvXABEBq35pDawjlP/etGKadd9W/wZrahEH6/L++6+AeU1Dzv8gMr38yIa+/PmjJJYbbAsCnyELwz/f1Pz8CAAAAAAASBwMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAVQIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9OWTMvRTJFMy9pMV9kZnRfbWluX3JlZi54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L05ZMy9wcmVwL2kxLm1vbCJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiYjdlODM1ODU5ZjIzMTE5NGY2YjNhOTY3ZDQ0ZDUzODYxYzlkYzhiOTcxNzY5YzVlNzlmZTA4YThmZjk3YjdlYiIsICJtb2wiOiAiYzQxNjVkZmMzM2E4OGUyNjk5MGMzMmI0YzM5MTEyNTlmZmMxYjA5MmI2N2FlZWIxZDU5NWJlYTMzZmVlYTE4NCJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDAyMS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV9iN2U4MzU4NTlmMjMxMTk0Lnh5eiIsICJtb2wiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDAyMS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV9jNDE2NWRmYzMzYTg4ZTI2Lm1vbCJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfR8AAABjbG91ZHJhX21hcHBpbmdfYmluZGluZ19kZXJpdmVkAwETOkcBAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEAAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAECAAAAAAMAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAIAAAAX0NJUENvZGUAAQAAAFIaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAwAAAAgBAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQUAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBAAAAAAAAAAAAAAAAAAAAAAAAAATOyQAAAAAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQETFg=="
+      },
+      "provided_guess_binding": {
+        "xyz": {
+          "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/ts_e2_guess.xyz",
+          "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/path/input_0002/provided.xyz",
+          "sha256": "8bbc6dbb866df8619b5a150b6c3ea196c575d3b0b9e1398a89b9497de32e9ea0"
+        },
+        "evidence": [
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/TS_E2_GUESS_PROVENANCE.md",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/path/input_0002/provenance_0000.md",
+            "sha256": "1f911489c7af5a06a3fd1c53b201fefbfce31c81509935f92ee93a2a40a09af9"
+          }
+        ]
+      },
+      "terminal": null,
+      "blocked": {
+        "failure_class": "job_failed",
+        "stage": "refine",
+        "message": "refinement job 1081 (ts_opt) ended as 'failed'; plain per-engine failure classes come from the log below — the run is stopped, not silently retried",
+        "atom_details": [
+          "native log: /home/ly/Cloudra-mechanism-agent/ts/ts_0021/jobs/declaration_0002/ts_opt/refine.log",
+          " Cartesian Forces:  Max     0.002103347 RMS     0.000845679",
+          " Leave Link  716 at Sun Oct 18 03:00:50 2026, MaxMem=  1879048192 cpu:               0.4 elap:               0.1",
+          " (Enter /home/ly/g16/l103.exe)",
+          "",
+          " GradGradGradGradGradGradGradGradGradGradGradGradGradGradGradGradGradGrad",
+          " Berny optimization.",
+          " Tors failed for dihedral     6 -     1 -     3 -     2",
+          " Tors failed for dihedral     7 -     2 -     3 -     1",
+          " Tors failed for dihedral     8 -     2 -     3 -     1",
+          " Tors failed for dihedral     9 -     2 -     3 -     1",
+          " FormBX had a problem.",
+          " Error termination via Lnk1e in /home/ly/g16/l103.exe at Sun Oct 18 03:00:50 2026.",
+          " Job cpu time:       0 days  0 hours 31 minutes 52.4 seconds.",
+          " Elapsed time:       0 days  0 hours  5 minutes 19.3 seconds.",
+          " File lengths (MBytes):  RWF=     34 Int=      0 D2E=      0 Chk=      5 Scr=      1"
+        ],
+        "needs": [
+          "ts_optimization",
+          "execution",
+          "reaction.reaction_center"
+        ],
+        "issues": []
+      },
+      "failed_attempt": {
+        "attempt_id": "2:ts_opt:1081",
+        "diagnostics": [
+          "native log: /home/ly/Cloudra-mechanism-agent/ts/ts_0021/jobs/declaration_0002/ts_opt/refine.log",
+          " Cartesian Forces:  Max     0.002103347 RMS     0.000845679",
+          " Leave Link  716 at Sun Oct 18 03:00:50 2026, MaxMem=  1879048192 cpu:               0.4 elap:               0.1",
+          " (Enter /home/ly/g16/l103.exe)",
+          "",
+          " GradGradGradGradGradGradGradGradGradGradGradGradGradGradGradGradGradGrad",
+          " Berny optimization.",
+          " Tors failed for dihedral     6 -     1 -     3 -     2",
+          " Tors failed for dihedral     7 -     2 -     3 -     1",
+          " Tors failed for dihedral     8 -     2 -     3 -     1",
+          " Tors failed for dihedral     9 -     2 -     3 -     1",
+          " FormBX had a problem.",
+          " Error termination via Lnk1e in /home/ly/g16/l103.exe at Sun Oct 18 03:00:50 2026.",
+          " Job cpu time:       0 days  0 hours 31 minutes 52.4 seconds.",
+          " Elapsed time:       0 days  0 hours  5 minutes 19.3 seconds.",
+          " File lengths (MBytes):  RWF=     34 Int=      0 D2E=      0 Chk=      5 Scr=      1"
+        ],
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/jobs/declaration_0002/ts_opt/refine.log"
+        ],
+        "failure_class": "unclassified_failure",
+        "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/jobs/declaration_0002/ts_opt/refine.gjf",
+        "input_revision": 2,
+        "input_sha256": "d43d08bf034af0f48d9f7d2c2f15413797f8726d4ee0c350693f0e043dd490d8",
+        "job_id": 1081,
+        "log_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/jobs/declaration_0002/ts_opt/refine.log",
+        "log_sha256": "d509a6c1445d68c64ca639a59c60fbfb431cf1eb1867c501a28fda1f76667165",
+        "purpose": "ts_opt"
+      },
+      "stop_reason": null
+    }
+  ],
+  "catalog_id": null,
+  "partition_revision": null,
+  "candidate_attempts": [],
+  "cards_path": "",
+  "product_seed_candidate_id": null,
+  "selected_candidate_id": null,
+  "run_dir": "/home/ly/Cloudra-mechanism-agent/ts/ts_0021",
+  "workspace_dir": "/home/ly/Cloudra-mechanism-agent",
+  "owner_conversation_id": "prj_244c6a3512cb4e52",
+  "owner_session_id": "as_f636e5bc837f46ee",
+  "input": {
+    "reaction": {
+      "reactant_smiles": "[Na+].CO[C@H]([O-])O",
+      "product_smiles": "[Na+].C[O-].C(=O)O",
+      "charge": 0,
+      "multiplicity": 1,
+      "electronic_character": "closed_shell",
+      "selected_candidate": null,
+      "reaction_center": [
+        [
+          3,
+          2
+        ],
+        [
+          3,
+          5
+        ]
+      ]
+    },
+    "calculations": {
+      "g16": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      }
+    },
+    "conformers": {
+      "reactant": {
+        "kind": "file",
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/i1_dft_min_ref.xyz",
+        "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/i1.mol",
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/E2E3_ENDPOINTS_PROVENANCE.md"
+        ],
+        "optimization": null
+      },
+      "product": {
+        "kind": "file",
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/i2_min_candA.xyz",
+        "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/build/art_I2_src/assembly/complex_candidate_000.mol",
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/E2E3_ENDPOINTS_PROVENANCE.md",
+          "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/I2_DFT_VERDICT.md"
+        ],
+        "optimization": null
+      },
+      "guidance": {
+        "ring_order": [],
+        "distance_filters": []
+      }
+    },
+    "guess": {
+      "kind": "provided",
+      "xyz_path": "gold_fill_20261018/NY3/e2_guess_i1_interp_t060.xyz",
+      "evidence_refs": [
+        "gold_fill_20261018/NY3/E2_GUESS_ATTEMPT2.md"
+      ]
+    },
+    "ts_optimization": {
+      "ref": "g16"
+    },
+    "verification": {
+      "frequency": {
+        "ref": "g16"
+      },
+      "irc": {
+        "ref": "g16"
+      },
+      "irc_log": null,
+      "reactant_endpoint": {
+        "seed": null,
+        "optimization": {
+          "ref": "g16"
+        },
+        "frequency": {
+          "ref": "g16"
+        }
+      },
+      "product_endpoint": {
+        "seed": null,
+        "optimization": {
+          "ref": "g16"
+        },
+        "frequency": {
+          "ref": "g16"
+        }
+      }
+    },
+    "execution": {
+      "cpus": 8,
+      "memory_mb": 14336,
+      "limits": null
+    }
+  },
+  "structures": {
+    "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAALAAAACQAAAIABCyAKAAAAAQEGACAAAAAECAAgAAAAAgYAJAAAAAEECAAgAAAAAggAIgAAAP8BAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQsBAgACAwADBAADBQABBgABBwABCAADCQAECgBCAAAAAEAZAQAAAQAAAAEAAAAAC091yM1wAwDAYvVHGAYs5j/koe9uZYnOP+HP8GYNXvg/q5Se6SVG9j8bu0T11sCuvxhd3hyu1dE/tRfRdkzd5z/pKXKIuDllv+W4UzpY/9E/yQImcOtu5r/myTUFMjvav5PfopOl1vI/95LGaB0V9r9U4GQbuAPePwFr1a4J6e2/doh/2NIj8r+W6gJeZtjYv3Gsi9toAAJA0QSKWMQw7j8VxEDXvoDkPwlP6PUncf8/1v7O9uiN9T/eO2pMiDnxv0BtVKcDGfY/eJyiI7mcA0Bu+x711yvKPyi37XvUX+o/zvxqDhBM5r8smzkktVD2v9oB1xUzQuM/l+ZWCKux+r8HDJI+rSLzPz8CAAAAAAASBwMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAVQIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9OWTMvRTJFMy9pMV9kZnRfbWluX3JlZi54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L05ZMy9wcmVwL2kxLm1vbCJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiYjdlODM1ODU5ZjIzMTE5NGY2YjNhOTY3ZDQ0ZDUzODYxYzlkYzhiOTcxNzY5YzVlNzlmZTA4YThmZjk3YjdlYiIsICJtb2wiOiAiYzQxNjVkZmMzM2E4OGUyNjk5MGMzMmI0YzM5MTEyNTlmZmMxYjA5MmI2N2FlZWIxZDU5NWJlYTMzZmVlYTE4NCJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDAyMS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV9iN2U4MzU4NTlmMjMxMTk0Lnh5eiIsICJtb2wiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDAyMS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV9jNDE2NWRmYzMzYTg4ZTI2Lm1vbCJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfR8AAABjbG91ZHJhX21hcHBpbmdfYmluZGluZ19kZXJpdmVkAwETOkcBAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEAAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAECAAAAAAMAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAIAAAAX0NJUENvZGUAAQAAAFIaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAwAAAAgBAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQUAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBAAAAAAAAAAAAAAAAAAAAAAAAAATOyQAAAAAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQETFg==",
+    "product": "776t3gAAAAAQAAAAAwAAAAAAAAALAAAACAAAAIABCyAKAAAAAQEGACAAAAAECAAiAAAA/wEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEGACgAAAADBAgAKAAAAAMCCAAoAAAAAwIBACgAAAABAQEAKAAAAAEBCwECAAEDAAEEAAEFAAYHKAIGCCAGCQAICgBCAAAAAEAZAQAAAQAAAAEAAAAAC1M/bypSYdi/3zKny2Ii87+NXg1QGmrIv+P8TShEwAnA5V5gVijS5D/E7juGx36+Pwjjp3FvngDAkDF3LSEfsL8VVFT9SueTv7nfoSjQRwzAIVZ/hGHA8z8HRIgrZ2/pv3YyOEpejRDAWf0RhgFLpj+A12fO+pTXP5J1OLpKlwnA0y6mme719j9YkGYsms7tP7aEfNCz2QNAYOemzTgNxz8OvFruzATBP7dELjiD//0/gXaHFAOk679BnfLoRljIP4rL8QpED/4/ECVa8nga9T8xJZLoZRTHv4ANiBBXjgxAKnPzjeie0D9jtI6qJojVPyAJ+3YSEQRAPYGwU6x6AEA7yOvBpPjGvz8CAAAAAAASMAMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAfgIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9OWTMvRTJFMy9pMl9taW5fY2FuZEEueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9OWTMvcHJlcC9idWlsZC9hcnRfSTJfc3JjL2Fzc2VtYmx5L2NvbXBsZXhfY2FuZGlkYXRlXzAwMC5tb2wifSwgImhhc2hlcyI6IHsieHl6IjogIjE3MTVmNmQ3ZDc3ZTkzYmI1MjAwYTcxYjIzZGIzMWZjODRjYjQ1NTY0YjFkNDhmNmJiYWIyZTdlZTNjMGVmODUiLCAibW9sIjogImFmNjc3NDBmOGM3NmYxOGYwNTE3NTczYzhjYjU1OTBhYThiYjYwM2QzZDFjNzA2ZGY2MjRlYmQxY2U0NmY4MTYifSwgInNuYXBzaG90cyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L3RzL3RzXzAwMjEvYnVpbGQvaW5wdXRfMDAwMi9wcm9kdWN0L3NvdXJjZV8xNzE1ZjZkN2Q3N2U5M2JiLnh5eiIsICJtb2wiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDAyMS9idWlsZC9pbnB1dF8wMDAyL3Byb2R1Y3Qvc291cmNlX2FmNjc3NDBmOGM3NmYxOGYubW9sIn0sICJpbnB1dF9yZXZpc2lvbiI6IDJ9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6EwEAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQAAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAAAAAAAAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAwAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEEAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQUAAAAAAAAAAAAAEzsgAAAAAAABAQAAAQEAAAEBAAABAQAAAQIAAAEBAAABAQAAAQETFg==",
+    "product_to_reactant": [
+      0,
+      1,
+      5,
+      6,
+      7,
+      8,
+      3,
+      2,
+      4,
+      9,
+      10
+    ],
+    "candidate": "776t3gAAAAAQAAAAAwAAAAAAAAALAAAACQAAAIABCyAKAAAAAQEGACAAAAAECAAgAAAAAgYAJAAAAAEECAAgAAAAAggAIgAAAP8BAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQsBAgACAwADBAADBQABBgABBwABCAADCQAECgBCAAAAAEAZAQAAAQAAAAEAAAAAC8UNz33/vwHAW6mxzkLs5T9CX5sJXdTiP+lZ1h5yGvM/RcBb/zJY+D8XWsYb0/KyP3ryuMGzsZC/FPJ7evAD6z/aYm1CENbFP2I+i2udNNG/0KgKV1Ed8r9znvNLqz7Sv4+xydBn9uU/L9L2dQFb+r8WJp2SvQ/jP3tu29aa1ve/WR4gbyRG9L+TpRgYYLy4vwithy8TJQBAms93vyP98D9vmqFlm6PkPzjH0upYs/g/IRk4wbMU+j/x7PoeWOLuv2kog92P7/A/LQ02VBBMBECP9HGGRXneP6w9qmkwcMA/RUgf65DY9b8kW+GGrYP0v9iNyo/wJMo/Cd1Gfz+nAMCpz4IOwtX0Pz8CAAAAAAASBwMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAVQIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9OWTMvRTJFMy9pMV9kZnRfbWluX3JlZi54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L05ZMy9wcmVwL2kxLm1vbCJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiYjdlODM1ODU5ZjIzMTE5NGY2YjNhOTY3ZDQ0ZDUzODYxYzlkYzhiOTcxNzY5YzVlNzlmZTA4YThmZjk3YjdlYiIsICJtb2wiOiAiYzQxNjVkZmMzM2E4OGUyNjk5MGMzMmI0YzM5MTEyNTlmZmMxYjA5MmI2N2FlZWIxZDU5NWJlYTMzZmVlYTE4NCJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDAyMS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV9iN2U4MzU4NTlmMjMxMTk0Lnh5eiIsICJtb2wiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDAyMS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV9jNDE2NWRmYzMzYTg4ZTI2Lm1vbCJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfR8AAABjbG91ZHJhX21hcHBpbmdfYmluZGluZ19kZXJpdmVkAwETOkcBAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEAAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAECAAAAAAMAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAIAAAAX0NJUENvZGUAAQAAAFIaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAwAAAAgBAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQUAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBAAAAAAAAAAAAAAAAAAAAAAAAAATOyQAAAAAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQETFg=="
+  },
+  "provided_guess_binding": {
+    "xyz": {
+      "source_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/NY3/e2_guess_i1_interp_t060.xyz",
+      "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/path/input_0003/provided.xyz",
+      "sha256": "4b4e75a707042c0ff5aa4170c0ee412122443bcdd7b3986e48f747d68f94cb41"
+    },
+    "evidence": [
+      {
+        "source_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/NY3/E2_GUESS_ATTEMPT2.md",
+        "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/path/input_0003/provenance_0000.md",
+        "sha256": "cccb1d3c2b9e4cfe242035ab2f1258d6c88dbe6c5427d64155f251cdc8d16f70"
+      }
+    ]
+  },
+  "failed_attempt": {
+    "attempt_id": "3:ts_opt:1085",
+    "failure_class": "nonconvergence",
+    "purpose": "ts_opt",
+    "job_id": 1085,
+    "input_revision": 3,
+    "evidence_refs": [
+      "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/jobs/declaration_0003/ts_opt/refine.log"
+    ],
+    "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/jobs/declaration_0003/ts_opt/refine.gjf",
+    "log_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/jobs/declaration_0003/ts_opt/refine.log",
+    "input_sha256": "0938e4af6b83afaf804418adc0ba8d0ef3d3cbf69c6f3614c269ce837cc98269",
+    "log_sha256": "cf84514743fd6a87de9aef85080a6e827a1bd89ff1e18f4d4cbcd6ce9cd14b6f",
+    "diagnostics": [
+      "native log: /home/ly/Cloudra-mechanism-agent/ts/ts_0021/jobs/declaration_0003/ts_opt/refine.log",
+      " Cycle  12  Pass 1  IDiag  1:",
+      " E= -466.993406556747     Delta-E=       -0.000000000010 Rises=F Damp=F",
+      " DIIS: error= 3.10D-08 at cycle  12 NSaved=  12.",
+      " NSaved=12 IEnMin=12 EnMin= -466.993406556747     IErMin=12 ErrMin= 3.10D-08",
+      " ErrMax= 3.10D-08  0.00D+00 EMaxC= 1.00D+00 BMatC= 2.61D-13 BMatP= 8.82D-12",
+      " IDIUse=1 WtCom= 1.00D+00 WtEn= 0.00D+00",
+      " RMSDP=5.43D-09 MaxDP=9.33D-08 DE=-9.83D-12 OVMax= 1.67D-07",
+      "",
+      " Error on total polarization charges =  0.01245",
+      " SCF Done:  E(RB3LYP) =  -466.993406557     A.U. after   12 cycles",
+      "            NFock= 12  Conv=0.54D-08     -V/T= 2.0074",
+      " KE= 4.635621491191D+02 PE=-1.638288484411D+03 EE= 4.422470382028D+02",
+      " Predicted change in Energy=-5.574270D-03",
+      " Optimization stopped.",
+      "    -- Number of steps exceeded,  NStep=  42",
+      "    -- Flag reset to prevent archiving.",
+      "                           ----------------------------",
+      "                           ! Non-Optimized Parameters !",
+      " No NMR shielding tensors so no spin-rotation constants.",
+      " Leave Link  601 at Sun Oct 18 03:13:34 2026, MaxMem=  1879048192 cpu:               1.0 elap:               0.2",
+      " (Enter /home/ly/g16/l9999.exe)",
+      "",
+      "",
+      " ABOVE ALL I AM AN OPTIMIST FOR NUMBER THEORY,",
+      " AND I HOLD THE HOPE THAT WE MAY NOT BE FAR FROM",
+      " A TIME WHEN IRREFUTABLE ARITHMETIC WILL CELEBRATE",
+      " ITS TRIUMPHS IN PHYSICS AND CHEMISTRY.",
+      "   -- HERMANN MINKOWSKI, 1905",
+      " Error termination request processed by link 9999.",
+      " Error termination via Lnk1e in /home/ly/g16/l9999.exe at Sun Oct 18 03:13:34 2026.",
+      " Job cpu time:       0 days  1 hours  5 minutes 38.6 seconds.",
+      " Elapsed time:       0 days  0 hours 10 minutes 35.0 seconds.",
+      " File lengths (MBytes):  RWF=     33 Int=      0 D2E=      0 Chk=      5 Scr=      1"
+    ]
+  },
+  "method_checks": {
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/jobs/declaration_0002/ts_opt/refine.gjf": {
+      "actual": {
+        "basis_set": "def2svp",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "method": "b3lyp",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 2,
+      "matched": true,
+      "purpose": "ts_opt",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/jobs/declaration_0003/ts_opt/refine.gjf": {
+      "input_revision": 3,
+      "purpose": "ts_opt",
+      "actual": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source": "stage_declaration",
+      "differences": [],
+      "matched": true
+    }
+  },
+  "stage": "refine",
+  "stage_records": [
+    {
+      "stage": "declare",
+      "status": "done",
+      "detail": "reaction declared; each calculation requires its own method",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "build",
+      "status": "done",
+      "detail": "both endpoints built",
+      "artifacts": [],
+      "source_input_revision": 3
+    },
+    {
+      "stage": "map",
+      "status": "done",
+      "detail": "Concrete endpoint correspondence confirmed and owned by this reaction.",
+      "artifacts": [],
+      "source_input_revision": 3
+    },
+    {
+      "stage": "assemble",
+      "status": "done",
+      "detail": "2 reaction-centre pair(s) guide the assembly",
+      "artifacts": [],
+      "source_input_revision": 3
+    },
+    {
+      "stage": "guess",
+      "status": "done",
+      "detail": "Provided candidate bound; formal optimization and verification remain required.",
+      "artifacts": [
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/path/input_0003/provided.xyz",
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/path/input_0003/provenance_0000.md"
+      ],
+      "source_input_revision": 3
+    },
+    {
+      "stage": "validate",
+      "status": "done",
+      "detail": "internal validation passed",
+      "artifacts": [],
+      "source_input_revision": 3
+    },
+    {
+      "stage": "submit",
+      "status": "done",
+      "detail": "refinement job 1085 submitted as 'ready' (gaussian, b3lyp); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+      "artifacts": [
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/jobs/declaration_0003/ts_opt/refine.gjf"
+      ],
+      "source_input_revision": 3
+    },
+    {
+      "stage": "refine",
+      "status": "blocked",
+      "detail": "refinement job 1085 (ts_opt) ended as 'failed'; plain per-engine failure classes come from the log below — the run is stopped, not silently retried",
+      "artifacts": [],
+      "source_input_revision": 3
+    }
+  ],
+  "terminal": null,
+  "stop_reason": null,
+  "blocked": {
+    "failure_class": "job_failed",
+    "stage": "refine",
+    "message": "refinement job 1085 (ts_opt) ended as 'failed'; plain per-engine failure classes come from the log below — the run is stopped, not silently retried",
+    "atom_details": [
+      "native log: /home/ly/Cloudra-mechanism-agent/ts/ts_0021/jobs/declaration_0003/ts_opt/refine.log",
+      " Cycle  12  Pass 1  IDiag  1:",
+      " E= -466.993406556747     Delta-E=       -0.000000000010 Rises=F Damp=F",
+      " DIIS: error= 3.10D-08 at cycle  12 NSaved=  12.",
+      " NSaved=12 IEnMin=12 EnMin= -466.993406556747     IErMin=12 ErrMin= 3.10D-08",
+      " ErrMax= 3.10D-08  0.00D+00 EMaxC= 1.00D+00 BMatC= 2.61D-13 BMatP= 8.82D-12",
+      " IDIUse=1 WtCom= 1.00D+00 WtEn= 0.00D+00",
+      " RMSDP=5.43D-09 MaxDP=9.33D-08 DE=-9.83D-12 OVMax= 1.67D-07",
+      "",
+      " Error on total polarization charges =  0.01245",
+      " SCF Done:  E(RB3LYP) =  -466.993406557     A.U. after   12 cycles",
+      "            NFock= 12  Conv=0.54D-08     -V/T= 2.0074",
+      " KE= 4.635621491191D+02 PE=-1.638288484411D+03 EE= 4.422470382028D+02",
+      " Predicted change in Energy=-5.574270D-03",
+      " Optimization stopped.",
+      "    -- Number of steps exceeded,  NStep=  42",
+      "    -- Flag reset to prevent archiving.",
+      "                           ----------------------------",
+      "                           ! Non-Optimized Parameters !",
+      " No NMR shielding tensors so no spin-rotation constants.",
+      " Leave Link  601 at Sun Oct 18 03:13:34 2026, MaxMem=  1879048192 cpu:               1.0 elap:               0.2",
+      " (Enter /home/ly/g16/l9999.exe)",
+      "",
+      "",
+      " ABOVE ALL I AM AN OPTIMIST FOR NUMBER THEORY,",
+      " AND I HOLD THE HOPE THAT WE MAY NOT BE FAR FROM",
+      " A TIME WHEN IRREFUTABLE ARITHMETIC WILL CELEBRATE",
+      " ITS TRIUMPHS IN PHYSICS AND CHEMISTRY.",
+      "   -- HERMANN MINKOWSKI, 1905",
+      " Error termination request processed by link 9999.",
+      " Error termination via Lnk1e in /home/ly/g16/l9999.exe at Sun Oct 18 03:13:34 2026.",
+      " Job cpu time:       0 days  1 hours  5 minutes 38.6 seconds.",
+      " Elapsed time:       0 days  0 hours 10 minutes 35.0 seconds.",
+      " File lengths (MBytes):  RWF=     33 Int=      0 D2E=      0 Chk=      5 Scr=      1"
+    ],
+    "needs": [
+      "ts_optimization",
+      "execution",
+      "reaction.reaction_center"
+    ],
+    "issues": []
+  },
+  "intervention_count": 2,
+  "path_kind": "provided",
+  "guidance_attempt": 0,
+  "active_attempt_dir": "",
+  "guidance_manifest_path": "",
+  "job_id": 1085,
+  "job_input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/jobs/declaration_0003/ts_opt/refine.gjf",
+  "waiting_for": "",
+  "scan_step": null,
+  "job_steps": [
+    {
+      "purpose": "ts_opt",
+      "job_id": 1085,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0021/jobs/declaration_0003/ts_opt/refine.gjf",
+      "state": "failed",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 3,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": null,
+      "atom_binding": {
+        "process_id": "a5db0ad58e41c13434ed59293e362cbafb25b9af9d0bfe06e979b4a7baab4f91",
+        "declaration_revision": 3,
+        "atom_map": [
+          1,
+          2,
+          6,
+          7,
+          8,
+          9,
+          4,
+          3,
+          5,
+          10,
+          11
+        ],
+        "charge": 0,
+        "ts_log_sha256": null,
+        "reactant_mol": "\n     RDKit          3D\n\n 11  9  0  0  0  0  0  0  0  0999 V2000\n   -2.0017    0.6929    0.2386 Na  0  0  0  0  0 15  0  0  0  0  0  0\n    1.5230    1.3921   -0.0601 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.2787    0.7458   -0.0026 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.2812   -0.7010   -0.4099 C   0  0  1  0  0  0  0  0  0  0  0  0\n    1.1774   -1.3802    0.4690 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9347   -1.1337   -0.3882 O   0  0  0  0  0  0  0  0  0  0  0  0\n    2.2502    0.9435    0.6407 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.9651    1.3471   -1.0765 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.3811    2.4515    0.2045 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8242   -0.6968   -1.3947 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.6018   -1.6684    1.1960 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  3  1  0\n  3  4  1  0\n  4  5  1  0\n  4  6  1  0\n  2  7  1  0\n  2  8  1  0\n  2  9  1  0\n  4 10  1  6\n  5 11  1  0\nM  CHG  2   1   1   6  -1\nM  END\n",
+        "product_mol": "\n     RDKit          3D\n\n 11  8  0  0  0  0  0  0  0  0999 V2000\n   -0.3809   -1.1959   -0.1907 Na  0  0  0  0  0 15  0  0  0  0  0  0\n   -3.2189    0.6507    0.1191 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.0774   -0.0630   -0.0194 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.5351    1.2345   -0.7948 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -4.1381    0.0435    0.3685 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.1989    1.4350    0.9315 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.4813    0.1801    0.1330 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8749   -0.8638    0.1902 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8787    1.3190   -0.1803 O   0  0  0  0  0  0  0  0  0  0  0  0\n    3.5695    0.2597    0.3364 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.5083    2.0599   -0.1795 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  3  1  0\n  2  4  1  0\n  2  5  1  0\n  2  6  1  0\n  7  8  2  0\n  7  9  1  0\n  7 10  1  0\n  9 11  1  0\nM  CHG  2   1   1   3  -1\nM  END\n"
+      },
+      "frequency_analysis": null
+    }
+  ],
+  "evidence_candidates": [],
+  "revision": 31
+}

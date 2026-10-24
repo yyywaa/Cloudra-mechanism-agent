@@ -1,0 +1,38 @@
+HI1_E1b (registry edge HI1_E2: hemiaminal dehydration -> enamine + H2O), 27-atom subsystem
+STATUS = ARCHIVED / SCHEDULED TERMINATION (user instruction 05:0x, 2026-10-18). No barrier was obtained.
+BARRIER (DeltaE-double-dagger) = null.  Do NOT backfill any number for this edge.
+
+edge | conclusion | job id | missing link
+HI1_E1b | scheduled termination, no verified saddle | 1092 (ts_opt of run ts_0026, state=cancelled) | ts_opt converged -> freq (exactly 1 imaginary + (a) direction + (b) three shares) -> bidirectional IRC -> both endpoints Opt/Freq 0 imaginary + identity
+
+REFERENCE MINIMUM (denominator of this step, still valid)
+  log  : /home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/INT1_27_optfreq.log
+  sha  : c03e0a82d78d22b96474ab48ee40799adb63a894bb9cefcd27c7051799024f63  (30,757 lines)
+  E    : -593.929762803 Eh   (L26615 opt final / L28142 freq single point, same value)
+  conv : L26903 Optimization completed. / L26904 -- Stationary point found.
+  75 modes = 3N-6, 0 imaginary (L28588-28589; lowest real mode 78.1490 cm-1)
+
+TERMINATED JOB (native evidence, unchanged on disk)
+  log  : /home/ly/Cloudra-mechanism-agent/ts/ts_0026/jobs/declaration_0003/ts_opt/refine.log
+  sha  : a27d5f147487f099e7938798bd63a96bd61ae4c0b405d3b33de5de9a5af6099d  (1,519,164 B)
+  L23848 Step number 33 out of a maximum of 153 ; L23775 SCF Done E(RB3LYP) = -593.859284599
+  Normal termination: 0 lines ; Error termination: 0 lines  => not converged, no freq, no imaginary data
+  input: .../declaration_0003/ts_opt/refine.gjf sha 658b0cc3e836d8ef929f2e634aa30376dbe65bdfb157119db91af67ad3df51c7
+         route #p opt=(TS,calcfc,noeigen) b3lyp/def2svp empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso) ; %nproc=4 %mem=6144MB
+
+MODEL FACTS (reusable, not deliverables)
+  atom order (1-based, = INT1_27 order): 1=C1(Me) 2=C2 3=O4 4=C3 5-7=H@C1 8/9/10=H@C3 (10=H22) 11=O13 12=C14 13=O15
+      14-17=ring C 18=N20 19=H@O15 20-26=ring H 27=H21 ; C8H15NO3, q0/m1
+  reaction centre (1-based): form (2,4) C2-C3, (3,10) O4-H22 ; break (4,10) C3-H22, (2,3) C2-O4
+  product side: no native 27-atom opt/freq log exists; I1_S_start.xyz is 41 atoms and its provenance
+    explicitly does not claim a minimum (sha c9d59aeab418c248629922ee37d4ea3822c64b7128dd63b3034d3c8c5ec2df3d)
+  TS guess (build/ts_guess_27.xyz, sha 88162e53ae6598e8550cc1e4f2a0037fda402a0212e6b607267ee8d97f585d4d):
+    r(C2-O4)=2.200, r(C2-C3)=1.440, ang(C3-C2-O4)=90.0, r(C3-H22)=1.355, r(O4-H22)=1.351,
+    C2...H22=1.595, C3-H22...O4=152.8 deg, every H 0.97-1.10 A from its parent heavy atom
+
+OPEN HYPOTHESIS (untested): the concerted four-centre route is geometrically strained
+  (C2 is only 0.86-1.2 A from the C3...O4 line, so the migrating H22 must sit close to C2).
+  If this edge is reopened, test a stepwise path (C2-O4 cleavage first) before tuning the optimizer.
+
+ARCHIVE: gold_fill_20261018/HI1/HI1_E1b/{STATUS_STOPPED_20261018.md, E1B_STATUS_AND_EVIDENCE.md,
+  TS_GUESS_PROVENANCE.md, build/, analysis/} ; ts/ts_0026 preserved untouched.

@@ -1,0 +1,2613 @@
+{
+  "format_version": 7,
+  "run_id": "ts_0022",
+  "pipeline_id": "fc5f0035929b401400a5d4088ab80a1f8ebdcc07303fd606058fbbdebd70202b",
+  "declaration_revision": 5,
+  "optimization_checkpoints": {},
+  "budget_action_keys": {},
+  "budget_reservations": {},
+  "attempt_history": [
+    {
+      "declaration_revision": 1,
+      "selected_candidate_id": null,
+      "job_steps": [
+        {
+          "purpose": "ts_opt",
+          "job_id": 1084,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0001/ts_opt/refine.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 1,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              4,
+              17,
+              18,
+              19
+            ],
+            "charge": 1,
+            "declaration_revision": 1,
+            "process_id": "fc5f0035929b401400a5d4088ab80a1f8ebdcc07303fd606058fbbdebd70202b",
+            "product_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    3.5176   -0.5730    0.1957 O   0  0  0  0  0  0  0  0  0  0  0  0\n    4.1927   -0.2127    0.7919 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.4293   -1.5200    0.3880 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0320   -0.5732   -0.3715 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7628   -0.8610    0.4408 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.6579    0.1337    0.1668 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.4034   -0.4288   -0.2750 N   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5056    0.6360   -0.5297 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9072    1.5902    0.3913 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8288   -0.6039   -1.4528 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.7874   -1.3405   -0.1503 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4703    0.4051   -0.1250 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3882   -1.8746    0.2383 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.9771   -0.7984    1.5223 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5806    0.6874   -1.5034 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3949    0.1376   -0.1810 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5481    1.7250    1.2739 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0177    2.1658    0.5044 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4658    1.9886   -0.4728 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  4  5  1  0\n  5  6  1  0\n  6  7  2  0\n  7  8  1  0\n  6  9  1  0\n  4 10  1  0\n  4 11  1  0\n  4 12  1  0\n  5 13  1  0\n  5 14  1  0\n  8 15  1  0\n  8 16  1  0\n  9 17  1  0\n  9 18  1  0\n  9 19  1  0\nM  CHG  1   8   1\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    1.5162   -1.5521    3.6949 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8919   -0.9269    3.2534 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1153   -1.9055    2.9572 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1085   -1.0678    4.3191 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4169    2.3407   -1.0918 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7826    0.9660   -0.9948 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6148    0.5572    0.4568 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4251    0.6744    0.9908 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.3801    0.3468    2.3538 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8460    0.0906    1.1984 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.8109    3.0900   -0.5717 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5135    2.6432   -2.1390 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4145    2.3491   -0.6406 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8015    0.9736   -1.4826 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4015    0.2213   -1.5058 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0982    0.8676    2.7800 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.6116   -0.2403    0.4915 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.6029   -0.7471    1.8570 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.2447    0.9194    1.7895 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  1  4  1  0\n  5  6  1  0\n  6  7  1  0\n  7  8  2  0\n  8  9  1  0\n  7 10  1  0\n  5 11  1  0\n  5 12  1  0\n  5 13  1  0\n  6 14  1  0\n  6 15  1  0\n  9 16  1  0\n 10 17  1  0\n 10 18  1  0\n 10 19  1  0\nM  CHG  1   1   1\nM  END\n",
+            "ts_log_sha256": null
+          },
+          "frequency_analysis": null
+        },
+        {
+          "purpose": "frequency",
+          "job_id": 1086,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0001/frequency/frequency.gjf",
+          "state": "ready",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 1,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              4,
+              17,
+              18,
+              19
+            ],
+            "charge": 1,
+            "declaration_revision": 1,
+            "process_id": "fc5f0035929b401400a5d4088ab80a1f8ebdcc07303fd606058fbbdebd70202b",
+            "product_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    3.5176   -0.5730    0.1957 O   0  0  0  0  0  0  0  0  0  0  0  0\n    4.1927   -0.2127    0.7919 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.4293   -1.5200    0.3880 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0320   -0.5732   -0.3715 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7628   -0.8610    0.4408 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.6579    0.1337    0.1668 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.4034   -0.4288   -0.2750 N   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5056    0.6360   -0.5297 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9072    1.5902    0.3913 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8288   -0.6039   -1.4528 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.7874   -1.3405   -0.1503 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4703    0.4051   -0.1250 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3882   -1.8746    0.2383 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.9771   -0.7984    1.5223 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5806    0.6874   -1.5034 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3949    0.1376   -0.1810 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5481    1.7250    1.2739 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0177    2.1658    0.5044 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4658    1.9886   -0.4728 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  4  5  1  0\n  5  6  1  0\n  6  7  2  0\n  7  8  1  0\n  6  9  1  0\n  4 10  1  0\n  4 11  1  0\n  4 12  1  0\n  5 13  1  0\n  5 14  1  0\n  8 15  1  0\n  8 16  1  0\n  9 17  1  0\n  9 18  1  0\n  9 19  1  0\nM  CHG  1   8   1\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    1.5162   -1.5521    3.6949 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8919   -0.9269    3.2534 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1153   -1.9055    2.9572 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1085   -1.0678    4.3191 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4169    2.3407   -1.0918 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7826    0.9660   -0.9948 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6148    0.5572    0.4568 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4251    0.6744    0.9908 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.3801    0.3468    2.3538 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8460    0.0906    1.1984 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.8109    3.0900   -0.5717 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5135    2.6432   -2.1390 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4145    2.3491   -0.6406 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8015    0.9736   -1.4826 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4015    0.2213   -1.5058 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0982    0.8676    2.7800 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.6116   -0.2403    0.4915 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.6029   -0.7471    1.8570 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.2447    0.9194    1.7895 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  1  4  1  0\n  5  6  1  0\n  6  7  1  0\n  7  8  2  0\n  8  9  1  0\n  7 10  1  0\n  5 11  1  0\n  5 12  1  0\n  5 13  1  0\n  6 14  1  0\n  6 15  1  0\n  9 16  1  0\n 10 17  1  0\n 10 18  1  0\n 10 19  1  0\nM  CHG  1   1   1\nM  END\n",
+            "ts_log_sha256": null
+          },
+          "frequency_analysis": null
+        }
+      ],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "map",
+          "status": "done",
+          "detail": "Concrete endpoint correspondence confirmed and owned by this reaction.",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "assemble",
+          "status": "done",
+          "detail": "2 reaction-centre pair(s) guide the assembly",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "guess",
+          "status": "done",
+          "detail": "Provided candidate bound; formal optimization and verification remain required.",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provided.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0000.md",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0001.log",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0002.csv",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0003.md"
+          ],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "validate",
+          "status": "done",
+          "detail": "internal validation passed",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "submit",
+          "status": "done",
+          "detail": "refinement job 1084 submitted as 'ready' (gaussian, B3LYP); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0001/ts_opt/refine.gjf"
+          ],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "refine",
+          "status": "waiting",
+          "detail": "TS optimisation converged (job 1084); frequency job 1086 submitted on the optimised geometry. Waiting for its terminal state via the existing notification path",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0001/frequency/frequency.gjf"
+          ],
+          "source_input_revision": 1
+        }
+      ],
+      "reason": "Coordinator 04:0x: frequency job 1086 is still queued ('ready', never started). Lower execution to 4 cpus / 6144 MB so the 32-cpu node can schedule more jobs in parallel. Geometry, guess, method and verification unchanged.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "[O+:1]([H:2])([H:9])[H:10].[CH3:11][CH2:5]/[C:4](=[N:6]/[O:7][H:8])/[CH3:3]",
+          "product_smiles": "[O:1]([H:9])[H:10].[CH3:11][CH2:5]/[C:4](=[N:6]/[O+:7]([H:8])[H:2])/[CH3:3]",
+          "charge": 1,
+          "multiplicity": 1,
+          "electronic_character": null,
+          "selected_candidate": null,
+          "reaction_center": [
+            [
+              0,
+              1
+            ],
+            [
+              1,
+              8
+            ]
+          ]
+        },
+        "calculations": {
+          "formal": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "irc": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight IRC=(MaxPoints=60,StepSize=10)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "gold_finish_20261015/HL1/ts_run/prep/RC_3A_seed.xyz",
+            "mol_path": "gold_finish_20261015/HL1/ts_run/prep/build_RCmap/assembly/complex_candidate_000.mol",
+            "evidence_refs": [
+              "gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md"
+            ],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "gold_finish_20261015/HL1/round3/product_endpoint_seed_B_prodorder.xyz",
+            "mol_path": "gold_finish_20261015/HL1/ts_run/prep/build_PCmap/assembly/complex_candidate_000.mol",
+            "evidence_refs": [
+              "gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md"
+            ],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": {
+          "kind": "provided",
+          "xyz_path": "gold_finish_20261015/HL1/round4/T3_scan_peak_pt8_ts_guess.xyz",
+          "evidence_refs": [
+            "gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md",
+            "gold_finish_20261015/HL1/round4/T3_ptscan_H2O9_relaxed.log",
+            "gold_finish_20261015/HL1/round4/T3_scan_curve.csv",
+            "gold_finish_20261015/HL1/round4/HL1_E1_DECISION.md"
+          ]
+        },
+        "ts_optimization": {
+          "ref": "formal"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "formal"
+          },
+          "irc": {
+            "ref": "irc"
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "formal"
+            },
+            "frequency": {
+              "ref": "formal"
+            }
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "formal"
+            },
+            "frequency": {
+              "ref": "formal"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 8,
+          "memory_mb": 10240,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAATAAAAEQAAAIABCAAiAAAAAQMBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEGACAAAAAEBgAgAAAABAYAKAAAAAMEBwAoAAAAAwMIACgAAAADAgYAIAAAAAQBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQELAAEAAAIAAAMABAUABQYEBAYHKgIDAgUIBwgkBAYJBAQECgAECwAEDAAFDQAFDgAIDwAJEAAJEQAJEgBCAAAAAEDZAQAAAQAAAAEAAAAAEz+MUjo/Qvg/pVBQaUjV+L+kEqZBNI8NQFOwCPZGiuw/UzKtC0ep7b/PbxQw7AYKQDZxk80s7ABAnP5oD+Z8/r8+HRNSTKgHQGYiOj453gBAoq/mIc8V8b9gdHlzuEYRQFmw4MDcVQPAef/le8K5AkDFIfo5Lnjxvy5p93FVhfy/VCzp7lvp7j843Q39btXvv9xCukwL1vm/CF+Q28zU4T9XbQbRvTvdPzH9O3AINNu/KpZ0962U5T8yDViswLTvPz2Ft2LaUti/8Dnqx6ox1j+cphEritQCQAnFVtC0xAbAHxdy+OYvtz8nb5k2kCzzP6Bl5bBe+fy/6NnNCEa4CEBrB6curkviv+L7LOCvGwTAiJxC11MlBUAyM/mHqRwBwBdIkhjrUAvAGs6IFPvKAkCUKe6RMIDkv+qC8iXxpem/UQm6g/kn7z/Hhqihkbj3v8C18hY4NgPAa3uiiJhUzD+B6ZNgmhf4v0T4m3kHkvG/OUcdHVfD6z9zFSi1WT0GQJFco4qH5AzAIQ6nBnnBzr+xCDDy03TfP0bV6R/I0gTARvRjel/o57+cXYy7ILb9Pz6f+YMe9QnA2trrcoRr7T90u4+KnKH8Pz8CAAAAAAASOQMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAhwIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ITDEvdHNfcnVuL3ByZXAvUkNfM0Ffc2VlZC54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L0hMMS90c19ydW4vcHJlcC9idWlsZF9SQ21hcC9hc3NlbWJseS9jb21wbGV4X2NhbmRpZGF0ZV8wMDAubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICIxOGRkODMwZGExMGQzY2M4MWQ5ZWQ1MDcyNDQ1ZTBkYTVkZjMyZDgxYjQ3OWViN2EzZWQzZThiYzVjMmM1ZGM2IiwgIm1vbCI6ICI4Mjg4MzBiYzljZWE4N2VkMjgyNTQ0YzhjYmQwN2VkYzdjNmQ0MzZkYjU2NWY0ZTY1ZjBlMjY1MjcyOTFlMjg4In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzE4ZGQ4MzBkYTEwZDNjYzgueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzgyODgzMGJjOWNlYTg3ZWQubW9sIn0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6jgEAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQAAAAAAAAAAAAAAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAgAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEDAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQQAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBQAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEztEAAAAAAABAQAAAQEAAAEBAAABAQAAAQEAAAECAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQETFg==",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAATAAAAEQAAAIABCAAgAAAAAgEAKAAAAAEBAQAoAAAAAQEGACAAAAAEBgAgAAAABAYAKAAAAAMEBwAoAAAAAwMIACoAAAABAwMGACAAAAAEAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQELAAEAAAIAAwQABAUEBAUGKgIDAgQHBgckBAUIBAQDCQADCgADCwAEDAAEDQAHDgAHDwAIEAAIEQAIEgBCAAAAAEDZAQAAAQAAAAEAAAAAE8DPuHAgJAxALSEf9GxW4r9BZfz7jAvJPxO4dTdPxRBAWMudmWA4y78xXB0AcVfpPySBBps6bwtAlpS7z/FR+L/FVzuKc9TYPzY8vVKWQQjAK8HicOZX4r/XTL7Z5sbXvzzZzYx+NPy/3bHYJhWN6786eZEJ+DXcPy18fa1LDeW/E9TwLawbwT9o6nWLwFjFP5aUu8/x0dk/zA2GOqxw27/ejQWFQZnRv1plprT+Fvg/ZYo5CDpa5D987gT7r/Pgv7+c2a7QB+2/JSL8i6Bx+T9wfVhv1ArZP7TMIhRboQbABhGpaRdT47/mXIqryj73v0Xaxp+oTA7ABmNEotBy9b+4sdmR6jvDv9hF0QMfwwvAmPc404Tt2T/p81FGXADAvy5zuiwmNva/dbD+z2H+/b/2QZYFE3/OP7LWUGovov+/wVJdwMuM6b96qkNuhlv4P6oPJO8cSvk/XAAapUv/5T+MKy6Oyg34v+uOxTapKANA+n/VkSOdwT8BipElcyzHv+Y+OQoQxfi/0vvG156Z+z9GlWHcDWL0P+aV620zFZI/+n5qvHRTAUB8C+vGuyPgP3xinSrfc/e/1h2LbVLR/z8q5Eo9C0Levz8CAAAAAAASSQMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAlwIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ITDEvcm91bmQzL3Byb2R1Y3RfZW5kcG9pbnRfc2VlZF9CX3Byb2RvcmRlci54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L0hMMS90c19ydW4vcHJlcC9idWlsZF9QQ21hcC9hc3NlbWJseS9jb21wbGV4X2NhbmRpZGF0ZV8wMDAubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICI1YjAzYTJlYTJmMTM2YTU5YTA4ODE3YjgwNTczM2QxODhhOWRlZDI5MjEzY2VhNTY5NTA5N2YwYTM0YTIwZmM2IiwgIm1vbCI6ICJiZTY0MjM2M2Y2YTQwMWM1NDk3YmZmMjg3ZGVlYWQ4MDI0MjI5MTNhMWRiYzA5ZTk4NjFjMmQ4NTQxMGFjNzcwIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfNWIwM2EyZWEyZjEzNmE1OS54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L3RzL3RzXzAwMjIvYnVpbGQvaW5wdXRfMDAwMS9wcm9kdWN0L3NvdXJjZV9iZTY0MjM2M2Y2YTQwMWM1Lm1vbCJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfR8AAABjbG91ZHJhX21hcHBpbmdfYmluZGluZ19kZXJpdmVkAwETOo4BAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEAAAAAAAAAAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAwAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEEAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQUAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABM7RAAAAAAAAQEAAAEBAAABAQAAAQEAAAECAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBExY=",
+        "product_to_reactant": [
+          0,
+          1,
+          2,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          3,
+          16,
+          17,
+          18
+        ],
+        "candidate": "776t3gAAAAAQAAAAAwAAAAAAAAATAAAAEQAAAIABCAAiAAAAAQMBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEGACAAAAAEBgAgAAAABAYAKAAAAAMEBwAoAAAAAwMIACgAAAADAgYAIAAAAAQBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQELAAEAAAIAAAMABAUABQYEBAYHKgIDAgUIBwgkBAYJBAQECgAECwAEDAAFDQAFDgAIDwAJEAAJEQAJEgBCAAAAAEDZAQAAAQAAAAEAAAAAE5QzFHe8SQjAy4Eeatsw7r8dHy3OGOawPycR4V8EjQXA71NVaCCWsT8bE2IuqdrIP4ARNGYS1QzAv4BeuHPh8L8ipdk8DgPnv6si3GRU+QDAlbpkHCMZ9b+BCkeQSrG7v4jaNoyCoAVAtW6D2m/t7L8nLscrEL3gPzze5LfoJPk/VcGopE5A678ju9IyUm/gv97lIr4Ts+I/Q+OJIM7Dzz9yNEdWfhnOv30E/vDz3+O/C+2cZoF2wb99WdqpudyQv4523PC7Kfm/qkNuhhtw7j+bWUsBaf/NP2R2Fr1TwfA/DHOCNjm8+j+05VyKq8rIv9Xnaiv2dwJAAK5kx0Zg8b+38LxUbIz4P68nui78IAtAmGn7V1aa+7+Re7q6Y7HRP3ibN04KUwpAvmn67IDrmj/ylNV0PVHhP1wbKsb5m/A/JLa7B+j+/L/2DOGYZc/hv18HzhlR2v8/UYNpGD4i5b+w52uWy0b4v83oR8Mps/W/qMXgYdr39T8Cm3PwTGjxP/AYHvtZLP8/pn7eVKTC/D+im/2Bctvpv/Ls8q0P69A/4Ep2bATiAkAI6L6c2S7hv9nts8pMKfU/BvNXyFwZ/z+EDU+vlOXqPz8CAAAAAAASOQMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAhwIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ITDEvdHNfcnVuL3ByZXAvUkNfM0Ffc2VlZC54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L0hMMS90c19ydW4vcHJlcC9idWlsZF9SQ21hcC9hc3NlbWJseS9jb21wbGV4X2NhbmRpZGF0ZV8wMDAubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICIxOGRkODMwZGExMGQzY2M4MWQ5ZWQ1MDcyNDQ1ZTBkYTVkZjMyZDgxYjQ3OWViN2EzZWQzZThiYzVjMmM1ZGM2IiwgIm1vbCI6ICI4Mjg4MzBiYzljZWE4N2VkMjgyNTQ0YzhjYmQwN2VkYzdjNmQ0MzZkYjU2NWY0ZTY1ZjBlMjY1MjcyOTFlMjg4In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzE4ZGQ4MzBkYTEwZDNjYzgueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzgyODgzMGJjOWNlYTg3ZWQubW9sIn0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6jgEAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQAAAAAAAAAAAAAAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAgAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEDAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQQAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBQAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEztEAAAAAAABAQAAAQEAAAEBAAABAQAAAQEAAAECAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQETFg=="
+      },
+      "provided_guess_binding": {
+        "xyz": {
+          "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/T3_scan_peak_pt8_ts_guess.xyz",
+          "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provided.xyz",
+          "sha256": "7018f6880a335c7ccd013a47d44fcf8599c3e9f5842bfa872571ae33f9a014ac"
+        },
+        "evidence": [
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0000.md",
+            "sha256": "3b42e07cbe6450d51aabc3d974a05d23137142b26b6009ec7201fb45d2d109ef"
+          },
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/T3_ptscan_H2O9_relaxed.log",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0001.log",
+            "sha256": "40ce3be2c6d07120b36d7bf8ce9580aad6becaee16cdf8d1b2c3cb0ab0e60c07"
+          },
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/T3_scan_curve.csv",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0002.csv",
+            "sha256": "ab5450a22900306e3f822b83b2e0e21e5030310ff9214fdbb428214a5b3a04bb"
+          },
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/HL1_E1_DECISION.md",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0003.md",
+            "sha256": "079392707ded6137f3ccf1e3b45f3e37d5550cfcc2ea2d8cb565ffa92fe2a338"
+          }
+        ]
+      },
+      "terminal": null,
+      "blocked": null,
+      "failed_attempt": null,
+      "stop_reason": null
+    },
+    {
+      "declaration_revision": 2,
+      "selected_candidate_id": null,
+      "job_steps": [
+        {
+          "purpose": "ts_opt",
+          "job_id": 1084,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0001/ts_opt/refine.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 1,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              4,
+              17,
+              18,
+              19
+            ],
+            "charge": 1,
+            "declaration_revision": 1,
+            "process_id": "fc5f0035929b401400a5d4088ab80a1f8ebdcc07303fd606058fbbdebd70202b",
+            "product_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    3.5176   -0.5730    0.1957 O   0  0  0  0  0  0  0  0  0  0  0  0\n    4.1927   -0.2127    0.7919 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.4293   -1.5200    0.3880 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0320   -0.5732   -0.3715 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7628   -0.8610    0.4408 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.6579    0.1337    0.1668 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.4034   -0.4288   -0.2750 N   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5056    0.6360   -0.5297 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9072    1.5902    0.3913 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8288   -0.6039   -1.4528 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.7874   -1.3405   -0.1503 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4703    0.4051   -0.1250 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3882   -1.8746    0.2383 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.9771   -0.7984    1.5223 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5806    0.6874   -1.5034 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3949    0.1376   -0.1810 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5481    1.7250    1.2739 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0177    2.1658    0.5044 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4658    1.9886   -0.4728 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  4  5  1  0\n  5  6  1  0\n  6  7  2  0\n  7  8  1  0\n  6  9  1  0\n  4 10  1  0\n  4 11  1  0\n  4 12  1  0\n  5 13  1  0\n  5 14  1  0\n  8 15  1  0\n  8 16  1  0\n  9 17  1  0\n  9 18  1  0\n  9 19  1  0\nM  CHG  1   8   1\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    1.5162   -1.5521    3.6949 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8919   -0.9269    3.2534 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1153   -1.9055    2.9572 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1085   -1.0678    4.3191 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4169    2.3407   -1.0918 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7826    0.9660   -0.9948 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6148    0.5572    0.4568 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4251    0.6744    0.9908 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.3801    0.3468    2.3538 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8460    0.0906    1.1984 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.8109    3.0900   -0.5717 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5135    2.6432   -2.1390 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4145    2.3491   -0.6406 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8015    0.9736   -1.4826 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4015    0.2213   -1.5058 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0982    0.8676    2.7800 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.6116   -0.2403    0.4915 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.6029   -0.7471    1.8570 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.2447    0.9194    1.7895 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  1  4  1  0\n  5  6  1  0\n  6  7  1  0\n  7  8  2  0\n  8  9  1  0\n  7 10  1  0\n  5 11  1  0\n  5 12  1  0\n  5 13  1  0\n  6 14  1  0\n  6 15  1  0\n  9 16  1  0\n 10 17  1  0\n 10 18  1  0\n 10 19  1  0\nM  CHG  1   1   1\nM  END\n",
+            "ts_log_sha256": null
+          },
+          "frequency_analysis": null
+        },
+        {
+          "purpose": "frequency",
+          "job_id": 1086,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0001/frequency/frequency.gjf",
+          "state": "cancelled",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 1,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              4,
+              17,
+              18,
+              19
+            ],
+            "charge": 1,
+            "declaration_revision": 1,
+            "process_id": "fc5f0035929b401400a5d4088ab80a1f8ebdcc07303fd606058fbbdebd70202b",
+            "product_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    3.5176   -0.5730    0.1957 O   0  0  0  0  0  0  0  0  0  0  0  0\n    4.1927   -0.2127    0.7919 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.4293   -1.5200    0.3880 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0320   -0.5732   -0.3715 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7628   -0.8610    0.4408 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.6579    0.1337    0.1668 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.4034   -0.4288   -0.2750 N   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5056    0.6360   -0.5297 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9072    1.5902    0.3913 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8288   -0.6039   -1.4528 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.7874   -1.3405   -0.1503 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4703    0.4051   -0.1250 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3882   -1.8746    0.2383 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.9771   -0.7984    1.5223 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5806    0.6874   -1.5034 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3949    0.1376   -0.1810 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5481    1.7250    1.2739 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0177    2.1658    0.5044 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4658    1.9886   -0.4728 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  4  5  1  0\n  5  6  1  0\n  6  7  2  0\n  7  8  1  0\n  6  9  1  0\n  4 10  1  0\n  4 11  1  0\n  4 12  1  0\n  5 13  1  0\n  5 14  1  0\n  8 15  1  0\n  8 16  1  0\n  9 17  1  0\n  9 18  1  0\n  9 19  1  0\nM  CHG  1   8   1\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    1.5162   -1.5521    3.6949 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8919   -0.9269    3.2534 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1153   -1.9055    2.9572 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1085   -1.0678    4.3191 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4169    2.3407   -1.0918 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7826    0.9660   -0.9948 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6148    0.5572    0.4568 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4251    0.6744    0.9908 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.3801    0.3468    2.3538 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8460    0.0906    1.1984 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.8109    3.0900   -0.5717 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5135    2.6432   -2.1390 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4145    2.3491   -0.6406 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8015    0.9736   -1.4826 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4015    0.2213   -1.5058 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0982    0.8676    2.7800 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.6116   -0.2403    0.4915 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.6029   -0.7471    1.8570 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.2447    0.9194    1.7895 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  1  4  1  0\n  5  6  1  0\n  6  7  1  0\n  7  8  2  0\n  8  9  1  0\n  7 10  1  0\n  5 11  1  0\n  5 12  1  0\n  5 13  1  0\n  6 14  1  0\n  6 15  1  0\n  9 16  1  0\n 10 17  1  0\n 10 18  1  0\n 10 19  1  0\nM  CHG  1   1   1\nM  END\n",
+            "ts_log_sha256": null
+          },
+          "frequency_analysis": null
+        }
+      ],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "map",
+          "status": "done",
+          "detail": "Concrete endpoint correspondence confirmed and owned by this reaction.",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "assemble",
+          "status": "done",
+          "detail": "2 reaction-centre pair(s) guide the assembly",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "guess",
+          "status": "done",
+          "detail": "Provided candidate bound; formal optimization and verification remain required.",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provided.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0000.md",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0001.log",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0002.csv",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0003.md"
+          ],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "validate",
+          "status": "done",
+          "detail": "internal validation passed",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "submit",
+          "status": "done",
+          "detail": "refinement job 1084 submitted as 'ready' (gaussian, B3LYP); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0001/ts_opt/refine.gjf"
+          ],
+          "source_input_revision": 1
+        }
+      ],
+      "reason": "Coordinator-authorized: re-submit the withdrawn (never-started) frequency stage at execution cpus=4 / memory_mb=6144. Geometry, guess, method and verification unchanged.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "[O+:1]([H:2])([H:9])[H:10].[CH3:11][CH2:5]/[C:4](=[N:6]/[O:7][H:8])/[CH3:3]",
+          "product_smiles": "[O:1]([H:9])[H:10].[CH3:11][CH2:5]/[C:4](=[N:6]/[O+:7]([H:8])[H:2])/[CH3:3]",
+          "charge": 1,
+          "multiplicity": 1,
+          "electronic_character": null,
+          "selected_candidate": null,
+          "reaction_center": [
+            [
+              0,
+              1
+            ],
+            [
+              1,
+              8
+            ]
+          ]
+        },
+        "calculations": {
+          "formal": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "irc": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight IRC=(MaxPoints=60,StepSize=10)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "gold_finish_20261015/HL1/ts_run/prep/RC_3A_seed.xyz",
+            "mol_path": "gold_finish_20261015/HL1/ts_run/prep/build_RCmap/assembly/complex_candidate_000.mol",
+            "evidence_refs": [
+              "gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md"
+            ],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "gold_finish_20261015/HL1/round3/product_endpoint_seed_B_prodorder.xyz",
+            "mol_path": "gold_finish_20261015/HL1/ts_run/prep/build_PCmap/assembly/complex_candidate_000.mol",
+            "evidence_refs": [
+              "gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md"
+            ],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": {
+          "kind": "provided",
+          "xyz_path": "gold_finish_20261015/HL1/round4/T3_scan_peak_pt8_ts_guess.xyz",
+          "evidence_refs": [
+            "gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md",
+            "gold_finish_20261015/HL1/round4/T3_ptscan_H2O9_relaxed.log",
+            "gold_finish_20261015/HL1/round4/T3_scan_curve.csv",
+            "gold_finish_20261015/HL1/round4/HL1_E1_DECISION.md"
+          ]
+        },
+        "ts_optimization": {
+          "ref": "formal"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "formal"
+          },
+          "irc": {
+            "ref": "irc"
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "formal"
+            },
+            "frequency": {
+              "ref": "formal"
+            }
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "formal"
+            },
+            "frequency": {
+              "ref": "formal"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 4,
+          "memory_mb": 6144,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAATAAAAEQAAAIABCAAiAAAAAQMBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEGACAAAAAEBgAgAAAABAYAKAAAAAMEBwAoAAAAAwMIACgAAAADAgYAIAAAAAQBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQELAAEAAAIAAAMABAUABQYEBAYHKgIDAgUIBwgkBAYJBAQECgAECwAEDAAFDQAFDgAIDwAJEAAJEQAJEgBCAAAAAEDZAQAAAQAAAAEAAAAAEz+MUjo/Qvg/pVBQaUjV+L+kEqZBNI8NQFOwCPZGiuw/UzKtC0ep7b/PbxQw7AYKQDZxk80s7ABAnP5oD+Z8/r8+HRNSTKgHQGYiOj453gBAoq/mIc8V8b9gdHlzuEYRQFmw4MDcVQPAef/le8K5AkDFIfo5Lnjxvy5p93FVhfy/VCzp7lvp7j843Q39btXvv9xCukwL1vm/CF+Q28zU4T9XbQbRvTvdPzH9O3AINNu/KpZ0962U5T8yDViswLTvPz2Ft2LaUti/8Dnqx6ox1j+cphEritQCQAnFVtC0xAbAHxdy+OYvtz8nb5k2kCzzP6Bl5bBe+fy/6NnNCEa4CEBrB6curkviv+L7LOCvGwTAiJxC11MlBUAyM/mHqRwBwBdIkhjrUAvAGs6IFPvKAkCUKe6RMIDkv+qC8iXxpem/UQm6g/kn7z/Hhqihkbj3v8C18hY4NgPAa3uiiJhUzD+B6ZNgmhf4v0T4m3kHkvG/OUcdHVfD6z9zFSi1WT0GQJFco4qH5AzAIQ6nBnnBzr+xCDDy03TfP0bV6R/I0gTARvRjel/o57+cXYy7ILb9Pz6f+YMe9QnA2trrcoRr7T90u4+KnKH8Pz8CAAAAAAASOQMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAhwIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ITDEvdHNfcnVuL3ByZXAvUkNfM0Ffc2VlZC54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L0hMMS90c19ydW4vcHJlcC9idWlsZF9SQ21hcC9hc3NlbWJseS9jb21wbGV4X2NhbmRpZGF0ZV8wMDAubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICIxOGRkODMwZGExMGQzY2M4MWQ5ZWQ1MDcyNDQ1ZTBkYTVkZjMyZDgxYjQ3OWViN2EzZWQzZThiYzVjMmM1ZGM2IiwgIm1vbCI6ICI4Mjg4MzBiYzljZWE4N2VkMjgyNTQ0YzhjYmQwN2VkYzdjNmQ0MzZkYjU2NWY0ZTY1ZjBlMjY1MjcyOTFlMjg4In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzE4ZGQ4MzBkYTEwZDNjYzgueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzgyODgzMGJjOWNlYTg3ZWQubW9sIn0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6jgEAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQAAAAAAAAAAAAAAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAgAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEDAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQQAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBQAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEztEAAAAAAABAQAAAQEAAAEBAAABAQAAAQEAAAECAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQETFg==",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAATAAAAEQAAAIABCAAgAAAAAgEAKAAAAAEBAQAoAAAAAQEGACAAAAAEBgAgAAAABAYAKAAAAAMEBwAoAAAAAwMIACoAAAABAwMGACAAAAAEAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQELAAEAAAIAAwQABAUEBAUGKgIDAgQHBgckBAUIBAQDCQADCgADCwAEDAAEDQAHDgAHDwAIEAAIEQAIEgBCAAAAAEDZAQAAAQAAAAEAAAAAE8DPuHAgJAxALSEf9GxW4r9BZfz7jAvJPxO4dTdPxRBAWMudmWA4y78xXB0AcVfpPySBBps6bwtAlpS7z/FR+L/FVzuKc9TYPzY8vVKWQQjAK8HicOZX4r/XTL7Z5sbXvzzZzYx+NPy/3bHYJhWN6786eZEJ+DXcPy18fa1LDeW/E9TwLawbwT9o6nWLwFjFP5aUu8/x0dk/zA2GOqxw27/ejQWFQZnRv1plprT+Fvg/ZYo5CDpa5D987gT7r/Pgv7+c2a7QB+2/JSL8i6Bx+T9wfVhv1ArZP7TMIhRboQbABhGpaRdT47/mXIqryj73v0Xaxp+oTA7ABmNEotBy9b+4sdmR6jvDv9hF0QMfwwvAmPc404Tt2T/p81FGXADAvy5zuiwmNva/dbD+z2H+/b/2QZYFE3/OP7LWUGovov+/wVJdwMuM6b96qkNuhlv4P6oPJO8cSvk/XAAapUv/5T+MKy6Oyg34v+uOxTapKANA+n/VkSOdwT8BipElcyzHv+Y+OQoQxfi/0vvG156Z+z9GlWHcDWL0P+aV620zFZI/+n5qvHRTAUB8C+vGuyPgP3xinSrfc/e/1h2LbVLR/z8q5Eo9C0Levz8CAAAAAAASSQMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAlwIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ITDEvcm91bmQzL3Byb2R1Y3RfZW5kcG9pbnRfc2VlZF9CX3Byb2RvcmRlci54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L0hMMS90c19ydW4vcHJlcC9idWlsZF9QQ21hcC9hc3NlbWJseS9jb21wbGV4X2NhbmRpZGF0ZV8wMDAubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICI1YjAzYTJlYTJmMTM2YTU5YTA4ODE3YjgwNTczM2QxODhhOWRlZDI5MjEzY2VhNTY5NTA5N2YwYTM0YTIwZmM2IiwgIm1vbCI6ICJiZTY0MjM2M2Y2YTQwMWM1NDk3YmZmMjg3ZGVlYWQ4MDI0MjI5MTNhMWRiYzA5ZTk4NjFjMmQ4NTQxMGFjNzcwIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfNWIwM2EyZWEyZjEzNmE1OS54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L3RzL3RzXzAwMjIvYnVpbGQvaW5wdXRfMDAwMS9wcm9kdWN0L3NvdXJjZV9iZTY0MjM2M2Y2YTQwMWM1Lm1vbCJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfR8AAABjbG91ZHJhX21hcHBpbmdfYmluZGluZ19kZXJpdmVkAwETOo4BAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEAAAAAAAAAAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAwAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEEAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQUAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABM7RAAAAAAAAQEAAAEBAAABAQAAAQEAAAECAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBExY=",
+        "product_to_reactant": [
+          0,
+          1,
+          2,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          3,
+          16,
+          17,
+          18
+        ],
+        "candidate": "776t3gAAAAAQAAAAAwAAAAAAAAATAAAAEQAAAIABCAAiAAAAAQMBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEGACAAAAAEBgAgAAAABAYAKAAAAAMEBwAoAAAAAwMIACgAAAADAgYAIAAAAAQBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQELAAEAAAIAAAMABAUABQYEBAYHKgIDAgUIBwgkBAYJBAQECgAECwAEDAAFDQAFDgAIDwAJEAAJEQAJEgBCAAAAAEDZAQAAAQAAAAEAAAAAE5QzFHe8SQjAy4Eeatsw7r8dHy3OGOawPycR4V8EjQXA71NVaCCWsT8bE2IuqdrIP4ARNGYS1QzAv4BeuHPh8L8ipdk8DgPnv6si3GRU+QDAlbpkHCMZ9b+BCkeQSrG7v4jaNoyCoAVAtW6D2m/t7L8nLscrEL3gPzze5LfoJPk/VcGopE5A678ju9IyUm/gv97lIr4Ts+I/Q+OJIM7Dzz9yNEdWfhnOv30E/vDz3+O/C+2cZoF2wb99WdqpudyQv4523PC7Kfm/qkNuhhtw7j+bWUsBaf/NP2R2Fr1TwfA/DHOCNjm8+j+05VyKq8rIv9Xnaiv2dwJAAK5kx0Zg8b+38LxUbIz4P68nui78IAtAmGn7V1aa+7+Re7q6Y7HRP3ibN04KUwpAvmn67IDrmj/ylNV0PVHhP1wbKsb5m/A/JLa7B+j+/L/2DOGYZc/hv18HzhlR2v8/UYNpGD4i5b+w52uWy0b4v83oR8Mps/W/qMXgYdr39T8Cm3PwTGjxP/AYHvtZLP8/pn7eVKTC/D+im/2Bctvpv/Ls8q0P69A/4Ep2bATiAkAI6L6c2S7hv9nts8pMKfU/BvNXyFwZ/z+EDU+vlOXqPz8CAAAAAAASOQMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAhwIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ITDEvdHNfcnVuL3ByZXAvUkNfM0Ffc2VlZC54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L0hMMS90c19ydW4vcHJlcC9idWlsZF9SQ21hcC9hc3NlbWJseS9jb21wbGV4X2NhbmRpZGF0ZV8wMDAubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICIxOGRkODMwZGExMGQzY2M4MWQ5ZWQ1MDcyNDQ1ZTBkYTVkZjMyZDgxYjQ3OWViN2EzZWQzZThiYzVjMmM1ZGM2IiwgIm1vbCI6ICI4Mjg4MzBiYzljZWE4N2VkMjgyNTQ0YzhjYmQwN2VkYzdjNmQ0MzZkYjU2NWY0ZTY1ZjBlMjY1MjcyOTFlMjg4In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzE4ZGQ4MzBkYTEwZDNjYzgueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzgyODgzMGJjOWNlYTg3ZWQubW9sIn0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6jgEAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQAAAAAAAAAAAAAAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAgAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEDAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQQAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBQAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEztEAAAAAAABAQAAAQEAAAEBAAABAQAAAQEAAAECAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQETFg=="
+      },
+      "provided_guess_binding": {
+        "xyz": {
+          "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/T3_scan_peak_pt8_ts_guess.xyz",
+          "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provided.xyz",
+          "sha256": "7018f6880a335c7ccd013a47d44fcf8599c3e9f5842bfa872571ae33f9a014ac"
+        },
+        "evidence": [
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0000.md",
+            "sha256": "3b42e07cbe6450d51aabc3d974a05d23137142b26b6009ec7201fb45d2d109ef"
+          },
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/T3_ptscan_H2O9_relaxed.log",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0001.log",
+            "sha256": "40ce3be2c6d07120b36d7bf8ce9580aad6becaee16cdf8d1b2c3cb0ab0e60c07"
+          },
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/T3_scan_curve.csv",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0002.csv",
+            "sha256": "ab5450a22900306e3f822b83b2e0e21e5030310ff9214fdbb428214a5b3a04bb"
+          },
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/HL1_E1_DECISION.md",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0003.md",
+            "sha256": "079392707ded6137f3ccf1e3b45f3e37d5550cfcc2ea2d8cb565ffa92fe2a338"
+          }
+        ]
+      },
+      "terminal": null,
+      "blocked": null,
+      "failed_attempt": null,
+      "stop_reason": "Coordinator 04:xx authorization: withdraw queued (never started, state=ready, no guard lock, no .log) frequency job 1086 so it can be re-submitted with execution cpus=4 / memory_mb=6144. Running jobs 1074/1080/1082/1085 untouched."
+    },
+    {
+      "declaration_revision": 3,
+      "selected_candidate_id": null,
+      "job_steps": [
+        {
+          "purpose": "ts_opt",
+          "job_id": 1084,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0001/ts_opt/refine.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 1,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              4,
+              17,
+              18,
+              19
+            ],
+            "charge": 1,
+            "declaration_revision": 1,
+            "process_id": "fc5f0035929b401400a5d4088ab80a1f8ebdcc07303fd606058fbbdebd70202b",
+            "product_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    3.5176   -0.5730    0.1957 O   0  0  0  0  0  0  0  0  0  0  0  0\n    4.1927   -0.2127    0.7919 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.4293   -1.5200    0.3880 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0320   -0.5732   -0.3715 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7628   -0.8610    0.4408 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.6579    0.1337    0.1668 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.4034   -0.4288   -0.2750 N   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5056    0.6360   -0.5297 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9072    1.5902    0.3913 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8288   -0.6039   -1.4528 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.7874   -1.3405   -0.1503 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4703    0.4051   -0.1250 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3882   -1.8746    0.2383 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.9771   -0.7984    1.5223 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5806    0.6874   -1.5034 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3949    0.1376   -0.1810 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5481    1.7250    1.2739 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0177    2.1658    0.5044 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4658    1.9886   -0.4728 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  4  5  1  0\n  5  6  1  0\n  6  7  2  0\n  7  8  1  0\n  6  9  1  0\n  4 10  1  0\n  4 11  1  0\n  4 12  1  0\n  5 13  1  0\n  5 14  1  0\n  8 15  1  0\n  8 16  1  0\n  9 17  1  0\n  9 18  1  0\n  9 19  1  0\nM  CHG  1   8   1\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    1.5162   -1.5521    3.6949 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8919   -0.9269    3.2534 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1153   -1.9055    2.9572 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1085   -1.0678    4.3191 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4169    2.3407   -1.0918 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7826    0.9660   -0.9948 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6148    0.5572    0.4568 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4251    0.6744    0.9908 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.3801    0.3468    2.3538 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8460    0.0906    1.1984 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.8109    3.0900   -0.5717 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5135    2.6432   -2.1390 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4145    2.3491   -0.6406 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8015    0.9736   -1.4826 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4015    0.2213   -1.5058 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0982    0.8676    2.7800 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.6116   -0.2403    0.4915 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.6029   -0.7471    1.8570 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.2447    0.9194    1.7895 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  1  4  1  0\n  5  6  1  0\n  6  7  1  0\n  7  8  2  0\n  8  9  1  0\n  7 10  1  0\n  5 11  1  0\n  5 12  1  0\n  5 13  1  0\n  6 14  1  0\n  6 15  1  0\n  9 16  1  0\n 10 17  1  0\n 10 18  1  0\n 10 19  1  0\nM  CHG  1   1   1\nM  END\n",
+            "ts_log_sha256": null
+          },
+          "frequency_analysis": null
+        },
+        {
+          "purpose": "frequency",
+          "job_id": 1093,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0003/frequency/frequency.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 3,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              4,
+              17,
+              18,
+              19
+            ],
+            "charge": 1,
+            "declaration_revision": 3,
+            "process_id": "fc5f0035929b401400a5d4088ab80a1f8ebdcc07303fd606058fbbdebd70202b",
+            "product_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    3.5176   -0.5730    0.1957 O   0  0  0  0  0  0  0  0  0  0  0  0\n    4.1927   -0.2127    0.7919 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.4293   -1.5200    0.3880 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0320   -0.5732   -0.3715 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7628   -0.8610    0.4408 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.6579    0.1337    0.1668 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.4034   -0.4288   -0.2750 N   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5056    0.6360   -0.5297 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9072    1.5902    0.3913 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8288   -0.6039   -1.4528 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.7874   -1.3405   -0.1503 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4703    0.4051   -0.1250 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3882   -1.8746    0.2383 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.9771   -0.7984    1.5223 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5806    0.6874   -1.5034 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3949    0.1376   -0.1810 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5481    1.7250    1.2739 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0177    2.1658    0.5044 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4658    1.9886   -0.4728 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  4  5  1  0\n  5  6  1  0\n  6  7  2  0\n  7  8  1  0\n  6  9  1  0\n  4 10  1  0\n  4 11  1  0\n  4 12  1  0\n  5 13  1  0\n  5 14  1  0\n  8 15  1  0\n  8 16  1  0\n  9 17  1  0\n  9 18  1  0\n  9 19  1  0\nM  CHG  1   8   1\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    1.5162   -1.5521    3.6949 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8919   -0.9269    3.2534 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1153   -1.9055    2.9572 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1085   -1.0678    4.3191 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4169    2.3407   -1.0918 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7826    0.9660   -0.9948 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6148    0.5572    0.4568 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4251    0.6744    0.9908 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.3801    0.3468    2.3538 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8460    0.0906    1.1984 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.8109    3.0900   -0.5717 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5135    2.6432   -2.1390 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4145    2.3491   -0.6406 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8015    0.9736   -1.4826 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4015    0.2213   -1.5058 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0982    0.8676    2.7800 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.6116   -0.2403    0.4915 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.6029   -0.7471    1.8570 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.2447    0.9194    1.7895 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  1  4  1  0\n  5  6  1  0\n  6  7  1  0\n  7  8  2  0\n  8  9  1  0\n  7 10  1  0\n  5 11  1  0\n  5 12  1  0\n  5 13  1  0\n  6 14  1  0\n  6 15  1  0\n  9 16  1  0\n 10 17  1  0\n 10 18  1  0\n 10 19  1  0\nM  CHG  1   1   1\nM  END\n",
+            "ts_log_sha256": null
+          },
+          "frequency_analysis": {
+            "fraction_basis": "unweighted_squared_displacement",
+            "log_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0003/frequency/frequency.log",
+            "log_sha256": "d4f9171d2430f18620ef8100c091e632a36a824bc76e57656f60f8c4668f4aad",
+            "mode_alignment": {
+              "aligned": true,
+              "details": [
+                "Atom pair (1,2) relative displacement=0.585 (threshold 0.50×1.104=0.552)",
+                "Atom pair (2,9) relative displacement=0.522 (threshold 0.50×1.104=0.552)"
+              ],
+              "message": "Imaginary mode is consistent with the declared reaction coordinate: watch_pairs max relative displacement 0.585 ≥ 0.50×global max 1.104 (max pair=(2,4)).",
+              "status": "aligned"
+            },
+            "modes": [
+              {
+                "frequency_cm": -254.4556,
+                "heavy_atom_fraction": 0.0512434817488969,
+                "top_displaced_atoms": [
+                  {
+                    "atom": 4,
+                    "element": "H",
+                    "fraction": 0.4739269955876454
+                  },
+                  {
+                    "atom": 2,
+                    "element": "H",
+                    "fraction": 0.22472924187725632
+                  },
+                  {
+                    "atom": 3,
+                    "element": "H",
+                    "fraction": 0.13728439630966704
+                  },
+                  {
+                    "atom": 16,
+                    "element": "H",
+                    "fraction": 0.09075411151223425
+                  },
+                  {
+                    "atom": 1,
+                    "element": "O",
+                    "fraction": 0.02125952667468913
+                  }
+                ],
+                "top_displaced_pairs": [
+                  [
+                    4,
+                    19,
+                    0.7172715971689966
+                  ],
+                  [
+                    4,
+                    10,
+                    0.7115136477281399
+                  ],
+                  [
+                    4,
+                    8,
+                    0.7049581121454106
+                  ],
+                  [
+                    4,
+                    7,
+                    0.7014836666905565
+                  ],
+                  [
+                    4,
+                    17,
+                    0.6968560840141952
+                  ]
+                ],
+                "watch_atom_fraction": 0.25421179302045727,
+                "watch_pair_fraction": {
+                  "fraction": 0.027239313037791795,
+                  "pair_projections": {
+                    "1-2": 0.19312719141777596,
+                    "2-9": 0.4955481151905126
+                  }
+                }
+              }
+            ],
+            "reaction_center_pairs": [
+              [
+                1,
+                2
+              ],
+              [
+                2,
+                9
+              ]
+            ]
+          }
+        }
+      ],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "map",
+          "status": "done",
+          "detail": "Concrete endpoint correspondence confirmed and owned by this reaction.",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "assemble",
+          "status": "done",
+          "detail": "2 reaction-centre pair(s) guide the assembly",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "guess",
+          "status": "done",
+          "detail": "Provided candidate bound; formal optimization and verification remain required.",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provided.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0000.md",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0001.log",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0002.csv",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0003.md"
+          ],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "validate",
+          "status": "done",
+          "detail": "internal validation passed",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "submit",
+          "status": "done",
+          "detail": "refinement job 1084 submitted as 'ready' (gaussian, B3LYP); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0001/ts_opt/refine.gjf"
+          ],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "refine",
+          "status": "blocked",
+          "detail": "keywords: expected ['empiricaldispersion=gd3bj', 'int(ultrafine)', 'irc=(maxpoints=60,stepsize=10)', 'scf=tight']; actual ['empiricaldispersion=gd3bj', 'int(ultrafine)', 'scf=tight']",
+          "artifacts": [],
+          "source_input_revision": 3
+        }
+      ],
+      "reason": "Admission rejected 'IRC=(MaxPoints=60,StepSize=10)' inside keywords for the irc stage (the ts writer injects irc=calcfc itself and dropped the declared token -> blocked with expected/actual keyword mismatch). Move the same IRC length/step control into the documented Gaussian trailing-native field end_setting instead, keeping method/basis/dispersion/grid/SCF identical.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "[O+:1]([H:2])([H:9])[H:10].[CH3:11][CH2:5]/[C:4](=[N:6]/[O:7][H:8])/[CH3:3]",
+          "product_smiles": "[O:1]([H:9])[H:10].[CH3:11][CH2:5]/[C:4](=[N:6]/[O+:7]([H:8])[H:2])/[CH3:3]",
+          "charge": 1,
+          "multiplicity": 1,
+          "electronic_character": null,
+          "selected_candidate": null,
+          "reaction_center": [
+            [
+              0,
+              1
+            ],
+            [
+              1,
+              8
+            ]
+          ]
+        },
+        "calculations": {
+          "formal": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "irc": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight IRC=(MaxPoints=60,StepSize=10)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "gold_finish_20261015/HL1/ts_run/prep/RC_3A_seed.xyz",
+            "mol_path": "gold_finish_20261015/HL1/ts_run/prep/build_RCmap/assembly/complex_candidate_000.mol",
+            "evidence_refs": [
+              "gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md"
+            ],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "gold_finish_20261015/HL1/round3/product_endpoint_seed_B_prodorder.xyz",
+            "mol_path": "gold_finish_20261015/HL1/ts_run/prep/build_PCmap/assembly/complex_candidate_000.mol",
+            "evidence_refs": [
+              "gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md"
+            ],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": {
+          "kind": "provided",
+          "xyz_path": "gold_finish_20261015/HL1/round4/T3_scan_peak_pt8_ts_guess.xyz",
+          "evidence_refs": [
+            "gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md",
+            "gold_finish_20261015/HL1/round4/T3_ptscan_H2O9_relaxed.log",
+            "gold_finish_20261015/HL1/round4/T3_scan_curve.csv",
+            "gold_finish_20261015/HL1/round4/HL1_E1_DECISION.md"
+          ]
+        },
+        "ts_optimization": {
+          "ref": "formal"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "formal"
+          },
+          "irc": {
+            "ref": "irc"
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "formal"
+            },
+            "frequency": {
+              "ref": "formal"
+            }
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "formal"
+            },
+            "frequency": {
+              "ref": "formal"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 4,
+          "memory_mb": 6144,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAATAAAAEQAAAIABCAAiAAAAAQMBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEGACAAAAAEBgAgAAAABAYAKAAAAAMEBwAoAAAAAwMIACgAAAADAgYAIAAAAAQBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQELAAEAAAIAAAMABAUABQYEBAYHKgIDAgUIBwgkBAYJBAQECgAECwAEDAAFDQAFDgAIDwAJEAAJEQAJEgBCAAAAAEDZAQAAAQAAAAEAAAAAEz+MUjo/Qvg/pVBQaUjV+L+kEqZBNI8NQFOwCPZGiuw/UzKtC0ep7b/PbxQw7AYKQDZxk80s7ABAnP5oD+Z8/r8+HRNSTKgHQGYiOj453gBAoq/mIc8V8b9gdHlzuEYRQFmw4MDcVQPAef/le8K5AkDFIfo5Lnjxvy5p93FVhfy/VCzp7lvp7j843Q39btXvv9xCukwL1vm/CF+Q28zU4T9XbQbRvTvdPzH9O3AINNu/KpZ0962U5T8yDViswLTvPz2Ft2LaUti/8Dnqx6ox1j+cphEritQCQAnFVtC0xAbAHxdy+OYvtz8nb5k2kCzzP6Bl5bBe+fy/6NnNCEa4CEBrB6curkviv+L7LOCvGwTAiJxC11MlBUAyM/mHqRwBwBdIkhjrUAvAGs6IFPvKAkCUKe6RMIDkv+qC8iXxpem/UQm6g/kn7z/Hhqihkbj3v8C18hY4NgPAa3uiiJhUzD+B6ZNgmhf4v0T4m3kHkvG/OUcdHVfD6z9zFSi1WT0GQJFco4qH5AzAIQ6nBnnBzr+xCDDy03TfP0bV6R/I0gTARvRjel/o57+cXYy7ILb9Pz6f+YMe9QnA2trrcoRr7T90u4+KnKH8Pz8CAAAAAAASOQMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAhwIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ITDEvdHNfcnVuL3ByZXAvUkNfM0Ffc2VlZC54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L0hMMS90c19ydW4vcHJlcC9idWlsZF9SQ21hcC9hc3NlbWJseS9jb21wbGV4X2NhbmRpZGF0ZV8wMDAubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICIxOGRkODMwZGExMGQzY2M4MWQ5ZWQ1MDcyNDQ1ZTBkYTVkZjMyZDgxYjQ3OWViN2EzZWQzZThiYzVjMmM1ZGM2IiwgIm1vbCI6ICI4Mjg4MzBiYzljZWE4N2VkMjgyNTQ0YzhjYmQwN2VkYzdjNmQ0MzZkYjU2NWY0ZTY1ZjBlMjY1MjcyOTFlMjg4In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzE4ZGQ4MzBkYTEwZDNjYzgueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzgyODgzMGJjOWNlYTg3ZWQubW9sIn0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6jgEAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQAAAAAAAAAAAAAAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAgAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEDAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQQAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBQAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEztEAAAAAAABAQAAAQEAAAEBAAABAQAAAQEAAAECAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQETFg==",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAATAAAAEQAAAIABCAAgAAAAAgEAKAAAAAEBAQAoAAAAAQEGACAAAAAEBgAgAAAABAYAKAAAAAMEBwAoAAAAAwMIACoAAAABAwMGACAAAAAEAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQELAAEAAAIAAwQABAUEBAUGKgIDAgQHBgckBAUIBAQDCQADCgADCwAEDAAEDQAHDgAHDwAIEAAIEQAIEgBCAAAAAEDZAQAAAQAAAAEAAAAAE8DPuHAgJAxALSEf9GxW4r9BZfz7jAvJPxO4dTdPxRBAWMudmWA4y78xXB0AcVfpPySBBps6bwtAlpS7z/FR+L/FVzuKc9TYPzY8vVKWQQjAK8HicOZX4r/XTL7Z5sbXvzzZzYx+NPy/3bHYJhWN6786eZEJ+DXcPy18fa1LDeW/E9TwLawbwT9o6nWLwFjFP5aUu8/x0dk/zA2GOqxw27/ejQWFQZnRv1plprT+Fvg/ZYo5CDpa5D987gT7r/Pgv7+c2a7QB+2/JSL8i6Bx+T9wfVhv1ArZP7TMIhRboQbABhGpaRdT47/mXIqryj73v0Xaxp+oTA7ABmNEotBy9b+4sdmR6jvDv9hF0QMfwwvAmPc404Tt2T/p81FGXADAvy5zuiwmNva/dbD+z2H+/b/2QZYFE3/OP7LWUGovov+/wVJdwMuM6b96qkNuhlv4P6oPJO8cSvk/XAAapUv/5T+MKy6Oyg34v+uOxTapKANA+n/VkSOdwT8BipElcyzHv+Y+OQoQxfi/0vvG156Z+z9GlWHcDWL0P+aV620zFZI/+n5qvHRTAUB8C+vGuyPgP3xinSrfc/e/1h2LbVLR/z8q5Eo9C0Levz8CAAAAAAASSQMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAlwIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ITDEvcm91bmQzL3Byb2R1Y3RfZW5kcG9pbnRfc2VlZF9CX3Byb2RvcmRlci54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L0hMMS90c19ydW4vcHJlcC9idWlsZF9QQ21hcC9hc3NlbWJseS9jb21wbGV4X2NhbmRpZGF0ZV8wMDAubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICI1YjAzYTJlYTJmMTM2YTU5YTA4ODE3YjgwNTczM2QxODhhOWRlZDI5MjEzY2VhNTY5NTA5N2YwYTM0YTIwZmM2IiwgIm1vbCI6ICJiZTY0MjM2M2Y2YTQwMWM1NDk3YmZmMjg3ZGVlYWQ4MDI0MjI5MTNhMWRiYzA5ZTk4NjFjMmQ4NTQxMGFjNzcwIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfNWIwM2EyZWEyZjEzNmE1OS54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L3RzL3RzXzAwMjIvYnVpbGQvaW5wdXRfMDAwMS9wcm9kdWN0L3NvdXJjZV9iZTY0MjM2M2Y2YTQwMWM1Lm1vbCJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfR8AAABjbG91ZHJhX21hcHBpbmdfYmluZGluZ19kZXJpdmVkAwETOo4BAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEAAAAAAAAAAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAwAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEEAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQUAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABM7RAAAAAAAAQEAAAEBAAABAQAAAQEAAAECAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBExY=",
+        "product_to_reactant": [
+          0,
+          1,
+          2,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          3,
+          16,
+          17,
+          18
+        ],
+        "candidate": "776t3gAAAAAQAAAAAwAAAAAAAAATAAAAEQAAAIABCAAiAAAAAQMBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEGACAAAAAEBgAgAAAABAYAKAAAAAMEBwAoAAAAAwMIACgAAAADAgYAIAAAAAQBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQELAAEAAAIAAAMABAUABQYEBAYHKgIDAgUIBwgkBAYJBAQECgAECwAEDAAFDQAFDgAIDwAJEAAJEQAJEgBCAAAAAEDZAQAAAQAAAAEAAAAAE5QzFHe8SQjAy4Eeatsw7r8dHy3OGOawPycR4V8EjQXA71NVaCCWsT8bE2IuqdrIP4ARNGYS1QzAv4BeuHPh8L8ipdk8DgPnv6si3GRU+QDAlbpkHCMZ9b+BCkeQSrG7v4jaNoyCoAVAtW6D2m/t7L8nLscrEL3gPzze5LfoJPk/VcGopE5A678ju9IyUm/gv97lIr4Ts+I/Q+OJIM7Dzz9yNEdWfhnOv30E/vDz3+O/C+2cZoF2wb99WdqpudyQv4523PC7Kfm/qkNuhhtw7j+bWUsBaf/NP2R2Fr1TwfA/DHOCNjm8+j+05VyKq8rIv9Xnaiv2dwJAAK5kx0Zg8b+38LxUbIz4P68nui78IAtAmGn7V1aa+7+Re7q6Y7HRP3ibN04KUwpAvmn67IDrmj/ylNV0PVHhP1wbKsb5m/A/JLa7B+j+/L/2DOGYZc/hv18HzhlR2v8/UYNpGD4i5b+w52uWy0b4v83oR8Mps/W/qMXgYdr39T8Cm3PwTGjxP/AYHvtZLP8/pn7eVKTC/D+im/2Bctvpv/Ls8q0P69A/4Ep2bATiAkAI6L6c2S7hv9nts8pMKfU/BvNXyFwZ/z+EDU+vlOXqPz8CAAAAAAASOQMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAhwIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ITDEvdHNfcnVuL3ByZXAvUkNfM0Ffc2VlZC54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L0hMMS90c19ydW4vcHJlcC9idWlsZF9SQ21hcC9hc3NlbWJseS9jb21wbGV4X2NhbmRpZGF0ZV8wMDAubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICIxOGRkODMwZGExMGQzY2M4MWQ5ZWQ1MDcyNDQ1ZTBkYTVkZjMyZDgxYjQ3OWViN2EzZWQzZThiYzVjMmM1ZGM2IiwgIm1vbCI6ICI4Mjg4MzBiYzljZWE4N2VkMjgyNTQ0YzhjYmQwN2VkYzdjNmQ0MzZkYjU2NWY0ZTY1ZjBlMjY1MjcyOTFlMjg4In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzE4ZGQ4MzBkYTEwZDNjYzgueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzgyODgzMGJjOWNlYTg3ZWQubW9sIn0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6jgEAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQAAAAAAAAAAAAAAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAgAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEDAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQQAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBQAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEztEAAAAAAABAQAAAQEAAAEBAAABAQAAAQEAAAECAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQETFg=="
+      },
+      "provided_guess_binding": {
+        "xyz": {
+          "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/T3_scan_peak_pt8_ts_guess.xyz",
+          "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provided.xyz",
+          "sha256": "7018f6880a335c7ccd013a47d44fcf8599c3e9f5842bfa872571ae33f9a014ac"
+        },
+        "evidence": [
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0000.md",
+            "sha256": "3b42e07cbe6450d51aabc3d974a05d23137142b26b6009ec7201fb45d2d109ef"
+          },
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/T3_ptscan_H2O9_relaxed.log",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0001.log",
+            "sha256": "40ce3be2c6d07120b36d7bf8ce9580aad6becaee16cdf8d1b2c3cb0ab0e60c07"
+          },
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/T3_scan_curve.csv",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0002.csv",
+            "sha256": "ab5450a22900306e3f822b83b2e0e21e5030310ff9214fdbb428214a5b3a04bb"
+          },
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/HL1_E1_DECISION.md",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0003.md",
+            "sha256": "079392707ded6137f3ccf1e3b45f3e37d5550cfcc2ea2d8cb565ffa92fe2a338"
+          }
+        ]
+      },
+      "terminal": null,
+      "blocked": {
+        "failure_class": "compute_admission_rejected",
+        "stage": "refine",
+        "message": "keywords: expected ['empiricaldispersion=gd3bj', 'int(ultrafine)', 'irc=(maxpoints=60,stepsize=10)', 'scf=tight']; actual ['empiricaldispersion=gd3bj', 'int(ultrafine)', 'scf=tight']",
+        "atom_details": [],
+        "needs": [
+          "method",
+          "engine",
+          "budget"
+        ],
+        "issues": []
+      },
+      "failed_attempt": null,
+      "stop_reason": null
+    },
+    {
+      "declaration_revision": 4,
+      "selected_candidate_id": null,
+      "job_steps": [
+        {
+          "purpose": "ts_opt",
+          "job_id": 1084,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0001/ts_opt/refine.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 1,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              4,
+              17,
+              18,
+              19
+            ],
+            "charge": 1,
+            "declaration_revision": 1,
+            "process_id": "fc5f0035929b401400a5d4088ab80a1f8ebdcc07303fd606058fbbdebd70202b",
+            "product_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    3.5176   -0.5730    0.1957 O   0  0  0  0  0  0  0  0  0  0  0  0\n    4.1927   -0.2127    0.7919 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.4293   -1.5200    0.3880 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0320   -0.5732   -0.3715 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7628   -0.8610    0.4408 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.6579    0.1337    0.1668 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.4034   -0.4288   -0.2750 N   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5056    0.6360   -0.5297 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9072    1.5902    0.3913 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8288   -0.6039   -1.4528 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.7874   -1.3405   -0.1503 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4703    0.4051   -0.1250 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3882   -1.8746    0.2383 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.9771   -0.7984    1.5223 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5806    0.6874   -1.5034 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3949    0.1376   -0.1810 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5481    1.7250    1.2739 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0177    2.1658    0.5044 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4658    1.9886   -0.4728 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  4  5  1  0\n  5  6  1  0\n  6  7  2  0\n  7  8  1  0\n  6  9  1  0\n  4 10  1  0\n  4 11  1  0\n  4 12  1  0\n  5 13  1  0\n  5 14  1  0\n  8 15  1  0\n  8 16  1  0\n  9 17  1  0\n  9 18  1  0\n  9 19  1  0\nM  CHG  1   8   1\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    1.5162   -1.5521    3.6949 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8919   -0.9269    3.2534 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1153   -1.9055    2.9572 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1085   -1.0678    4.3191 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4169    2.3407   -1.0918 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7826    0.9660   -0.9948 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6148    0.5572    0.4568 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4251    0.6744    0.9908 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.3801    0.3468    2.3538 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8460    0.0906    1.1984 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.8109    3.0900   -0.5717 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5135    2.6432   -2.1390 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4145    2.3491   -0.6406 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8015    0.9736   -1.4826 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4015    0.2213   -1.5058 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0982    0.8676    2.7800 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.6116   -0.2403    0.4915 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.6029   -0.7471    1.8570 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.2447    0.9194    1.7895 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  1  4  1  0\n  5  6  1  0\n  6  7  1  0\n  7  8  2  0\n  8  9  1  0\n  7 10  1  0\n  5 11  1  0\n  5 12  1  0\n  5 13  1  0\n  6 14  1  0\n  6 15  1  0\n  9 16  1  0\n 10 17  1  0\n 10 18  1  0\n 10 19  1  0\nM  CHG  1   1   1\nM  END\n",
+            "ts_log_sha256": null
+          },
+          "frequency_analysis": null
+        },
+        {
+          "purpose": "frequency",
+          "job_id": 1093,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0003/frequency/frequency.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 3,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              4,
+              17,
+              18,
+              19
+            ],
+            "charge": 1,
+            "declaration_revision": 3,
+            "process_id": "fc5f0035929b401400a5d4088ab80a1f8ebdcc07303fd606058fbbdebd70202b",
+            "product_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    3.5176   -0.5730    0.1957 O   0  0  0  0  0  0  0  0  0  0  0  0\n    4.1927   -0.2127    0.7919 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.4293   -1.5200    0.3880 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0320   -0.5732   -0.3715 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7628   -0.8610    0.4408 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.6579    0.1337    0.1668 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.4034   -0.4288   -0.2750 N   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5056    0.6360   -0.5297 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9072    1.5902    0.3913 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8288   -0.6039   -1.4528 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.7874   -1.3405   -0.1503 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4703    0.4051   -0.1250 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3882   -1.8746    0.2383 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.9771   -0.7984    1.5223 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5806    0.6874   -1.5034 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3949    0.1376   -0.1810 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5481    1.7250    1.2739 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0177    2.1658    0.5044 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4658    1.9886   -0.4728 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  4  5  1  0\n  5  6  1  0\n  6  7  2  0\n  7  8  1  0\n  6  9  1  0\n  4 10  1  0\n  4 11  1  0\n  4 12  1  0\n  5 13  1  0\n  5 14  1  0\n  8 15  1  0\n  8 16  1  0\n  9 17  1  0\n  9 18  1  0\n  9 19  1  0\nM  CHG  1   8   1\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    1.5162   -1.5521    3.6949 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8919   -0.9269    3.2534 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1153   -1.9055    2.9572 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1085   -1.0678    4.3191 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4169    2.3407   -1.0918 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7826    0.9660   -0.9948 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6148    0.5572    0.4568 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4251    0.6744    0.9908 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.3801    0.3468    2.3538 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8460    0.0906    1.1984 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.8109    3.0900   -0.5717 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5135    2.6432   -2.1390 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4145    2.3491   -0.6406 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8015    0.9736   -1.4826 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4015    0.2213   -1.5058 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0982    0.8676    2.7800 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.6116   -0.2403    0.4915 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.6029   -0.7471    1.8570 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.2447    0.9194    1.7895 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  1  4  1  0\n  5  6  1  0\n  6  7  1  0\n  7  8  2  0\n  8  9  1  0\n  7 10  1  0\n  5 11  1  0\n  5 12  1  0\n  5 13  1  0\n  6 14  1  0\n  6 15  1  0\n  9 16  1  0\n 10 17  1  0\n 10 18  1  0\n 10 19  1  0\nM  CHG  1   1   1\nM  END\n",
+            "ts_log_sha256": null
+          },
+          "frequency_analysis": {
+            "fraction_basis": "unweighted_squared_displacement",
+            "log_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0003/frequency/frequency.log",
+            "log_sha256": "d4f9171d2430f18620ef8100c091e632a36a824bc76e57656f60f8c4668f4aad",
+            "mode_alignment": {
+              "aligned": true,
+              "details": [
+                "Atom pair (1,2) relative displacement=0.585 (threshold 0.50×1.104=0.552)",
+                "Atom pair (2,9) relative displacement=0.522 (threshold 0.50×1.104=0.552)"
+              ],
+              "message": "Imaginary mode is consistent with the declared reaction coordinate: watch_pairs max relative displacement 0.585 ≥ 0.50×global max 1.104 (max pair=(2,4)).",
+              "status": "aligned"
+            },
+            "modes": [
+              {
+                "frequency_cm": -254.4556,
+                "heavy_atom_fraction": 0.0512434817488969,
+                "top_displaced_atoms": [
+                  {
+                    "atom": 4,
+                    "element": "H",
+                    "fraction": 0.4739269955876454
+                  },
+                  {
+                    "atom": 2,
+                    "element": "H",
+                    "fraction": 0.22472924187725632
+                  },
+                  {
+                    "atom": 3,
+                    "element": "H",
+                    "fraction": 0.13728439630966704
+                  },
+                  {
+                    "atom": 16,
+                    "element": "H",
+                    "fraction": 0.09075411151223425
+                  },
+                  {
+                    "atom": 1,
+                    "element": "O",
+                    "fraction": 0.02125952667468913
+                  }
+                ],
+                "top_displaced_pairs": [
+                  [
+                    4,
+                    19,
+                    0.7172715971689966
+                  ],
+                  [
+                    4,
+                    10,
+                    0.7115136477281399
+                  ],
+                  [
+                    4,
+                    8,
+                    0.7049581121454106
+                  ],
+                  [
+                    4,
+                    7,
+                    0.7014836666905565
+                  ],
+                  [
+                    4,
+                    17,
+                    0.6968560840141952
+                  ]
+                ],
+                "watch_atom_fraction": 0.25421179302045727,
+                "watch_pair_fraction": {
+                  "fraction": 0.027239313037791795,
+                  "pair_projections": {
+                    "1-2": 0.19312719141777596,
+                    "2-9": 0.4955481151905126
+                  }
+                }
+              }
+            ],
+            "reaction_center_pairs": [
+              [
+                1,
+                2
+              ],
+              [
+                2,
+                9
+              ]
+            ]
+          }
+        },
+        {
+          "purpose": "irc",
+          "job_id": 1099,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0004/irc/irc.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": "IRC=(MaxPoints=60,StepSize=10)"
+          },
+          "source_input_revision": 4,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              4,
+              17,
+              18,
+              19
+            ],
+            "charge": 1,
+            "declaration_revision": 4,
+            "process_id": "fc5f0035929b401400a5d4088ab80a1f8ebdcc07303fd606058fbbdebd70202b",
+            "product_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    3.5176   -0.5730    0.1957 O   0  0  0  0  0  0  0  0  0  0  0  0\n    4.1927   -0.2127    0.7919 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.4293   -1.5200    0.3880 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0320   -0.5732   -0.3715 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7628   -0.8610    0.4408 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.6579    0.1337    0.1668 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.4034   -0.4288   -0.2750 N   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5056    0.6360   -0.5297 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9072    1.5902    0.3913 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8288   -0.6039   -1.4528 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.7874   -1.3405   -0.1503 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4703    0.4051   -0.1250 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3882   -1.8746    0.2383 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.9771   -0.7984    1.5223 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5806    0.6874   -1.5034 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3949    0.1376   -0.1810 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5481    1.7250    1.2739 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0177    2.1658    0.5044 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4658    1.9886   -0.4728 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  4  5  1  0\n  5  6  1  0\n  6  7  2  0\n  7  8  1  0\n  6  9  1  0\n  4 10  1  0\n  4 11  1  0\n  4 12  1  0\n  5 13  1  0\n  5 14  1  0\n  8 15  1  0\n  8 16  1  0\n  9 17  1  0\n  9 18  1  0\n  9 19  1  0\nM  CHG  1   8   1\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    1.5162   -1.5521    3.6949 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8919   -0.9269    3.2534 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1153   -1.9055    2.9572 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1085   -1.0678    4.3191 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4169    2.3407   -1.0918 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7826    0.9660   -0.9948 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6148    0.5572    0.4568 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4251    0.6744    0.9908 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.3801    0.3468    2.3538 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8460    0.0906    1.1984 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.8109    3.0900   -0.5717 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5135    2.6432   -2.1390 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4145    2.3491   -0.6406 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8015    0.9736   -1.4826 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4015    0.2213   -1.5058 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0982    0.8676    2.7800 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.6116   -0.2403    0.4915 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.6029   -0.7471    1.8570 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.2447    0.9194    1.7895 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  1  4  1  0\n  5  6  1  0\n  6  7  1  0\n  7  8  2  0\n  8  9  1  0\n  7 10  1  0\n  5 11  1  0\n  5 12  1  0\n  5 13  1  0\n  6 14  1  0\n  6 15  1  0\n  9 16  1  0\n 10 17  1  0\n 10 18  1  0\n 10 19  1  0\nM  CHG  1   1   1\nM  END\n",
+            "ts_log_sha256": "d4f9171d2430f18620ef8100c091e632a36a824bc76e57656f60f8c4668f4aad"
+          },
+          "frequency_analysis": null
+        },
+        {
+          "purpose": "reactant_opt",
+          "job_id": 1100,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0004/reactant_opt/reactant_opt.gjf",
+          "state": "failed",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 4,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": {
+            "kind": "irc_outer_frame",
+            "label": "A",
+            "source_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0004/reactant_opt/reactant_source.xyz",
+            "sha256": "557ed574d73b50cfc2983658b654e4e646560904fd06a516bebb2115dee1371d",
+            "irc_job_id": 1099,
+            "irc_log_sha256": "b2f2974677120745f1e060dcb286a7ce524749f1c96d0a4eaa39903212e741c8"
+          },
+          "atom_binding": {
+            "atom_map": [
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              4,
+              17,
+              18,
+              19
+            ],
+            "charge": 1,
+            "declaration_revision": 4,
+            "process_id": "fc5f0035929b401400a5d4088ab80a1f8ebdcc07303fd606058fbbdebd70202b",
+            "product_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    3.5176   -0.5730    0.1957 O   0  0  0  0  0  0  0  0  0  0  0  0\n    4.1927   -0.2127    0.7919 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.4293   -1.5200    0.3880 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0320   -0.5732   -0.3715 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7628   -0.8610    0.4408 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.6579    0.1337    0.1668 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.4034   -0.4288   -0.2750 N   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5056    0.6360   -0.5297 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9072    1.5902    0.3913 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8288   -0.6039   -1.4528 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.7874   -1.3405   -0.1503 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4703    0.4051   -0.1250 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3882   -1.8746    0.2383 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.9771   -0.7984    1.5223 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5806    0.6874   -1.5034 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3949    0.1376   -0.1810 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5481    1.7250    1.2739 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0177    2.1658    0.5044 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4658    1.9886   -0.4728 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  4  5  1  0\n  5  6  1  0\n  6  7  2  0\n  7  8  1  0\n  6  9  1  0\n  4 10  1  0\n  4 11  1  0\n  4 12  1  0\n  5 13  1  0\n  5 14  1  0\n  8 15  1  0\n  8 16  1  0\n  9 17  1  0\n  9 18  1  0\n  9 19  1  0\nM  CHG  1   8   1\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    1.5162   -1.5521    3.6949 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8919   -0.9269    3.2534 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1153   -1.9055    2.9572 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1085   -1.0678    4.3191 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4169    2.3407   -1.0918 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7826    0.9660   -0.9948 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6148    0.5572    0.4568 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4251    0.6744    0.9908 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.3801    0.3468    2.3538 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8460    0.0906    1.1984 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.8109    3.0900   -0.5717 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5135    2.6432   -2.1390 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4145    2.3491   -0.6406 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8015    0.9736   -1.4826 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4015    0.2213   -1.5058 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0982    0.8676    2.7800 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.6116   -0.2403    0.4915 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.6029   -0.7471    1.8570 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.2447    0.9194    1.7895 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  1  4  1  0\n  5  6  1  0\n  6  7  1  0\n  7  8  2  0\n  8  9  1  0\n  7 10  1  0\n  5 11  1  0\n  5 12  1  0\n  5 13  1  0\n  6 14  1  0\n  6 15  1  0\n  9 16  1  0\n 10 17  1  0\n 10 18  1  0\n 10 19  1  0\nM  CHG  1   1   1\nM  END\n",
+            "ts_log_sha256": "d4f9171d2430f18620ef8100c091e632a36a824bc76e57656f60f8c4668f4aad"
+          },
+          "frequency_analysis": null
+        }
+      ],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "map",
+          "status": "done",
+          "detail": "Concrete endpoint correspondence confirmed and owned by this reaction.",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "assemble",
+          "status": "done",
+          "detail": "2 reaction-centre pair(s) guide the assembly",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "guess",
+          "status": "done",
+          "detail": "Provided candidate bound; formal optimization and verification remain required.",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provided.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0000.md",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0001.log",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0002.csv",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0003.md"
+          ],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "validate",
+          "status": "done",
+          "detail": "internal validation passed",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "submit",
+          "status": "done",
+          "detail": "refinement job 1084 submitted as 'ready' (gaussian, B3LYP); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0001/ts_opt/refine.gjf"
+          ],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "refine",
+          "status": "blocked",
+          "detail": "refinement job 1100 (reactant_opt) ended as 'failed'; plain per-engine failure classes come from the log below — the run is stopped, not silently retried",
+          "artifacts": [],
+          "source_input_revision": 4
+        }
+      ],
+      "reason": "reactant_opt job 1100 died at l103 'Bend failed for angle 1-4-8 / FormBX had a problem' after 30 optimisation steps: the reverse-IRC frame has H4 bridging O1 and N6 (angle 1-4-8 nearly linear). The same run had already walked to the N-protonated oxime + water arrangement (E=-364.330446174, R(N6,H4)=1.054, R(2,9)=4.16). Re-seed the reactant endpoint from that native last frame (format_converter, package atom order, opt step=30) so a clean Opt+Freq can establish identity and 0-imaginary status of the actual reverse-side minimum. Product endpoint seed, methods and execution unchanged.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "[O+:1]([H:2])([H:9])[H:10].[CH3:11][CH2:5]/[C:4](=[N:6]/[O:7][H:8])/[CH3:3]",
+          "product_smiles": "[O:1]([H:9])[H:10].[CH3:11][CH2:5]/[C:4](=[N:6]/[O+:7]([H:8])[H:2])/[CH3:3]",
+          "charge": 1,
+          "multiplicity": 1,
+          "electronic_character": null,
+          "selected_candidate": null,
+          "reaction_center": [
+            [
+              0,
+              1
+            ],
+            [
+              1,
+              8
+            ]
+          ]
+        },
+        "calculations": {
+          "formal": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "irc": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": "IRC=(MaxPoints=60,StepSize=10)"
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "gold_finish_20261015/HL1/ts_run/prep/RC_3A_seed.xyz",
+            "mol_path": "gold_finish_20261015/HL1/ts_run/prep/build_RCmap/assembly/complex_candidate_000.mol",
+            "evidence_refs": [
+              "gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md"
+            ],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "gold_finish_20261015/HL1/round3/product_endpoint_seed_B_prodorder.xyz",
+            "mol_path": "gold_finish_20261015/HL1/ts_run/prep/build_PCmap/assembly/complex_candidate_000.mol",
+            "evidence_refs": [
+              "gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md"
+            ],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": {
+          "kind": "provided",
+          "xyz_path": "gold_finish_20261015/HL1/round4/T3_scan_peak_pt8_ts_guess.xyz",
+          "evidence_refs": [
+            "gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md",
+            "gold_finish_20261015/HL1/round4/T3_ptscan_H2O9_relaxed.log",
+            "gold_finish_20261015/HL1/round4/T3_scan_curve.csv",
+            "gold_finish_20261015/HL1/round4/HL1_E1_DECISION.md"
+          ]
+        },
+        "ts_optimization": {
+          "ref": "formal"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "formal"
+          },
+          "irc": {
+            "ref": "irc"
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "formal"
+            },
+            "frequency": {
+              "ref": "formal"
+            }
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "formal"
+            },
+            "frequency": {
+              "ref": "formal"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 4,
+          "memory_mb": 6144,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAATAAAAEQAAAIABCAAiAAAAAQMBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEGACAAAAAEBgAgAAAABAYAKAAAAAMEBwAoAAAAAwMIACgAAAADAgYAIAAAAAQBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQELAAEAAAIAAAMABAUABQYEBAYHKgIDAgUIBwgkBAYJBAQECgAECwAEDAAFDQAFDgAIDwAJEAAJEQAJEgBCAAAAAEDZAQAAAQAAAAEAAAAAEz+MUjo/Qvg/pVBQaUjV+L+kEqZBNI8NQFOwCPZGiuw/UzKtC0ep7b/PbxQw7AYKQDZxk80s7ABAnP5oD+Z8/r8+HRNSTKgHQGYiOj453gBAoq/mIc8V8b9gdHlzuEYRQFmw4MDcVQPAef/le8K5AkDFIfo5Lnjxvy5p93FVhfy/VCzp7lvp7j843Q39btXvv9xCukwL1vm/CF+Q28zU4T9XbQbRvTvdPzH9O3AINNu/KpZ0962U5T8yDViswLTvPz2Ft2LaUti/8Dnqx6ox1j+cphEritQCQAnFVtC0xAbAHxdy+OYvtz8nb5k2kCzzP6Bl5bBe+fy/6NnNCEa4CEBrB6curkviv+L7LOCvGwTAiJxC11MlBUAyM/mHqRwBwBdIkhjrUAvAGs6IFPvKAkCUKe6RMIDkv+qC8iXxpem/UQm6g/kn7z/Hhqihkbj3v8C18hY4NgPAa3uiiJhUzD+B6ZNgmhf4v0T4m3kHkvG/OUcdHVfD6z9zFSi1WT0GQJFco4qH5AzAIQ6nBnnBzr+xCDDy03TfP0bV6R/I0gTARvRjel/o57+cXYy7ILb9Pz6f+YMe9QnA2trrcoRr7T90u4+KnKH8Pz8CAAAAAAASOQMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAhwIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ITDEvdHNfcnVuL3ByZXAvUkNfM0Ffc2VlZC54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L0hMMS90c19ydW4vcHJlcC9idWlsZF9SQ21hcC9hc3NlbWJseS9jb21wbGV4X2NhbmRpZGF0ZV8wMDAubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICIxOGRkODMwZGExMGQzY2M4MWQ5ZWQ1MDcyNDQ1ZTBkYTVkZjMyZDgxYjQ3OWViN2EzZWQzZThiYzVjMmM1ZGM2IiwgIm1vbCI6ICI4Mjg4MzBiYzljZWE4N2VkMjgyNTQ0YzhjYmQwN2VkYzdjNmQ0MzZkYjU2NWY0ZTY1ZjBlMjY1MjcyOTFlMjg4In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzE4ZGQ4MzBkYTEwZDNjYzgueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzgyODgzMGJjOWNlYTg3ZWQubW9sIn0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6jgEAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQAAAAAAAAAAAAAAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAgAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEDAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQQAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBQAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEztEAAAAAAABAQAAAQEAAAEBAAABAQAAAQEAAAECAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQETFg==",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAATAAAAEQAAAIABCAAgAAAAAgEAKAAAAAEBAQAoAAAAAQEGACAAAAAEBgAgAAAABAYAKAAAAAMEBwAoAAAAAwMIACoAAAABAwMGACAAAAAEAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQELAAEAAAIAAwQABAUEBAUGKgIDAgQHBgckBAUIBAQDCQADCgADCwAEDAAEDQAHDgAHDwAIEAAIEQAIEgBCAAAAAEDZAQAAAQAAAAEAAAAAE8DPuHAgJAxALSEf9GxW4r9BZfz7jAvJPxO4dTdPxRBAWMudmWA4y78xXB0AcVfpPySBBps6bwtAlpS7z/FR+L/FVzuKc9TYPzY8vVKWQQjAK8HicOZX4r/XTL7Z5sbXvzzZzYx+NPy/3bHYJhWN6786eZEJ+DXcPy18fa1LDeW/E9TwLawbwT9o6nWLwFjFP5aUu8/x0dk/zA2GOqxw27/ejQWFQZnRv1plprT+Fvg/ZYo5CDpa5D987gT7r/Pgv7+c2a7QB+2/JSL8i6Bx+T9wfVhv1ArZP7TMIhRboQbABhGpaRdT47/mXIqryj73v0Xaxp+oTA7ABmNEotBy9b+4sdmR6jvDv9hF0QMfwwvAmPc404Tt2T/p81FGXADAvy5zuiwmNva/dbD+z2H+/b/2QZYFE3/OP7LWUGovov+/wVJdwMuM6b96qkNuhlv4P6oPJO8cSvk/XAAapUv/5T+MKy6Oyg34v+uOxTapKANA+n/VkSOdwT8BipElcyzHv+Y+OQoQxfi/0vvG156Z+z9GlWHcDWL0P+aV620zFZI/+n5qvHRTAUB8C+vGuyPgP3xinSrfc/e/1h2LbVLR/z8q5Eo9C0Levz8CAAAAAAASSQMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAlwIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ITDEvcm91bmQzL3Byb2R1Y3RfZW5kcG9pbnRfc2VlZF9CX3Byb2RvcmRlci54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L0hMMS90c19ydW4vcHJlcC9idWlsZF9QQ21hcC9hc3NlbWJseS9jb21wbGV4X2NhbmRpZGF0ZV8wMDAubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICI1YjAzYTJlYTJmMTM2YTU5YTA4ODE3YjgwNTczM2QxODhhOWRlZDI5MjEzY2VhNTY5NTA5N2YwYTM0YTIwZmM2IiwgIm1vbCI6ICJiZTY0MjM2M2Y2YTQwMWM1NDk3YmZmMjg3ZGVlYWQ4MDI0MjI5MTNhMWRiYzA5ZTk4NjFjMmQ4NTQxMGFjNzcwIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfNWIwM2EyZWEyZjEzNmE1OS54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L3RzL3RzXzAwMjIvYnVpbGQvaW5wdXRfMDAwMS9wcm9kdWN0L3NvdXJjZV9iZTY0MjM2M2Y2YTQwMWM1Lm1vbCJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfR8AAABjbG91ZHJhX21hcHBpbmdfYmluZGluZ19kZXJpdmVkAwETOo4BAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEAAAAAAAAAAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAwAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEEAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQUAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABM7RAAAAAAAAQEAAAEBAAABAQAAAQEAAAECAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBExY=",
+        "product_to_reactant": [
+          0,
+          1,
+          2,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          3,
+          16,
+          17,
+          18
+        ],
+        "candidate": "776t3gAAAAAQAAAAAwAAAAAAAAATAAAAEQAAAIABCAAiAAAAAQMBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEGACAAAAAEBgAgAAAABAYAKAAAAAMEBwAoAAAAAwMIACgAAAADAgYAIAAAAAQBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQELAAEAAAIAAAMABAUABQYEBAYHKgIDAgUIBwgkBAYJBAQECgAECwAEDAAFDQAFDgAIDwAJEAAJEQAJEgBCAAAAAEDZAQAAAQAAAAEAAAAAE5QzFHe8SQjAy4Eeatsw7r8dHy3OGOawPycR4V8EjQXA71NVaCCWsT8bE2IuqdrIP4ARNGYS1QzAv4BeuHPh8L8ipdk8DgPnv6si3GRU+QDAlbpkHCMZ9b+BCkeQSrG7v4jaNoyCoAVAtW6D2m/t7L8nLscrEL3gPzze5LfoJPk/VcGopE5A678ju9IyUm/gv97lIr4Ts+I/Q+OJIM7Dzz9yNEdWfhnOv30E/vDz3+O/C+2cZoF2wb99WdqpudyQv4523PC7Kfm/qkNuhhtw7j+bWUsBaf/NP2R2Fr1TwfA/DHOCNjm8+j+05VyKq8rIv9Xnaiv2dwJAAK5kx0Zg8b+38LxUbIz4P68nui78IAtAmGn7V1aa+7+Re7q6Y7HRP3ibN04KUwpAvmn67IDrmj/ylNV0PVHhP1wbKsb5m/A/JLa7B+j+/L/2DOGYZc/hv18HzhlR2v8/UYNpGD4i5b+w52uWy0b4v83oR8Mps/W/qMXgYdr39T8Cm3PwTGjxP/AYHvtZLP8/pn7eVKTC/D+im/2Bctvpv/Ls8q0P69A/4Ep2bATiAkAI6L6c2S7hv9nts8pMKfU/BvNXyFwZ/z+EDU+vlOXqPz8CAAAAAAASOQMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAhwIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ITDEvdHNfcnVuL3ByZXAvUkNfM0Ffc2VlZC54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L0hMMS90c19ydW4vcHJlcC9idWlsZF9SQ21hcC9hc3NlbWJseS9jb21wbGV4X2NhbmRpZGF0ZV8wMDAubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICIxOGRkODMwZGExMGQzY2M4MWQ5ZWQ1MDcyNDQ1ZTBkYTVkZjMyZDgxYjQ3OWViN2EzZWQzZThiYzVjMmM1ZGM2IiwgIm1vbCI6ICI4Mjg4MzBiYzljZWE4N2VkMjgyNTQ0YzhjYmQwN2VkYzdjNmQ0MzZkYjU2NWY0ZTY1ZjBlMjY1MjcyOTFlMjg4In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzE4ZGQ4MzBkYTEwZDNjYzgueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzgyODgzMGJjOWNlYTg3ZWQubW9sIn0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6jgEAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQAAAAAAAAAAAAAAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAgAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEDAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQQAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBQAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEztEAAAAAAABAQAAAQEAAAEBAAABAQAAAQEAAAECAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQETFg=="
+      },
+      "provided_guess_binding": {
+        "xyz": {
+          "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/T3_scan_peak_pt8_ts_guess.xyz",
+          "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provided.xyz",
+          "sha256": "7018f6880a335c7ccd013a47d44fcf8599c3e9f5842bfa872571ae33f9a014ac"
+        },
+        "evidence": [
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0000.md",
+            "sha256": "3b42e07cbe6450d51aabc3d974a05d23137142b26b6009ec7201fb45d2d109ef"
+          },
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/T3_ptscan_H2O9_relaxed.log",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0001.log",
+            "sha256": "40ce3be2c6d07120b36d7bf8ce9580aad6becaee16cdf8d1b2c3cb0ab0e60c07"
+          },
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/T3_scan_curve.csv",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0002.csv",
+            "sha256": "ab5450a22900306e3f822b83b2e0e21e5030310ff9214fdbb428214a5b3a04bb"
+          },
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/HL1_E1_DECISION.md",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0003.md",
+            "sha256": "079392707ded6137f3ccf1e3b45f3e37d5550cfcc2ea2d8cb565ffa92fe2a338"
+          }
+        ]
+      },
+      "terminal": null,
+      "blocked": {
+        "failure_class": "job_failed",
+        "stage": "refine",
+        "message": "refinement job 1100 (reactant_opt) ended as 'failed'; plain per-engine failure classes come from the log below — the run is stopped, not silently retried",
+        "atom_details": [
+          "native log: /home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0004/reactant_opt/reactant_opt.log",
+          " Cycle  10  Pass 1  IDiag  1:",
+          " E= -364.330446173658     Delta-E=       -0.000000000392 Rises=F Damp=F",
+          " DIIS: error= 3.97D-07 at cycle   5 NSaved=   5.",
+          " NSaved= 5 IEnMin= 5 EnMin= -364.330446173658     IErMin= 5 ErrMin= 3.97D-07",
+          " ErrMax= 3.97D-07  0.00D+00 EMaxC= 1.00D-01 BMatC= 2.89D-11 BMatP= 5.19D-10",
+          " IDIUse=1 WtCom= 1.00D+00 WtEn= 0.00D+00",
+          " Cycle  11  Pass 1  IDiag  1:",
+          " E= -364.330446173680     Delta-E=       -0.000000000021 Rises=F Damp=F",
+          " DIIS: error= 1.23D-07 at cycle   6 NSaved=   6.",
+          " NSaved= 6 IEnMin= 6 EnMin= -364.330446173680     IErMin= 6 ErrMin= 1.23D-07",
+          " ErrMax= 1.23D-07  0.00D+00 EMaxC= 1.00D-01 BMatC= 5.72D-12 BMatP= 2.89D-11",
+          " IDIUse=1 WtCom= 1.00D+00 WtEn= 0.00D+00",
+          " Cycle  12  Pass 1  IDiag  1:",
+          " E= -364.330446173685     Delta-E=       -0.000000000005 Rises=F Damp=F",
+          " DIIS: error= 1.88D-08 at cycle   7 NSaved=   7.",
+          " NSaved= 7 IEnMin= 7 EnMin= -364.330446173685     IErMin= 7 ErrMin= 1.88D-08",
+          " ErrMax= 1.88D-08  0.00D+00 EMaxC= 1.00D-01 BMatC= 6.45D-14 BMatP= 5.72D-12",
+          " IDIUse=1 WtCom= 1.00D+00 WtEn= 0.00D+00",
+          "     19        1           0.000137987    0.000095902   -0.000306974",
+          " -------------------------------------------------------------------",
+          " Cartesian Forces:  Max     0.009900201 RMS     0.001989835",
+          " Leave Link  716 at Sun Oct 18 04:26:11 2026, MaxMem=   805306368 cpu:               0.1 elap:               0.1",
+          " (Enter /home/ly/g16/l103.exe)",
+          "",
+          " GradGradGradGradGradGradGradGradGradGradGradGradGradGradGradGradGradGrad",
+          " Berny optimization.",
+          " Using GEDIIS/GDIIS optimizer.",
+          " Bend failed for angle     1 -     4 -     8",
+          " FormBX had a problem.",
+          " Error termination via Lnk1e in /home/ly/g16/l103.exe at Sun Oct 18 04:26:11 2026.",
+          " Job cpu time:       0 days  0 hours 49 minutes  4.1 seconds.",
+          " Elapsed time:       0 days  0 hours 19 minutes 38.7 seconds.",
+          " File lengths (MBytes):  RWF=     18 Int=      0 D2E=      0 Chk=      3 Scr=      1"
+        ],
+        "needs": [
+          "verification.reactant_endpoint.optimization",
+          "execution",
+          "reaction.reaction_center"
+        ],
+        "issues": []
+      },
+      "failed_attempt": {
+        "attempt_id": "4:reactant_opt:1100",
+        "diagnostics": [
+          "native log: /home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0004/reactant_opt/reactant_opt.log",
+          " Cycle  10  Pass 1  IDiag  1:",
+          " E= -364.330446173658     Delta-E=       -0.000000000392 Rises=F Damp=F",
+          " DIIS: error= 3.97D-07 at cycle   5 NSaved=   5.",
+          " NSaved= 5 IEnMin= 5 EnMin= -364.330446173658     IErMin= 5 ErrMin= 3.97D-07",
+          " ErrMax= 3.97D-07  0.00D+00 EMaxC= 1.00D-01 BMatC= 2.89D-11 BMatP= 5.19D-10",
+          " IDIUse=1 WtCom= 1.00D+00 WtEn= 0.00D+00",
+          " Cycle  11  Pass 1  IDiag  1:",
+          " E= -364.330446173680     Delta-E=       -0.000000000021 Rises=F Damp=F",
+          " DIIS: error= 1.23D-07 at cycle   6 NSaved=   6.",
+          " NSaved= 6 IEnMin= 6 EnMin= -364.330446173680     IErMin= 6 ErrMin= 1.23D-07",
+          " ErrMax= 1.23D-07  0.00D+00 EMaxC= 1.00D-01 BMatC= 5.72D-12 BMatP= 2.89D-11",
+          " IDIUse=1 WtCom= 1.00D+00 WtEn= 0.00D+00",
+          " Cycle  12  Pass 1  IDiag  1:",
+          " E= -364.330446173685     Delta-E=       -0.000000000005 Rises=F Damp=F",
+          " DIIS: error= 1.88D-08 at cycle   7 NSaved=   7.",
+          " NSaved= 7 IEnMin= 7 EnMin= -364.330446173685     IErMin= 7 ErrMin= 1.88D-08",
+          " ErrMax= 1.88D-08  0.00D+00 EMaxC= 1.00D-01 BMatC= 6.45D-14 BMatP= 5.72D-12",
+          " IDIUse=1 WtCom= 1.00D+00 WtEn= 0.00D+00",
+          "     19        1           0.000137987    0.000095902   -0.000306974",
+          " -------------------------------------------------------------------",
+          " Cartesian Forces:  Max     0.009900201 RMS     0.001989835",
+          " Leave Link  716 at Sun Oct 18 04:26:11 2026, MaxMem=   805306368 cpu:               0.1 elap:               0.1",
+          " (Enter /home/ly/g16/l103.exe)",
+          "",
+          " GradGradGradGradGradGradGradGradGradGradGradGradGradGradGradGradGradGrad",
+          " Berny optimization.",
+          " Using GEDIIS/GDIIS optimizer.",
+          " Bend failed for angle     1 -     4 -     8",
+          " FormBX had a problem.",
+          " Error termination via Lnk1e in /home/ly/g16/l103.exe at Sun Oct 18 04:26:11 2026.",
+          " Job cpu time:       0 days  0 hours 49 minutes  4.1 seconds.",
+          " Elapsed time:       0 days  0 hours 19 minutes 38.7 seconds.",
+          " File lengths (MBytes):  RWF=     18 Int=      0 D2E=      0 Chk=      3 Scr=      1"
+        ],
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0004/reactant_opt/reactant_opt.log"
+        ],
+        "failure_class": "unclassified_failure",
+        "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0004/reactant_opt/reactant_opt.gjf",
+        "input_revision": 4,
+        "input_sha256": "dab2110f10594bd5d168fb9d4375223ffedbb85e20fae5dbc46b9d99d2229ef3",
+        "job_id": 1100,
+        "log_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0004/reactant_opt/reactant_opt.log",
+        "log_sha256": "337ee9334fb50ae789641a16ee784edd2b5aac4b404c5ff843a0c9a9f9ea9d44",
+        "purpose": "reactant_opt"
+      },
+      "stop_reason": null
+    }
+  ],
+  "catalog_id": null,
+  "partition_revision": null,
+  "candidate_attempts": [],
+  "cards_path": "",
+  "product_seed_candidate_id": null,
+  "selected_candidate_id": null,
+  "run_dir": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022",
+  "workspace_dir": "/home/ly/Cloudra-mechanism-agent",
+  "owner_conversation_id": "prj_244c6a3512cb4e52",
+  "owner_session_id": "as_eb687a63ebb243bd",
+  "input": {
+    "reaction": {
+      "reactant_smiles": "[O+:1]([H:2])([H:9])[H:10].[CH3:11][CH2:5]/[C:4](=[N:6]/[O:7][H:8])/[CH3:3]",
+      "product_smiles": "[O:1]([H:9])[H:10].[CH3:11][CH2:5]/[C:4](=[N:6]/[O+:7]([H:8])[H:2])/[CH3:3]",
+      "charge": 1,
+      "multiplicity": 1,
+      "electronic_character": null,
+      "selected_candidate": null,
+      "reaction_center": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          8
+        ]
+      ]
+    },
+    "calculations": {
+      "formal": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "irc": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": "IRC=(MaxPoints=60,StepSize=10)"
+      }
+    },
+    "conformers": {
+      "reactant": {
+        "kind": "file",
+        "xyz_path": "gold_finish_20261015/HL1/ts_run/prep/RC_3A_seed.xyz",
+        "mol_path": "gold_finish_20261015/HL1/ts_run/prep/build_RCmap/assembly/complex_candidate_000.mol",
+        "evidence_refs": [
+          "gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md"
+        ],
+        "optimization": null
+      },
+      "product": {
+        "kind": "file",
+        "xyz_path": "gold_finish_20261015/HL1/round3/product_endpoint_seed_B_prodorder.xyz",
+        "mol_path": "gold_finish_20261015/HL1/ts_run/prep/build_PCmap/assembly/complex_candidate_000.mol",
+        "evidence_refs": [
+          "gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md"
+        ],
+        "optimization": null
+      },
+      "guidance": {
+        "ring_order": [],
+        "distance_filters": []
+      }
+    },
+    "guess": {
+      "kind": "provided",
+      "xyz_path": "gold_finish_20261015/HL1/round4/T3_scan_peak_pt8_ts_guess.xyz",
+      "evidence_refs": [
+        "gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md",
+        "gold_finish_20261015/HL1/round4/T3_ptscan_H2O9_relaxed.log",
+        "gold_finish_20261015/HL1/round4/T3_scan_curve.csv",
+        "gold_finish_20261015/HL1/round4/HL1_E1_DECISION.md"
+      ]
+    },
+    "ts_optimization": {
+      "ref": "formal"
+    },
+    "verification": {
+      "frequency": {
+        "ref": "formal"
+      },
+      "irc": {
+        "ref": "irc"
+      },
+      "irc_log": null,
+      "reactant_endpoint": {
+        "seed": {
+          "kind": "file",
+          "xyz_path": "gold_fill_20261018/HL1/HL1_E1/reactant_endpoint_seed_last_frame.xyz",
+          "mol_path": null,
+          "evidence_refs": [
+            "ts/ts_0022/jobs/declaration_0004/reactant_opt/reactant_opt.log"
+          ]
+        },
+        "optimization": {
+          "ref": "formal"
+        },
+        "frequency": {
+          "ref": "formal"
+        }
+      },
+      "product_endpoint": {
+        "seed": null,
+        "optimization": {
+          "ref": "formal"
+        },
+        "frequency": {
+          "ref": "formal"
+        }
+      }
+    },
+    "execution": {
+      "cpus": 4,
+      "memory_mb": 6144,
+      "limits": null
+    }
+  },
+  "structures": {
+    "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAATAAAAEQAAAIABCAAiAAAAAQMBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEGACAAAAAEBgAgAAAABAYAKAAAAAMEBwAoAAAAAwMIACgAAAADAgYAIAAAAAQBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQELAAEAAAIAAAMABAUABQYEBAYHKgIDAgUIBwgkBAYJBAQECgAECwAEDAAFDQAFDgAIDwAJEAAJEQAJEgBCAAAAAEDZAQAAAQAAAAEAAAAAEz+MUjo/Qvg/pVBQaUjV+L+kEqZBNI8NQFOwCPZGiuw/UzKtC0ep7b/PbxQw7AYKQDZxk80s7ABAnP5oD+Z8/r8+HRNSTKgHQGYiOj453gBAoq/mIc8V8b9gdHlzuEYRQFmw4MDcVQPAef/le8K5AkDFIfo5Lnjxvy5p93FVhfy/VCzp7lvp7j843Q39btXvv9xCukwL1vm/CF+Q28zU4T9XbQbRvTvdPzH9O3AINNu/KpZ0962U5T8yDViswLTvPz2Ft2LaUti/8Dnqx6ox1j+cphEritQCQAnFVtC0xAbAHxdy+OYvtz8nb5k2kCzzP6Bl5bBe+fy/6NnNCEa4CEBrB6curkviv+L7LOCvGwTAiJxC11MlBUAyM/mHqRwBwBdIkhjrUAvAGs6IFPvKAkCUKe6RMIDkv+qC8iXxpem/UQm6g/kn7z/Hhqihkbj3v8C18hY4NgPAa3uiiJhUzD+B6ZNgmhf4v0T4m3kHkvG/OUcdHVfD6z9zFSi1WT0GQJFco4qH5AzAIQ6nBnnBzr+xCDDy03TfP0bV6R/I0gTARvRjel/o57+cXYy7ILb9Pz6f+YMe9QnA2trrcoRr7T90u4+KnKH8Pz8CAAAAAAASOQMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAhwIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ITDEvdHNfcnVuL3ByZXAvUkNfM0Ffc2VlZC54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L0hMMS90c19ydW4vcHJlcC9idWlsZF9SQ21hcC9hc3NlbWJseS9jb21wbGV4X2NhbmRpZGF0ZV8wMDAubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICIxOGRkODMwZGExMGQzY2M4MWQ5ZWQ1MDcyNDQ1ZTBkYTVkZjMyZDgxYjQ3OWViN2EzZWQzZThiYzVjMmM1ZGM2IiwgIm1vbCI6ICI4Mjg4MzBiYzljZWE4N2VkMjgyNTQ0YzhjYmQwN2VkYzdjNmQ0MzZkYjU2NWY0ZTY1ZjBlMjY1MjcyOTFlMjg4In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzE4ZGQ4MzBkYTEwZDNjYzgueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzgyODgzMGJjOWNlYTg3ZWQubW9sIn0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6jgEAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQAAAAAAAAAAAAAAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAgAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEDAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQQAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBQAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEztEAAAAAAABAQAAAQEAAAEBAAABAQAAAQEAAAECAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQETFg==",
+    "product": "776t3gAAAAAQAAAAAwAAAAAAAAATAAAAEQAAAIABCAAgAAAAAgEAKAAAAAEBAQAoAAAAAQEGACAAAAAEBgAgAAAABAYAKAAAAAMEBwAoAAAAAwMIACoAAAABAwMGACAAAAAEAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQELAAEAAAIAAwQABAUEBAUGKgIDAgQHBgckBAUIBAQDCQADCgADCwAEDAAEDQAHDgAHDwAIEAAIEQAIEgBCAAAAAEDZAQAAAQAAAAEAAAAAE8DPuHAgJAxALSEf9GxW4r9BZfz7jAvJPxO4dTdPxRBAWMudmWA4y78xXB0AcVfpPySBBps6bwtAlpS7z/FR+L/FVzuKc9TYPzY8vVKWQQjAK8HicOZX4r/XTL7Z5sbXvzzZzYx+NPy/3bHYJhWN6786eZEJ+DXcPy18fa1LDeW/E9TwLawbwT9o6nWLwFjFP5aUu8/x0dk/zA2GOqxw27/ejQWFQZnRv1plprT+Fvg/ZYo5CDpa5D987gT7r/Pgv7+c2a7QB+2/JSL8i6Bx+T9wfVhv1ArZP7TMIhRboQbABhGpaRdT47/mXIqryj73v0Xaxp+oTA7ABmNEotBy9b+4sdmR6jvDv9hF0QMfwwvAmPc404Tt2T/p81FGXADAvy5zuiwmNva/dbD+z2H+/b/2QZYFE3/OP7LWUGovov+/wVJdwMuM6b96qkNuhlv4P6oPJO8cSvk/XAAapUv/5T+MKy6Oyg34v+uOxTapKANA+n/VkSOdwT8BipElcyzHv+Y+OQoQxfi/0vvG156Z+z9GlWHcDWL0P+aV620zFZI/+n5qvHRTAUB8C+vGuyPgP3xinSrfc/e/1h2LbVLR/z8q5Eo9C0Levz8CAAAAAAASSQMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAlwIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ITDEvcm91bmQzL3Byb2R1Y3RfZW5kcG9pbnRfc2VlZF9CX3Byb2RvcmRlci54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L0hMMS90c19ydW4vcHJlcC9idWlsZF9QQ21hcC9hc3NlbWJseS9jb21wbGV4X2NhbmRpZGF0ZV8wMDAubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICI1YjAzYTJlYTJmMTM2YTU5YTA4ODE3YjgwNTczM2QxODhhOWRlZDI5MjEzY2VhNTY5NTA5N2YwYTM0YTIwZmM2IiwgIm1vbCI6ICJiZTY0MjM2M2Y2YTQwMWM1NDk3YmZmMjg3ZGVlYWQ4MDI0MjI5MTNhMWRiYzA5ZTk4NjFjMmQ4NTQxMGFjNzcwIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfNWIwM2EyZWEyZjEzNmE1OS54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L3RzL3RzXzAwMjIvYnVpbGQvaW5wdXRfMDAwMS9wcm9kdWN0L3NvdXJjZV9iZTY0MjM2M2Y2YTQwMWM1Lm1vbCJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfR8AAABjbG91ZHJhX21hcHBpbmdfYmluZGluZ19kZXJpdmVkAwETOo4BAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEAAAAAAAAAAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAwAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEEAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQUAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABM7RAAAAAAAAQEAAAEBAAABAQAAAQEAAAECAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBExY=",
+    "product_to_reactant": [
+      0,
+      1,
+      2,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      3,
+      16,
+      17,
+      18
+    ],
+    "candidate": "776t3gAAAAAQAAAAAwAAAAAAAAATAAAAEQAAAIABCAAiAAAAAQMBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEGACAAAAAEBgAgAAAABAYAKAAAAAMEBwAoAAAAAwMIACgAAAADAgYAIAAAAAQBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQELAAEAAAIAAAMABAUABQYEBAYHKgIDAgUIBwgkBAYJBAQECgAECwAEDAAFDQAFDgAIDwAJEAAJEQAJEgBCAAAAAEDZAQAAAQAAAAEAAAAAE5QzFHe8SQjAy4Eeatsw7r8dHy3OGOawPycR4V8EjQXA71NVaCCWsT8bE2IuqdrIP4ARNGYS1QzAv4BeuHPh8L8ipdk8DgPnv6si3GRU+QDAlbpkHCMZ9b+BCkeQSrG7v4jaNoyCoAVAtW6D2m/t7L8nLscrEL3gPzze5LfoJPk/VcGopE5A678ju9IyUm/gv97lIr4Ts+I/Q+OJIM7Dzz9yNEdWfhnOv30E/vDz3+O/C+2cZoF2wb99WdqpudyQv4523PC7Kfm/qkNuhhtw7j+bWUsBaf/NP2R2Fr1TwfA/DHOCNjm8+j+05VyKq8rIv9Xnaiv2dwJAAK5kx0Zg8b+38LxUbIz4P68nui78IAtAmGn7V1aa+7+Re7q6Y7HRP3ibN04KUwpAvmn67IDrmj/ylNV0PVHhP1wbKsb5m/A/JLa7B+j+/L/2DOGYZc/hv18HzhlR2v8/UYNpGD4i5b+w52uWy0b4v83oR8Mps/W/qMXgYdr39T8Cm3PwTGjxP/AYHvtZLP8/pn7eVKTC/D+im/2Bctvpv/Ls8q0P69A/4Ep2bATiAkAI6L6c2S7hv9nts8pMKfU/BvNXyFwZ/z+EDU+vlOXqPz8CAAAAAAASOQMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAhwIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ITDEvdHNfcnVuL3ByZXAvUkNfM0Ffc2VlZC54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L0hMMS90c19ydW4vcHJlcC9idWlsZF9SQ21hcC9hc3NlbWJseS9jb21wbGV4X2NhbmRpZGF0ZV8wMDAubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICIxOGRkODMwZGExMGQzY2M4MWQ5ZWQ1MDcyNDQ1ZTBkYTVkZjMyZDgxYjQ3OWViN2EzZWQzZThiYzVjMmM1ZGM2IiwgIm1vbCI6ICI4Mjg4MzBiYzljZWE4N2VkMjgyNTQ0YzhjYmQwN2VkYzdjNmQ0MzZkYjU2NWY0ZTY1ZjBlMjY1MjcyOTFlMjg4In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzE4ZGQ4MzBkYTEwZDNjYzgueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlXzgyODgzMGJjOWNlYTg3ZWQubW9sIn0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6jgEAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQAAAAAAAAAAAAAAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAgAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEDAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQQAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBQAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEztEAAAAAAABAQAAAQEAAAEBAAABAQAAAQEAAAECAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQEAAAEBAAABAQAAAQETFg=="
+  },
+  "provided_guess_binding": {
+    "xyz": {
+      "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/T3_scan_peak_pt8_ts_guess.xyz",
+      "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provided.xyz",
+      "sha256": "7018f6880a335c7ccd013a47d44fcf8599c3e9f5842bfa872571ae33f9a014ac"
+    },
+    "evidence": [
+      {
+        "source_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HL1/HL1_E1/GUESS_PROVENANCE.md",
+        "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0000.md",
+        "sha256": "3b42e07cbe6450d51aabc3d974a05d23137142b26b6009ec7201fb45d2d109ef"
+      },
+      {
+        "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/T3_ptscan_H2O9_relaxed.log",
+        "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0001.log",
+        "sha256": "40ce3be2c6d07120b36d7bf8ce9580aad6becaee16cdf8d1b2c3cb0ab0e60c07"
+      },
+      {
+        "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/T3_scan_curve.csv",
+        "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0002.csv",
+        "sha256": "ab5450a22900306e3f822b83b2e0e21e5030310ff9214fdbb428214a5b3a04bb"
+      },
+      {
+        "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HL1/round4/HL1_E1_DECISION.md",
+        "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0003.md",
+        "sha256": "079392707ded6137f3ccf1e3b45f3e37d5550cfcc2ea2d8cb565ffa92fe2a338"
+      }
+    ]
+  },
+  "failed_attempt": null,
+  "method_checks": {
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0001/frequency/frequency.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 1,
+      "matched": true,
+      "purpose": "frequency",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0001/ts_opt/refine.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 1,
+      "matched": true,
+      "purpose": "ts_opt",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0003/frequency/frequency.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 3,
+      "matched": true,
+      "purpose": "frequency",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0003/irc/irc.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight IRC=(MaxPoints=60,StepSize=10)",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [
+        {
+          "actual": [
+            "empiricaldispersion=gd3bj",
+            "int(ultrafine)",
+            "scf=tight"
+          ],
+          "expected": [
+            "empiricaldispersion=gd3bj",
+            "int(ultrafine)",
+            "irc=(maxpoints=60,stepsize=10)",
+            "scf=tight"
+          ],
+          "field": "keywords",
+          "message": "keywords: expected ['empiricaldispersion=gd3bj', 'int(ultrafine)', 'irc=(maxpoints=60,stepsize=10)', 'scf=tight']; actual ['empiricaldispersion=gd3bj', 'int(ultrafine)', 'scf=tight']"
+        }
+      ],
+      "input_revision": 3,
+      "matched": false,
+      "purpose": "irc",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0004/irc/irc.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "IRC=(MaxPoints=60,StepSize=10)",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 4,
+      "matched": true,
+      "purpose": "irc",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0004/reactant_opt/reactant_opt.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 4,
+      "matched": true,
+      "purpose": "reactant_opt",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0005/reactant_opt/reactant_opt.gjf": {
+      "input_revision": 5,
+      "purpose": "reactant_opt",
+      "actual": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source": "stage_declaration",
+      "differences": [],
+      "matched": true
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0005/reactant_frequency/reactant_frequency.gjf": {
+      "input_revision": 5,
+      "purpose": "reactant_frequency",
+      "actual": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source": "stage_declaration",
+      "differences": [],
+      "matched": true
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0005/product_opt/product_opt.gjf": {
+      "input_revision": 5,
+      "purpose": "product_opt",
+      "actual": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source": "stage_declaration",
+      "differences": [],
+      "matched": true
+    }
+  },
+  "stage": "refine",
+  "stage_records": [
+    {
+      "stage": "declare",
+      "status": "done",
+      "detail": "reaction declared; each calculation requires its own method",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "build",
+      "status": "done",
+      "detail": "both endpoints built",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "map",
+      "status": "done",
+      "detail": "Concrete endpoint correspondence confirmed and owned by this reaction.",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "assemble",
+      "status": "done",
+      "detail": "2 reaction-centre pair(s) guide the assembly",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "guess",
+      "status": "done",
+      "detail": "Provided candidate bound; formal optimization and verification remain required.",
+      "artifacts": [
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provided.xyz",
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0000.md",
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0001.log",
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0002.csv",
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0003.md"
+      ],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "validate",
+      "status": "done",
+      "detail": "internal validation passed",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "submit",
+      "status": "done",
+      "detail": "refinement job 1084 submitted as 'ready' (gaussian, B3LYP); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+      "artifacts": [
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0001/ts_opt/refine.gjf"
+      ],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "refine",
+      "status": "waiting",
+      "detail": "Endpoint product opt job 1116 submitted; awaiting its compute notification",
+      "artifacts": [
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0005/product_opt/product_opt.gjf"
+      ],
+      "source_input_revision": 5
+    }
+  ],
+  "terminal": null,
+  "stop_reason": "Coordinator broadcast evt_1368eb1b076741ac (user 05:0x: replaced-task work is cancelled): stop HL1_E1 endpoint computation and submit nothing further. Withdraw queued product_opt job 1116 (never started). All existing logs/geometry kept unchanged as archive evidence.",
+  "blocked": null,
+  "intervention_count": 4,
+  "path_kind": "provided",
+  "guidance_attempt": 0,
+  "active_attempt_dir": "",
+  "guidance_manifest_path": "",
+  "job_id": 1084,
+  "job_input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0001/ts_opt/refine.gjf",
+  "waiting_for": "",
+  "scan_step": null,
+  "job_steps": [
+    {
+      "purpose": "ts_opt",
+      "job_id": 1084,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0001/ts_opt/refine.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 1,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": null,
+      "atom_binding": {
+        "atom_map": [
+          1,
+          2,
+          3,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          4,
+          17,
+          18,
+          19
+        ],
+        "charge": 1,
+        "declaration_revision": 1,
+        "process_id": "fc5f0035929b401400a5d4088ab80a1f8ebdcc07303fd606058fbbdebd70202b",
+        "product_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    3.5176   -0.5730    0.1957 O   0  0  0  0  0  0  0  0  0  0  0  0\n    4.1927   -0.2127    0.7919 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.4293   -1.5200    0.3880 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0320   -0.5732   -0.3715 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7628   -0.8610    0.4408 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.6579    0.1337    0.1668 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.4034   -0.4288   -0.2750 N   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5056    0.6360   -0.5297 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9072    1.5902    0.3913 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8288   -0.6039   -1.4528 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.7874   -1.3405   -0.1503 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4703    0.4051   -0.1250 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3882   -1.8746    0.2383 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.9771   -0.7984    1.5223 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5806    0.6874   -1.5034 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3949    0.1376   -0.1810 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5481    1.7250    1.2739 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0177    2.1658    0.5044 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4658    1.9886   -0.4728 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  4  5  1  0\n  5  6  1  0\n  6  7  2  0\n  7  8  1  0\n  6  9  1  0\n  4 10  1  0\n  4 11  1  0\n  4 12  1  0\n  5 13  1  0\n  5 14  1  0\n  8 15  1  0\n  8 16  1  0\n  9 17  1  0\n  9 18  1  0\n  9 19  1  0\nM  CHG  1   8   1\nM  END\n",
+        "reactant_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    1.5162   -1.5521    3.6949 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8919   -0.9269    3.2534 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1153   -1.9055    2.9572 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1085   -1.0678    4.3191 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4169    2.3407   -1.0918 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7826    0.9660   -0.9948 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6148    0.5572    0.4568 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4251    0.6744    0.9908 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.3801    0.3468    2.3538 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8460    0.0906    1.1984 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.8109    3.0900   -0.5717 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5135    2.6432   -2.1390 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4145    2.3491   -0.6406 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8015    0.9736   -1.4826 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4015    0.2213   -1.5058 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0982    0.8676    2.7800 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.6116   -0.2403    0.4915 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.6029   -0.7471    1.8570 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.2447    0.9194    1.7895 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  1  4  1  0\n  5  6  1  0\n  6  7  1  0\n  7  8  2  0\n  8  9  1  0\n  7 10  1  0\n  5 11  1  0\n  5 12  1  0\n  5 13  1  0\n  6 14  1  0\n  6 15  1  0\n  9 16  1  0\n 10 17  1  0\n 10 18  1  0\n 10 19  1  0\nM  CHG  1   1   1\nM  END\n",
+        "ts_log_sha256": null
+      },
+      "frequency_analysis": null
+    },
+    {
+      "purpose": "frequency",
+      "job_id": 1093,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0003/frequency/frequency.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 3,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": null,
+      "atom_binding": {
+        "atom_map": [
+          1,
+          2,
+          3,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          4,
+          17,
+          18,
+          19
+        ],
+        "charge": 1,
+        "declaration_revision": 3,
+        "process_id": "fc5f0035929b401400a5d4088ab80a1f8ebdcc07303fd606058fbbdebd70202b",
+        "product_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    3.5176   -0.5730    0.1957 O   0  0  0  0  0  0  0  0  0  0  0  0\n    4.1927   -0.2127    0.7919 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.4293   -1.5200    0.3880 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0320   -0.5732   -0.3715 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7628   -0.8610    0.4408 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.6579    0.1337    0.1668 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.4034   -0.4288   -0.2750 N   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5056    0.6360   -0.5297 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9072    1.5902    0.3913 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8288   -0.6039   -1.4528 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.7874   -1.3405   -0.1503 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4703    0.4051   -0.1250 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3882   -1.8746    0.2383 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.9771   -0.7984    1.5223 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5806    0.6874   -1.5034 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3949    0.1376   -0.1810 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5481    1.7250    1.2739 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0177    2.1658    0.5044 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4658    1.9886   -0.4728 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  4  5  1  0\n  5  6  1  0\n  6  7  2  0\n  7  8  1  0\n  6  9  1  0\n  4 10  1  0\n  4 11  1  0\n  4 12  1  0\n  5 13  1  0\n  5 14  1  0\n  8 15  1  0\n  8 16  1  0\n  9 17  1  0\n  9 18  1  0\n  9 19  1  0\nM  CHG  1   8   1\nM  END\n",
+        "reactant_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    1.5162   -1.5521    3.6949 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8919   -0.9269    3.2534 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1153   -1.9055    2.9572 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1085   -1.0678    4.3191 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4169    2.3407   -1.0918 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7826    0.9660   -0.9948 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6148    0.5572    0.4568 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4251    0.6744    0.9908 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.3801    0.3468    2.3538 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8460    0.0906    1.1984 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.8109    3.0900   -0.5717 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5135    2.6432   -2.1390 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4145    2.3491   -0.6406 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8015    0.9736   -1.4826 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4015    0.2213   -1.5058 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0982    0.8676    2.7800 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.6116   -0.2403    0.4915 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.6029   -0.7471    1.8570 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.2447    0.9194    1.7895 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  1  4  1  0\n  5  6  1  0\n  6  7  1  0\n  7  8  2  0\n  8  9  1  0\n  7 10  1  0\n  5 11  1  0\n  5 12  1  0\n  5 13  1  0\n  6 14  1  0\n  6 15  1  0\n  9 16  1  0\n 10 17  1  0\n 10 18  1  0\n 10 19  1  0\nM  CHG  1   1   1\nM  END\n",
+        "ts_log_sha256": null
+      },
+      "frequency_analysis": {
+        "fraction_basis": "unweighted_squared_displacement",
+        "log_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0003/frequency/frequency.log",
+        "log_sha256": "d4f9171d2430f18620ef8100c091e632a36a824bc76e57656f60f8c4668f4aad",
+        "mode_alignment": {
+          "aligned": true,
+          "details": [
+            "Atom pair (1,2) relative displacement=0.585 (threshold 0.50×1.104=0.552)",
+            "Atom pair (2,9) relative displacement=0.522 (threshold 0.50×1.104=0.552)"
+          ],
+          "message": "Imaginary mode is consistent with the declared reaction coordinate: watch_pairs max relative displacement 0.585 ≥ 0.50×global max 1.104 (max pair=(2,4)).",
+          "status": "aligned"
+        },
+        "modes": [
+          {
+            "frequency_cm": -254.4556,
+            "heavy_atom_fraction": 0.0512434817488969,
+            "top_displaced_atoms": [
+              {
+                "atom": 4,
+                "element": "H",
+                "fraction": 0.4739269955876454
+              },
+              {
+                "atom": 2,
+                "element": "H",
+                "fraction": 0.22472924187725632
+              },
+              {
+                "atom": 3,
+                "element": "H",
+                "fraction": 0.13728439630966704
+              },
+              {
+                "atom": 16,
+                "element": "H",
+                "fraction": 0.09075411151223425
+              },
+              {
+                "atom": 1,
+                "element": "O",
+                "fraction": 0.02125952667468913
+              }
+            ],
+            "top_displaced_pairs": [
+              [
+                4,
+                19,
+                0.7172715971689966
+              ],
+              [
+                4,
+                10,
+                0.7115136477281399
+              ],
+              [
+                4,
+                8,
+                0.7049581121454106
+              ],
+              [
+                4,
+                7,
+                0.7014836666905565
+              ],
+              [
+                4,
+                17,
+                0.6968560840141952
+              ]
+            ],
+            "watch_atom_fraction": 0.25421179302045727,
+            "watch_pair_fraction": {
+              "fraction": 0.027239313037791795,
+              "pair_projections": {
+                "1-2": 0.19312719141777596,
+                "2-9": 0.4955481151905126
+              }
+            }
+          }
+        ],
+        "reaction_center_pairs": [
+          [
+            1,
+            2
+          ],
+          [
+            2,
+            9
+          ]
+        ]
+      }
+    },
+    {
+      "purpose": "irc",
+      "job_id": 1099,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0004/irc/irc.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": "IRC=(MaxPoints=60,StepSize=10)"
+      },
+      "source_input_revision": 4,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": null,
+      "atom_binding": {
+        "atom_map": [
+          1,
+          2,
+          3,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          4,
+          17,
+          18,
+          19
+        ],
+        "charge": 1,
+        "declaration_revision": 4,
+        "process_id": "fc5f0035929b401400a5d4088ab80a1f8ebdcc07303fd606058fbbdebd70202b",
+        "product_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    3.5176   -0.5730    0.1957 O   0  0  0  0  0  0  0  0  0  0  0  0\n    4.1927   -0.2127    0.7919 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.4293   -1.5200    0.3880 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0320   -0.5732   -0.3715 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7628   -0.8610    0.4408 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.6579    0.1337    0.1668 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.4034   -0.4288   -0.2750 N   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5056    0.6360   -0.5297 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9072    1.5902    0.3913 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8288   -0.6039   -1.4528 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.7874   -1.3405   -0.1503 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4703    0.4051   -0.1250 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3882   -1.8746    0.2383 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.9771   -0.7984    1.5223 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5806    0.6874   -1.5034 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3949    0.1376   -0.1810 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5481    1.7250    1.2739 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0177    2.1658    0.5044 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4658    1.9886   -0.4728 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  4  5  1  0\n  5  6  1  0\n  6  7  2  0\n  7  8  1  0\n  6  9  1  0\n  4 10  1  0\n  4 11  1  0\n  4 12  1  0\n  5 13  1  0\n  5 14  1  0\n  8 15  1  0\n  8 16  1  0\n  9 17  1  0\n  9 18  1  0\n  9 19  1  0\nM  CHG  1   8   1\nM  END\n",
+        "reactant_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    1.5162   -1.5521    3.6949 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8919   -0.9269    3.2534 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1153   -1.9055    2.9572 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1085   -1.0678    4.3191 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4169    2.3407   -1.0918 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7826    0.9660   -0.9948 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6148    0.5572    0.4568 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4251    0.6744    0.9908 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.3801    0.3468    2.3538 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8460    0.0906    1.1984 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.8109    3.0900   -0.5717 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5135    2.6432   -2.1390 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4145    2.3491   -0.6406 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8015    0.9736   -1.4826 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4015    0.2213   -1.5058 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0982    0.8676    2.7800 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.6116   -0.2403    0.4915 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.6029   -0.7471    1.8570 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.2447    0.9194    1.7895 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  1  4  1  0\n  5  6  1  0\n  6  7  1  0\n  7  8  2  0\n  8  9  1  0\n  7 10  1  0\n  5 11  1  0\n  5 12  1  0\n  5 13  1  0\n  6 14  1  0\n  6 15  1  0\n  9 16  1  0\n 10 17  1  0\n 10 18  1  0\n 10 19  1  0\nM  CHG  1   1   1\nM  END\n",
+        "ts_log_sha256": "d4f9171d2430f18620ef8100c091e632a36a824bc76e57656f60f8c4668f4aad"
+      },
+      "frequency_analysis": null
+    },
+    {
+      "purpose": "reactant_opt",
+      "job_id": 1102,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0005/reactant_opt/reactant_opt.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 5,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": {
+        "kind": "species_reference",
+        "label": "reactant",
+        "source_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0005/reactant_opt/reactant_source.xyz",
+        "sha256": "2dc67cb03abe6e3c503135dc7f08933e7a6ed211f426a05c4bc6f180d0ea0546",
+        "irc_job_id": null,
+        "irc_log_sha256": null
+      },
+      "atom_binding": {
+        "process_id": "fc5f0035929b401400a5d4088ab80a1f8ebdcc07303fd606058fbbdebd70202b",
+        "declaration_revision": 5,
+        "atom_map": [
+          1,
+          2,
+          3,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          4,
+          17,
+          18,
+          19
+        ],
+        "charge": 1,
+        "ts_log_sha256": "d4f9171d2430f18620ef8100c091e632a36a824bc76e57656f60f8c4668f4aad",
+        "reactant_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    1.5162   -1.5521    3.6949 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8919   -0.9269    3.2534 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1153   -1.9055    2.9572 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1085   -1.0678    4.3191 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4169    2.3407   -1.0918 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7826    0.9660   -0.9948 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6148    0.5572    0.4568 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4251    0.6744    0.9908 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.3801    0.3468    2.3538 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8460    0.0906    1.1984 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.8109    3.0900   -0.5717 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5135    2.6432   -2.1390 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4145    2.3491   -0.6406 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8015    0.9736   -1.4826 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4015    0.2213   -1.5058 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0982    0.8676    2.7800 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.6116   -0.2403    0.4915 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.6029   -0.7471    1.8570 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.2447    0.9194    1.7895 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  1  4  1  0\n  5  6  1  0\n  6  7  1  0\n  7  8  2  0\n  8  9  1  0\n  7 10  1  0\n  5 11  1  0\n  5 12  1  0\n  5 13  1  0\n  6 14  1  0\n  6 15  1  0\n  9 16  1  0\n 10 17  1  0\n 10 18  1  0\n 10 19  1  0\nM  CHG  1   1   1\nM  END\n",
+        "product_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    3.5176   -0.5730    0.1957 O   0  0  0  0  0  0  0  0  0  0  0  0\n    4.1927   -0.2127    0.7919 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.4293   -1.5200    0.3880 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0320   -0.5732   -0.3715 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7628   -0.8610    0.4408 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.6579    0.1337    0.1668 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.4034   -0.4288   -0.2750 N   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5056    0.6360   -0.5297 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9072    1.5902    0.3913 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8288   -0.6039   -1.4528 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.7874   -1.3405   -0.1503 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4703    0.4051   -0.1250 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3882   -1.8746    0.2383 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.9771   -0.7984    1.5223 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5806    0.6874   -1.5034 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3949    0.1376   -0.1810 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5481    1.7250    1.2739 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0177    2.1658    0.5044 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4658    1.9886   -0.4728 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  4  5  1  0\n  5  6  1  0\n  6  7  2  0\n  7  8  1  0\n  6  9  1  0\n  4 10  1  0\n  4 11  1  0\n  4 12  1  0\n  5 13  1  0\n  5 14  1  0\n  8 15  1  0\n  8 16  1  0\n  9 17  1  0\n  9 18  1  0\n  9 19  1  0\nM  CHG  1   8   1\nM  END\n"
+      },
+      "frequency_analysis": null
+    },
+    {
+      "purpose": "reactant_frequency",
+      "job_id": 1105,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0005/reactant_frequency/reactant_frequency.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 5,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": {
+        "kind": "species_reference",
+        "label": "reactant",
+        "source_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0005/reactant_opt/reactant_source.xyz",
+        "sha256": "2dc67cb03abe6e3c503135dc7f08933e7a6ed211f426a05c4bc6f180d0ea0546",
+        "irc_job_id": null,
+        "irc_log_sha256": null
+      },
+      "atom_binding": {
+        "process_id": "fc5f0035929b401400a5d4088ab80a1f8ebdcc07303fd606058fbbdebd70202b",
+        "declaration_revision": 5,
+        "atom_map": [
+          1,
+          2,
+          3,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          4,
+          17,
+          18,
+          19
+        ],
+        "charge": 1,
+        "ts_log_sha256": "d4f9171d2430f18620ef8100c091e632a36a824bc76e57656f60f8c4668f4aad",
+        "reactant_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    1.5162   -1.5521    3.6949 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8919   -0.9269    3.2534 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1153   -1.9055    2.9572 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1085   -1.0678    4.3191 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4169    2.3407   -1.0918 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7826    0.9660   -0.9948 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6148    0.5572    0.4568 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4251    0.6744    0.9908 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.3801    0.3468    2.3538 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8460    0.0906    1.1984 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.8109    3.0900   -0.5717 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5135    2.6432   -2.1390 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4145    2.3491   -0.6406 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8015    0.9736   -1.4826 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4015    0.2213   -1.5058 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0982    0.8676    2.7800 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.6116   -0.2403    0.4915 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.6029   -0.7471    1.8570 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.2447    0.9194    1.7895 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  1  4  1  0\n  5  6  1  0\n  6  7  1  0\n  7  8  2  0\n  8  9  1  0\n  7 10  1  0\n  5 11  1  0\n  5 12  1  0\n  5 13  1  0\n  6 14  1  0\n  6 15  1  0\n  9 16  1  0\n 10 17  1  0\n 10 18  1  0\n 10 19  1  0\nM  CHG  1   1   1\nM  END\n",
+        "product_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    3.5176   -0.5730    0.1957 O   0  0  0  0  0  0  0  0  0  0  0  0\n    4.1927   -0.2127    0.7919 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.4293   -1.5200    0.3880 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0320   -0.5732   -0.3715 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7628   -0.8610    0.4408 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.6579    0.1337    0.1668 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.4034   -0.4288   -0.2750 N   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5056    0.6360   -0.5297 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9072    1.5902    0.3913 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8288   -0.6039   -1.4528 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.7874   -1.3405   -0.1503 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4703    0.4051   -0.1250 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3882   -1.8746    0.2383 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.9771   -0.7984    1.5223 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5806    0.6874   -1.5034 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3949    0.1376   -0.1810 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5481    1.7250    1.2739 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0177    2.1658    0.5044 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4658    1.9886   -0.4728 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  4  5  1  0\n  5  6  1  0\n  6  7  2  0\n  7  8  1  0\n  6  9  1  0\n  4 10  1  0\n  4 11  1  0\n  4 12  1  0\n  5 13  1  0\n  5 14  1  0\n  8 15  1  0\n  8 16  1  0\n  9 17  1  0\n  9 18  1  0\n  9 19  1  0\nM  CHG  1   8   1\nM  END\n"
+      },
+      "frequency_analysis": null
+    },
+    {
+      "purpose": "product_opt",
+      "job_id": 1116,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0005/product_opt/product_opt.gjf",
+      "state": "cancelled",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 5,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": {
+        "kind": "irc_outer_frame",
+        "label": "B",
+        "source_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0005/product_opt/product_source.xyz",
+        "sha256": "1d0417cba441fe4670a1d326050a4f9ac5e0345efa6e5ad20b59d38b43bbf478",
+        "irc_job_id": 1099,
+        "irc_log_sha256": "b2f2974677120745f1e060dcb286a7ce524749f1c96d0a4eaa39903212e741c8"
+      },
+      "atom_binding": {
+        "process_id": "fc5f0035929b401400a5d4088ab80a1f8ebdcc07303fd606058fbbdebd70202b",
+        "declaration_revision": 5,
+        "atom_map": [
+          1,
+          2,
+          3,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          4,
+          17,
+          18,
+          19
+        ],
+        "charge": 1,
+        "ts_log_sha256": "d4f9171d2430f18620ef8100c091e632a36a824bc76e57656f60f8c4668f4aad",
+        "reactant_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    1.5162   -1.5521    3.6949 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8919   -0.9269    3.2534 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1153   -1.9055    2.9572 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1085   -1.0678    4.3191 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4169    2.3407   -1.0918 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7826    0.9660   -0.9948 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6148    0.5572    0.4568 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4251    0.6744    0.9908 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.3801    0.3468    2.3538 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8460    0.0906    1.1984 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.8109    3.0900   -0.5717 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5135    2.6432   -2.1390 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4145    2.3491   -0.6406 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8015    0.9736   -1.4826 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4015    0.2213   -1.5058 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0982    0.8676    2.7800 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.6116   -0.2403    0.4915 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.6029   -0.7471    1.8570 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.2447    0.9194    1.7895 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  1  4  1  0\n  5  6  1  0\n  6  7  1  0\n  7  8  2  0\n  8  9  1  0\n  7 10  1  0\n  5 11  1  0\n  5 12  1  0\n  5 13  1  0\n  6 14  1  0\n  6 15  1  0\n  9 16  1  0\n 10 17  1  0\n 10 18  1  0\n 10 19  1  0\nM  CHG  1   1   1\nM  END\n",
+        "product_mol": "\n     RDKit          3D\n\n 19 17  0  0  0  0  0  0  0  0999 V2000\n    3.5176   -0.5730    0.1957 O   0  0  0  0  0  0  0  0  0  0  0  0\n    4.1927   -0.2127    0.7919 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.4293   -1.5200    0.3880 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0320   -0.5732   -0.3715 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7628   -0.8610    0.4408 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.6579    0.1337    0.1668 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.4034   -0.4288   -0.2750 N   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5056    0.6360   -0.5297 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9072    1.5902    0.3913 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.8288   -0.6039   -1.4528 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.7874   -1.3405   -0.1503 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.4703    0.4051   -0.1250 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3882   -1.8746    0.2383 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.9771   -0.7984    1.5223 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5806    0.6874   -1.5034 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3949    0.1376   -0.1810 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5481    1.7250    1.2739 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0177    2.1658    0.5044 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4658    1.9886   -0.4728 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  1  3  1  0\n  4  5  1  0\n  5  6  1  0\n  6  7  2  0\n  7  8  1  0\n  6  9  1  0\n  4 10  1  0\n  4 11  1  0\n  4 12  1  0\n  5 13  1  0\n  5 14  1  0\n  8 15  1  0\n  8 16  1  0\n  9 17  1  0\n  9 18  1  0\n  9 19  1  0\nM  CHG  1   8   1\nM  END\n"
+      },
+      "frequency_analysis": null
+    }
+  ],
+  "evidence_candidates": [
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provided.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0000.md",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0001.log",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0002.csv",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/path/input_0001/provenance_0003.md",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0022/jobs/declaration_0001/ts_opt/refine.gjf"
+  ],
+  "revision": 52
+}

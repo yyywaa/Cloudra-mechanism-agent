@@ -1,0 +1,103 @@
+{
+  "trajectory_id": "frag2-mmff94-attempt1",
+  "component_id": "frag2",
+  "attempt": 1,
+  "engine": "MMFF94",
+  "symbols": [
+    "C",
+    "O",
+    "O",
+    "H",
+    "H"
+  ],
+  "random_seed": 42,
+  "frame_count": 109,
+  "iterations": 108,
+  "initial_frame": {
+    "step": 0,
+    "symbols": [
+      "C",
+      "O",
+      "O",
+      "H",
+      "H"
+    ],
+    "positions": [
+      [
+        -0.4716690018935091,
+        -0.06059705273167721,
+        0.03376358570906644
+      ],
+      [
+        -0.7278657455223466,
+        1.1626579365658756,
+        0.032443825117636584
+      ],
+      [
+        0.8563597416183302,
+        -0.43531329878076297,
+        0.22367795323195183
+      ],
+      [
+        -1.2572532803166534,
+        -0.7911673690413501,
+        -0.10779632633723094
+      ],
+      [
+        1.6004282861141792,
+        0.1244197839879147,
+        -0.18208903772142107
+      ]
+    ],
+    "energy": -11.874080023530135,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 85.6344235491022
+  },
+  "final_frame": {
+    "step": 108,
+    "symbols": [
+      "C",
+      "O",
+      "O",
+      "H",
+      "H"
+    ],
+    "positions": [
+      [
+        -0.4211494558183223,
+        -0.03085620715194593,
+        -0.0008488418578807859
+      ],
+      [
+        -0.6112901131771905,
+        1.170513058721766,
+        -0.023614921912068917
+      ],
+      [
+        0.815215570208244,
+        -0.5518395393105127,
+        0.01291460249785011
+      ],
+      [
+        -1.189888639721131,
+        -0.817214544059445,
+        0.011038038816819121
+      ],
+      [
+        1.4071126385083998,
+        0.22939723180013744,
+        0.0005111224552833494
+      ]
+    ],
+    "energy": -25.574865797882477,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 0.0013970457423342353
+  },
+  "convergence_code": 0,
+  "status": "converged",
+  "failure": "",
+  "notes": [],
+  "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/build_candB/structure_build/trajectories/frag2-mmff94-attempt1/frames.xyz",
+  "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/build_candB/structure_build/trajectories/frag2-mmff94-attempt1/frames.jsonl",
+  "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/build_candB/structure_build/trajectories/frag2-mmff94-attempt1/trajectory.json"
+}

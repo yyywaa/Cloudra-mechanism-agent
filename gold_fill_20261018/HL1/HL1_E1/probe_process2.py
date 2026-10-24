@@ -1,0 +1,10 @@
+import json
+d=json.load(open('/home/ly/Cloudra-mechanism-agent/ts/ts_0022/process.json'))
+print("stage:", json.dumps(d.get('stage'))[:600])
+print("waiting_for:", json.dumps(d.get('waiting_for'))[:400])
+print("job_id:", d.get('job_id'), "job_input:", d.get('job_input_path'))
+js=d.get('job_steps')
+print("job_steps type", type(js).__name__)
+print(json.dumps(js)[:2500])
+sr=d.get('stage_records')
+print("stage_records keys:", list(sr.keys()) if isinstance(sr,dict) else type(sr))

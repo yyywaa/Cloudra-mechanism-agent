@@ -1,0 +1,131 @@
+{
+  "trajectory_id": "placement017-mmff94-attempt1",
+  "component_id": "placement017",
+  "attempt": 1,
+  "engine": "MMFF94",
+  "symbols": [
+    "N",
+    "C",
+    "O",
+    "H",
+    "O",
+    "H",
+    "H"
+  ],
+  "random_seed": 42,
+  "frame_count": 2,
+  "iterations": 1,
+  "initial_frame": {
+    "step": 0,
+    "symbols": [
+      "N",
+      "C",
+      "O",
+      "H",
+      "O",
+      "H",
+      "H"
+    ],
+    "positions": [
+      [
+        -0.3814946754825507,
+        0.6029122846443894,
+        -0.23540647961116398
+      ],
+      [
+        0.44013558731898683,
+        -0.09613869686173444,
+        0.21828349280135134
+      ],
+      [
+        1.242230926837569,
+        -0.8125894711264285,
+        0.6877460157180854
+      ],
+      [
+        -1.3008718386739149,
+        0.305815883343722,
+        0.09953930926859024
+      ],
+      [
+        -0.07914315323333321,
+        -1.641093737103309,
+        0.05955739262981696
+      ],
+      [
+        -0.11573260074895775,
+        -0.9689142666176965,
+        0.7565491246851894
+      ],
+      [
+        -0.16258234394903226,
+        -1.132318256080711,
+        -0.7608975316825248
+      ]
+    ],
+    "energy": 422.86904114873613,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 1217.6975138127546
+  },
+  "final_frame": {
+    "step": 1,
+    "symbols": [
+      "N",
+      "C",
+      "O",
+      "H",
+      "O",
+      "H",
+      "H"
+    ],
+    "positions": [
+      [
+        -0.15966592080593744,
+        0.8629809615044705,
+        0.49818535366342726
+      ],
+      [
+        0.43058117017379544,
+        0.5699723674825321,
+        1.464847486474768
+      ],
+      [
+        1.023793220527925,
+        0.25810427197440344,
+        2.4291433294332365
+      ],
+      [
+        -0.2799563917451127,
+        0.008246094803461243,
+        -0.07866289464026378
+      ],
+      [
+        -0.40519758961689767,
+        -1.4844439529624276,
+        -0.9296167578311884
+      ],
+      [
+        -0.11172770642902459,
+        -2.39878099466457,
+        -0.768433842400738
+      ],
+      [
+        -0.8552848800360976,
+        -1.5584050079383216,
+        -1.7900913508895835
+      ]
+    ],
+    "energy": -25.514997325156244,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 0.0004022481242502707
+  },
+  "convergence_code": 0,
+  "status": "converged",
+  "failure": "",
+  "notes": [
+    "no reaction-center constraint (complex mode); frames are phase boundaries only (maxIts=2000 per phase), full per-iteration trajectories live in the per-component builds"
+  ],
+  "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/N_HNCO/geom/structure_build/R_complex_raw/assembly/trajectories/placement017-mmff94-attempt1/frames.xyz",
+  "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/N_HNCO/geom/structure_build/R_complex_raw/assembly/trajectories/placement017-mmff94-attempt1/frames.jsonl",
+  "json_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/N_HNCO/geom/structure_build/R_complex_raw/assembly/trajectories/placement017-mmff94-attempt1/trajectory.json"
+}

@@ -1,1 +1,32 @@
 [calculator] isolated GAUSS_SCRDIR=/home/ly/g16/scratch/cloudra_g16_task1074_1234148
+Error: software termination
+   rax 0000000000000470, rbx 000008370ab03df0, rcx 000000000000016d
+   rdx 000008370ab0ae60, rsp 00007ffd635d6830, rbp 00007ffd635d6910
+   rsi 000008370ab07e30, rdi 000008370c4894b0, r8  000008370ab04e00
+   r9  000008370ab09e50, r10 000008370ab06e20, r11 000008370c4884a0
+   r12 000008370ab08e40, r13 000008370ab05e10, r14 000008370c487490
+   r15 000008370ab02de0
+  /lib/x86_64-linux-gnu/libc.so.6(+0x45330) [0x83989a45330]
+  /home/ly/g16/l703.exe() [0xdca494]
+Error: software termination
+   rax fffffffffffffffc, rbx 00007fff28cebca8, rcx 000005a5099108d7
+   rdx 0000000000000000, rsp 00007fff28cebc98, rbp 00007fff28cebd20
+   rsi 00007fff28cebca8, rdi 000000000012d520, r8  00007fff28ceba70
+   r9  0000000000000000, r10 0000000000000000, r11 0000000000000202
+   r12 0000000000000000, r13 00007fff28cebcd0, r14 0000000000000000
+   r15 00007fff28cf28e0
+  /home/ly/g16/l703.exe() [0xd1f5a2]
+  /home/ly/g16/l703.exe() [0xcde1ff]
+  /home/ly/g16/l703.exe() [0x8a19bc]
+  /home/ly/g16/l703.exe() [0x6e367d]
+  /home/ly/g16/l703.exe() [0x5a28e8]
+  /home/ly/g16/l703.exe() [0x4898cb]
+  /home/ly/g16/l703.exe() [0x5d8ba3]
+  /home/ly/g16/l703.exe() [0x4caeb3]
+  /home/ly/g16/l703.exe() [0x4158f8]
+  /home/ly/g16/l703.exe() [0x4138db]
+  /home/ly/g16/l703.exe() [0x41071b]
+  /home/ly/g16/l703.exe() [0x410624]
+  /lib/x86_64-linux-gnu/libc.so.6(+0x2a1ca) [0x83989a2a1ca]
+  /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x8b) [0x83989a2a28b]
+  /home/ly/g16/l703.exe() [0x40ad69]

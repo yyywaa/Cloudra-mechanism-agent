@@ -1,0 +1,76 @@
+{
+  "reaction": {
+    "reactant_smiles": "NC=O",
+    "product_smiles": "[H]/N=C/O",
+    "charge": 0,
+    "multiplicity": 1,
+    "electronic_character": null,
+    "selected_candidate": null,
+    "reaction_center": []
+  },
+  "calculations": {
+    "g16": {
+      "engine": "gaussian",
+      "method": "B3LYP",
+      "basis_set": "def2SVP",
+      "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+      "frequency_mode": "auto",
+      "orca_blocks": null,
+      "end_setting": ""
+    }
+  },
+  "conformers": {
+    "reactant": {
+      "kind": "file",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/N_FORMAMIDE/geom/R_syn_opt.xyz",
+      "mol_path": null,
+      "evidence_refs": [],
+      "optimization": null
+    },
+    "product": {
+      "kind": "file",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/N_FORMAMIDE/geom/I1_opt.xyz",
+      "mol_path": null,
+      "evidence_refs": [],
+      "optimization": null
+    },
+    "guidance": {
+      "ring_order": [],
+      "distance_filters": []
+    }
+  },
+  "guess": {
+    "kind": "provided",
+    "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/N_FORMAMIDE/inputs/E1_scan_H5toO2_ts_guess.xyz",
+    "evidence_refs": [
+      "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/N_FORMAMIDE/inputs/E1_scan_H5toO2.log"
+    ]
+  },
+  "ts_optimization": {
+    "ref": "g16"
+  },
+  "verification": {
+    "frequency": {
+      "ref": "g16"
+    },
+    "irc": {
+      "ref": "g16"
+    },
+    "irc_log": null,
+    "reactant_endpoint": {
+      "seed": null,
+      "optimization": null,
+      "frequency": null
+    },
+    "product_endpoint": {
+      "seed": null,
+      "optimization": null,
+      "frequency": null
+    }
+  },
+  "execution": {
+    "cpus": 4,
+    "memory_mb": 6144,
+    "limits": null
+  }
+}

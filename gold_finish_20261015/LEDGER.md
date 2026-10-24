@@ -3100,6 +3100,348 @@ coordinator 台账现值：`STATUS.md` `52edaf765f88f19c3dd7be95bf9e17889f570ba1
 4. **快照（本机 date -Is = 2026-10-18T01:02:52 实测）**：1074 = **256,215 行 / sha256 c635773335afa13f83540bcc020d1b8bdcc92c2da637acb735e766f3512ce28e**，conv 16、末计数行 "Step number 5 out of a maximum of 243 on scan point 17 out of 36" ⇒ scan#17=(r5,c3) 在跑。E3 道 STATUS = **2,560 行 / 411,701 B / sha256 3d6a423918a2ec9294daa4d488ec05f1464783425c9c9e5db11aa822ccfef917**（snapshot）；其自报一次手算行数错误（2,570 vs 实测 2,558）已在同分钟更正并加自查条，我按跨道记录登记、不代其更正。
 5. **口径与处置不变**：受约束剖面（R(10,27) 冻结 0.9949）；峰只作候选/上界；跨度 3.7179、P 参照 ≥2.10；**E3b result / barrier = null**；质子路径未裁定仍是任何 ΔE‡ 的前置；不提前提交、等 r2c4（≈pt23）自然闭合后按三支预设处置；本 lane 零提交 / 零 kill / 零 priority / 零 ts_resume。
 
+## §R198 E3b PENDING 状态更新（scan#15 现仅缺 r3c4）+ 仓库推送登记（01:07 CST）
+
+1. **pt16 双签**：协调者独立复算（check_1074_pt15_0051.py，46 行 / a6002b25…）OPT L250837 / hdr L250210 / SCF L250417 = −939.242193436、ΔE +44.1975、R(2,4)=2.0248、R(25,26)=1.4693、R(4,26)=3.5032、R(2,25)=1.2658、R(2,26)=2.4038 ⇒ 与 §R196 逐位相同；#15→#16 heavy20 0.0987 / 0.1686 / a6（all-41 0.1193 / 0.2287 / a19）平滑，**#14→#15 的 0.6968 仍为孤立 [CHECK]、未延续**。
+2. **PENDING 集合更新（替代 §R197 第 2 条该档）**：scan#14=(r2,c3) 仍缺 **r2c4**；**scan#15=(r3,c3) 现仅缺 r3c4**（r4c3 已由 pt16 补上）；scan#16=(r4,c3) 缺 **r5c3（在跑）/ r4c4**；scan#13 boundary；scan#10 / #11 两轴皆 neither（格点级）；**scan#9 四邻齐全后仍非候选**（R(2,4) 轴 neither + R(25,26) 轴 MAX ⇒ 非「一轴 MAX + 一轴 MIN」）。**候选 = 0**。
+3. **口径**：pt14 的峰仍只作「候选未闭合」，不得写 TS / 不写 ΔE‡；「即便 r2c4 收敛仍须先做支路/构象核查」的前置不变（§R195 第 2 条）；E3b result / barrier = null；受约束剖面（R(10,27) 冻结 0.9949）；跨度 3.7179、P 参照 ≥2.10 不变。
+4. **快照（本机 date -Is = 2026-10-18T01:07:53+08:00 实测）**：1074 = **262634 行 / sha256 5260a2520ebf13e289abb259b3fef7dc7893d32443d1d848e5a441bcad6105d4**，conv 16、termination 0、末计数行 "Step number  12 out of a maximum of  243 on scan point    17 out of    36"；协调者 01:07:34 的 261,785 行 / a9caa4b0…（mtime 01:07:27.168）登记为其快照（同链）。
+5. **仓库推送登记（本项目级动作，非计算证据）**：按用户指令，结构与日志已推送到 GitHub 新分支 **gold-finish-artifacts**（远端最新 04216db7，基于本地 HEAD 8d793f40；**未直推 master**，因 origin/master 已前进到 5db2b1ec 而本地落后）：提交 2cf1babe「artifacts(gold-finish): 结构文件与计算日志（不含 chk/轨迹）」= 2,982 文件 / 约 375 MB 未压缩（打包 88 MB），内容为 gold_finish_20261015 / ts / ts_path 下的 *.log / *.xyz / *.gjf / *.mol / *.zmat / *.out 与台账文档；排除 *.chk（650 MB）/ *.rwf / *.fchk / fort.* / crest 轨迹 frames.xyz（约 115 MB），规则随提交 04216db7 写入 .gitignore。**registry / task / tests 的 gold 值改动未包含**，仍在工作区未提交。交付面文件本轮未改动。
+
+## §R199 E3b 判据分写：工具 PENDING ≠ 逻辑未判；scan#15 逻辑已判非候选（01:08 CST）
+
+1. **分写原则（采纳协调者 ⑬ⓐ 与 E3 道的提法）**：对每个格点必须分别写清两件事——(i) **v6 规则下 PENDING（四邻未齐，工具未判）**；(ii) **逻辑上是否已可判**（两轴邻居是否都收敛、是否为极值）。二者不矛盾，但**不得把 PENDING 当成「可能候选」**；反之凡逻辑已闭合的判定，可在报告中作为已闭合判据引用。
+2. **scan#15=(r3,c3) 逻辑已判非候选（本条修正 §R197 第 2 条与 §R198 第 2 条把它列入 PENDING 的表述）**：其 R(2,4) 轴两侧邻居 **row2 = pt14 (1.6248, +54.5541)** 与 **row4 = pt16 (2.0248, +44.1975)** 均已收敛，本点 **+45.1404** 夹在两者之间且序列单调下降（54.5541 → 45.1404 → 44.1975）⇒ **沿 R 轴既非极大亦非极小（neither）** ⇒ **不满足「一轴 MAX + 一轴 MIN」⇒ 格点级非候选**，**不依赖质子轴 r3c4**；r3c4 只是 v6 四邻门控的缺口。
+3. **scan#9=(r4,c2) 同理**：R(2,4) 轴 neither + R(25,26) 轴 MAX ⇒ 非候选（质子轴 MAX 本身不构成候选）。
+4. **更新后的分类**：**PENDING 仅剩** scan#14=(r2,c3)（缺 r2c4）与 scan#16=(r4,c3)（缺 r5c3 在跑 / r4c4）；**已判非候选** = scan#9、#10、#11、**#15**；boundary = #1–#7、#12、#13；**候选 = 0**。
+5. **快照（本机 date -Is = 2026-10-18T01:08:31+08:00 实测）**：1074 = **263539 行 / sha256 7e77eaf4decd5602f8c13d1ed0a5e7ce03476e210e6dafb8df7fb27fc16b1f33**，conv 16、termination 0、末计数行 "Step number  13 out of a maximum of  243 on scan point    17 out of    36"；协调者 01:08:05 的 262,700 行 / 4ad21284… 登记为同链快照。
+6. **仓库动作登记（项目级，非计算证据）**：已用 gh 在 yyywaa/Cloudra-mechanism-agent 上开 PR **#199**（base master ← head gold-finish-artifacts，含提交 2cf1babe、04216db7；2,982 文件 / 约 375 MB 未压缩结构+日志，排除 chk/轨迹；registry/task/tests 的 gold 值改动不在本 PR 内）。URL: https://github.com/yyywaa/Cloudra-mechanism-agent/pull/199
+
+## §R200 E3b 第 17 格点 (r5,c3) 收敛：col3 峰后单调下降；scan#16 逻辑判非候选（01:27 CST）
+
+1. **快照（本机 date -Is = 2026-10-18T01:27:14 实测）**：1074 = **291,550 行 / sha256 653587d7771d027eb899739303159e8683b1407510a0fe63353bec698cef8341**，conv **17**、termination 0、末计数行 "Step number 2 out of a maximum of 243 on scan point 18 out of 36" ⇒ scan#18=(r6,c3) 在跑；协调者 01:26:44 的 290,702 行 / 790e5a08…（mtime 01:26:42.215）登记为同链快照。
+2. **pt17=(r5,c3) 三件套（我独立复算，与其逐位一致）**：收敛块 L289017、该块最后一条 SCF Done **L288604 = −939.245779342** ⇒ **ΔE = +41.9473 vs 1028**；实测 **R(2,4)=2.2248 / R(25,26)=1.4693**、R(4,26)=3.3966、R(2,25)=1.2475、R(2,26)=2.3766、R(10,27)=0.9949（冻结保持）。
+3. **col3 沿 R(2,4) 五点（全部收敛）**：pt13 **+52.6635** → pt14 **+54.5541（局部 MAX）** → pt15 **+45.1404** → pt16 **+44.1975** → pt17 **+41.9473**；逐段差 +1.8906 / −9.4137 / −0.9430 / −2.2502 ⇒ 峰后**单调下降、无新极值**；pt15 与 pt16 均判 not-extremum（各自两侧邻居均已收敛）。
+4. **scan#16=(r4,c3) 逻辑已判非候选（据 §R199 分写原则）**：其 R(2,4) 轴两侧 pt15 **+45.1404** 与 pt17 **+41.9473** 均已收敛，本点 +44.1975 夹在中间 ⇒ R 轴 neither ⇒ 不满足「一轴 MAX + 一轴 MIN」；仅剩 r4c4 这一 v6 门控缺口。**scan#8=(r5,c2) 与 scan#9=(r4,c2) 两轴齐后同样判非候选（R 轴 neither + 质子轴 MAX；质子轴 MAX 单独不构成候选）**。
+5. **更新分类**：**PENDING（v6 四邻未齐）仅剩** scan#14=(r2,c3)（缺 r2c4）与 scan#17=(r5,c3)（缺 r6c3 在跑 / r5c4）；**逻辑已判非候选** = scan#8、#9、#10、#11、#15、#16；boundary = #1–#7、#12、#13；**候选 = 0**。
+6. **叠合**：#16→#17 heavy20 **0.0836 / max 0.1538 / a2**（all-41 0.1249 / 0.4393 / a17）、det=+1、三条合成自检 2.849e-15 / 2.1147 / 1.057e-15 ⇒ 平滑续段；**#14→#15 的 0.6968 仍为孤立 [CHECK]、峰邻域外未延续**。
+7. **口径与处置不变**：受约束剖面（R(10,27) 冻结 0.9949）；pt14 峰只作「候选未闭合」、不写 TS/ΔE‡；「即便 r2c4 收敛仍须先做支路/构象核查」为判候选前置；E3b result / barrier = null；跨度 3.7179、P 参照 ≥2.10；不 ts_prepare、零提交 / 零 kill / 零 priority / 零 ts_resume。协调者台账 738 行 / 7ec4234c…（snapshot）。
+
+## §R201 校正：v6 规则下 PENDING 实为三点（#14/#16/#17）；两者并列、含义不同（01:28 CST）
+
+1. **校正 §R200 第 5 条的一处口径**：严格按 v6 四邻门控，**PENDING（工具未判）= 三点** —— scan#14=(r2,c3) 缺 r2c4；**scan#16=(r4,c3) 缺 r4c4**；scan#17=(r5,c3) 缺 r6c3（在跑）/ r5c4。我 §R200 写「PENDING 仅剩 #14 与 #17」漏了 #16 的 r4c4 缺口（原文保留、以本条为准）。
+2. **两表并列、含义不同**：scan#16 同时出现在两处但说的是两件事 ——(i) **v6 规则下 PENDING**（四邻未齐，工具未判）；(ii) **逻辑已判非候选**（R 轴两侧 +45.1404 与 +41.9473 均收敛、本点 +44.1975 夹在中间 ⇒ neither）。这正是 §R199 分写原则要防的混淆：PENDING 只说明工具未判，不等于「可能候选」。
+3. **逻辑非候选清单（不变）**：#8 / #9 / #10 / #11 / #15 / #16；boundary = #1–#7 / #12 / #13；**候选 = 0**；scan#8 与 scan#9 是「质子轴 MAX 单独不构成候选」的反例句。
+4. **快照**：协调者台账现行 = **738 行 / sha256 27bc3e5ad92886f17d7ed164221263e2a822fd2762e43b774779514fb4aafdbe / 295,806 B（2026-10-18T01:27:42）**，其 738 行 / 7ec4234c… 按 snapshot 引用式作废。本机 2026-10-18T01:27:52+08:00 实测：我的 LEDGER 改前 = 7faa8d3785a2b0b8ce214ef00e155563d2f1832f64743029bcbb4b82a0b8c9fa。
+5. **状态不变**：四条边（E1a / E2 / E3b / EM1）result = barrier = null；pt14 峰只作「候选未闭合」、不写 TS/ΔE‡；「即便 r2c4 收敛仍须先做支路/构象核查」为前置；受约束剖面（R(10,27) 冻结 0.9949）；跨度 3.7179、P 参照 ≥2.10；交付面 277 行 / a2964d8d… 未动；零提交 / 零 kill / 零 priority / 零 ts_resume。
+
+## §R202 回协调者 01:27 §R200：分类一致；双方快照按 snapshot 各自前移（01:30 CST）
+
+1. **分类一致、无需勘误**：逻辑非候选 = #8 / #9 / #10 / #11 / #15 / #16；PENDING（v6 四邻门控）= #14 缺 r2c4、#16 缺 r4c4、#17 缺 r6c3（在跑）/ r5c4；boundary = #1–#7 / #12 / #13；**候选 = 0**。协调者 01:27 帖与 §R200/§R201 逐项一致。
+2. **快照（2026-10-18T01:29–01:30+08:00 本轮逐项单独命令实测）**：本台账 = **3159 行 / sha256 61d404c210d225636a75786e01d9714ce5e33587324fd709fefb7d66900de7b0 / 693,499 B / mtime 2026-10-18 01:27:54.145698308 +0800**；协调者台账 gold_finish_20261015/HI1/PROCESS.md = **740 行 / sha256 fd21ecd28f0ac04e8ae686d52469079af6140101d621e30ec9c156eab8f9a4ac / 298,035 B / mtime 2026-10-18 01:28:04.665663217 +0800**。协调者帖中「你的 LEDGER = 3151 行 / 7faa8d37…」是 01:27:52 的改前快照（见 §R201 第 4 条），已被 61d404c2… 取代；协调者自报「738 行 / 27bc3e5a…（01:27:50）」按其自述降为前版，我按 snapshot 引用式登记、不互签。
+3. **1074 实测（2026-10-18T01:29:42）**：294,474 行 / sha256 e44ef857c1a0e7914f56abef2dea219a56e442e6d6483a5bc3703a6e405b4ba9 / 19,022,164 B / mtime 01:29:42.642432461 +0800；Optimization completed = **17**（不带句点 / 带句点各 17，同一批 17 点）、Normal termination = **0**；末计数行 L293668「Step number 5 out of a maximum of 243 on scan point 18 out of 36」⇒ scan#18=(r6,c3) 第 5 步优化中。协调者 291,702 行 / 161c8e74…（conv 17 / term 0 / 末计数行 L290849）为增长中的降快照，与我的读数同趋势、不冲突。
+4. **r6c3 的效力**：位于 col3 末行 ⇒ 按 §R137 永不作候选（不在首/末行、首/末列）。其收敛只用于 (i) 闭合 scan#17=(r5,c3) 的 R 轴下邻缺口、(ii) 给 col3 末行 boundary 类定性。收敛后仍按 §R199 两行分写（v6 PENDING 与逻辑判定），候选计数不变。
+5. **队列实测（01:29）**：running 仅 1074（8 cpus / 10,240 MB / priority 0），free = 24 cpus / 9 slots；本 lane 零提交、零 kill、零 priority 变更、零 ts_resume。
+6. **交付面不变**：FINAL_DELIVERY_DRAFT.md = **277 行 / sha256 a2964d8d37aa3214fd03136b5a4d6d95a0e4a3b57c9465a6368c1e6b0cf230df / 72,141 B / mtime 2026-10-17 15:33:19.035720898 +0800**。
+7. **状态不变**：四条边（E1a / E2 / E3b / EM1）result = barrier = null；pt14 峰只作「候选未闭合」（其后四点 +1.8906 / −9.4137 / −0.9430 / −2.2502 单调降）；「即便 r2c4 收敛仍须先做支路/构象核查」为前置；PR #199 由用户侧处理，我不发起 gold 值 PR。
+
+## §R203 回协调者 01:30：双方快照链双档登记；1074 scan#18 第 7 步（01:31 CST）
+
+1. **快照链登记（双向，均按 snapshot 引用式、不互签）**：
+   - 我的台账 gold_finish_20261015/LEDGER.md：**3151 行 / 7faa8d37…（01:27:52 改前）→ 3159 行 / 61d404c2…（mtime 01:27:54，693,499 B）→ 3169 行 / 183319e7…（mtime 01:30:25，696,196 B）**，依次降快照，以最后一条为现行。
+   - 协调者台账 gold_finish_20261015/HI1/PROCESS.md：**738 行 / 27bc3e5a…（其自报 01:27:50）→ 740 行 / fd21ecd28f0ac04e8ae686d52469079af6140101d621e30ec9c156eab8f9a4ac / 298,035 B（mtime 01:28:04.665663217）**；协调者 01:30:45 复测仍为 740 / fd21ecd2…，与我 01:29 实测一致 ⇒ 两档并列登记，不互签。
+2. **1074 实测（2026-10-18T01:30:53 起同轮取数）**：295,522 行（wc -l 时点）/ sha256 83d37ad447a3781766437aca7c1c1a3de6372a8f1cac95cc16d2310148643690（同轮稍后命令，文件仍在增长）/ 19,139,786 B / mtime 01:30:52.525876345 +0800；Optimization completed = **17**、Normal termination = **0**；末计数行 **L295583「Step number 7 out of a maximum of 243 on scan point 18 out of 36」**。协调者的 295,522 行 / e682461f… 与末计数行 L294621 第 6 步，与我第 7 步同链、先后一致，属同一增长过程的不同秒取样，不是冲突。
+3. **效力不变**：r6c3 位于末行 ⇒ 永不候选；收敛后仅用于闭合 (r5,c3) 的 R 轴下邻缺口与 col3 末行 boundary 定性，按 §R199 两档分写、候选计数不变。
+4. **新增开口条件（协调者 01:30 提出，我接受并对等执行）**：若 v6 出现任何「MAX+MIN 配对 + 四邻收敛」格点，立即互报、**不 ts_prepare**；我侧即便出现该情形也只报不提交，等显式口令。
+5. **其余不变**：四条边 result = barrier = null；pt14 峰只作「候选未闭合」；r2c4 收敛后仍须先做支路/构象核查；交付面 277 行 / a2964d8d… 未动；队列 running 仅 1074（8 cpus / priority 0）、free 24 cpus / 9 slots；零提交 / 零 kill / 零 priority / 零 ts_resume；PR #199 由用户侧处理。
+
+## §R204 回协调者 01:31：只有同链快照、无新事实；恢复严格事件驱动（01:32 CST）
+
+1. **快照（同链，无冲突）**：我 2026-10-18T01:31:22 实测 1074 = **296,404 行 / sha256 e63d8d254cffb55db6517c47139babbbfdfd49ffd1f96fa7a208869cdb5d9e0f / 19,145,567 B / mtime 01:31:21.521586994**，conv = 17、Normal termination = 0、末计数行仍为 L295583 第 7 步（scan point 18 out of 36）。协调者 01:31:20 的 296,389 行 / 106371da… 与之同链、同 conv/term/末行，属不同秒取样。
+2. **对等执行确认**：协调者以其 check_1074_pt15_0051.py 同模式复算 + v6 逐格两轴判读；我方独立复算（SCF 行号 + 能量 + 关键距离 + 相邻 Kabsch 三件 + 三条合成自检）后先报，双方只报不提交。
+3. **#14→#15 支路/构象核查的既备量**（协调者与我一致）：heavy20 rms 0.6968 / max 1.4476 / 最差原子 a6；all-41 0.9631 / 2.5343 / a17。该核查是 r2c4 收敛后给候选结论的硬前置。
+4. **本轮回帖性质**：内容为同链快照互换 + 对等约定，无新科学事实（无新收敛点、无 termination、无候选）。按 §R182/§R184 事件驱动约定，此后不再为台账或日志 sha 变动互发帖，只在四类事件开口：①1074 新收敛帧或 termination；②四邻齐全的候选格点；③主协调新口令/终稿复核；④需重出种子或证据冲突。
+5. **其余不变**：四条边 result = barrier = null；pt14 峰只作「候选未闭合」；交付面 277 行 / a2964d8d… 未动；队列 running 仅 1074、free 24 cpus / 9 slots；零提交 / 零 kill / 零 priority / 零 ts_resume；PR #199 由用户侧处理。
+
+## §R205 事件类④：1074 日志静默但计算在跑；monitor --timeout 1800 的自动终止风险（02:50 CST）
+
+1. **预警来源**：small_mol 帖 evt_6203b671e6564daf（2026-10-18T02:48:41 / 02:49:06 两次采样）报 1074 的 .log 约 21 分钟未刷新，但作业在算。
+2. **我方独立实测（2026-10-18T02:49:57）**：日志 = 19,577,855 B / mtime 2026-10-18 02:28:07.721187122 +0800 / 303,154 行 / sha256 9044f74b2dd8678f69e07b8eeaadc903694070a18d8c644ec400ab8bf5b49cfe；Optimization completed = **17**（带句点 / 不带句点各 17）、Normal termination = **0**、Error termination = **0**；末计数行 **L302333「Step number 14 out of a maximum of 243 on scan point 18 out of 36」**（与 small_mol 读数一致）。
+3. **未挂死的直接证据**：ps 存活 = g16 pid 1234203 + l502.exe 子进程；scratch .rwf = /home/ly/g16/scratch/Gau-1234209.rwf **236,371,968 B / mtime 02:49:57.889446534**（02:49 前后 25 秒内仍在推进）。⇒ Gaussian stdout 重定向按块缓冲，log 静默不是崩溃；判据必须「末写入时间 + .rwf mtime / 进程存活」联用，单独看 log mtime 会误判。
+4. **风险（只登记、不请求操作）**：ps 实测 monitor 进程 pid 1234148 = python -m cloudra.runtime.monitor --path …e3b_scan2d_c2n4_o25h26.gjf **--timeout 1800** --task_id 1074，etime 06:50:01（自 20:28:54 起即存在）⇒ 该 timeout 显然不是总墙钟（否则早已触发）；若其以 log 静默时长计，则自 02:28:07 起算 **约 02:58:07 可能自动终止**。语义只能平台侧/主协调核对。禁止处置：kill 作业或重投（会丢 17 个已收敛格点之后的进度，且违反零提交 / 零 kill 纪律）。
+5. **口径不变**：四条边 result = barrier = null；候选 = 0（col2 row4/row5 仍是「质子轴 MAX ≠ 候选」的反例）；(r2,c3)=pt14 的 R(2,4) 局部 MAX 待 (r2,c4) 闭合；跨度 3.7179 kcal/mol；P 参照 ≥2.10（已验证项）；质子路径 undetermined（任何 ΔE‡ 之前置）。
+6. **下一步**：改用「log 里程碑（scan point 19 out of 36）+ .rwf mtime」双判据轮询，wake_at 约 02:59:30 核对作业是否存活；若被终止则按实际 termination 判读，写「scan#18 未收敛、col3 缺末行 ⇒ E3b 仍 null」，绝不把未收敛帧当数据。
+
+## §R206 事件类④处置：1074 仍在算；E1 支 A 续扫「有条件放行」（我行使放行权，02:51 CST）
+
+1. **1074 实测（2026-10-18T02:50:45 / 02:50:48）**：log = 19,577,855 B / mtime 02:28:07.721187122 / 303,154 行 / sha256 9044f74b2dd8678f69e07b8eeaadc903694070a18d8c644ec400ab8bf5b49cfe（与我 02:49:57 及 small_mol 02:48:41/02:49:06 两次采样完全一致，仍静默）；scratch .rwf = 236,371,968 B / mtime **02:50:48.053488938**（继续推进）⇒ 作业在算。conv 17、term 0、末计数行 L302333 第 14 步。monitor pid 1234148 命令行含 **--timeout 1800** ⇒ 若按 log 静默计，风险点约 **02:58:07**；不 kill、不重投、不改 priority，语义待平台侧核对。
+2. **台账快照**：协调者 gold_finish_20261015/HI1/PROCESS.md = **741 行 / sha256 df241dd566559fa9150ca36d7972230efc70e03b8c2ed3112f16c9f07d4e2830 / 300,347 B / mtime 02:50:11.952584382**（其自报一致、登记为现行；740/fd21ecd2 降快照）；我 LEDGER 本条写入前 = 3196 行 / 76ecd1f373a502dfd9d7d4f24297e55b18a41638c927414e29f991d5b262b74a。
+3. **E1 支 A 续扫：判定「有条件放行」（放行权在我，协调者 02:50 转交）**。条件逐条不可放宽：
+   (a) 种子 = gold_finish_20261015/HI1/E1/split/E1A_neg_scan_p4_R2542_branchA.xyz，sha256 必须为 f1ff21307918afaa6afa921f244969122b40f94183883d01bc2a232f4d8055e2；
+   (b) 扫描 = **B 2 18 S 5 -0.1000**、maxstep=6、6 个几何 2.5420 → 2.0420 Å、8 cpus / 10,240 MB / priority 0；输出**新文件名后缀**（如 E1A_scanA_cont_2542_2042.log），**禁覆盖任何既有文件**；
+   (c) 定性 = **post-freeze asset / non-delivery / 非 guess / 非鞍点**；**E1a result = barrier = null 不变**；
+   (d) ΔE 只在**支 A 内部**相对本段首点，标「非 ΔE‡」；**禁与 1077（支 B）或 cont1 拼接、禁跨支相减**；
+   (e) 报告格式 = 行数 / sha256 / B / mtime（同轮实测、逐项单独命令）+ 每点末次 SCF 行号 + 只读收敛帧 + 相邻 Kabsch（heavy20 与 all-41，SVD、det=+1、三条合成自检）+ 单原子最大位移与原子号；出现极大只写「候选/下界」，不写 TS、不写 ΔE‡、不触发 ts_prepare；
+   (f) 零 kill / 零 re-submit / 不碰 ts_0015、ts_0016、ts_0020 / 不改交付面 277 行 / a2964d8d…。
+4. **仍未授权（保持排队）**：E2 cont2 反向回扫与「支 B 2.8543 几何在 R(1,29)=2.9543 的约束单点」、E3b 加密子网格或扩窗、E1a C–N × N18–H27 二维网格、任何 ts_prepare / ts_resume。
+5. **1075 只读核验**：同意（协调者 02:50 已批给 E1 道只读做：failure_class + 逐字报错行 + 三件套）；结论只登记，不作 E2 证据，E2 result/barrier 恒 null。
+6. **不变项**：四条边 null；候选 0；col3 沿 R = +52.6635 → +54.5541（pt14 极大）→ +45.1404 → +44.1975 → +41.9473；跨度 3.7179 kcal/mol；P 参照 ≥2.10；质子路径 undetermined；零提交（本条只放行他道、我不提交）。
+
+## §R207 登记 1075 取证行号级证据（只登记、不作 E2 证据）；支 A 放行由协调者只登记（02:52 CST）
+
+1. **1075（E2 主扫）只读取证**（协调者 02:53 转述 E1 道只读结论，我方按行号级证据登记）：日志 gold_finish_20261015/HI1/E2/scan_1d/build/E2_1D_scan.log = 103,879 行 / sha256 445956fd7491b68f65da4b1d0172f68ac4e35e19a9a55215d9358390fbe2932e / 6,703,953 B / mtime 2026-10-17 22:44:01.203275950；failure_class = **Error imposing constraints**（L103875 逐字），伴 L103822 / L103874「New curvilinear step failed: FormB failed.」、L103876「Error termination via Lnk1e … l103.exe at Sat Oct 17 22:44:01 2026.」；进度 = 8 点收敛、**第 9 点第 18 步（L103757）在约束施加处中止** ⇒ 这是 E2 主扫 scan point 9–15 缺测的原因。**口径：只登记、不作 E2 证据、E2 result/barrier 恒 null。**
+2. **支 A 续扫**：协调者确认不代提交、不代记账，只按 §R206 第 (e) 条核对 E1 道报告；我方零提交，口令我 02:52 已直发 E1 道 as_700f852fe3af412f。队列此刻实测（02:51:46）：running 仅 1074（8 cpus / priority 0）、free 9 slots / 24 cpus / 40,960 MB ⇒ E1 道尚未起跑，起跑后两作业仍在 ≤4 上限内。
+3. **1074 现态（02:51:46 / 02:51:47）**：log 仍 19,577,855 B / mtime 02:28:07.721187122（静默）；scratch .rwf = 236,371,968 B / mtime 02:51:47.841452172（在算）。monitor --timeout 1800 的风险点约 02:58:07；已设 02:59:40 唤醒核对，预案见 §R205/§R206。
+4. **不变项**：四条边 null；候选 0；交付面 277 行 / a2964d8d… 未动；零提交 / 零 kill / 零 priority / 零 ts_resume。
+
+## §R208 E1 支 A 首投 1079 在 l101 失败（缺空行）；我批准一次性格式修复重试 + 我的原子集笔误勘误（02:54 CST）
+
+1. **执行记录（E1 道 02:53 报，条件逐条对齐）**：种子 E1A_neg_scan_p4_R2542_branchA.xyz = 1,118 B / mtime 2026-10-17 20:28:04.107574788 / 27 原子 / sha256 **f1ff21307918afaa6afa921f244969122b40f94183883d01bc2a232f4d8055e2**（与 §R206 (a) 一致）；输入 E1A_scanA_cont_2542_2042.gjf = 38 行 / sha256 30a8689980e776471a2df9f1f9ad20a3966e74da9158b9bc81236ceaeb46b4d9（坐标由 qm_input_writer 从种子生成、与种子逐行 diff 一致）；submit → **job 1079**。
+2. **1079 终态 = failed（l101 输入解析，未进 SCF、无任何能量）**：log E1A_scanA_cont_2542_2042.log = 151 行 / sha256 de4e9a6f9f2edd6bbe9005bff1a8d97ff114b93bfd12e5e8771526f20934ed0f / 7,125 B / mtime 2026-10-18 02:52:18.457442750；逐字 L144「Wanted a floating point number as input.」/ L145「Found an integer as input.」/ L146 卡片行 / L148「Error termination via Lnk1e … l101.exe at Sun Oct 18 02:52:18 2026.」。
+3. **根因（E1 道判定，我认可）**：坐标末原子行与 modredundant 卡片之间缺一个空行 ⇒ 卡片被当作原子行解析，故在 2 处要求浮点。属输入格式缺陷，非方法口径、非化学限制；对照 1072/1077 成功输入均为「末原子行 → 空行 → 卡片 → 空行」。
+4. **我的裁定：批准一次性格式修复重试**。硬条件：新文件名 E1A_scanA_cont_2542_2042_v2.gjf（不覆盖任何文件）；仅在末原子行后插入一个空行，路由 / 约束 B 2 18 S 5 -0.1000 / 坐标 / maxstep=6 / 引擎与方法全部不变；8 cpus / 10,240 MB / priority 0；post-freeze / non-delivery / 非 guess / 非鞍点；ΔE 只支 A 内部、标非 ΔE‡、禁与 1077 拼接；**E1a barrier 恒 null**。**仅此一次**：v2 若再现 l1xx 解析失败即停、只留取证，不再重试。说明：§R206 (f) 的「零 re-submit」针对重复提交既有失败作业；输入格式修复 + 新文件名 + 仅一次，属其例外，此处我明确放行。
+5. **我的勘误（重要）**：§R206 第 (e) 条我照抄了 E3b 的原子集口径「heavy20 与 all-41」，但 **E1a 模型是 27 原子（12 重 + 15 H）**，不存在 heavy20 / all-41。正确口径 = **heavy-12 + all-27**，报告须逐项标注原子集定义。E1 道实测：heavy-12 最大位移 1.1290 Å（工作编号原子 7）、all-27 = 0.9853 / 1.7398 / 原子 9（sp4→sp5）。**§R206 (e) 中该处按本条更正**（原文保留）。
+6. **不变项**：四条边 result = barrier = null；候选 0；交付面 277 行 / a2964d8d… 未动；零 kill / 零 priority / 零 ts_resume；我不代提交、不代记账。
+
+## §R209 E1 支 A v2 已提交 = job 1080 并已越过 l101（02:54 CST）
+
+1. **v2 输入三件套（E1 道 02:54 报）**：gold_finish_20261015/HI1/E1/split/E1A_scanA_cont_2542_2042_v2.gjf = 38 行 / sha256 3b77f40c727070cffa0dc506ff8e48e55a057fcfb1087dbfe88878a338402e00 / 1,740 B / mtime 2026-10-18 02:53:58.799019343；同构核对：L35 = 末原子、**L36 = 空行**、**L37 = 卡片 B 2 18 S 5 -0.1000**、**L38 = 空行**，与 1072（L37 B 2 18 S 10 -0.0500）/1077（L37 B 2 18 S 5 -0.1000）完全同构；坐标 gjf L9–35 与种子 xyz L3–29 逐行一致（COORD_IDENTICAL_TO_SEED）。v1→v2 差异三类：(a) %chk 后缀机械变更、(b) 标题行说明、(c) 坐标与卡片之间新增 1 空行（唯一实质改动）。
+2. **提交与队列实测（我方 02:54:26）**：running = **1074 + 1080**（各 8 cpus / priority 0），free = 8 slots / 16 cpus / 30,720 MB ⇒ 2 作业 ≤4 上限、各 ≤8 cpus；terminal 新增 1079 failed @02:52:25。
+3. **已越过 l101 的直接证据（我方 02:54:26 实测）**：E1A_scanA_cont_2542_2042_v2.log = **48,361 B / mtime 2026-10-18 02:54**（v1 在 l101 只到 7,125 B / 151 行即终止）⇒ 输入解析通过，第二次提交进入正常计算。
+4. **口径不变**：post-freeze / non-delivery / 非 guess / 非鞍点；ΔE 仅支 A 内部、标非 ΔE‡、禁与 1077 或 cont1 拼接相减；E1a result = barrier = null；峰只写候选/下界；不触发 ts_prepare / ts_resume；零 kill（含 1074）。报告按 §R208 第 5 条勘误后的 **heavy-12 + all-27** 两套出表，并给三自检数值。
+5. **不变项**：四条边 null；候选 0；交付面 277 行 / a2964d8d… 未动。
+
+## §R210 1080 首点已出 SCF（scan point 1 = 2.5420）；1074 仍静默在算（02:55 CST）
+
+1. **1080 进度（E1 道 02:54:46 报）**：E1A_scanA_cont_2542_2042_v2.log = 119,147 B / 1,850 行 / mtime 2026-10-18 02:54:45.877408778；Optimization completed = 1；末计数行 L1152「Step number 1 out of a maximum of 152 on scan point 1 out of 6」；**SCF Done L790 E(RB3LYP) = −593.931626205**（12 cycles，scan point 1 = 起点 R = 2.5420）；Normal / Error termination 均未出现。此为 post-freeze asset 的过程读数，不作交付证据、不写 ΔE‡。
+2. **l101 议题结案**：v1 停在 7,125 B / 151 行，v2 已达 119,147 B 并出 SCF ⇒ 格式修复有效；不再讨论。
+3. **1074 现态（我 02:55 前后实测）**：见本条同轮命令输出；log 仍静默、.rwf 持续写 ⇒ 仍按「log 静默 != 挂死；判活以 .rwf mtime 或进程存活为准」，不 kill。
+4. **口径**：E1a result = barrier = null；报告按 9+3 项；若 1080 再现 l1xx 或任何非 Normal termination 即停、只留取证、**不做第三次提交**。四条边 null；候选 0；交付面 277 行 / a2964d8d… 未动。
+
+## §R211 自纠：v1→v2 差异应写三处（非「唯一改动一个空行」）；1079 加测 SCF Done = 0（02:56 CST）
+
+1. **自纠（协调者 02:55 指出，我采纳）**：我在 §R208 第 4 条 / §R209 第 1 条把批准表述写成「唯一改动是插入一个空行」，不准确。实测 diff 恰三处：(a) %chk 后缀改 _v2；(b) 标题行追加 v2 注释；(c) **空行位置前移**——原 L36 = 卡片、L37/L38 = 空行 ⇒ v2 L36 = 空行、L37 = 卡片、L38 = 空行（原末尾两空行之一前移，故两侧同为 38 行）。路由 #p opt=(modredundant,maxstep=6) B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=DMSO)、约束 B 2 18 S 5 -0.1000、27 原子坐标、%nproc=8 / %mem=10240MB 逐字不变。正确表述 =「%chk 后缀 + 标题注释 + 空行位置前移；路由/坐标/约束/资源逐字不变」。§R208/§R209 原文保留，以本条为准。
+2. **1079 加测判据（协调者）**：日志内 grep SCF Done 计数 = **0** ⇒ 未进入 SCF、无任何能量产生。此判据与 L144–L148 逐字报错共同构成失败定性；只登记、不作 E1a 证据、不入任何 ΔE 表、不据此推断支 A 有无极大。
+3. **1080 进度**：队列 running 1080 @2026-10-18T02:54:05（8 cpus / 10,240 MB / priority 0）；in_flight 2 slots / 16 cpus / 20,480 MB；free 8 slots / 16 cpus / 30,720 MB。E1 道自报首点：末计数行 L1152、SCF Done L790 E(RB3LYP) = −593.931626205（scan point 1 = 2.5420）；登记为「对方自报、我方未复算」，属 post-freeze 过程读数、不作交付证据、不写 ΔE‡。
+4. **1074 我方最新实测（02:55:19 / 02:55:20）**：log = 19,577,855 B / mtime 2026-10-18 02:28:07.721187122（静默未变）；.rwf = 236,371,968 B / mtime **02:55:20.157423584**（仍在写）⇒ 在算；风险点约 02:58:07。running = 1074 + 1080。
+5. **台账链**：协调者 gold_finish_20261015/HI1/PROCESS.md = **743 行 / sha256 8cefe9e91d77d06f9e2fd7704cdd913a994ba2783666d823c33540c1750f23f0 / 306,749 B / mtime 02:54:59.693477904**（742/6a5dd254 降快照），我方 02:55:19 实测一致；我台账本条写入前 = 3242 行 / 5461da63c149e655f3445b519cb4db53b151c9683b2928ad09d357904d8f369e；E1 道 LANE1_STATUS 1,256 行 / dbe29f41…（其自报）。均按 snapshot、不互签。
+6. **不变项**：四条边 result = barrier = null；候选 0；交付面 277 行 / a2964d8d… 未动；零提交 / 零 kill / 零 priority / 零 ts_resume。
+
+## §R212 monitor 语义交叉实测：ELAPSED 远大于 1800 ⇒ 非总墙钟；1080 四点 SCF 过程读数（02:56 CST）
+
+1. **monitor 语义（两路独立实测、同一结论）**：协调者 02:55:53 `ps -o pid,ppid,etime,args -p 1234148` ⇒ ELAPSED **06:55:53 = 24,953 s**，命令行 = python -m cloudra.runtime.monitor --path …/e3b_scan2d_c2n4_o25h26.gjf --timeout 1800 --conv_id prj_15b00532a66347c3 --task_id 1074 --db_path /home/ly/.local/share/cloudra/compute.db --job_type gaussian；我方 02:50:45 实测同一 pid ELAPSED 06:50:01（= 24,601 s）。两路均 ≫ 1800 s 且作业仍在算 ⇒ **--timeout 1800 不是作业总墙钟上限**。若为「输出静默 1800 s」类判据，触发点约 02:58:07，而 log 静默已证为 stdout 块缓冲（.rwf 持续写）⇒ 该路径若触发属**误判性自动终止**。我方仍只观测、不改动。
+2. **1080 过程读数（协调者实测，登记为过程量、非证据、不入 ΔE 表）**：E1A_scanA_cont_2542_2042_v2.log = 3,338 行 / sha256 01a82f004667edbce78ddecea4953e0c15a1a4bb1b111527bd36b48c677f1859 / 214,866 B / mtime 2026-10-18 02:56:00.709408440；SCF Done 四行：L790 −593.931626205（a12）、L1922 −593.930098739（a10）、L2679 −593.912851812（a14）、L3382 −593.929174511（a11）；L1343/L1344 =「Optimization completed.」/「-- Stationary point found.」；扫描计数行 L1152（point 1/6, step 1/152）、L1995（point 2/6, step 1）、L2753（point 2/6, step 2）⇒ 当前 **scan point 2 / 6**，仅第 1 点完成优化。
+3. **待提醒 E1 道**：报告须给全 6 点各自末次 SCF Done 行号（现仅 1 点闭合），且逐点能量只作本段相对差、禁跨段排序。
+4. **1074 稳态（协调者 02:55:45）**：303,154 行 / sha256 9044f74b… / 19,577,855 B / mtime 02:28:07.721187122；.rwf 236,371,968 B / mtime 02:55:48.069426060；g16 pid 1234203 ELAPSED 06:55:48、STAT SN 存活。
+5. **台账链**：协调者 HI1/PROCESS.md = **744 行 / sha256 e737d80c545b57236e25984cce714d63daf67e392c15d7097ff6c820defa763c / 309,600 B / mtime 02:56:13.494787176**（743/8cefe9e9 降快照）；我台账本条写入前 = 3251 行 / 07bd0ebd…；E1 道 1,256 / dbe29f41…（其自报）。
+6. **不变项**：四条边 result = barrier = null；候选 0；交付面 277 行 / a2964d8d… 未动；零提交 / 零 kill / 零 priority / 零 ts_resume。
+
+## §R213 队列出现第三个作业 1081（ts_0021 TS 工作流，非本 lane、非 E1 道）；容量到 24/32 cpus（02:57 CST）
+
+1. **三进程实测（我方 2026-10-18T02:57:15，ps -eo pid,etime,args）**：1234203 / 06:57:15 = 1074（e3b_scan2d_c2n4_o25h26.gjf）；1782008 / 03:10 = 1080（E1A_scanA_cont_2542_2042_v2.gjf）；**1784151 / 01:51 = ts/ts_0021/jobs/declaration_0002/ts_opt/refine.gjf** ⇒ 属 TS durable 工作流，既非本 lane 提交、也非 E1 道支 A 作业。
+2. **容量**：query_compute_queue running = 1074 / 1080 / 1081（各 8 cpus / priority 0）；free = 7 slots / **8 cpus** / 16,384 MB（in_flight 3 slots / 24 cpus / 25,600 MB）⇒ 已用 24/32 cpus。**结论：在任一作业结束前不再放行任何新作业**（否则触 4 作业上限并挤压 1074 的推进）。
+3. **作用域可见性差异（协调者报，登记不下结论）**：query_compute_job(1081) 在协调者作用域返回「No compute job found」，而 query_compute_queue 列为 running / 8 cpus ⇒ 跨 conv/task 作用域可见性差异；若终稿要引用 1081，只可用队列侧数据，并标「非本 lane 作业、未参与判定」。
+4. **1074 稳态（02:57:15 / 02:57:16）**：log = 19,577,855 B / mtime 2026-10-18 02:28:07.721187122（自 02:28 起未变）；.rwf = 236,371,968 B / mtime 02:57:16.077405589（仍在写）⇒ 在算。02:58:07 风险点由 02:59:40 唤醒核对。
+5. **口径**：三作业并行会进一步拉长 1074 与 1080 的单步时间与缓冲窗口 ⇒ 「log 静默」判据更不可单用，仍以 .rwf mtime / 进程存活为准。四条边 null；候选 0；交付面 277 行 / a2964d8d… 未动；零提交 / 零 kill / 零 priority / 零 ts_resume、不碰 ts_0021。
+
+## §R214 风险点结案（反证成立）：1074 与 monitor 双双存活、.rwf 跨过 02:58:07 继续写（02:59 CST）
+
+1. **我方独立实测（2026-10-18T02:59:03）**：g16 pid 1234203 = ELAPSED 06:59:04 / STAT **SN**（存活）；monitor pid 1234148 = ELAPSED 06:59:06 / STAT **Ssl**（存活）；scratch Gau-1234209.rwf = 236,371,968 B / mtime **02:59:04.685392221**（已跨过 02:58:07 仍推进）；log = 19,577,855 B / mtime 2026-10-18 02:28:07.721187122（仍静默）；末计数行（tail 5000 内）= Step 14 / 243，scan point 18 / 36。
+2. **判读**：以「log mtime 02:28:07 + 1800 s = 02:58:07 自动终止」形式提出的假设**未被证实、反证成立**（协调者 02:58:23 与我 02:59:03 两路独立同结论）。结合 ELAPSED 24,9xx s ≫ 1800 s 的三路交叉，倾向判定 --timeout 非以 log 静默计（作业/进程级语义）；最终语义归平台/主协调，我方只登记实测反证、不改执行侧。风险点状态：由「待核」改为「已实测排除（该假设形式）」。
+3. **1074 其余读数**：Normal / Error termination 计数均 0（无终止行）；已收敛 17/36；候选 0；col3 仍缺末行 ⇒ E3b result/barrier 恒 null。
+4. **冻结不变**：任一作业自然结束前我不放行新作业；排队项（E2 cont2、支 B 2.9543 约束单点、E3b 加密网格/扩窗、E1a 二维网格）维持未授权；1081（ts_0021 refine, pid 1784151）零干预、不参与判读。
+5. **台账链**：协调者 HI1/PROCESS.md = **747 行 / sha256 7d245bc4c971647e709852a5686e0c2c782394f5d7a2c0ab34b672cc2f3c78b1 / 314,086 B / mtime 02:58:44.583923130**（746/8a088148、745/df86252c、744/e737d80c 降快照）；我台账本条写入前 = 3268 行 / e2155a0c…。
+6. **下一步**：只做 scan point 19 里程碑看护（出现即复算 pt18 并事件帖）+ 1080 终态判读（按其 heavy-12 + all-27 口径核对 E1 道报告）。四条边 null；交付面 277 行 / a2964d8d… 未动；零提交 / 零 kill / 零 priority / 零 ts_resume。
+
+## §R215 节点饱和：第 4 个作业 1082（gold_fill_20261018 的 NR1 E2 反向扫描）⇒ free 0 cpus / 2,048 MB（03:00 CST）
+
+1. **1074 分支 A 确认（02:59:56 实测）**：log = 19,577,855 B / mtime 2026-10-18 02:28:07.721187122 / 303,154 行；Normal termination 计数 = 0；.rwf = 236,371,968 B / mtime 02:59:56.957419732（在写）；query_compute_job(1074) = state **running**、attempt_count 0、last_error 空、ended_at 空 ⇒ **未被 monitor 终止**，§R214 的风险点结案成立。
+2. **新事实（03:00:23 实测）**：running = 1074 / 1080 / 1081 / **1082**（各 8 cpus / priority 0）；**free = 6 slots / 0 cpus / 2,048 MB**（in_flight 4 slots / 32 cpus / 40,960 MB）⇒ **节点已饱和**（32/32 cpus）。四进程实测：1234203 = 1074（ELAPSED 07:00:21）、1782008 = 1080（06:16）、1784151 = ts_0021 refine（04:57）、**1788583 / ELAPSED 02:59 = gold_fill_20261018/NR1/inputs/E2_scan_anti_01.gjf**。
+3. **归属**：1082 属另一包 gold_fill_20261018 的 NR1 E2 反向扫描，**非本 lane、非 E1 道、非 TS 工作流**；我不干预（不 kill、不改 priority、不参与其判读），只登记队列事实。
+4. **对我方判据的影响**：4 作业争抢 32 cpus 会显著拉长 1074/1080 的单步时间与 log flush 间隔 ⇒ 「log 静默」窗口进一步变大，**更不可单独作挂死判据**；同时 4/4 作业上限已到 ⇒ 原「任一作业自然结束前不放行新作业」的冻结继续有效（排队项全部维持未授权）。
+5. **下一步看护**：check 间隔改 300 s、timeout 3000 s，条件 = tail 内出现 'scan point 19 out of' 或 log 字节数增长（>19,577,855）；触发后先复算 pt18（末次 SCF 行号 + 能量 + R 距离）再按 §R199 两行分写并事件帖。四条边 null；候选 0；交付面 277 行 / a2964d8d… 未动；零提交 / 零 kill / 零 priority / 零 ts_resume。
+
+## §R216 并行度更正：1081 已结束、1084（ts_0022 refine）接上；四作业 / free 0 cpus（03:01 CST）
+
+1. **快照（03:00:57 我方实测）**：协调者 HI1/PROCESS.md = **748 行 / sha256 044c21e8c164ecbe042586600e53019db78ed95e5119f02e7cd19c113ae27b20 / 316,097 B / mtime 03:00:24.044911571**（与其自报逐位一致）；1074 log 仍 19,577,855 B / mtime 02:28:07.721187122；.rwf = 236,371,968 B / mtime 03:01:05.309388281（在写）。
+2. **并行度更正（协调者 §三 已过期）**：03:00:23 曾为 1074 / 1080 / 1081 / 1082（free 0 cpus / 2,048 MB）；**03:00:57 实测 running = 1074 / 1080 / 1082 / 1084**，1081 已结束（query_compute_job(1081) 返回空对象），**1084 = pid 1797504 / ELAPSED 00:10 / ts/ts_0022/jobs/declaration_0001/ts_opt/refine.gjf**；free = 6 slots / **0 cpus** / 6,144 MB。
+3. **归属**：1082 = gold_fill_20261018/NR1/inputs/E2_scan_anti_01.gjf（另一包的 NR1 E2 反向扫描）；1084 = ts_0022 TS durable 工作流；均非本 lane、非 E1 道，零干预、不参与判读。
+4. **判据登记（双方一致）**：①4 作业争满 32 cpus ⇒ 1074 单步更慢、log flush 更稀，判活只能以 .rwf mtime / 进程存活为准；②scan#18=(r6,c3) 属末行 boundary（§R137 永不作候选）⇒ 即使收敛也不新增候选，价值仅在给 (r5,c3) 提供下邻并补齐 col3；③**真正的决定性格点仍是 (r2,c4)**。
+5. **不变项**：冻结有效（任一作业自然结束前不放行新作业）；四条边 result = barrier = null；候选 0；交付面 277 行 / a2964d8d… 未动；零提交 / 零 kill / 零 priority / 零 ts_resume。
+
+## §R217 自纠：1081 = failed（l103），不是「已结束」；1083 = 重复提交失败；1085 为 ts_0021 新声明重试（03:04 CST）
+
+1. **自纠（协调者 03:03 指出，我采纳）**：§R216 第 2 条写「1081 已结束（query_compute_job(1081) 返回空对象）」不成立 —— **空对象只表示跨作用域不可见，不代表正常终止**。实测：队列 terminal 记录 **1081 state=failed、ended_at 2026-10-18T03:01:05**、last_error「calculator 退出码 1；Error termination via Lnk1e in /home/ly/g16/l103.exe at Sun Oct …」；日志 ts/ts_0021/jobs/declaration_0002/ts_opt/refine.log = **10,788 行 / 651,946 B / mtime 2026-10-18 03:00:50.381393603**；逐字 **L10783「Tors failed for dihedral 9 - 2 - 3 - 1」/ L10784「FormBX had a problem.」/ L10785「Error termination via Lnk1e in /home/ly/g16/l103.exe at Sun Oct 18 03:00:50 2026.」**。口径：终态须查 query_compute_queue 的 terminal 段，不能用 query_compute_job 的空结果推断。
+2. **1083 = failed @2026-10-18T02:59:11**，last_error 逐字「duplicate submission by me (my own identical input E2_scan_anti_01.gjf)」⇒ 归属 gold_fill 包的重复提交；非本 lane、非 E1 道，只登记、不作推断。
+3. **1084 = done @03:02:44**（ts/ts_0022 refine）；**1085 = ts/ts_0021/jobs/declaration_0003/ts_opt/refine.gjf**（pid 1801202 / ELAPSED 01:19，03:04:07 实测）⇒ TS 工作流在 0002 失败后以新声明重试，非本 lane 提交；我零干预、不 ts_resume、不参与判读。
+4. **队列（03:04:07）**：running = 1074 / 1080 / 1082 / 1085；free = 6 slots / **0 cpus** / 2,048 MB ⇒ 仍 32/32 满载。
+5. **作废与保留**：§R216 第 2 条「1081 已结束」作废（原文保留）；同条其余内容（四作业更正、1082/1084 归属、末行 boundary 判据、决定性格点 (r2,c4)）继续有效。协调者台账 = **749 行 / sha256 c916c14fe120f2d3c56c99f3ebbc1ffb81e9c459bbb6fda80e45340b033e69af / 318,899 B / mtime 03:03:12.314598008**，登记现行（748/044c21e8 降快照）。
+6. **不变项**：四条边 result = barrier = null；候选 0；交付面 277 行 / a2964d8d… 未动；零提交 / 零 kill / 零 priority / 零 ts_resume；冻结继续。
+
+## §R218 1083 last_error 取数来源标注（query_compute_queue terminal 段）；1084 done、1085 接上；07:05 快照（03:05 CST）
+
+1. **1083 取数来源（供协调者复现）**：我引的 last_error **不是**来自 query_compute_job（该接口在协调者作用域返回 jobs 空），而是来自 **query_compute_queue 的 terminal 段**该条记录逐字：state=failed、ended_at 2026-10-18T02:59:11+08:00、last_error「duplicate submission by me (my own identical input E2_scan_anti_01.gjf); job 1082 already runs it in place. Withdrawing the queued duplicate before it starts so it cannot overwrite the original native log/checkpoint. Job 1083 state was 'ready' (never started).」⇒ 1083 从未启动、被平台按重复提交撤回；归属 gold_fill 包。若协调者作用域 terminal 段同样可见，可逐字对照。
+2. **1084 = done @03:02:44**（ts/ts_0022 refine），其 g16 pid 1797504 已退出；**1085 = ts/ts_0021/jobs/declaration_0003/ts_opt/refine.gjf**（pid 1801202），为 0002 失败后的新声明重试；两者均非本 lane，零干预、不 ts_resume。
+3. **快照（03:05:09 实测）**：1074 log = 19,577,855 B / mtime 2026-10-18 02:28:07.721187122（自 02:28 未变）；.rwf = 236,371,968 B / mtime **03:05:07.384094529**（推进）；running = 1074 / 1080 / 1082 / 1085。
+4. **台账链**：协调者 HI1/PROCESS.md = **750 行 / sha256 0fe3a7f74ca7961db37eed85419a612a9b202b91fabb2cb002f2f37764e2fc8f / 320,519 B / mtime 03:04:48.601487753**（749/c916c14f、748/044c21e8 降快照），我方 03:05:09 实测一致；我台账本条写入前 = 3302 行 / 57f3a1d0…。
+5. **不变项**：四条边 null；候选 0；交付面 277 行 / a2964d8d… 未动；0 cpus 满载期冻结新作业；零提交 / 零 kill / 零 priority / 零 ts_resume。
+
+## §R219 双向独立读取确认 1083/1084；terminal 段只保留最近 5 条（滚动窗口）（03:06 CST）
+
+1. **1083 双向独立读取一致**：协调者按其作用域 query_compute_queue 的 terminal 段复现，逐字与我 §R218 第 1 条相同（state=failed、ended_at 2026-10-18T02:59:11+08:00、last_error 含「Job 1083 state was 'ready' (never started).」）⇒ 我方标注由「我方独立读取」升级为「双方独立读取一致」；判读只登记不推断：从未启动、平台按重复提交撤回、归属 gold_fill 包。
+2. **1084**：terminal state=done、ended_at 2026-10-18T03:02:44+08:00、last_error 空串，双方一致。
+3. **terminal 段为滚动窗口（本方实测，重要）**：我方 terminal 段现列 **1084 / 1081 / 1083 / 1079 / 1076** 五条（与协调者所见完全相同）⇒ 更早的 1077 / 1078 / 1071 / 1075 已滚出该窗口；**历史值以各自台账条目为准，不因滚出而改写**。
+4. **快照（03:06:34 / 03:06:35）**：1074 log = 19,577,855 B / mtime 2026-10-18 02:28:07.721187122（自 02:28 未变）；.rwf = 236,371,968 B / mtime **03:06:35.873481339**（推进）；running = 1074 / 1080 / 1082 / 1085。协调者 HI1/PROCESS.md = **751 行 / sha256 73b01a3e172204242dcc47a8bb25e464b10cbde2f27bd4307b9a45571db2c91e / 322,154 B / mtime 03:06:16.651384649**，我方 03:06:34 实测一致、登记现行（750/0fe3a7f7 降快照）。
+5. **不变项**：四条边 null；候选 0；交付面 277 行 / a2964d8d… 未动；冻结；零提交 / 零 kill / 零 priority / 零 ts_resume；mtime 今后一律贴含纳秒的 stat 原始输出。
+
+## §R220 滚动窗口纪律双方互证升级；协调者台账 757 行 / 34b4ec46（03:07 CST）
+
+1. 滚动窗口事实双方已互证一致（各自独立实测 terminal 段同为 1084 / 1081 / 1083 / 1079 / 1076 五条），协调者已把它列为其台账「纪律」级；我方写作纪律同步：引历史作业终态必须引各自当时落账条目，不得按新窗口改写。1083 结案（从「我方独立读取」升为双方一致）：从未启动、平台按重复提交撤回、归属 gold_fill 包、只登记不推断。
+2. 台账链：协调者 HI1/PROCESS.md = **757 行 / sha256 34b4ec46501cb2529e96685ab487c198a366f0457ea7ac8007f8dc6da478a247 / 323,557 B / mtime 03:07:21.068079100**（751/73b01a3e、750/0fe3a7f7、749/c916c14f 降快照），登记现行；我台账本条写入前 = 3318 行 / b1edefa8…。
+3. 1074 快照见同轮命令：log 仍 19,577,855 B / mtime 02:28:07.721187122；.rwf 持续推进 ⇒ 在算、scan#18 未收敛、17/36、候选 0。
+4. 不变项：四条边 null；交付面 277 行 / a2964d8d… 未动；冻结；零提交 / 零 kill / 零 priority / 零 ts_resume。
+
+## §R221 TS 队列大幅滚动（1 failed + 4 cancelled）；1074 log 静默 63 分钟但 .rwf 12 秒级刷新（03:31 CST）
+
+1. **TS 队列滚动（协调者 03:30:40 terminal 段逐字，我只登记不推断）**：1085 state=failed、ended_at 03:13:47、last_error「calculator 退出码 1；Error termination via Lnk1e in /home/ly/g16/l9999.exe at Sun Oct 18 03:13:34 2026. | Error termination 」；1088 cancelled @03:12:47、1090 cancelled @03:12:36、1086 cancelled @03:12:26（三者 last_error 均「TS pipeline stopped」）；1091 cancelled @03:11:21（「superseded by TS input revision」）；**1087 = ts/ts_0023/jobs/declaration_0001/ts_opt/refine.gjf 接上**。全部属 TS durable 工作流，非本 lane、非 E1 道 ⇒ 零干预（不 kill、不 ts_resume、不碰 ts_0021/0022/0023）；l9999 含义与是否继续 resume 由 TS 属主判定。
+2. **滚动窗口提醒**：terminal 段 5 条窗口已把 1084/1081/1083/1079/1076 挤出，历史终态仍以各自台账条目为准（§R219 第 2 条纪律）。
+3. **我方活性实测（03:31:15 / 03:31:25）**：g16 四进程 = 1234203（1074）/ 1782008（1080）/ 1788583（1082）/ 1827591（1087）；**Gau-1234209.rwf mtime 03:31:13.925388099 → 03:31:25.841382962（12 秒内刷新）**，大小恒 236,371,968 B ⇒ 按判活优先级「chk/rwf mtime 十秒级刷新 > 子进程 CPU > 终止标记 0 > 主输出 mtime」，1074 **在算**。ps 显示主进程 %CPU 0.0 属已知形态（算在子 l*.exe）。
+4. **1074 log 静默 63 分钟**（02:28:07.721187122 → 03:31）：不据此改判挂死；未收敛、col3 缺末行、17/36、候选 0、E3b null。
+5. **冻结口径**：TS 作业反复腾出名额，但 4 作业上限与「free 0 cpus」现态未变 ⇒ 我仍不放行任何新作业；放行前提改为「free cpus >= 8 且 running <= 2」。
+6. **台账**：协调者 HI1/PROCESS.md = **770 行 / sha256 277c8a51b8549dac3daf2802484a768a9f1709c11f390fb4ebdaab155db15b66 / 327,549 B / mtime 03:31:01.597368094**（763/96305841、757/34b4ec46 降快照），登记现行；我台账本条写入前 = 3325 行 / 1ea511cb…。四条边 null；交付面 277 行 / a2964d8d… 未动。
+
+## §R222 资源式放行门槛与四级判活双方互认；协调者台账 776 行 / 75485ff7（03:32 CST）
+
+1. 协调者已把两条纪律列为其台账条目：①放行门槛 = free cpus >= 8 且 running <= 2（取代计数式）；②判活四级制（rwf/chk mtime 十秒级刷新 > 子进程 CPU>0 且运行态 > 终止标记 0 > .log mtime）。我方同口径，不再为门槛表述反复澄清。
+2. 台账链：协调者 HI1/PROCESS.md = **776 行 / sha256 75485ff75d092242885251bc06161896c490efe430be9bcbe5894481606b7a4f / 329,433 B / mtime 03:32:03.127143625**，登记现行（770/277c8a51、763/96305841 降快照）；我台账本条写入前 = 3334 行 / d72877c7…。
+3. 1074 活性见同轮命令（.rwf mtime 持续十秒级刷新）；scan#18 未收敛、col3 缺末行、17/36、候选 0、E3b null。四条边 null；交付面 277 行 / a2964d8d… 未动；零提交 / 零 kill / 零 priority / 零 ts_resume。
+
+## §R223 E1 支 A v2（job 1080）终止：Gaussian l502 软件终止；仅 2/6 点收敛；E1a 仍 null（03:38 CST）
+
+1. **终态性质**：平台 state = cancelled，但原生日志 **Normal termination = 0、Error termination = 0**；真实原因在包装日志 `gold_finish_20261015/HI1/E1/split/.cloudra/calc-1080.out.log`（我方 03:38:07 实读）：L2 / L9「Error: software termination」，L16–L33 为 backtrace，栈含 `/home/ly/g16/l502.exe() [0xf84dd4]` ⇒ failure_class = **Gaussian 内部软件终止（l502 段错误）**，非 l101 / l103 / NStep / SCF 不收敛报错。
+2. **日志三件套（我方 03:38:07 同轮独立实测）**：`HI1/E1/split/E1A_scanA_cont_2542_2042_v2.log` = **47,015 行 / sha256 7f11a2628c0c0b39db8d242bb695c675890dd1d908595815ae1a26fbc24b0c5f / 2,965,446 B / mtime 2026-10-18 03:34:43.710427783**（与 E1 道自报逐位一致）；Optimization completed = **2**；末计数行（tail 3000）= **Step 9 / 152，scan point 3 / 6** ⇒ **2/6 收敛，pt3–pt6 缺测（不插值、不外推）**。
+3. **两收敛点（E1 道报，我方登记为过程量、非交付证据）**：pt1 末次 SCF L790 `E(RB3LYP) = −593.931626205`（收敛 L1343）；pt2 L40160 `E(RB3LYP) = −593.932746675`（收敛 L40451）；**ΔE(pt2 − pt1) = −0.7031 kcal/mol**，仅支 A 内部相对本段首点、标非 ΔE‡，未与 1077 / cont1 / 1072 拼接或相减。
+4. **可解释性限制（必须先说）**：τ(3,2,18,14) 由 −130.97° 变到 −64.74°（|Δτ| 66.23°）、O3···H27 由 2.5575 变到 3.1012 Å；Kabsch pt1→pt2 = heavy-12 **0.7390 / 1.0821 / 最差工作编号 3**、all-27 **0.9631 / 1.7259 / 最差工作编号 9**（det +1、三自检 0.000000 / 镜像 rms 1.9084 det_raw −1 / 副本 0.00000000）⇒ 与 sp4→sp5（0.7593/1.1290）同量级 ⇒ **pt1→pt2 是构象重排，ΔE 不得读作「C–N 缩短 0.10 Å 的纯势能响应」，本段也不是单支刚性弛豫序列**。
+5. **判定**：**E1a result = barrier = null 不变**；按 §R206 (f) 与 §R208 第 4 条**不做第三次提交**；不写「本段无极大」「通道不存在」（缺测不构成无极大的证明）；任何峰只作候选/下界、未触发 ts_prepare/ts_resume。
+6. **台账（E1 道自报）**：LANE1_STATUS.md dbe29f41… → **23e4a20abe4bf88cc3ee8c541ab3fa5878a7dca224221c9d1e864da394aea912**，1,256 → 1,311 行。
+7. **资源**：见同轮 query_compute_queue 输出；1080 退出后队列构成变化以实测为准，放行门槛仍为「free cpus >= 8 且 running <= 2」，且排队项仍需显式口令。四条边 null；交付面 277 行 / a2964d8d… 未动；零提交 / 零 kill / 零 priority / 零 ts_resume。
+
+## §R224 1080 终止的双证据与时序：l502 撞击（03:34:43/45）早于 D23 管理性取消（03:35:58）约 73 s；1089 孤儿进程仍在算（03:40 CST）
+
+1. **terminal 逐字（我方 03:39:45 实测）**：**1080 cancelled @2026-10-18T03:35:58**，last_error「D23 cancel: HI1_E1a direction-disproven; cores reallocated to 1093/1095/1096」；**1089 cancelled @03:36:55**，last_error「D23 cancel: duplicate of 1080 (same E1a scan R2.5420->2.0420); edge direction-disproven」；1093 done @03:39:31。
+2. **时序判定（只由时间戳得出）**：撞击证据早于取消记录 —— v2.log mtime **03:34:43.710427783**、包装日志 calc-1080.out.log mtime **03:34:45.173349804**（L2/L9「Error: software termination」+ l502 backtrace），而 1080 ended_at = **03:35:58** ⇒ 段错误比管理性取消早约 **73 s**。故 **「direction-disproven」不能作为 1080 终止的原因**（时间上在后）；我方既不采信、也不否定其科学内容，仅登记为第三方（gold_fill 包 D23）写在元数据里的断言，**不进入本交付的证据链**。
+3. **孤儿进程实测**：g16 **pid 1867365（PPID 1867360）ELAPSED 03:47、STAT SN** 存活，命令行 = gold_fill_20261018/HI1/HI1_E1a_scanfix/HI1_E1a_scanA_cont_2542_2042_fix1.gjf；fix1.log = **219,582 B / mtime 03:39:43.161505529**、fix1.chk = **8,310,784 B / mtime 03:39:43.125504778** ⇒ 元数据已 cancelled 但计算仍在写盘。我方零 kill、不干预。
+4. **记账与实际不一致（超订）**：g16 进程实测 6 个 = 1074 / 1082 / 1087 / 1867365（1089 孤儿）/ ts_0026 refine / ts_0024 refine；而队列 running 只记 5 个（1074 / 1082 / 1087 各 8 + 1092 / 1094 各 4 cpus），free = 5 slots / **0 cpus / 0 MB** ⇒ 实际占用约 44 cpus > 32 核；这是 load 32–36 与 1074 单步变慢的可解释来源。
+5. **引用限制**：若日后引用 fix1 结果，必须标「元数据 cancelled 的孤儿进程产物、无主账、非交付证据」，且不得与 1080 的 v2 日志相加/拼接。
+6. **不变项**：E1a result = barrier = null（1080 段按未交付处理）；四条边 null；候选 0；交付面 277 行 / a2964d8d… 未动；零提交 / 零 kill / 零 priority / 零 ts_resume。
+
+## §R225 1074 终态结案：Gaussian 内部 software termination（l703）；17/36 收敛、scan#18 未收敛、候选 0、E3b null（03:52 CST）
+
+1. **平台记录（我方 query_compute_job(1074) 03:51 实测）**：state **cancelled**、scheduler_state CANCELLED、started 2026-10-17T20:28:54、**ended_at 2026-10-18T03:47:00**、attempt_count 0、last_error 逐字「D23/D29 cancel: HI1_E5 superseded by route A; remaining 19 grid pts need 7.7h; free memory for IRC 1099」；g16 pid 1234203 已消失（PID_GONE）。
+2. **一手证据（包装日志，我方 03:51:19 实测）**：HI1/E3/runs/.cloudra/calc-1074.out.log = **1,581 B / mtime 2026-10-18 03:45:46.453373043**，含 **2 次「Error: software termination」** 与 **14 处 l703.exe** 栈帧 + libc backtrace；scratch Gau-1234209.rwf 末次写入 mtime **03:45:35.805260811** ⇒ 撞击窗口 03:45:35 – 03:45:46。
+3. **时序（可证）**：撞击（wrapper 03:45:46.453373043）→ cancel 记账（03:47:00）= **73.5 s**；与 1080 的 72.8 s（wrapper 03:34:45.173349804 → 03:35:58）几乎相同 ⇒ 元数据 last_error 属**崩溃后的事后记账与第三方归因**，不是终止原因。**1074 的真实失败模式 = Gaussian 内部 software termination（l703）**，与 1080（l502）同类。终稿措辞应为「计算侧异常终止（software termination），随后平台以 cancelled 记账并附第三方理由」，不写成「被调度主动撤下、非计算失败」。
+4. **结案基线（逐项实测）**：log = **303,154 行 / sha256 9044f74b2dd8678f69e07b8eeaadc903694070a18d8c644ec400ab8bf5b49cfe / 19,577,855 B / mtime 2026-10-18 02:28:07.721187122**（末次落盘）；Optimization completed = **17**、Normal termination = **0**、Error termination = **0**；末计数行 L302333 = Step 14 / 243，scan point 18 / 36 ⇒ **6×6 网格 17/36 收敛**、scan#18=(r6,c3) 未收敛 ⇒ **col3 缺末行**。
+5. **结案判定**：**E3b result = barrier = null**；候选 **0**；不写「该窗口无驻点」、不把 (r5,c3) 的 R 轴强判单调、未收敛帧一律不当数据；**(r2,c4)（约 pt23）从未采样** ⇒ 候选判定的唯一闭合路径仍悬空。第三方断言「剩余 19 格点需 7.7h」「route A 取代 HI1_E5」不入本 lane 结论。**log 停在哪不等于算到哪**（02:28:07 之后约 77 分钟的步进丢在缓冲里）。
+6. **资源（03:51）**：running = 1092 / 1094 / 1095 / 1096 / 1097 / 1098（各 4 cpus），free = 3 slots / **0 cpus / 0 MB** ⇒ 资源式门槛（free >= 8 且 running <= 2）远未满足，任何补做（含 (r2,c4) 单点）需新授权 + 新文件名。
+7. **交付面**：FINAL_DELIVERY_DRAFT.md 仍 277 行 / sha256 a2964d8d37aa3214fd03136b5a4d6d95a0e4a3b57c9465a6368c1e6b0cf230df，未动；若要写入报告本体 = 新版本，须重跑清单与 sha 冻结并单独授权。
+8. **台账**：协调者 gold_finish_20261015/HI1/PROCESS.md 按其自报 = **807 行 / sha256 81f7497bc29f46546fa45e4d6dcdcae4fc4ac57c592131f88d00cb1cb0abbfe5 / 345,461 B / mtime 03:51:03.864905756**，按 snapshot 登记。四条边 null；零提交 / 零 kill / 零 priority / 零 ts_resume。
+
+## §R226 1074 看护关闭；E3b 缺口的最终措辞定稿；待授权清单（03:53 CST）
+
+1. **看护关闭**：里程碑提醒已到期且事件已处置（§R225），**不再重设**任何 1074 轮询提醒；最终复核（03:52:17）pid 1234203 已消失、log 冻结于 303,154 行 / 9044f74b… / 19,577,855 B / mtime 02:28:07.721187122、包装日志 calc-1074.out.log 1,581 B / mtime 03:45:46.453373043 未变。
+2. **E3b 缺口的最终措辞（采纳协调者 03:52 提议，作为终稿用语）**：不得写「无 TS」「通道不存在」「该窗口无驻点」；应写「**6×6 网格（已算 17 个收敛点）未分辨出离散指标 1 的驻点，需扩窗或加密**」，并同时写明决定性缺口 **(r2,c4) ≈ pt23 从未采样**。
+3. **待授权清单（我侧零动作）**：①(r2,c4) 单点补算（需新授权 + 新文件名 + free cpus >= 8 且 running <= 2；当前 0 cpus / 6 running 不满足）；②E2 cont2 反向回扫；③支 B 2.9543 约束单点；④E3b 加密网格/扩窗；⑤质子路径（H26 直接转移 vs H27 经 O10 中继双穿梭）未判定 —— 这是任何 ΔE‡ 的前置。
+4. **快照（snapshot、不互签）**：协调者 HI1/PROCESS.md = 807 行 / 81f7497bc29f46546fa45e4d6dcdcae4fc4ac57c592131f88d00cb1cb0abbfe5；E3 道 STATUS 2,662 行 / 3fdf8d6e…（自报）；E1 道 LANE1_STATUS 1,345 行 / 58aebaa0…（自报）；我台账本条写入前 = 3370 行 / 5d84078f…。
+5. **不变项**：四条边 result = barrier = null；交付面 277 行 / a2964d8d37aa3214fd03136b5a4d6d95a0e4a3b57c9465a6368c1e6b0cf230df / 72,141 B / mtime 2026-10-17 15:33:19.035720898 未动；零提交 / 零 kill / 零 priority / 零 ts_resume；判活四级制与资源式门槛继续沿用。
+
+## §R228 终止证据双签完成；三源纪律双方同口径（03:54 CST，无新计算）
+
+1. **双签证据（可入终稿方法/局限一节）**：包装日志 HI1/E3/runs/.cloudra/calc-1074.out.log = 32 行 / 1,581 B / sha256 f9e73b64815b76fdf38c497793a21cf49b47f2feef7d7aa78cc5b85911a79d6d / mtime 03:45:46.453373043（software termination 2 = L2/L11、l703.exe 帧 14），协调者、E3 道与我三方独立读取逐位一致；临时文件 Gau-1234209.rwf = 236,371,968 B / mtime 03:45:35.805260811 ⇒ 崩溃窗口 03:45:35.8–03:45:46.5，与 cancel 记账 03:47:00 相隔 73.5 s（1080：72.8 s）。
+2. **三源并用纪律**双方同口径并各自入账：①原生 stdout ②包装日志 .cloudra/calc-<id>.out.log ③进程退出与 .rwf 停写时刻；只查 ① 会假阴（本案 stdout Normal/Error termination 均 0）。
+3. **台账链**：协调者 HI1/PROCESS.md = **813 行 / sha256 6acfca966727cc568102ec02e698558c4b28d3522c8651db33e2719225241b7e / 347,650 B / mtime 2026-10-18 03:53:17.444142077**（807/81f7497b 降快照）；E3 道 STATUS 2,712 行 / 6bb2c712…（双方实测一致）；我台账本条写入前 = 3386 行 / 6cb8b6b8…。
+4. **不变项**：四条边 null；交付面 277 行 / a2964d8d… 未动；待授权清单不变（(r2,c4) 单点、E2 cont2、支 B 2.9543 单点、E3b 加密/扩窗、质子路径），资源门槛不满足（0 cpus / 6 running）；零提交 / 零 kill / 零 priority / 零 ts_resume。
+
+## §R229 重大自纠：1074/1080 系外部 SIGTERM 终止（exit 241 / -15），不是 Gaussian 内部崩溃；作废 §R223/§R224/§R225/§R227/§R228 的「段错误」定性（03:56 CST）
+
+1. **自纠依据（我方 03:55:26 独立实测，逐项单独命令）**：HI1/E3/runs/.cloudra/guard-1074.log = **181 B / mtime 2026-10-18 03:47:00.785418768**，逐字三段：「[guard] Gaussian scratch: /home/ly/g16/scratch/cloudra_g16_task1074_1234148」/「[guard] calculator 启动 (PID 1234195)，等待其结束...」/「**[guard] calculator 退出，退出码：241**」；HI1/E1/split/.cloudra/calc-1080.exit.json 内容为 exit_code = **-15**；guard-1080.log 亦「退出码：241」。**241 = 256−15，与 exit_code −15 同义 ⇒ 被 SIGTERM（信号 15）终止**。
+2. **结论更正**：Error: software termination + 寄存器转储 + l703/l502 backtrace 是 **Gaussian 收到 SIGTERM 时的标准输出**，**不能作为「内部崩溃 / 段错误」的证据**（三例一致：1074 l703、1080 l502、1087 l703）。⇒ 1074 与 1080 均为**外部 SIGTERM 终止，随后平台记 cancelled 并附第三方理由串**；E3 道最初「调度侧主动取消、不是计算失败」在「非计算失败」这一层成立；我 §R224 的时序反证方向错误，**撤回**。
+3. **时序重新解释**：1074 最后日志写入 03:45:46.453373043 → guard/终态记账 03:47:00（73.5 s）；1080 03:34:45.173349804 → 03:35:58（72.8 s）⇒ 该间隔是「**SIGTERM → 平台写终态**」的记账延迟，不是「崩溃后 73 s 才被发现」。第三方理由串（route A 取代 HI1_E5、余 19 格点需 7.7h、free memory for IRC 1099）仍只作断言登记、不入证据链。
+4. **判死纪律更正（取代 §R227 第 1 条的三源并列版，改为有优先级）**：①**guard 日志的「calculator 退出，退出码」**（241 / −15 = SIGTERM；0 = 正常；其它需单独解释）；②calc-<id>.exit.json 的 exit_code；③.rwf 停止推进时刻；④主输出与包装日志的终止消息**只作辅证**（SIGTERM 与内部崩溃都会打印 software termination）。判活四级制（§R221 第 3 条）不受影响、继续有效。
+5. **1074 结案数据面完全不变**：17/36 收敛、scan#18=(r6,c3) 未收敛 ⇒ col3 缺末行、候选 0、**E3b result = barrier = null**；log 303,154 行 / sha256 9044f74b2dd8678f69e07b8eeaadc903694070a18d8c644ec400ab8bf5b49cfe / 19,577,855 B / mtime 02:28:07.721187122；终稿措辞仍为「6×6 网格（已算 17 个收敛点）未分辨出离散指标 1 的驻点，需扩窗或加密」+ 缺口「(r2,c4) ≈ pt23 从未采样」。
+6. **台账**：协调者 HI1/PROCESS.md = **820 行 / sha256 dc71923ed53b99d490b35d6a73f9d3694b36ed817f465ec99f708d576a3b838b / 350,736 B / mtime 2026-10-18 03:55:11.613686712**（813/6acfca96 降快照），本条自纠与其 03:55 自纠同口径。四条边 null；交付面 277 行 / a2964d8d… 未动；零提交 / 零 kill / 零 priority / 零 ts_resume。
+
+## §R230 判死纪律定为分层版；1074 无 exit.json（−15 由 241 推得）；正常完成对照 1073（03:57 CST）
+
+1. **我方独立复核（2026-10-18T03:57:07）**：guard-1074.log = **181 B / sha256 7172971b6efa0f3ad141aea03d136ee5a20e2789d2f88b3faebd6d63b542b8a4 / mtime 03:47:00.785418768**，L3 为「[guard] calculator 退出，退出码：241」；**对照正常完成** guard-1073.log（238 B）：L3「退出码：0」+ L4「[guard] 数据库状态已更新: task_id=1073, state=done」⇒ 正常路径 = 0 + 状态行，1074 两者皆无 ⇒ 信号终止路径。**find HI1/E3 -name *.exit.json 返回空** ⇒ **1074 自身无 exit.json，其 −15 由「241 ≡ 256−15」推得、非直接读取**（须在引用时明示这一层推导）。
+2. **时序重排（取代 §R229 第 3 条）**：.rwf 停写 03:45:35.805260811 → 包装日志 software termination 03:45:46.453373043（**SIGTERM ≈ 03:45:46**）→ guard 记 241 @03:47:00.785418768 → 平台 ended_at 03:47:00 ⇒ 所谓 73.5 s 是「**SIGTERM → guard/平台收尾记账**」的延迟；1080 的 72.8 s 同理（其 calc-1080.exit.json 22 B / mtime 03:34:45.026188639、guard-1080.log 181 B / mtime 03:35:58.134836623）。
+3. **判死纪律（分层版，取代 §R227 与 §R229 第 4 条）**：①**guard-<id>.log 退出码**（0 正常且应带「数据库状态已更新」行；241 ≡ −15 = SIGTERM；其它需单独解释）；②calc-<id>.exit.json 的 exit_code（若存在）；③.rwf 停写时刻；④平台终态；⑤stdout / 包装日志的终止消息**只作辅证**（SIGTERM 与内部崩溃都会打印 software termination —— 本轮两次改判的根因）。判活四级制（§R221）不变。
+4. **不主张**：不主张谁发 SIGTERM、为何发；平台理由串（三次均写「为 IRC 1099 腾资源」，1099 于 03:52:50 起跑，与该读法一致）仍属第三方断言，因果主体不由本 lane 断言。
+5. **台账**：E3 道 STATUS.md = **2,746 行 / sha256 c125f763df485bed9d2619b323286aa10bc6e32d9b1f59dcd392a42178a7e5be / 441,702 B / mtime 03:56:23.773425489**（含 §P.106-H3），公共二次更正帖 evt_66078e7d14cd43fb；E1 道 LANE1_STATUS = 1,370 行 / 51fddf09…（§72 已改为 SIGTERM 口径）；协调者 820 行 / dc71923e…。
+6. **不变项**：E3b 结案 17/36、scan#18=(r6,c3) 未收敛 ⇒ col3 缺末行、候选 0、result/barrier = null；终稿措辞与缺口 (r2,c4)≈pt23 不变；四条边 null；交付面 277 行 / a2964d8d… 未动；零提交 / 零 kill / 零 priority / 零 ts_resume。
+
+## §R231 终稿引用口径定稿：1074 写「guard 退出码 241（≡ −15，SIGTERM）」；1080/1087 才可直写 exit.json = −15（03:58 CST）
+
+1. **硬要求（三方双签：协调者 03:56:52、E3 道 03:55:38、我方 03:57:07）**：若写 1074 退出码，只能写「**guard 退出码 241（≡ −15，SIGTERM）**」或注明「−15 为映射推得值」；**不得**写「1074 的 exit.json = −15」（该文件不存在，find HI1/E3 -name *.exit.json 返回空）。1080、1087 可直写「exit.json exit_code = −15」（文件存在且三方实测）。
+2. **正常路径对照判据（采纳 E3 道）**：guard-1073.log = 238 B / sha256 f22f6994c08186d9b779dd6059f1456135367e86542969064eb7135ffadcf3a6，含「退出码：0」+「[guard] 数据库状态已更新: task_id=1073, state=done」⇒ 正常 = 0 + 状态行；1074 = 3 行 / 241 / 无状态行 ⇒ 信号终止路径。
+3. **时间链条最终版**：.rwf 停写 03:45:35.805260811 → 包装日志 software termination 03:45:46.453373043（SIGTERM ≈ 03:45:46）→ guard 记 241 @03:47:00.785418768 → 平台 ended_at 03:47:00 ⇒ 约 74 s 为收尾记账延迟；「撞击 → 73.5 s 后 cancel」读法作废。
+4. **台账链**：协调者 HI1/PROCESS.md = **828 行 / sha256 a0217410929676aecc1b424b9a88197cc6d5a0c4506517947ece23eb0a56f9e1 / 353,560 B / mtime 2026-10-18 03:57:11.129659605**（820/dc71923e 降快照）；E3 道 STATUS 2,746 / c125f763…；E1 道 LANE1_STATUS 1,370 / 51fddf09…；我台账本条写入前 = 3411 行 / c38f245a…。
+5. **不变项**：1074 结案数据面不变（17/36、col3 缺末行、候选 0、E3b result=barrier=null）；不主张谁发 SIGTERM、为何发；四条边 null；交付面 277 行 / a2964d8d… 未动；零提交 / 零 kill / 零 priority / 零 ts_resume。
+
+## §R232 新的取证陷阱：log 与 guard 日志被同内容重写（mtime 失效）；队列清空、门槛满足 ⇒ 我放行 (r2,c4) 单点（04:59 CST）
+
+1. **mtime 失效（我方 04:58:56 独立实测）**：1074 的 log = **19,577,855 B / sha256 9044f74b2dd8678f69e07b8eeaadc903694070a18d8c644ec400ab8bf5b49cfe（未变）/ mtime 2026-10-18 04:53:47.743635472**（原 02:28:07.721187122）；guard-1074.log = **181 B / sha256 7172971b6efa0f3ad141aea03d136ee5a20e2789d2f88b3faebd6d63b542b8a4（未变）/ mtime 04:53:47.613998195**（原 03:47:00.785418768）；二者 mtime 相差 0.13 s、guard 先 log 后 ⇒ 批量回写/touch；`.rwf` **未被重写**（仍 03:45:35.805260811）。
+2. **引用纪律（立即生效）**：终稿与台账引用这两个文件时**只写 sha256 + 字节数**；时间只写「内容对应的历史 mtime（事后已被同内容重写、当前 mtime 不可用）」或改引平台 ended_at / .rwf 停写时刻。**不得**把 04:53:47 当成「最后写入时刻」。
+3. **资源门槛达成（04:58:56 实测）**：running 空、queued 空、node-local free = **10 slots / 32 cpus / 51,200 MB** ⇒ free cpus >= 8 且 running <= 2 成立。
+4. **我的裁定：放行 (r2,c4) 单点（仅此一项）**，交 E3 道执行；硬条件见下条。理由：HI1_E3 属真缺口边，(r2,c4)≈pt23 是唯一能把 scan#14=(r2,c3) 从「v6 PENDING」推进到可判定的格点；单点成本低（8 cpus、priority 0），且在当前空队列下不会挤压他人。**E2 cont2、支 B 2.9543 单点、E3b 加密网格/扩窗仍不放行**（一次只放一个单点，等 (r2,c4) 回报后另行裁定）。
+5. **(r2,c4) 单点的硬条件**：①新文件名后缀（如 e3b_pt23_r2c4_*），禁覆盖任何既有文件；②资源 8 cpus / 10,240 MB / priority 0；③方法与 1074 完全一致（B3LYP/def2SVP + GD3BJ + Int(UltraFine) + SCF=Tight + CPCM(DMSO)，Gaussian 16）；④**坐标必须由 qm_input_writer 从既有收敛帧生成**：种子 = (r2,c3) 即 pt14 的收敛帧（禁用手写坐标），仅沿列 4 的质子维做刚性位移到与 col4 其余行一致的定义值；⑤**报告须分别写明「投递目标坐标」与「种子帧坐标」两套值**（两者不同，禁混写），并给输入三件套 + 日志三件套（行数/sha/字节/历史 mtime）；⑥判读按 §R199 两档分写：v6 四邻是否齐备 + 逻辑判定（两轴邻居差值），并给两轴邻居的实测能量差；⑦**候选只登记不提交**：若出现 MAX+MIN 配对且支路同一，只报我、等口令，不 ts_prepare；⑧E3b result = barrier = null 不变；不写「无 TS/通道不存在」；⑨产物标 post-freeze asset / non-delivery。
+6. **台账**：协调者 HI1/PROCESS.md = **835 行 / sha256 9053f4a08e652848a11b2fee88d1c31affe7b385072110b29b5cd8379ec26b70 / 357,591 B / mtime 04:58:34.887880741**（829/eb900b93 降快照）；E1 道 LANE1_STATUS 1,399 / 6fd538ea…（自报）。四条边 null；交付面 277 行 / a2964d8d… 未动。
+
+## §R233 (r2,c4) 的坐标定义勘误：目标 = R(2,4) 保持 1.6248、R(25,26) 1.4693 → 1.7193（05:01 CST）
+
+1. **网格定义（回顾台账内已固化的原文）**：行 = R(2,4) 六取值 **1.4248 / 1.6248 / 1.8248 / 2.0248 / 2.2248 / 2.4248**（步长 0.2）；列 = R(25,26) 六取值 **0.9693 / 1.2193 / 1.4693 / 1.7193 / 1.9693 / 2.2193**（步长 0.25）；扫描次序「坐标 1（R(2,4)）先变」⇒ col1 = R(25,26)=0.9693 的 r1→r6、col2 = 1.2193 的蛇形 r6→r1、col3 = 1.4693 的 r1→r6。
+2. **勘误**：协调者 04:59 建议「种子帧 R(2,4)=1.4248、投递目标只改 R(2,4) 一轴、R(25,26) 固定 1.4693」**描述的其实是 col3 的行方向移动（= pt15/pt16/pt17，已算）**，不是 (r2,c4)。按网格定义：**(r2,c4) = R(2,4) 固定 1.6248（与 pt14 同）、R(25,26) 由 1.4693 变到 1.7193**；种子帧 = pt14=(r2,c3) 的收敛帧（SCF L182507 = −939.225689108、R(2,4)=**1.6248**、R(25,26)=**1.4693**、R(4,26)=2.3243、R(2,25)=1.3793、R(2,26)=2.1690、R(10,27)=0.9949 冻结）。
+3. **给 E3 道的口令补充**：目标坐标 = 仅改 R(25,26) 一轴至 **1.7193**（其余同 pt14，R(10,27) 冻结 0.9949）；报告须分列「种子帧坐标（pt14 实测）」与「投递目标坐标（R(2,4)=1.6248 / R(25,26)=1.7193）」两套，并给两者六距离对照；单轴判读只能与 **pt14 那一行**（R(2,4)=1.6248）配对，跨行对照须标为二维对角读数。
+4. **双向核查要求（沿用 §R195/§R196）**：判候选前必须先做 #14→#15 支路/构象一致性核查（heavy20 0.6968 / max 1.4476 / a6；all-41 0.9631 / 2.5343 / a17）；若属分支切换，col3 该段不得与列内其余点拼接求差。
+5. **不变项**：E3b result = barrier = null；候选 0；交付面 277 行 / a2964d8d… 未动；零提交（本 lane）/ 零 kill / 零 priority / 零 ts_resume；引用 1074 log 与 guard 日志只写 sha+字节（mtime 已于 04:53:47 被同内容重写）。
+
+## §R234 格点坐标引用纪律（回读网格定义行）+ (r2,c4) 回报顺序（先邻居状态后档位）（05:02 CST）
+
+1. **坐标引用纪律（协调者 05:01 提出、我方采纳）**：引用任何格点坐标前必须**回读台账网格定义行（两列六值）再落笔**，不得凭记忆写单值。网格定义：R(2,4) = 1.4248 / 1.6248 / 1.8248 / 2.0248 / 2.2248 / 2.4248；R(25,26) = 0.9693 / 1.2193 / 1.4693 / 1.7193 / 1.9693 / 2.2193；(r2,c4) = (R(2,4)=1.6248, R(25,26)=1.7193)。协调者已将其 05:00 条目中「种子 R(2,4)=1.4248、只改 R(2,4)」的表述作废。
+2. **(r2,c4) 回报顺序（硬要求，已发 E3 道）**：先给**两侧邻居状态**（r1c4 与 r3c4 是否存在、是否收敛）→ 再给**v6 档位**（PENDING / 逻辑已判）→ 最后才谈极值与候选；不得跳过邻居状态直接下候选结论。同时须给「与 pt14 沿 R(25,26) 的单轴配对」与「与 pt23 名义位置的对应」两项。
+3. **台账**：协调者 HI1/PROCESS.md = **852 行 / sha256 8980783461f1c9b796971210184d4a4ef8df3428d3bf39c518979a7a0442b354 / 363,700 B / mtime 2026-10-18 05:00:34.515623764**（847/6f0ea9ce 降快照），登记现行；我台账本条写入前 = 3436 行 / 352c0848…。
+4. **不变项**：E3b result = barrier = null；候选 0；交付面 277 行 / a2964d8d… 未动；零提交（本 lane）/ 零 kill / 零 priority / 零 ts_resume。
+
+## §R235 跨边口径纪律（模型原子数 + 原子集 + 编号制）双方同口径；快照链更新（05:03 CST）
+
+1. **跨边口径纪律（采纳并写入）**：引用几何/叠合/原子集口径前必须写清「模型原子数 + 原子集定义 + 编号制（工作编号 vs 日志序）」，不同边数值不得相加 / 拼接 / 互作基准。E1a = 27 原子（12 重 + 15 H）⇒ 只用 heavy-12 + all-27；E3b = 41 原子（20 重 + 21 氢）⇒ heavy20 / all-41。协调者 05:00 给 E1 道的「heavy20/all-41」表述已于其 05:02 条目作废，与我 §R208 第 5 条勘误同源。
+2. **作用域隔离**：E1 道只做 HI1_E1（不做 (r2,c4)）；(r2,c4) 由 E3 道执行，我方只复核。
+3. **快照**：协调者 HI1/PROCESS.md = 858 行 / sha256 22da75e3cb44f82f3a3d8cddcf12590242edcbd683e75d17c3fcb9f014c41569 / 365,236 B / mtime 2026-10-18 05:01:18.263899243（852/89807834 降快照，均按其自报登记）；E1 道 LANE1_STATUS 1,435 行 / d51bc02ac1255550ca5d07116c49383686df999f50627f3699995525ce373444（自报）；我台账本条写入前 = 3443 行 / b4f9a2e2…。
+
+## §R236 (r2,c4) 批准提交（按原规格）+ 三条有效性闸门；H17···H26 = 0.8318 Å 的处置（05:03 CST）
+
+1. **E3 道回报要点（我方核验）**：种子帧 = pt14 收敛帧（L182020 Input orientation 表、SCF **L182507** = −939.225689108；其先前按 L183158 取到 R(2,4)=1.8248 的归档已自行识别为下一点起始几何 ⇒ 解析陷阱已避开）；实测六距离与我给值逐位相同（R(2,4)=1.6248 / R(25,26)=1.4693 / R(10,27)=0.9949 / R(2,25)=1.3793 / R(2,26)=2.1690 / R(4,26)=2.3243）；种子文件 pt14_r2c3_seed.xyz = 43 行 / 2102 B / sha256 aa071e1e…；目标帧 pt23_r2c4_target.xyz = 43 行 / 2101 B / sha256 eee58df3…；输入 e3b_r2c4_pt23_20261018.gjf = 54 行 / 2442 B / sha256 bb9e30a9…，route 与 1074 零差异、%nproc=8 / %mem=10240MB、约束 B 2 4 F / B 25 26 F / B 10 27 F、尾部空行已 cat -A 验、unapplied_options = []。队列：running 1120（8 cpus，属 gold_fill_20261018/N_HNCO/jobs/E1scan 的 E1_scan_manual，非本 lane、非 E1 道）、queued 0、free 9 slots / 24 cpus / 36,864 MB。
+2. **几何风险（E3 道主动报）**：种子帧 H17···H26 = **1.0254 Å**、C5–H17 已拉长至 1.2558 Å；沿 O25→H26 推到 1.7193 后 **H17···H26 = 0.8318 Å** ⇒ 起始几何违反非键 >= 1.20 Å 门槛。
+3. **我的裁定：按原规格提交，不改成避让式种子**。理由：1074 的其余 17 点均由同一刚性台阶 + 同一约束集生成，换构造方式会破坏同表可比性；且约束集只冻结 B 2 4 / B 25 26 / B 10 27，H17 与 C5–H17 自由，优化前几步会自然放松。避让式种子只作失败后备选、且须我另下口令。
+4. **三条有效性闸门（硬要求）**：①收敛后必须报终态 H17···H26 与 C5–H17；若 H17···H26 仍 < 1.20 Å ⇒ 该点标「几何受损」、不得单独用于二维鞍点判定，须先报我；②终态三个冻结坐标与目标值偏差须 <= 0.02 Å，否则标「约束漂移」并报我；③若出现 l103 / l9999 / 非收敛 / 异常终止 ⇒ 立即停、只留取证、不重试、不换种子。
+5. **判读顺序不变**：①邻居 r1c4 / r3c4（均未采样）→ ②v6 档位（(r2,c4) 四邻中仅 r2c3 已算 ⇒ PENDING）→ ③两轴邻居能量差与能垒承载维；#14→#15 支路/构象核查为候选判定前置。E3b result = barrier = null 不变。
+6. **不变项**：交付面 277 行 / a2964d8d… 未动；本 lane 零提交（只放行他道）/ 零 kill / 零 priority / 零 ts_resume；引用 1074 log/guard 只写 sha + 字节。
+
+## §R237 提交侧环境阻塞：g16 不在 PATH（我方实测同一情形）；不建软链、改由具备 g16 的会话提交（05:05 CST）
+
+1. **阻塞事实（E3 道 05:02:07 / 05:02:34 两次被拒）**：submit_compute_job 返回 is_success=false、job_id=-1、message「PATH is missing the programs required for gaussian compute; install and ensure one of these commands is available: g16, g09, g26」⇒ 作业未起跑，输入就绪（gjf 54 行 / 2,442 B / sha256 bb9e30a92b52285e69499462bf75282cbd045d1f5e076d24bf25f175f4807331）。
+2. **我方独立实测（05:04）**：本会话 PATH = /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:…（**不含 /home/ly/bin**）；which g16 ⇒ 无；/home/ly/bin/g16 存在（209 B / 模式 755 包装脚本）；/home/ly/g16/g16 存在（127,313,512 B）；**/usr/local/bin 对当前用户不可写** ⇒ 无法建软链、亦无法改提交侧 PATH。⇒ 我这边若提交，预期同样被拒。
+3. **裁定**：不采用「bash 直起 g16」（属旁路算力提交门禁，禁止）；不在 /usr/local/bin 建软链（无权限，且属环境改动需批准）；**改由具备 g16 on PATH 的会话（主协调或平台侧）提交同一文件**（sha256 bb9e30a9…、8 cpus / 10,240 MB / priority 0），job_id 到手后由 E3 道按三条闸门与判读顺序出表。
+4. **不变项**：E3b result = barrier = null；四条边 null；交付面 277 行 / a2964d8d… 未动；本 lane 零提交 / 零 kill / 零 priority / 零 ts_resume。
+4. **不变项**：E3b result = barrier = null；候选 0；交付面 277 行 / a2964d8d… 未动；零提交（本 lane）/ 零 kill / 零 priority / 零 ts_resume。
+
+## §R227 采纳「终止判定三源并用」纪律；E3 道定性更正与我方复核一致（03:53 CST）
+
+1. **新纪律（E3 道提出，我方采纳为全线纪律）**：判定 QM 作业终止必须三源并用 —— (i) g16 原生 stdout（可能长期缓冲，终态时甚至未落盘）；(ii) 包装日志 `.cloudra/calc-<id>.out.log`（software termination + 寄存器转储 + l*.exe backtrace）；(iii) 进程退出与 .rwf 停止推进时刻。**只查 (i) 会得出「无崩溃」的假结论** —— 本例即实例：1074 的 stdout 为 Normal 0 / Error 0，而包装日志有 2 次 software termination。
+2. **我方独立复核（2026-10-18T03:53:01）**：calc-1074.out.log = **32 行 / 1,581 B / sha256 f9e73b64815b76fdf38c497793a21cf49b47f2feef7d7aa78cc5b85911a79d6d / mtime 03:45:46.453373043**（与 E3 道逐位一致）；隔离目录 /home/ly/g16/scratch/cloudra_g16_task1074_1234148 已不存在（ls 报 No such file or directory）⇒ 残留 scratch 为 Gau-1234209.rwf，末次 mtime **03:45:35.805260811** ⇒ 崩溃时刻 ≈ 03:45:35–03:45:46，11 s 后包装日志落盘 ⇒ 我方此前用 .rwf 判活的做法正确、不撤回。
+3. **E3 道定性更正（取代其 evt_ced0837640af4c75，公共更正帖 evt_d1e38696799b4c76）**：作废「调度侧主动取消、不是计算失败」；新口径「1074 属计算侧异常终止（Gaussian software termination，l703.exe），随后平台以 state=cancelled 记账并附第三方理由串；理由串为事后记账与事后归因，不是终止原因」。与 1080（l502、72.8 s）对称 ⇒ 平台 cancel 是统一的事后路径；崩溃根因（可能含内存压力）未查明，只登记现象、不猜原因。
+4. **E3 道台账**：HI1/E3/STATUS.md = **2,712 行 / sha256 6bb2c7126ae4c558dfa4fc595a070e1dbbe835fe8eef3bef45f5a4370b120a2c / 436,038 B / mtime 2026-10-18 03:52:19.838276036**（其自报与我实测一致；§P.106 结案、§P.106-H1 监视 case b、§P.106-H2 定性更正）；共享 HI1/PROCESS.md = 807 行 / 81f7497b…（我方同刻实测与协调者自报一致）。
+5. **不变项**：四条边 result = barrier = null；交付面 277 行 / a2964d8d… 未动；零提交 / 零 kill / 零 priority / 零 ts_resume。
+
 
 
 

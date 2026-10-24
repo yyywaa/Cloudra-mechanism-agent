@@ -1,0 +1,1167 @@
+{
+  "format_version": 7,
+  "run_id": "ts_0041",
+  "pipeline_id": "63c45c4a0e4ac9088258dec93bfa0b16b1dcca1db952171f79ed73e3aa459d77",
+  "declaration_revision": 9,
+  "optimization_checkpoints": {},
+  "budget_action_keys": {},
+  "budget_reservations": {},
+  "attempt_history": [
+    {
+      "declaration_revision": 1,
+      "selected_candidate_id": null,
+      "job_steps": [],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "map",
+          "status": "blocked",
+          "detail": "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: N=CO; concrete identity: [H]/N=C\\O. Changing binding indices cannot repair this identity mismatch.",
+          "artifacts": [],
+          "source_input_revision": 1
+        }
+      ],
+      "reason": "Endpoint identity mismatch: the concrete reactant file is the trans (E-like) HN=CH-OH arrangement, i.e. [H]/N=C\\O, while the declared N=C(O) carried no stereo descriptor. Re-declare the reactant SMILES with the explicit stereo/explicit-H form that matches the concrete frame; product (C#N.O) and all calculations unchanged.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "N=C(O)",
+          "product_smiles": "C#N.O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "selected_candidate": null,
+          "reaction_center": [
+            [
+              0,
+              3
+            ],
+            [
+              2,
+              3
+            ]
+          ]
+        },
+        "calculations": {
+          "m": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_frame_cand_b.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_P_complex.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": {
+          "kind": "provided",
+          "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_frame_cand_b.xyz",
+          "evidence_refs": [
+            "gold_compute/queue_20261018/results/NR1/jobs/E4_relax_c1.log",
+            "gold_compute/queue_20261018/results/NR1/jobs/E4_freq_candB.log"
+          ]
+        },
+        "ts_optimization": {
+          "ref": "m"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "m"
+          },
+          "irc": null,
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": null,
+            "frequency": null
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": null,
+            "frequency": null
+          }
+        },
+        "execution": {
+          "cpus": 4,
+          "memory_mb": 6144,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABByAoAAAAAwMGICgAAAADBAggKAAAAAMCASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAKgICAgIDAgEkBAMABAQEAQQDBQIAQgAAAABAoQAAAAEAAAABAAAAAAYQdopVgzCHP91e0hitY/Y/AAAAAAAAAABqSx3k9WDAv0PGo1TCE8o/AAAAAAAAAADkoe9uZYn6P8DpXbwft9G/AAAAAAAAAABS8BRypV71P/28qUiFMfI/AAAAAAAAAABu3c1THXLov12LFqBtteW/AAAAAAAAAACALa9cb7sBQLsJvmn6LPG/AAAAAAAAAAA/AgAAAAAAEgYCAAACAA0AAABfRmlsZUNvbW1lbnRzAHEAAABFNCBzdGVwMWIgcmVsYXhlZCBmcmFtZSBmcm9tIGpvYiAxMjkwIGxhc3Qgc2NhbiBwb2ludCAoTzMtSDQgMS40NTAgZnJvemVuLCBOMS1INCAxLjM1MCwgQzItTzMgMS44NTAsIGFuZ2xlcyBmcmVlKRUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAXwEAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2NvbXB1dGUvcXVldWVfMjAyNjEwMTgvcmVzdWx0cy9OUjEvZ2VvbXMvRTRfZnJhbWVfY2FuZF9iLnh5eiJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiN2JjM2JmOTZkZGRiNjI5YjMzMTIxNzljMWQ0ZDg2ZWIwYTNhNzBjYzdmY2Y2ZGZmMzIxZTY2NmI1NjcyN2E2ZSJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDA0MS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV83YmMzYmY5NmRkZGI2MjliLnh5eiJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfRMW",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABAAAAIABBiAoAAAAAgQHICgAAAACAwEgKAAAAAEBCCAgAAAAAgEgKAAAAAEBASAoAAAAAQELAQAIAwIAAAQDAAUDAEIAAAAAQKEAAAABAAAAAQAAAAAGgv3XuWkTAMDLngQ25+BpvwAAAAAAAAAAvaYHBaVo679p5POKpx6ZPwAAAAAAAACADR07qMS1CMDxYmGInL6evwAAAAAAAAAA1e3sKw+SAUDxETElkui5vwAAAAAAAAAAUB2rlJ6p8z8iHLPsSWDFvwAAAAAAAACAm3RbIhe8AkClvcEXJlPrPwAAAAAAAAAAPwIAAAAAABLuAQAAAgANAAAAX0ZpbGVDb21tZW50cwBdAAAATlIxIFAgY29tcGxleCBIQ04uLi5IMk8gbGFzdCBvcmllbnRhdGlvbiBmcm9tIE5SMV9QX2NvbXBsZXhfb3B0ZnJlcS5sb2cgKGxpbmUgNTYzMywgam9iIDEyMTMpFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBbAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9FNF9QX2NvbXBsZXgueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICI4ODczNjkwNmY0YzczYTUzOTkzNzY1NmZjYzk4YzI5ODkyN2JkYmY0OTEzYmIzNTZkODg3ZWU4ZDVmZGZmYzRlIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQxL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfODg3MzY5MDZmNGM3M2E1My54eXoifSwgImlucHV0X3JldmlzaW9uIjogMX0TFg==",
+        "product_to_reactant": null,
+        "candidate": null
+      },
+      "provided_guess_binding": null,
+      "terminal": null,
+      "blocked": {
+        "failure_class": "input_identity_unconfirmed",
+        "stage": "map",
+        "message": "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: N=CO; concrete identity: [H]/N=C\\O. Changing binding indices cannot repair this identity mismatch.",
+        "atom_details": [
+          "reactant built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0041/structures/reactant_4f1de368dea0ff49f1d3.xyz",
+          "reactant atoms (1-based): 1=N, 2=C, 3=O, 4=H, 5=H, 6=H",
+          "product built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0041/structures/product_440e9cb4e70ef664f053.xyz",
+          "product atoms (1-based): 1=C, 2=N, 3=H, 4=O, 5=H, 6=H"
+        ],
+        "needs": [
+          "conformers.reactant",
+          "reaction.reactant_smiles"
+        ],
+        "issues": [
+          {
+            "code": "endpoint_identity_mismatch",
+            "details": [
+              "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: N=CO; concrete identity: [H]/N=C\\O. Changing binding indices cannot repair this identity mismatch."
+            ],
+            "field": "conformers.reactant",
+            "role": "reactant"
+          }
+        ]
+      },
+      "failed_attempt": null,
+      "stop_reason": null
+    },
+    {
+      "declaration_revision": 2,
+      "selected_candidate_id": null,
+      "job_steps": [],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 2
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [],
+          "source_input_revision": 2
+        },
+        {
+          "stage": "map",
+          "status": "blocked",
+          "detail": "Heavy-atom element counts differ before and after the reaction: {(1, 0): 1, (7, 0): 1, (6, 0): 1, (8, 0): 1} vs {(6, 0): 1, (7, 0): 1, (8, 0): 1}",
+          "artifacts": [],
+          "source_input_revision": 2
+        }
+      ],
+      "reason": "Declare the reactant with an implicit-hydrogen stereo SMILES that reproduces the concrete frame's C=N configuration (previous attempts: N=C(O) lacked stereo; explicit [H] changed heavy-atom counts). Method, conformers, guess and calculations unchanged.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "[H]/N=C\\O",
+          "product_smiles": "C#N.O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "selected_candidate": null,
+          "reaction_center": []
+        },
+        "calculations": {
+          "m": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_frame_cand_b.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_P_complex.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": null,
+        "ts_optimization": {
+          "ref": "m"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "m"
+          },
+          "irc": null,
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": null,
+            "frequency": null
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": null,
+            "frequency": null
+          }
+        },
+        "execution": {
+          "cpus": 4,
+          "memory_mb": 6144,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABByAoAAAAAwMGICgAAAADBAggKAAAAAMCASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAKgICAgIDAgEkBAMABAQEAQQDBQIAQgAAAABAoQAAAAEAAAABAAAAAAYQdopVgzCHP91e0hitY/Y/AAAAAAAAAABqSx3k9WDAv0PGo1TCE8o/AAAAAAAAAADkoe9uZYn6P8DpXbwft9G/AAAAAAAAAABS8BRypV71P/28qUiFMfI/AAAAAAAAAABu3c1THXLov12LFqBtteW/AAAAAAAAAACALa9cb7sBQLsJvmn6LPG/AAAAAAAAAAA/AgAAAAAAEgYCAAACAA0AAABfRmlsZUNvbW1lbnRzAHEAAABFNCBzdGVwMWIgcmVsYXhlZCBmcmFtZSBmcm9tIGpvYiAxMjkwIGxhc3Qgc2NhbiBwb2ludCAoTzMtSDQgMS40NTAgZnJvemVuLCBOMS1INCAxLjM1MCwgQzItTzMgMS44NTAsIGFuZ2xlcyBmcmVlKRUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAXwEAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2NvbXB1dGUvcXVldWVfMjAyNjEwMTgvcmVzdWx0cy9OUjEvZ2VvbXMvRTRfZnJhbWVfY2FuZF9iLnh5eiJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiN2JjM2JmOTZkZGRiNjI5YjMzMTIxNzljMWQ0ZDg2ZWIwYTNhNzBjYzdmY2Y2ZGZmMzIxZTY2NmI1NjcyN2E2ZSJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDA0MS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV83YmMzYmY5NmRkZGI2MjliLnh5eiJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfRMW",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABAAAAIABBiAoAAAAAgQHICgAAAACAwEgKAAAAAEBCCAgAAAAAgEgKAAAAAEBASAoAAAAAQELAQAIAwIAAAQDAAUDAEIAAAAAQKEAAAABAAAAAQAAAAAGgv3XuWkTAMDLngQ25+BpvwAAAAAAAAAAvaYHBaVo679p5POKpx6ZPwAAAAAAAACADR07qMS1CMDxYmGInL6evwAAAAAAAAAA1e3sKw+SAUDxETElkui5vwAAAAAAAAAAUB2rlJ6p8z8iHLPsSWDFvwAAAAAAAACAm3RbIhe8AkClvcEXJlPrPwAAAAAAAAAAPwIAAAAAABLuAQAAAgANAAAAX0ZpbGVDb21tZW50cwBdAAAATlIxIFAgY29tcGxleCBIQ04uLi5IMk8gbGFzdCBvcmllbnRhdGlvbiBmcm9tIE5SMV9QX2NvbXBsZXhfb3B0ZnJlcS5sb2cgKGxpbmUgNTYzMywgam9iIDEyMTMpFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBbAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9FNF9QX2NvbXBsZXgueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICI4ODczNjkwNmY0YzczYTUzOTkzNzY1NmZjYzk4YzI5ODkyN2JkYmY0OTEzYmIzNTZkODg3ZWU4ZDVmZGZmYzRlIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQxL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfODg3MzY5MDZmNGM3M2E1My54eXoifSwgImlucHV0X3JldmlzaW9uIjogMX0TFg==",
+        "product_to_reactant": null,
+        "candidate": null
+      },
+      "provided_guess_binding": null,
+      "terminal": null,
+      "blocked": {
+        "failure_class": "input_identity_unconfirmed",
+        "stage": "map",
+        "message": "Heavy-atom element counts differ before and after the reaction: {(1, 0): 1, (7, 0): 1, (6, 0): 1, (8, 0): 1} vs {(6, 0): 1, (7, 0): 1, (8, 0): 1}",
+        "atom_details": [],
+        "needs": [
+          "conformers",
+          "reaction.selected_candidate"
+        ],
+        "issues": []
+      },
+      "failed_attempt": null,
+      "stop_reason": null
+    },
+    {
+      "declaration_revision": 3,
+      "selected_candidate_id": null,
+      "job_steps": [],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "map",
+          "status": "blocked",
+          "detail": "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: NC=O; concrete identity: [H]/N=C\\O. Changing binding indices cannot repair this identity mismatch.",
+          "artifacts": [],
+          "source_input_revision": 3
+        }
+      ],
+      "reason": "Declare the reactant with an implicit-hydrogen stereo SMILES that reproduces the concrete frame's C=N configuration (previous attempts: N=C(O) lacked stereo; explicit [H] changed heavy-atom counts). Method, conformers, guess and calculations unchanged.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "N/C=O",
+          "product_smiles": "C#N.O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "selected_candidate": null,
+          "reaction_center": []
+        },
+        "calculations": {
+          "m": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_frame_cand_b.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_P_complex.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": null,
+        "ts_optimization": {
+          "ref": "m"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "m"
+          },
+          "irc": null,
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": null,
+            "frequency": null
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": null,
+            "frequency": null
+          }
+        },
+        "execution": {
+          "cpus": 4,
+          "memory_mb": 6144,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABByAoAAAAAwMGICgAAAADBAggKAAAAAMCASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAKgICAgIDAgEkBAMABAQEAQQDBQIAQgAAAABAoQAAAAEAAAABAAAAAAYQdopVgzCHP91e0hitY/Y/AAAAAAAAAABqSx3k9WDAv0PGo1TCE8o/AAAAAAAAAADkoe9uZYn6P8DpXbwft9G/AAAAAAAAAABS8BRypV71P/28qUiFMfI/AAAAAAAAAABu3c1THXLov12LFqBtteW/AAAAAAAAAACALa9cb7sBQLsJvmn6LPG/AAAAAAAAAAA/AgAAAAAAEgYCAAACAA0AAABfRmlsZUNvbW1lbnRzAHEAAABFNCBzdGVwMWIgcmVsYXhlZCBmcmFtZSBmcm9tIGpvYiAxMjkwIGxhc3Qgc2NhbiBwb2ludCAoTzMtSDQgMS40NTAgZnJvemVuLCBOMS1INCAxLjM1MCwgQzItTzMgMS44NTAsIGFuZ2xlcyBmcmVlKRUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAXwEAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2NvbXB1dGUvcXVldWVfMjAyNjEwMTgvcmVzdWx0cy9OUjEvZ2VvbXMvRTRfZnJhbWVfY2FuZF9iLnh5eiJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiN2JjM2JmOTZkZGRiNjI5YjMzMTIxNzljMWQ0ZDg2ZWIwYTNhNzBjYzdmY2Y2ZGZmMzIxZTY2NmI1NjcyN2E2ZSJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDA0MS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV83YmMzYmY5NmRkZGI2MjliLnh5eiJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfRMW",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABAAAAIABBiAoAAAAAgQHICgAAAACAwEgKAAAAAEBCCAgAAAAAgEgKAAAAAEBASAoAAAAAQELAQAIAwIAAAQDAAUDAEIAAAAAQKEAAAABAAAAAQAAAAAGgv3XuWkTAMDLngQ25+BpvwAAAAAAAAAAvaYHBaVo679p5POKpx6ZPwAAAAAAAACADR07qMS1CMDxYmGInL6evwAAAAAAAAAA1e3sKw+SAUDxETElkui5vwAAAAAAAAAAUB2rlJ6p8z8iHLPsSWDFvwAAAAAAAACAm3RbIhe8AkClvcEXJlPrPwAAAAAAAAAAPwIAAAAAABLuAQAAAgANAAAAX0ZpbGVDb21tZW50cwBdAAAATlIxIFAgY29tcGxleCBIQ04uLi5IMk8gbGFzdCBvcmllbnRhdGlvbiBmcm9tIE5SMV9QX2NvbXBsZXhfb3B0ZnJlcS5sb2cgKGxpbmUgNTYzMywgam9iIDEyMTMpFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBbAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9FNF9QX2NvbXBsZXgueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICI4ODczNjkwNmY0YzczYTUzOTkzNzY1NmZjYzk4YzI5ODkyN2JkYmY0OTEzYmIzNTZkODg3ZWU4ZDVmZGZmYzRlIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQxL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfODg3MzY5MDZmNGM3M2E1My54eXoifSwgImlucHV0X3JldmlzaW9uIjogMX0TFg==",
+        "product_to_reactant": null,
+        "candidate": null
+      },
+      "provided_guess_binding": null,
+      "terminal": null,
+      "blocked": {
+        "failure_class": "input_identity_unconfirmed",
+        "stage": "map",
+        "message": "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: NC=O; concrete identity: [H]/N=C\\O. Changing binding indices cannot repair this identity mismatch.",
+        "atom_details": [
+          "reactant built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0041/structures/reactant_4f1de368dea0ff49f1d3.xyz",
+          "reactant atoms (1-based): 1=N, 2=C, 3=O, 4=H, 5=H, 6=H",
+          "product built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0041/structures/product_440e9cb4e70ef664f053.xyz",
+          "product atoms (1-based): 1=C, 2=N, 3=H, 4=O, 5=H, 6=H"
+        ],
+        "needs": [
+          "conformers.reactant",
+          "reaction.reactant_smiles"
+        ],
+        "issues": [
+          {
+            "code": "endpoint_identity_mismatch",
+            "details": [
+              "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: NC=O; concrete identity: [H]/N=C\\O. Changing binding indices cannot repair this identity mismatch."
+            ],
+            "field": "conformers.reactant",
+            "role": "reactant"
+          }
+        ]
+      },
+      "failed_attempt": null,
+      "stop_reason": null
+    },
+    {
+      "declaration_revision": 4,
+      "selected_candidate_id": null,
+      "job_steps": [],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 4
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [],
+          "source_input_revision": 4
+        },
+        {
+          "stage": "map",
+          "status": "blocked",
+          "detail": "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: NC=O; concrete identity: [H]/N=C\\O. Changing binding indices cannot repair this identity mismatch.",
+          "artifacts": [],
+          "source_input_revision": 4
+        }
+      ],
+      "reason": "Declare the reactant with an implicit-hydrogen stereo SMILES that reproduces the concrete frame's C=N configuration (previous attempts: N=C(O) lacked stereo; explicit [H] changed heavy-atom counts). Method, conformers, guess and calculations unchanged.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "N\\C=O",
+          "product_smiles": "C#N.O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "selected_candidate": null,
+          "reaction_center": []
+        },
+        "calculations": {
+          "m": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_frame_cand_b.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_P_complex.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": null,
+        "ts_optimization": {
+          "ref": "m"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "m"
+          },
+          "irc": null,
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": null,
+            "frequency": null
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": null,
+            "frequency": null
+          }
+        },
+        "execution": {
+          "cpus": 4,
+          "memory_mb": 6144,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABByAoAAAAAwMGICgAAAADBAggKAAAAAMCASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAKgICAgIDAgEkBAMABAQEAQQDBQIAQgAAAABAoQAAAAEAAAABAAAAAAYQdopVgzCHP91e0hitY/Y/AAAAAAAAAABqSx3k9WDAv0PGo1TCE8o/AAAAAAAAAADkoe9uZYn6P8DpXbwft9G/AAAAAAAAAABS8BRypV71P/28qUiFMfI/AAAAAAAAAABu3c1THXLov12LFqBtteW/AAAAAAAAAACALa9cb7sBQLsJvmn6LPG/AAAAAAAAAAA/AgAAAAAAEgYCAAACAA0AAABfRmlsZUNvbW1lbnRzAHEAAABFNCBzdGVwMWIgcmVsYXhlZCBmcmFtZSBmcm9tIGpvYiAxMjkwIGxhc3Qgc2NhbiBwb2ludCAoTzMtSDQgMS40NTAgZnJvemVuLCBOMS1INCAxLjM1MCwgQzItTzMgMS44NTAsIGFuZ2xlcyBmcmVlKRUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAXwEAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2NvbXB1dGUvcXVldWVfMjAyNjEwMTgvcmVzdWx0cy9OUjEvZ2VvbXMvRTRfZnJhbWVfY2FuZF9iLnh5eiJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiN2JjM2JmOTZkZGRiNjI5YjMzMTIxNzljMWQ0ZDg2ZWIwYTNhNzBjYzdmY2Y2ZGZmMzIxZTY2NmI1NjcyN2E2ZSJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDA0MS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV83YmMzYmY5NmRkZGI2MjliLnh5eiJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfRMW",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABAAAAIABBiAoAAAAAgQHICgAAAACAwEgKAAAAAEBCCAgAAAAAgEgKAAAAAEBASAoAAAAAQELAQAIAwIAAAQDAAUDAEIAAAAAQKEAAAABAAAAAQAAAAAGgv3XuWkTAMDLngQ25+BpvwAAAAAAAAAAvaYHBaVo679p5POKpx6ZPwAAAAAAAACADR07qMS1CMDxYmGInL6evwAAAAAAAAAA1e3sKw+SAUDxETElkui5vwAAAAAAAAAAUB2rlJ6p8z8iHLPsSWDFvwAAAAAAAACAm3RbIhe8AkClvcEXJlPrPwAAAAAAAAAAPwIAAAAAABLuAQAAAgANAAAAX0ZpbGVDb21tZW50cwBdAAAATlIxIFAgY29tcGxleCBIQ04uLi5IMk8gbGFzdCBvcmllbnRhdGlvbiBmcm9tIE5SMV9QX2NvbXBsZXhfb3B0ZnJlcS5sb2cgKGxpbmUgNTYzMywgam9iIDEyMTMpFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBbAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9FNF9QX2NvbXBsZXgueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICI4ODczNjkwNmY0YzczYTUzOTkzNzY1NmZjYzk4YzI5ODkyN2JkYmY0OTEzYmIzNTZkODg3ZWU4ZDVmZGZmYzRlIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQxL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfODg3MzY5MDZmNGM3M2E1My54eXoifSwgImlucHV0X3JldmlzaW9uIjogMX0TFg==",
+        "product_to_reactant": null,
+        "candidate": null
+      },
+      "provided_guess_binding": null,
+      "terminal": null,
+      "blocked": {
+        "failure_class": "input_identity_unconfirmed",
+        "stage": "map",
+        "message": "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: NC=O; concrete identity: [H]/N=C\\O. Changing binding indices cannot repair this identity mismatch.",
+        "atom_details": [
+          "reactant built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0041/structures/reactant_4f1de368dea0ff49f1d3.xyz",
+          "reactant atoms (1-based): 1=N, 2=C, 3=O, 4=H, 5=H, 6=H",
+          "product built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0041/structures/product_440e9cb4e70ef664f053.xyz",
+          "product atoms (1-based): 1=C, 2=N, 3=H, 4=O, 5=H, 6=H"
+        ],
+        "needs": [
+          "conformers.reactant",
+          "reaction.reactant_smiles"
+        ],
+        "issues": [
+          {
+            "code": "endpoint_identity_mismatch",
+            "details": [
+              "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: NC=O; concrete identity: [H]/N=C\\O. Changing binding indices cannot repair this identity mismatch."
+            ],
+            "field": "conformers.reactant",
+            "role": "reactant"
+          }
+        ]
+      },
+      "failed_attempt": null,
+      "stop_reason": null
+    },
+    {
+      "declaration_revision": 5,
+      "selected_candidate_id": null,
+      "job_steps": [],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 5
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [],
+          "source_input_revision": 5
+        },
+        {
+          "stage": "map",
+          "status": "blocked",
+          "detail": "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: N=CO; concrete identity: [H]/N=C\\O. Changing binding indices cannot repair this identity mismatch.",
+          "artifacts": [],
+          "source_input_revision": 5
+        }
+      ],
+      "reason": "Declare the reactant with all atoms explicit (6 atoms, 3 H) so the atom-count comparison matches, plus the C=N stereo descriptor of the concrete frame; calculations/conformers/guess unchanged.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "O/C=N",
+          "product_smiles": "C#N.O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "selected_candidate": null,
+          "reaction_center": []
+        },
+        "calculations": {
+          "m": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_frame_cand_b.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_P_complex.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": null,
+        "ts_optimization": {
+          "ref": "m"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "m"
+          },
+          "irc": null,
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": null,
+            "frequency": null
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": null,
+            "frequency": null
+          }
+        },
+        "execution": {
+          "cpus": 4,
+          "memory_mb": 6144,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABByAoAAAAAwMGICgAAAADBAggKAAAAAMCASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAKgICAgIDAgEkBAMABAQEAQQDBQIAQgAAAABAoQAAAAEAAAABAAAAAAYQdopVgzCHP91e0hitY/Y/AAAAAAAAAABqSx3k9WDAv0PGo1TCE8o/AAAAAAAAAADkoe9uZYn6P8DpXbwft9G/AAAAAAAAAABS8BRypV71P/28qUiFMfI/AAAAAAAAAABu3c1THXLov12LFqBtteW/AAAAAAAAAACALa9cb7sBQLsJvmn6LPG/AAAAAAAAAAA/AgAAAAAAEgYCAAACAA0AAABfRmlsZUNvbW1lbnRzAHEAAABFNCBzdGVwMWIgcmVsYXhlZCBmcmFtZSBmcm9tIGpvYiAxMjkwIGxhc3Qgc2NhbiBwb2ludCAoTzMtSDQgMS40NTAgZnJvemVuLCBOMS1INCAxLjM1MCwgQzItTzMgMS44NTAsIGFuZ2xlcyBmcmVlKRUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAXwEAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2NvbXB1dGUvcXVldWVfMjAyNjEwMTgvcmVzdWx0cy9OUjEvZ2VvbXMvRTRfZnJhbWVfY2FuZF9iLnh5eiJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiN2JjM2JmOTZkZGRiNjI5YjMzMTIxNzljMWQ0ZDg2ZWIwYTNhNzBjYzdmY2Y2ZGZmMzIxZTY2NmI1NjcyN2E2ZSJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDA0MS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV83YmMzYmY5NmRkZGI2MjliLnh5eiJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfRMW",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABAAAAIABBiAoAAAAAgQHICgAAAACAwEgKAAAAAEBCCAgAAAAAgEgKAAAAAEBASAoAAAAAQELAQAIAwIAAAQDAAUDAEIAAAAAQKEAAAABAAAAAQAAAAAGgv3XuWkTAMDLngQ25+BpvwAAAAAAAAAAvaYHBaVo679p5POKpx6ZPwAAAAAAAACADR07qMS1CMDxYmGInL6evwAAAAAAAAAA1e3sKw+SAUDxETElkui5vwAAAAAAAAAAUB2rlJ6p8z8iHLPsSWDFvwAAAAAAAACAm3RbIhe8AkClvcEXJlPrPwAAAAAAAAAAPwIAAAAAABLuAQAAAgANAAAAX0ZpbGVDb21tZW50cwBdAAAATlIxIFAgY29tcGxleCBIQ04uLi5IMk8gbGFzdCBvcmllbnRhdGlvbiBmcm9tIE5SMV9QX2NvbXBsZXhfb3B0ZnJlcS5sb2cgKGxpbmUgNTYzMywgam9iIDEyMTMpFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBbAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9FNF9QX2NvbXBsZXgueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICI4ODczNjkwNmY0YzczYTUzOTkzNzY1NmZjYzk4YzI5ODkyN2JkYmY0OTEzYmIzNTZkODg3ZWU4ZDVmZGZmYzRlIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQxL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfODg3MzY5MDZmNGM3M2E1My54eXoifSwgImlucHV0X3JldmlzaW9uIjogMX0TFg==",
+        "product_to_reactant": null,
+        "candidate": null
+      },
+      "provided_guess_binding": null,
+      "terminal": null,
+      "blocked": {
+        "failure_class": "input_identity_unconfirmed",
+        "stage": "map",
+        "message": "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: N=CO; concrete identity: [H]/N=C\\O. Changing binding indices cannot repair this identity mismatch.",
+        "atom_details": [
+          "reactant built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0041/structures/reactant_4f1de368dea0ff49f1d3.xyz",
+          "reactant atoms (1-based): 1=N, 2=C, 3=O, 4=H, 5=H, 6=H",
+          "product built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0041/structures/product_440e9cb4e70ef664f053.xyz",
+          "product atoms (1-based): 1=C, 2=N, 3=H, 4=O, 5=H, 6=H"
+        ],
+        "needs": [
+          "conformers.reactant",
+          "reaction.reactant_smiles"
+        ],
+        "issues": [
+          {
+            "code": "endpoint_identity_mismatch",
+            "details": [
+              "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: N=CO; concrete identity: [H]/N=C\\O. Changing binding indices cannot repair this identity mismatch."
+            ],
+            "field": "conformers.reactant",
+            "role": "reactant"
+          }
+        ]
+      },
+      "failed_attempt": null,
+      "stop_reason": null
+    },
+    {
+      "declaration_revision": 6,
+      "selected_candidate_id": null,
+      "job_steps": [],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 6
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [],
+          "source_input_revision": 6
+        },
+        {
+          "stage": "map",
+          "status": "blocked",
+          "detail": "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: N=CO; concrete identity: [H]/N=C\\O. Changing binding indices cannot repair this identity mismatch.",
+          "artifacts": [],
+          "source_input_revision": 6
+        }
+      ],
+      "reason": "Declare the reactant with all atoms explicit (6 atoms, 3 H) so the atom-count comparison matches, plus the C=N stereo descriptor of the concrete frame; calculations/conformers/guess unchanged.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "[H]N=C([H])[O][H]",
+          "product_smiles": "C#N.O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "selected_candidate": null,
+          "reaction_center": []
+        },
+        "calculations": {
+          "m": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_frame_cand_b.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_P_complex.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": null,
+        "ts_optimization": {
+          "ref": "m"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "m"
+          },
+          "irc": null,
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": null,
+            "frequency": null
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": null,
+            "frequency": null
+          }
+        },
+        "execution": {
+          "cpus": 4,
+          "memory_mb": 6144,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABByAoAAAAAwMGICgAAAADBAggKAAAAAMCASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAKgICAgIDAgEkBAMABAQEAQQDBQIAQgAAAABAoQAAAAEAAAABAAAAAAYQdopVgzCHP91e0hitY/Y/AAAAAAAAAABqSx3k9WDAv0PGo1TCE8o/AAAAAAAAAADkoe9uZYn6P8DpXbwft9G/AAAAAAAAAABS8BRypV71P/28qUiFMfI/AAAAAAAAAABu3c1THXLov12LFqBtteW/AAAAAAAAAACALa9cb7sBQLsJvmn6LPG/AAAAAAAAAAA/AgAAAAAAEgYCAAACAA0AAABfRmlsZUNvbW1lbnRzAHEAAABFNCBzdGVwMWIgcmVsYXhlZCBmcmFtZSBmcm9tIGpvYiAxMjkwIGxhc3Qgc2NhbiBwb2ludCAoTzMtSDQgMS40NTAgZnJvemVuLCBOMS1INCAxLjM1MCwgQzItTzMgMS44NTAsIGFuZ2xlcyBmcmVlKRUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAXwEAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2NvbXB1dGUvcXVldWVfMjAyNjEwMTgvcmVzdWx0cy9OUjEvZ2VvbXMvRTRfZnJhbWVfY2FuZF9iLnh5eiJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiN2JjM2JmOTZkZGRiNjI5YjMzMTIxNzljMWQ0ZDg2ZWIwYTNhNzBjYzdmY2Y2ZGZmMzIxZTY2NmI1NjcyN2E2ZSJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDA0MS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV83YmMzYmY5NmRkZGI2MjliLnh5eiJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfRMW",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABAAAAIABBiAoAAAAAgQHICgAAAACAwEgKAAAAAEBCCAgAAAAAgEgKAAAAAEBASAoAAAAAQELAQAIAwIAAAQDAAUDAEIAAAAAQKEAAAABAAAAAQAAAAAGgv3XuWkTAMDLngQ25+BpvwAAAAAAAAAAvaYHBaVo679p5POKpx6ZPwAAAAAAAACADR07qMS1CMDxYmGInL6evwAAAAAAAAAA1e3sKw+SAUDxETElkui5vwAAAAAAAAAAUB2rlJ6p8z8iHLPsSWDFvwAAAAAAAACAm3RbIhe8AkClvcEXJlPrPwAAAAAAAAAAPwIAAAAAABLuAQAAAgANAAAAX0ZpbGVDb21tZW50cwBdAAAATlIxIFAgY29tcGxleCBIQ04uLi5IMk8gbGFzdCBvcmllbnRhdGlvbiBmcm9tIE5SMV9QX2NvbXBsZXhfb3B0ZnJlcS5sb2cgKGxpbmUgNTYzMywgam9iIDEyMTMpFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBbAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9FNF9QX2NvbXBsZXgueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICI4ODczNjkwNmY0YzczYTUzOTkzNzY1NmZjYzk4YzI5ODkyN2JkYmY0OTEzYmIzNTZkODg3ZWU4ZDVmZGZmYzRlIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQxL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfODg3MzY5MDZmNGM3M2E1My54eXoifSwgImlucHV0X3JldmlzaW9uIjogMX0TFg==",
+        "product_to_reactant": null,
+        "candidate": null
+      },
+      "provided_guess_binding": null,
+      "terminal": null,
+      "blocked": {
+        "failure_class": "input_identity_unconfirmed",
+        "stage": "map",
+        "message": "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: N=CO; concrete identity: [H]/N=C\\O. Changing binding indices cannot repair this identity mismatch.",
+        "atom_details": [
+          "reactant built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0041/structures/reactant_4f1de368dea0ff49f1d3.xyz",
+          "reactant atoms (1-based): 1=N, 2=C, 3=O, 4=H, 5=H, 6=H",
+          "product built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0041/structures/product_440e9cb4e70ef664f053.xyz",
+          "product atoms (1-based): 1=C, 2=N, 3=H, 4=O, 5=H, 6=H"
+        ],
+        "needs": [
+          "conformers.reactant",
+          "reaction.reactant_smiles"
+        ],
+        "issues": [
+          {
+            "code": "endpoint_identity_mismatch",
+            "details": [
+              "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: N=CO; concrete identity: [H]/N=C\\O. Changing binding indices cannot repair this identity mismatch."
+            ],
+            "field": "conformers.reactant",
+            "role": "reactant"
+          }
+        ]
+      },
+      "failed_attempt": null,
+      "stop_reason": null
+    },
+    {
+      "declaration_revision": 7,
+      "selected_candidate_id": null,
+      "job_steps": [],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 7
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [],
+          "source_input_revision": 7
+        },
+        {
+          "stage": "map",
+          "status": "blocked",
+          "detail": "Heavy-atom element counts differ before and after the reaction: {(1, 0): 1, (7, 0): 1, (6, 0): 1, (8, 0): 1} vs {(6, 0): 1, (7, 0): 1, (8, 0): 1}",
+          "artifacts": [],
+          "source_input_revision": 7
+        }
+      ],
+      "reason": "Declare the reactant with all atoms explicit (6 atoms, 3 H) so the atom-count comparison matches, plus the C=N stereo descriptor of the concrete frame; calculations/conformers/guess unchanged.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "[H]/N=C(\\[H])[O][H]",
+          "product_smiles": "C#N.O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "selected_candidate": null,
+          "reaction_center": []
+        },
+        "calculations": {
+          "m": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_frame_cand_b.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_P_complex.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": null,
+        "ts_optimization": {
+          "ref": "m"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "m"
+          },
+          "irc": null,
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": null,
+            "frequency": null
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": null,
+            "frequency": null
+          }
+        },
+        "execution": {
+          "cpus": 4,
+          "memory_mb": 6144,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABByAoAAAAAwMGICgAAAADBAggKAAAAAMCASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAKgICAgIDAgEkBAMABAQEAQQDBQIAQgAAAABAoQAAAAEAAAABAAAAAAYQdopVgzCHP91e0hitY/Y/AAAAAAAAAABqSx3k9WDAv0PGo1TCE8o/AAAAAAAAAADkoe9uZYn6P8DpXbwft9G/AAAAAAAAAABS8BRypV71P/28qUiFMfI/AAAAAAAAAABu3c1THXLov12LFqBtteW/AAAAAAAAAACALa9cb7sBQLsJvmn6LPG/AAAAAAAAAAA/AgAAAAAAEgYCAAACAA0AAABfRmlsZUNvbW1lbnRzAHEAAABFNCBzdGVwMWIgcmVsYXhlZCBmcmFtZSBmcm9tIGpvYiAxMjkwIGxhc3Qgc2NhbiBwb2ludCAoTzMtSDQgMS40NTAgZnJvemVuLCBOMS1INCAxLjM1MCwgQzItTzMgMS44NTAsIGFuZ2xlcyBmcmVlKRUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAXwEAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2NvbXB1dGUvcXVldWVfMjAyNjEwMTgvcmVzdWx0cy9OUjEvZ2VvbXMvRTRfZnJhbWVfY2FuZF9iLnh5eiJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiN2JjM2JmOTZkZGRiNjI5YjMzMTIxNzljMWQ0ZDg2ZWIwYTNhNzBjYzdmY2Y2ZGZmMzIxZTY2NmI1NjcyN2E2ZSJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDA0MS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV83YmMzYmY5NmRkZGI2MjliLnh5eiJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfRMW",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABAAAAIABBiAoAAAAAgQHICgAAAACAwEgKAAAAAEBCCAgAAAAAgEgKAAAAAEBASAoAAAAAQELAQAIAwIAAAQDAAUDAEIAAAAAQKEAAAABAAAAAQAAAAAGgv3XuWkTAMDLngQ25+BpvwAAAAAAAAAAvaYHBaVo679p5POKpx6ZPwAAAAAAAACADR07qMS1CMDxYmGInL6evwAAAAAAAAAA1e3sKw+SAUDxETElkui5vwAAAAAAAAAAUB2rlJ6p8z8iHLPsSWDFvwAAAAAAAACAm3RbIhe8AkClvcEXJlPrPwAAAAAAAAAAPwIAAAAAABLuAQAAAgANAAAAX0ZpbGVDb21tZW50cwBdAAAATlIxIFAgY29tcGxleCBIQ04uLi5IMk8gbGFzdCBvcmllbnRhdGlvbiBmcm9tIE5SMV9QX2NvbXBsZXhfb3B0ZnJlcS5sb2cgKGxpbmUgNTYzMywgam9iIDEyMTMpFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBbAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9FNF9QX2NvbXBsZXgueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICI4ODczNjkwNmY0YzczYTUzOTkzNzY1NmZjYzk4YzI5ODkyN2JkYmY0OTEzYmIzNTZkODg3ZWU4ZDVmZGZmYzRlIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQxL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfODg3MzY5MDZmNGM3M2E1My54eXoifSwgImlucHV0X3JldmlzaW9uIjogMX0TFg==",
+        "product_to_reactant": null,
+        "candidate": null
+      },
+      "provided_guess_binding": null,
+      "terminal": null,
+      "blocked": {
+        "failure_class": "input_identity_unconfirmed",
+        "stage": "map",
+        "message": "Heavy-atom element counts differ before and after the reaction: {(1, 0): 1, (7, 0): 1, (6, 0): 1, (8, 0): 1} vs {(6, 0): 1, (7, 0): 1, (8, 0): 1}",
+        "atom_details": [],
+        "needs": [
+          "conformers",
+          "reaction.selected_candidate"
+        ],
+        "issues": []
+      },
+      "failed_attempt": null,
+      "stop_reason": null
+    },
+    {
+      "declaration_revision": 8,
+      "selected_candidate_id": null,
+      "job_steps": [],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reactant: The declared electron count N_e=23 and multiplicity=1 cannot give integer alpha/beta electron populations: N_e must be non-negative, and multiplicity - 1 must be between 0 and N_e with the same parity as N_e.",
+          "artifacts": [],
+          "source_input_revision": 8
+        }
+      ],
+      "reason": "Declare the reactant with all atoms explicit (6 atoms, 3 H) so the atom-count comparison matches, plus the C=N stereo descriptor of the concrete frame; calculations/conformers/guess unchanged.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "[H]/N=C\\[O]",
+          "product_smiles": "C#N.O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "selected_candidate": null,
+          "reaction_center": []
+        },
+        "calculations": {
+          "m": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_frame_cand_b.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_P_complex.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": null,
+        "ts_optimization": {
+          "ref": "m"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "m"
+          },
+          "irc": null,
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": null,
+            "frequency": null
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": null,
+            "frequency": null
+          }
+        },
+        "execution": {
+          "cpus": 4,
+          "memory_mb": 6144,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABByAoAAAAAwMGICgAAAADBAggKAAAAAMCASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAKgICAgIDAgEkBAMABAQEAQQDBQIAQgAAAABAoQAAAAEAAAABAAAAAAYQdopVgzCHP91e0hitY/Y/AAAAAAAAAABqSx3k9WDAv0PGo1TCE8o/AAAAAAAAAADkoe9uZYn6P8DpXbwft9G/AAAAAAAAAABS8BRypV71P/28qUiFMfI/AAAAAAAAAABu3c1THXLov12LFqBtteW/AAAAAAAAAACALa9cb7sBQLsJvmn6LPG/AAAAAAAAAAA/AgAAAAAAEgYCAAACAA0AAABfRmlsZUNvbW1lbnRzAHEAAABFNCBzdGVwMWIgcmVsYXhlZCBmcmFtZSBmcm9tIGpvYiAxMjkwIGxhc3Qgc2NhbiBwb2ludCAoTzMtSDQgMS40NTAgZnJvemVuLCBOMS1INCAxLjM1MCwgQzItTzMgMS44NTAsIGFuZ2xlcyBmcmVlKRUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAXwEAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2NvbXB1dGUvcXVldWVfMjAyNjEwMTgvcmVzdWx0cy9OUjEvZ2VvbXMvRTRfZnJhbWVfY2FuZF9iLnh5eiJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiN2JjM2JmOTZkZGRiNjI5YjMzMTIxNzljMWQ0ZDg2ZWIwYTNhNzBjYzdmY2Y2ZGZmMzIxZTY2NmI1NjcyN2E2ZSJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDA0MS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV83YmMzYmY5NmRkZGI2MjliLnh5eiJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfRMW",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABAAAAIABBiAoAAAAAgQHICgAAAACAwEgKAAAAAEBCCAgAAAAAgEgKAAAAAEBASAoAAAAAQELAQAIAwIAAAQDAAUDAEIAAAAAQKEAAAABAAAAAQAAAAAGgv3XuWkTAMDLngQ25+BpvwAAAAAAAAAAvaYHBaVo679p5POKpx6ZPwAAAAAAAACADR07qMS1CMDxYmGInL6evwAAAAAAAAAA1e3sKw+SAUDxETElkui5vwAAAAAAAAAAUB2rlJ6p8z8iHLPsSWDFvwAAAAAAAACAm3RbIhe8AkClvcEXJlPrPwAAAAAAAAAAPwIAAAAAABLuAQAAAgANAAAAX0ZpbGVDb21tZW50cwBdAAAATlIxIFAgY29tcGxleCBIQ04uLi5IMk8gbGFzdCBvcmllbnRhdGlvbiBmcm9tIE5SMV9QX2NvbXBsZXhfb3B0ZnJlcS5sb2cgKGxpbmUgNTYzMywgam9iIDEyMTMpFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBbAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9FNF9QX2NvbXBsZXgueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICI4ODczNjkwNmY0YzczYTUzOTkzNzY1NmZjYzk4YzI5ODkyN2JkYmY0OTEzYmIzNTZkODg3ZWU4ZDVmZGZmYzRlIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQxL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfODg3MzY5MDZmNGM3M2E1My54eXoifSwgImlucHV0X3JldmlzaW9uIjogMX0TFg==",
+        "product_to_reactant": null,
+        "candidate": null
+      },
+      "provided_guess_binding": null,
+      "terminal": "invalid_input",
+      "blocked": null,
+      "failed_attempt": null,
+      "stop_reason": null
+    }
+  ],
+  "catalog_id": null,
+  "partition_revision": null,
+  "candidate_attempts": [],
+  "cards_path": "",
+  "product_seed_candidate_id": null,
+  "selected_candidate_id": null,
+  "run_dir": "/home/ly/Cloudra-mechanism-agent/ts/ts_0041",
+  "workspace_dir": "/home/ly/Cloudra-mechanism-agent",
+  "owner_conversation_id": "prj_244c6a3512cb4e52",
+  "owner_session_id": "as_ebc2eac267254580",
+  "input": {
+    "reaction": {
+      "reactant_smiles": "[H]N=C(O)[H]",
+      "product_smiles": "C#N.O",
+      "charge": 0,
+      "multiplicity": 1,
+      "electronic_character": "closed_shell",
+      "selected_candidate": null,
+      "reaction_center": []
+    },
+    "calculations": {
+      "m": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      }
+    },
+    "conformers": {
+      "reactant": {
+        "kind": "file",
+        "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_frame_cand_b.xyz",
+        "mol_path": null,
+        "evidence_refs": [],
+        "optimization": null
+      },
+      "product": {
+        "kind": "file",
+        "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_P_complex.xyz",
+        "mol_path": null,
+        "evidence_refs": [],
+        "optimization": null
+      },
+      "guidance": {
+        "ring_order": [],
+        "distance_filters": []
+      }
+    },
+    "guess": null,
+    "ts_optimization": {
+      "ref": "m"
+    },
+    "verification": {
+      "frequency": {
+        "ref": "m"
+      },
+      "irc": null,
+      "irc_log": null,
+      "reactant_endpoint": {
+        "seed": null,
+        "optimization": null,
+        "frequency": null
+      },
+      "product_endpoint": {
+        "seed": null,
+        "optimization": null,
+        "frequency": null
+      }
+    },
+    "execution": {
+      "cpus": 4,
+      "memory_mb": 6144,
+      "limits": null
+    }
+  },
+  "structures": {
+    "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABByAoAAAAAwMGICgAAAADBAggKAAAAAMCASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAKgICAgIDAgEkBAMABAQEAQQDBQIAQgAAAABAoQAAAAEAAAABAAAAAAYQdopVgzCHP91e0hitY/Y/AAAAAAAAAABqSx3k9WDAv0PGo1TCE8o/AAAAAAAAAADkoe9uZYn6P8DpXbwft9G/AAAAAAAAAABS8BRypV71P/28qUiFMfI/AAAAAAAAAABu3c1THXLov12LFqBtteW/AAAAAAAAAACALa9cb7sBQLsJvmn6LPG/AAAAAAAAAAA/AgAAAAAAEgYCAAACAA0AAABfRmlsZUNvbW1lbnRzAHEAAABFNCBzdGVwMWIgcmVsYXhlZCBmcmFtZSBmcm9tIGpvYiAxMjkwIGxhc3Qgc2NhbiBwb2ludCAoTzMtSDQgMS40NTAgZnJvemVuLCBOMS1INCAxLjM1MCwgQzItTzMgMS44NTAsIGFuZ2xlcyBmcmVlKRUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAXwEAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2NvbXB1dGUvcXVldWVfMjAyNjEwMTgvcmVzdWx0cy9OUjEvZ2VvbXMvRTRfZnJhbWVfY2FuZF9iLnh5eiJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiN2JjM2JmOTZkZGRiNjI5YjMzMTIxNzljMWQ0ZDg2ZWIwYTNhNzBjYzdmY2Y2ZGZmMzIxZTY2NmI1NjcyN2E2ZSJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDA0MS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV83YmMzYmY5NmRkZGI2MjliLnh5eiJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfRMW",
+    "product": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABAAAAIABBiAoAAAAAgQHICgAAAACAwEgKAAAAAEBCCAgAAAAAgEgKAAAAAEBASAoAAAAAQELAQAIAwIAAAQDAAUDAEIAAAAAQKEAAAABAAAAAQAAAAAGgv3XuWkTAMDLngQ25+BpvwAAAAAAAAAAvaYHBaVo679p5POKpx6ZPwAAAAAAAACADR07qMS1CMDxYmGInL6evwAAAAAAAAAA1e3sKw+SAUDxETElkui5vwAAAAAAAAAAUB2rlJ6p8z8iHLPsSWDFvwAAAAAAAACAm3RbIhe8AkClvcEXJlPrPwAAAAAAAAAAPwIAAAAAABLuAQAAAgANAAAAX0ZpbGVDb21tZW50cwBdAAAATlIxIFAgY29tcGxleCBIQ04uLi5IMk8gbGFzdCBvcmllbnRhdGlvbiBmcm9tIE5SMV9QX2NvbXBsZXhfb3B0ZnJlcS5sb2cgKGxpbmUgNTYzMywgam9iIDEyMTMpFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBbAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9FNF9QX2NvbXBsZXgueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICI4ODczNjkwNmY0YzczYTUzOTkzNzY1NmZjYzk4YzI5ODkyN2JkYmY0OTEzYmIzNTZkODg3ZWU4ZDVmZGZmYzRlIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQxL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfODg3MzY5MDZmNGM3M2E1My54eXoifSwgImlucHV0X3JldmlzaW9uIjogMX0TFg==",
+    "product_to_reactant": null,
+    "candidate": null
+  },
+  "provided_guess_binding": null,
+  "failed_attempt": null,
+  "method_checks": {},
+  "stage": "map",
+  "stage_records": [
+    {
+      "stage": "declare",
+      "status": "done",
+      "detail": "reaction declared; each calculation requires its own method",
+      "artifacts": [],
+      "source_input_revision": 9
+    },
+    {
+      "stage": "build",
+      "status": "done",
+      "detail": "both endpoints built",
+      "artifacts": [],
+      "source_input_revision": 9
+    },
+    {
+      "stage": "map",
+      "status": "blocked",
+      "detail": "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: N=CO; concrete identity: [H]/N=C\\O. Changing binding indices cannot repair this identity mismatch.",
+      "artifacts": [],
+      "source_input_revision": 9
+    }
+  ],
+  "terminal": null,
+  "stop_reason": null,
+  "blocked": {
+    "failure_class": "input_identity_unconfirmed",
+    "stage": "map",
+    "message": "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: N=CO; concrete identity: [H]/N=C\\O. Changing binding indices cannot repair this identity mismatch.",
+    "atom_details": [
+      "reactant built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0041/structures/reactant_4f1de368dea0ff49f1d3.xyz",
+      "reactant atoms (1-based): 1=N, 2=C, 3=O, 4=H, 5=H, 6=H",
+      "product built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0041/structures/product_440e9cb4e70ef664f053.xyz",
+      "product atoms (1-based): 1=C, 2=N, 3=H, 4=O, 5=H, 6=H"
+    ],
+    "needs": [
+      "conformers.reactant",
+      "reaction.reactant_smiles"
+    ],
+    "issues": [
+      {
+        "code": "endpoint_identity_mismatch",
+        "field": "conformers.reactant",
+        "role": "reactant",
+        "details": [
+          "reactant: The concrete structure's molecular graph or stereochemistry differs from the declared SMILES. Declared identity: N=CO; concrete identity: [H]/N=C\\O. Changing binding indices cannot repair this identity mismatch."
+        ]
+      }
+    ]
+  },
+  "intervention_count": 8,
+  "path_kind": "not_attempted",
+  "guidance_attempt": 0,
+  "active_attempt_dir": "",
+  "guidance_manifest_path": "",
+  "job_id": null,
+  "job_input_path": "",
+  "waiting_for": "",
+  "scan_step": null,
+  "job_steps": [],
+  "evidence_candidates": [],
+  "revision": 43
+}

@@ -1,0 +1,77 @@
+{
+  "trajectory_id": "frag0-mmff94-attempt1",
+  "component_id": "frag0",
+  "attempt": 1,
+  "engine": "MMFF94",
+  "symbols": [
+    "O",
+    "H",
+    "H"
+  ],
+  "random_seed": 42,
+  "frame_count": 33,
+  "iterations": 32,
+  "initial_frame": {
+    "step": 0,
+    "symbols": [
+      "O",
+      "H",
+      "H"
+    ],
+    "positions": [
+      [
+        -0.00570308011320009,
+        0.3851587075724239,
+        -0.0
+      ],
+      [
+        -0.7960779383037317,
+        -0.19467500329535578,
+        -0.0
+      ],
+      [
+        0.8017810184169318,
+        -0.1904837042770681,
+        0.0
+      ]
+    ],
+    "energy": 0.6806278916315581,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 25.94218689614566
+  },
+  "final_frame": {
+    "step": 32,
+    "symbols": [
+      "O",
+      "H",
+      "H"
+    ],
+    "positions": [
+      [
+        -0.0017438020084458213,
+        0.3978102931075321,
+        -0.0
+      ],
+      [
+        -0.7625898384053788,
+        -0.20225204670762575,
+        -0.0
+      ],
+      [
+        0.7643336404138245,
+        -0.19555824639990638,
+        0.0
+      ]
+    ],
+    "energy": 7.391365945370506e-10,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 0.0005532087990027399
+  },
+  "convergence_code": 0,
+  "status": "converged",
+  "failure": "",
+  "notes": [],
+  "frames_path": "/home/ly/Cloudra-mechanism-agent/structure_build/trajectories/frag0-mmff94-attempt1/frames.xyz",
+  "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/structure_build/trajectories/frag0-mmff94-attempt1/frames.jsonl",
+  "json_path": "/home/ly/Cloudra-mechanism-agent/structure_build/trajectories/frag0-mmff94-attempt1/trajectory.json"
+}

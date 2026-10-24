@@ -1,0 +1,358 @@
+{
+  "format_version": 7,
+  "run_id": "ts_0023",
+  "pipeline_id": "d03315d02c19264e714ba694eeac7fc2519279505078ed82f0fe6b7e4a1cac9b",
+  "declaration_revision": 1,
+  "optimization_checkpoints": {},
+  "budget_action_keys": {},
+  "budget_reservations": {},
+  "attempt_history": [],
+  "catalog_id": null,
+  "partition_revision": null,
+  "candidate_attempts": [],
+  "cards_path": "",
+  "product_seed_candidate_id": null,
+  "selected_candidate_id": null,
+  "run_dir": "/home/ly/Cloudra-mechanism-agent/ts/ts_0023",
+  "workspace_dir": "/home/ly/Cloudra-mechanism-agent",
+  "owner_conversation_id": "prj_244c6a3512cb4e52",
+  "owner_session_id": "as_f636e5bc837f46ee",
+  "input": {
+    "reaction": {
+      "reactant_smiles": "[Na+].C[O-].C(=O)O",
+      "product_smiles": "[Na+].CO.C(=O)[O-]",
+      "charge": 0,
+      "multiplicity": 1,
+      "electronic_character": "closed_shell",
+      "selected_candidate": null,
+      "reaction_center": [
+        [
+          8,
+          10
+        ],
+        [
+          2,
+          10
+        ]
+      ]
+    },
+    "calculations": {
+      "g16": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      }
+    },
+    "conformers": {
+      "reactant": {
+        "kind": "file",
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/i2_min_candA.xyz",
+        "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/build/art_I2_src/assembly/complex_candidate_000.mol",
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/E2E3_ENDPOINTS_PROVENANCE.md",
+          "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/I2_DFT_VERDICT.md"
+        ],
+        "optimization": null
+      },
+      "product": {
+        "kind": "file",
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/p_min_ref_pmol_order.xyz",
+        "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/p.mol",
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/E2E3_ENDPOINTS_PROVENANCE.md"
+        ],
+        "optimization": null
+      },
+      "guidance": {
+        "ring_order": [],
+        "distance_filters": []
+      }
+    },
+    "guess": {
+      "kind": "provided",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/ts_e3_guess_v2.xyz",
+      "evidence_refs": [
+        "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/TS_E3_GUESS_V2_PROVENANCE.md"
+      ]
+    },
+    "ts_optimization": {
+      "ref": "g16"
+    },
+    "verification": {
+      "frequency": {
+        "ref": "g16"
+      },
+      "irc": {
+        "ref": "g16"
+      },
+      "irc_log": null,
+      "reactant_endpoint": {
+        "seed": null,
+        "optimization": {
+          "ref": "g16"
+        },
+        "frequency": {
+          "ref": "g16"
+        }
+      },
+      "product_endpoint": {
+        "seed": null,
+        "optimization": {
+          "ref": "g16"
+        },
+        "frequency": {
+          "ref": "g16"
+        }
+      }
+    },
+    "execution": {
+      "cpus": 8,
+      "memory_mb": 14336,
+      "limits": null
+    }
+  },
+  "structures": {
+    "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAALAAAACAAAAIABCyAKAAAAAQEGACAAAAAECAAiAAAA/wEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEGACgAAAADBAgAKAAAAAMCCAAoAAAAAwIBACgAAAABAQEAKAAAAAEBCwECAAEDAAEEAAEFAAYHKAIGCCAGCQAICgBCAAAAAEAZAQAAAQAAAAEAAAAAC1M/bypSYdi/3zKny2Ii87+NXg1QGmrIv+P8TShEwAnA5V5gVijS5D/E7juGx36+Pwjjp3FvngDAkDF3LSEfsL8VVFT9SueTv7nfoSjQRwzAIVZ/hGHA8z8HRIgrZ2/pv3YyOEpejRDAWf0RhgFLpj+A12fO+pTXP5J1OLpKlwnA0y6mme719j9YkGYsms7tP7aEfNCz2QNAYOemzTgNxz8OvFruzATBP7dELjiD//0/gXaHFAOk679BnfLoRljIP4rL8QpED/4/ECVa8nga9T8xJZLoZRTHv4ANiBBXjgxAKnPzjeie0D9jtI6qJojVPyAJ+3YSEQRAPYGwU6x6AEA7yOvBpPjGvz8CAAAAAAASMgMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAgAIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9OWTMvRTJFMy9pMl9taW5fY2FuZEEueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9OWTMvcHJlcC9idWlsZC9hcnRfSTJfc3JjL2Fzc2VtYmx5L2NvbXBsZXhfY2FuZGlkYXRlXzAwMC5tb2wifSwgImhhc2hlcyI6IHsieHl6IjogIjE3MTVmNmQ3ZDc3ZTkzYmI1MjAwYTcxYjIzZGIzMWZjODRjYjQ1NTY0YjFkNDhmNmJiYWIyZTdlZTNjMGVmODUiLCAibW9sIjogImFmNjc3NDBmOGM3NmYxOGYwNTE3NTczYzhjYjU1OTBhYThiYjYwM2QzZDFjNzA2ZGY2MjRlYmQxY2U0NmY4MTYifSwgInNuYXBzaG90cyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L3RzL3RzXzAwMjMvYnVpbGQvaW5wdXRfMDAwMS9yZWFjdGFudC9zb3VyY2VfMTcxNWY2ZDdkNzdlOTNiYi54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L3RzL3RzXzAwMjMvYnVpbGQvaW5wdXRfMDAwMS9yZWFjdGFudC9zb3VyY2VfYWY2Nzc0MGY4Yzc2ZjE4Zi5tb2wifSwgImlucHV0X3JldmlzaW9uIjogMX0fAAAAY2xvdWRyYV9tYXBwaW5nX2JpbmRpbmdfZGVyaXZlZAMBEzoTAQAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAAAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQEAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAgAAAAAAAAAAAAAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEDAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQQAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBQAAAAAAAAAAAAATOyAAAAAAAAEBAAABAQAAAQEAAAEBAAABAgAAAQEAAAEBAAABARMW",
+    "product": "776t3gAAAAAQAAAAAwAAAAAAAAALAAAACAAAAIABCyAKAAAAAQEGACAAAAAECAAgAAAAAgEAKAAAAAEBAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBBgAoAAAAAwQIACgAAAADAggAKgAAAP8DAQEAKAAAAAEBCwECAAEDAAEEAAEFAAIGAAcIKAIHCSAHCgBCAAAAAEAZAQAAAQAAAAEAAAAAC8kFZ/D3i7k/luttMxUi/T8q/YSzW8u0v9L+B1irdgJAOGivPh7647+w479AECDYP+dvQiECTvU/utqK/WX3sL9QqRJlbynev+XxtPzA9QVAu2OxTSra+L8oKbAApgykv3JRLSKKCQlAGJY/3xYsuT8jMUEN30LgP+4h4Xt/g/4/i96pgHue678iUtMuphn2P9sWZTbIpOA/atyb3zBR5b9bXOMz2T/dv83MzMzMTPy/mIbhI2JK5r8r+dhdoKS8P/Qau0T1Vvu/UwPN59xt4T/QJ/Ik6ZrRP5aX/E/+buu/oDL+fcaF979551CGqpjRvzW1bK0vEgbAJZASu7b38r8LRE/KpIbVPz8CAAAAAAASCgMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAWAIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9OWTMvRTJFMy9wX21pbl9yZWZfcG1vbF9vcmRlci54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmluaXNoXzIwMjYxMDE1L05ZMy9wcmVwL3AubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICJiY2E3NWQwYWMxMDAyOThkOTU1YjM4MjZmYzhhZGUzYmMxNDEzNzgzZWQ5MDVkNWRjYTYyZDU3YTgzNDg2ZDhiIiwgIm1vbCI6ICIxNjU3MDJhYjY0YmNjY2JlNmI3NDM0YjJiMGEzYTY2Mzc5ZWQ4OGRlYjRlYWIzNGQyMGJkMWQ3MjlkY2VkZjA5In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDIzL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfYmNhNzVkMGFjMTAwMjk4ZC54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L3RzL3RzXzAwMjMvYnVpbGQvaW5wdXRfMDAwMS9wcm9kdWN0L3NvdXJjZV8xNjU3MDJhYjY0YmNjY2JlLm1vbCJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfR8AAABjbG91ZHJhX21hcHBpbmdfYmluZGluZ19kZXJpdmVkAwETOhMBAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEAAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAECAAAAAAAAAAAAAAAAAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQMAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBAAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEFAAAAAAAAABM7IAAAAAAAAQEAAAEBAAABAQAAAQEAAAEBAAABAgAAAQEAAAEBExY=",
+    "product_to_reactant": [
+      0,
+      1,
+      8,
+      3,
+      4,
+      5,
+      10,
+      6,
+      7,
+      2,
+      9
+    ],
+    "candidate": "776t3gAAAAAQAAAAAwAAAAAAAAALAAAACAAAAIABCyAKAAAAAQEGACAAAAAECAAiAAAA/wEBACgAAAABAQEAKAAAAAEBAQAoAAAAAQEGACgAAAADBAgAKAAAAAMCCAAoAAAAAwIBACgAAAABAQEAKAAAAAEBCwECAAEDAAEEAAEFAAYHKAIGCCAGCQAICgBCAAAAAEAZAQAAAQAAAAEAAAAACyXj3h2Vcro/clbhIjnxAcD4IvMrSsfJv8VKFkGt4/6/lzJ4sZMu2T+ZHl4hvfKaP2f0QLfZcO2/+dozSwIU0r8GBveg83zlv1JKxjkD/gHA3XX8OBZr9T9GWUPSPHrdvziXTUa2nwbAU7Zhdy7Kz7/rJZ2zy9i3Pym3aUMwJPq/YCft9CCw5D80EZlmeAvxP954NUjaeAJAEjKQZ5dvp78VB0y3V6zQP5SN3tu6JABAnRA66BL+8783/fqd/bPaPyUgiQv+tvg/M/ryfrMf7T+U08cRpZypv1eONcjJAQtAUNgLJnrwzz9NKOkGr4LdPydv21JictM/v0azLkXk2T9P6f3S5Jrpvz8CAAAAAAASMgMAAAYABQAAAF9OYW1lAAAAAAAMAAAAX01vbEZpbGVJbmZvABYAAAAgICAgIFJES2l0ICAgICAgICAgIDNEEAAAAF9Nb2xGaWxlQ29tbWVudHMAAAAAABIAAABfTW9sRmlsZUNoaXJhbEZsYWcCAAAAABUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAgAIAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9OWTMvRTJFMy9pMl9taW5fY2FuZEEueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9OWTMvcHJlcC9idWlsZC9hcnRfSTJfc3JjL2Fzc2VtYmx5L2NvbXBsZXhfY2FuZGlkYXRlXzAwMC5tb2wifSwgImhhc2hlcyI6IHsieHl6IjogIjE3MTVmNmQ3ZDc3ZTkzYmI1MjAwYTcxYjIzZGIzMWZjODRjYjQ1NTY0YjFkNDhmNmJiYWIyZTdlZTNjMGVmODUiLCAibW9sIjogImFmNjc3NDBmOGM3NmYxOGYwNTE3NTczYzhjYjU1OTBhYThiYjYwM2QzZDFjNzA2ZGY2MjRlYmQxY2U0NmY4MTYifSwgInNuYXBzaG90cyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L3RzL3RzXzAwMjMvYnVpbGQvaW5wdXRfMDAwMS9yZWFjdGFudC9zb3VyY2VfMTcxNWY2ZDdkNzdlOTNiYi54eXoiLCAibW9sIjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L3RzL3RzXzAwMjMvYnVpbGQvaW5wdXRfMDAwMS9yZWFjdGFudC9zb3VyY2VfYWY2Nzc0MGY4Yzc2ZjE4Zi5tb2wifSwgImlucHV0X3JldmlzaW9uIjogMX0fAAAAY2xvdWRyYV9tYXBwaW5nX2JpbmRpbmdfZGVyaXZlZAMBEzoTAQAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAAAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQEAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAgAAAAAAAAAAAAAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEDAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQQAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBQAAAAAAAAAAAAATOyAAAAAAAAEBAAABAQAAAQEAAAEBAAABAgAAAQEAAAEBAAABARMW"
+  },
+  "provided_guess_binding": {
+    "xyz": {
+      "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/ts_e3_guess_v2.xyz",
+      "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0023/path/input_0001/provided.xyz",
+      "sha256": "3ccf834e473dc4f6f0e19b1ad1502d9e0f026ea602d8957b3c5b4fdc4fbfa43f"
+    },
+    "evidence": [
+      {
+        "source_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/TS_E3_GUESS_V2_PROVENANCE.md",
+        "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0023/path/input_0001/provenance_0000.md",
+        "sha256": "059494a83c49d69a1fb789723f9cc26d4aa84a9f12148606d295acf849f99612"
+      }
+    ]
+  },
+  "failed_attempt": {
+    "attempt_id": "1:ts_opt:1087",
+    "failure_class": "unclassified_failure",
+    "purpose": "ts_opt",
+    "job_id": 1087,
+    "input_revision": 1,
+    "evidence_refs": [
+      "/home/ly/Cloudra-mechanism-agent/ts/ts_0023/jobs/declaration_0001/ts_opt/.cloudra/calc-1087.out.log"
+    ],
+    "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0023/jobs/declaration_0001/ts_opt/refine.gjf",
+    "log_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0023/jobs/declaration_0001/ts_opt/.cloudra/calc-1087.out.log",
+    "input_sha256": "fe174dc011b63144ec1c5109b18c7b8aac55a72e5874ed5975fa88d3b5cad956",
+    "log_sha256": "ffcd26326d4d4cbdd4e114cc64a72a8a32e8c2bda9774c4aac9d46528aa8172d",
+    "diagnostics": [
+      "native log: /home/ly/Cloudra-mechanism-agent/ts/ts_0023/jobs/declaration_0001/ts_opt/.cloudra/calc-1087.out.log",
+      "[calculator] isolated GAUSS_SCRDIR=/home/ly/g16/scratch/cloudra_g16_task1087_1827556",
+      "Error: software termination",
+      "   rax fffffffffffffffc, rbx 00007ffd914bc868, rcx 00000d1d99d108d7",
+      "   rdx 0000000000000000, rsp 00007ffd914bc858, rbp 00007ffd914bc8e0",
+      "   rsi 00007ffd914bc868, rdi 00000000001be30c, r8  00007ffd914bc630",
+      "   r9  0000000000000000, r10 0000000000000000, r11 0000000000000202",
+      "   r12 0000000000000000, r13 00007ffd914bc890, r14 0000000000000000",
+      "   r15 00007ffd914c34a0",
+      "Error: software termination",
+      "   rax 0000000000000008, rbx 0000000006081370, rcx 0000000000000000",
+      "   rdx 0000000000000040, rsp 00007ffee3b750c0, rbp 00007ffee3b750d0",
+      "   rsi 0000000000000000, rdi 00000000992e0840, r8  00007ffee3b74f50",
+      "   r9  0000000000000000, r10 0000000000000000, r11 0000000000000246",
+      "   r12 000012156b592e18, r13 000000000607fbb8, r14 0000000000000108",
+      "   r15 000012156b592b00",
+      "  /lib/x86_64-linux-gnu/libc.so.6(+0x45330) [0x1218eaa45330]",
+      "  /home/ly/g16/l103.exe() [0x1c08547]",
+      "  /home/ly/g16/l103.exe() [0x1c08eb0]",
+      "  /home/ly/g16/l103.exe() [0x1c02bea]"
+    ]
+  },
+  "method_checks": {
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0023/jobs/declaration_0001/ts_opt/refine.gjf": {
+      "input_revision": 1,
+      "purpose": "ts_opt",
+      "actual": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source": "stage_declaration",
+      "differences": [],
+      "matched": true
+    }
+  },
+  "stage": "refine",
+  "stage_records": [
+    {
+      "stage": "declare",
+      "status": "done",
+      "detail": "reaction declared; each calculation requires its own method",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "build",
+      "status": "done",
+      "detail": "both endpoints built",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "map",
+      "status": "done",
+      "detail": "Concrete endpoint correspondence confirmed and owned by this reaction.",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "assemble",
+      "status": "done",
+      "detail": "2 reaction-centre pair(s) guide the assembly",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "guess",
+      "status": "done",
+      "detail": "Provided candidate bound; formal optimization and verification remain required.",
+      "artifacts": [
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0023/path/input_0001/provided.xyz",
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0023/path/input_0001/provenance_0000.md"
+      ],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "validate",
+      "status": "done",
+      "detail": "internal validation passed",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "submit",
+      "status": "done",
+      "detail": "refinement job 1087 submitted as 'ready' (gaussian, b3lyp); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+      "artifacts": [
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0023/jobs/declaration_0001/ts_opt/refine.gjf"
+      ],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "refine",
+      "status": "blocked",
+      "detail": "refinement job 1087 (ts_opt) ended as 'cancelled'; plain per-engine failure classes come from the log below — the run is stopped, not silently retried",
+      "artifacts": [],
+      "source_input_revision": 1
+    }
+  ],
+  "terminal": null,
+  "stop_reason": null,
+  "blocked": {
+    "failure_class": "job_cancelled",
+    "stage": "refine",
+    "message": "refinement job 1087 (ts_opt) ended as 'cancelled'; plain per-engine failure classes come from the log below — the run is stopped, not silently retried",
+    "atom_details": [
+      "native log: /home/ly/Cloudra-mechanism-agent/ts/ts_0023/jobs/declaration_0001/ts_opt/.cloudra/calc-1087.out.log",
+      "[calculator] isolated GAUSS_SCRDIR=/home/ly/g16/scratch/cloudra_g16_task1087_1827556",
+      "Error: software termination",
+      "   rax fffffffffffffffc, rbx 00007ffd914bc868, rcx 00000d1d99d108d7",
+      "   rdx 0000000000000000, rsp 00007ffd914bc858, rbp 00007ffd914bc8e0",
+      "   rsi 00007ffd914bc868, rdi 00000000001be30c, r8  00007ffd914bc630",
+      "   r9  0000000000000000, r10 0000000000000000, r11 0000000000000202",
+      "   r12 0000000000000000, r13 00007ffd914bc890, r14 0000000000000000",
+      "   r15 00007ffd914c34a0",
+      "Error: software termination",
+      "   rax 0000000000000008, rbx 0000000006081370, rcx 0000000000000000",
+      "   rdx 0000000000000040, rsp 00007ffee3b750c0, rbp 00007ffee3b750d0",
+      "   rsi 0000000000000000, rdi 00000000992e0840, r8  00007ffee3b74f50",
+      "   r9  0000000000000000, r10 0000000000000000, r11 0000000000000246",
+      "   r12 000012156b592e18, r13 000000000607fbb8, r14 0000000000000108",
+      "   r15 000012156b592b00",
+      "  /lib/x86_64-linux-gnu/libc.so.6(+0x45330) [0x1218eaa45330]",
+      "  /home/ly/g16/l103.exe() [0x1c08547]",
+      "  /home/ly/g16/l103.exe() [0x1c08eb0]",
+      "  /home/ly/g16/l103.exe() [0x1c02bea]"
+    ],
+    "needs": [
+      "ts_optimization",
+      "execution",
+      "reaction.reaction_center"
+    ],
+    "issues": []
+  },
+  "intervention_count": 0,
+  "path_kind": "provided",
+  "guidance_attempt": 0,
+  "active_attempt_dir": "",
+  "guidance_manifest_path": "",
+  "job_id": 1087,
+  "job_input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0023/jobs/declaration_0001/ts_opt/refine.gjf",
+  "waiting_for": "",
+  "scan_step": null,
+  "job_steps": [
+    {
+      "purpose": "ts_opt",
+      "job_id": 1087,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0023/jobs/declaration_0001/ts_opt/refine.gjf",
+      "state": "cancelled",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 1,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": null,
+      "atom_binding": {
+        "process_id": "d03315d02c19264e714ba694eeac7fc2519279505078ed82f0fe6b7e4a1cac9b",
+        "declaration_revision": 1,
+        "atom_map": [
+          1,
+          2,
+          9,
+          4,
+          5,
+          6,
+          11,
+          7,
+          8,
+          3,
+          10
+        ],
+        "charge": 0,
+        "ts_log_sha256": null,
+        "reactant_mol": "\n     RDKit          3D\n\n 11  8  0  0  0  0  0  0  0  0999 V2000\n   -0.3809   -1.1959   -0.1907 Na  0  0  0  0  0 15  0  0  0  0  0  0\n   -3.2189    0.6507    0.1191 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.0774   -0.0630   -0.0194 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.5351    1.2345   -0.7948 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -4.1381    0.0435    0.3685 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.1989    1.4350    0.9315 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.4813    0.1801    0.1330 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8749   -0.8638    0.1902 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8787    1.3190   -0.1803 O   0  0  0  0  0  0  0  0  0  0  0  0\n    3.5695    0.2597    0.3364 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.5083    2.0599   -0.1795 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  3  1  0\n  2  4  1  0\n  2  5  1  0\n  2  6  1  0\n  7  8  2  0\n  7  9  1  0\n  7 10  1  0\n  9 11  1  0\nM  CHG  2   1   1   3  -1\nM  END\n",
+        "product_mol": "\n     RDKit          3D\n\n 11  8  0  0  0  0  0  0  0  0999 V2000\n    0.0998    1.8208   -0.0812 Na  0  0  0  0  0 15  0  0  0  0  0  0\n    2.3079   -0.6243    0.3770 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.3315   -0.0663   -0.4713 O   0  0  0  0  0  0  0  0  0  0  0  0\n    2.7450   -1.5533   -0.0392 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.1297    0.0983    0.5082 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.9071   -0.8631    1.3813 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.5201   -0.6662   -0.4570 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7688   -0.6966    0.1119 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7087    0.5447    0.2751 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8573   -1.4702   -0.2749 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.7589   -1.1855    0.3363 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  3  1  0\n  2  4  1  0\n  2  5  1  0\n  2  6  1  0\n  3  7  1  0\n  8  9  2  0\n  8 10  1  0\n  8 11  1  0\nM  CHG  2   1   1  10  -1\nM  END\n"
+      },
+      "frequency_analysis": null
+    }
+  ],
+  "evidence_candidates": [],
+  "revision": 14
+}

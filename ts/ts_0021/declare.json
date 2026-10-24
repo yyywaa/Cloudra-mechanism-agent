@@ -1,0 +1,98 @@
+{
+  "reaction": {
+    "reactant_smiles": "[Na+].CO[C@H]([O-])O",
+    "product_smiles": "[Na+].C[O-].C(=O)O",
+    "charge": 0,
+    "multiplicity": 1,
+    "electronic_character": "closed_shell",
+    "selected_candidate": null,
+    "reaction_center": [
+      [
+        3,
+        2
+      ],
+      [
+        3,
+        5
+      ]
+    ]
+  },
+  "calculations": {
+    "g16": {
+      "engine": "gaussian",
+      "method": "b3lyp",
+      "basis_set": "def2svp",
+      "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=water)",
+      "frequency_mode": "auto",
+      "orca_blocks": null,
+      "end_setting": ""
+    }
+  },
+  "conformers": {
+    "reactant": {
+      "kind": "file",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/i1_dft_min_ref.xyz",
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/i1.mol",
+      "evidence_refs": [
+        "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/E2E3_ENDPOINTS_PROVENANCE.md"
+      ],
+      "optimization": null
+    },
+    "product": {
+      "kind": "file",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/i2_min_candA.xyz",
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/prep/build/art_I2_src/assembly/complex_candidate_000.mol",
+      "evidence_refs": [
+        "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/E2E3_ENDPOINTS_PROVENANCE.md",
+        "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NY3/E2E3/I2_DFT_VERDICT.md"
+      ],
+      "optimization": null
+    },
+    "guidance": {
+      "ring_order": [],
+      "distance_filters": []
+    }
+  },
+  "guess": {
+    "kind": "provided",
+    "xyz_path": "gold_fill_20261018/NY3/e2_guess_i1_interp_t060.xyz",
+    "evidence_refs": [
+      "gold_fill_20261018/NY3/E2_GUESS_ATTEMPT2.md"
+    ]
+  },
+  "ts_optimization": {
+    "ref": "g16"
+  },
+  "verification": {
+    "frequency": {
+      "ref": "g16"
+    },
+    "irc": {
+      "ref": "g16"
+    },
+    "irc_log": null,
+    "reactant_endpoint": {
+      "seed": null,
+      "optimization": {
+        "ref": "g16"
+      },
+      "frequency": {
+        "ref": "g16"
+      }
+    },
+    "product_endpoint": {
+      "seed": null,
+      "optimization": {
+        "ref": "g16"
+      },
+      "frequency": {
+        "ref": "g16"
+      }
+    }
+  },
+  "execution": {
+    "cpus": 8,
+    "memory_mb": 14336,
+    "limits": null
+  }
+}

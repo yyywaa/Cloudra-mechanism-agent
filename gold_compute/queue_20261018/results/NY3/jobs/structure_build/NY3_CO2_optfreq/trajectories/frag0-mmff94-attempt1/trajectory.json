@@ -1,0 +1,77 @@
+{
+  "trajectory_id": "frag0-mmff94-attempt1",
+  "component_id": "frag0",
+  "attempt": 1,
+  "engine": "MMFF94",
+  "symbols": [
+    "O",
+    "C",
+    "O"
+  ],
+  "random_seed": 42,
+  "frame_count": 30,
+  "iterations": 29,
+  "initial_frame": {
+    "step": 0,
+    "symbols": [
+      "O",
+      "C",
+      "O"
+    ],
+    "positions": [
+      [
+        -1.1379837005880382,
+        0.10168244700222961,
+        0.0
+      ],
+      [
+        -0.0004110907498718272,
+        -0.38594976241334694,
+        0.0
+      ],
+      [
+        1.1383947913379102,
+        -0.8532997568924452,
+        0.0
+      ]
+    ],
+    "energy": 30.33702169169176,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 197.29544746358735
+  },
+  "final_frame": {
+    "step": 29,
+    "symbols": [
+      "O",
+      "C",
+      "O"
+    ],
+    "positions": [
+      [
+        -1.2956125325333867,
+        0.1643301830021863,
+        0.0
+      ],
+      [
+        -1.413788643866734e-6,
+        -0.37919232616650395,
+        0.0
+      ],
+      [
+        1.2956139463220315,
+        -0.9227049291392452,
+        0.0
+      ]
+    ],
+    "energy": 2.517482323749025e-9,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 0.0008387945628413594
+  },
+  "convergence_code": 0,
+  "status": "converged",
+  "failure": "",
+  "notes": [],
+  "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NY3/jobs/structure_build/NY3_CO2_optfreq/trajectories/frag0-mmff94-attempt1/frames.xyz",
+  "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NY3/jobs/structure_build/NY3_CO2_optfreq/trajectories/frag0-mmff94-attempt1/frames.jsonl",
+  "json_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NY3/jobs/structure_build/NY3_CO2_optfreq/trajectories/frag0-mmff94-attempt1/trajectory.json"
+}

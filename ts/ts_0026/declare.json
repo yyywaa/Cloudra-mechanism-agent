@@ -1,0 +1,114 @@
+{
+  "reaction": {
+    "reactant_smiles": "[CH3:1][C:2]([CH2:3]([H:22]))([O:4]([H:21]))[N:20]1[CH2:19][CH2:18][CH2:17][C@H:16]1[C:14](=[O:13])[OH:15]",
+    "product_smiles": "[CH3:1][C:2](=[CH2:3])[N:20]2[CH2:19][CH2:18][CH2:17][C@H:16]2[C:14](=[O:13])[OH:15].[O:4]([H:21])([H:22])",
+    "charge": 0,
+    "multiplicity": 1,
+    "electronic_character": "closed_shell",
+    "selected_candidate": 0,
+    "reaction_center": [
+      [
+        1,
+        3
+      ],
+      [
+        2,
+        9
+      ],
+      [
+        3,
+        9
+      ],
+      [
+        1,
+        2
+      ]
+    ]
+  },
+  "calculations": {
+    "g16": {
+      "engine": "gaussian",
+      "method": "b3lyp",
+      "basis_set": "def2svp",
+      "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso)",
+      "frequency_mode": "auto",
+      "orca_blocks": null,
+      "end_setting": ""
+    },
+    "g16_irc": {
+      "engine": "gaussian",
+      "method": "b3lyp",
+      "basis_set": "def2svp",
+      "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso) irc=(calcfc,maxpoints=80,stepsize=5,recalc=10)",
+      "frequency_mode": "auto",
+      "orca_blocks": null,
+      "end_setting": ""
+    }
+  },
+  "conformers": {
+    "reactant": {
+      "kind": "file",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/INT1_27_opt_frame.xyz",
+      "mol_path": null,
+      "evidence_refs": [
+        "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/TS_GUESS_PROVENANCE.md"
+      ],
+      "optimization": null
+    },
+    "product": {
+      "kind": "file",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/build/product_start_27.xyz",
+      "mol_path": null,
+      "evidence_refs": [
+        "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/TS_GUESS_PROVENANCE.md"
+      ],
+      "optimization": null
+    },
+    "guidance": {
+      "ring_order": [],
+      "distance_filters": []
+    }
+  },
+  "guess": {
+    "kind": "provided",
+    "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/build/ts_guess_27.xyz",
+    "evidence_refs": [
+      "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/TS_GUESS_PROVENANCE.md"
+    ]
+  },
+  "ts_optimization": {
+    "ref": "g16"
+  },
+  "verification": {
+    "frequency": {
+      "ref": "g16"
+    },
+    "irc": {
+      "ref": "g16_irc"
+    },
+    "irc_log": null,
+    "reactant_endpoint": {
+      "seed": null,
+      "optimization": {
+        "ref": "g16"
+      },
+      "frequency": {
+        "ref": "g16"
+      }
+    },
+    "product_endpoint": {
+      "seed": null,
+      "optimization": {
+        "ref": "g16"
+      },
+      "frequency": {
+        "ref": "g16"
+      }
+    }
+  },
+  "execution": {
+    "cpus": 4,
+    "memory_mb": 6144,
+    "limits": null
+  }
+}

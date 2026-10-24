@@ -1,0 +1,154 @@
+{
+  "format_version": 7,
+  "run_id": "ts_0031",
+  "pipeline_id": "f9ba1bf73687377d113be9af539a64f5b34e22f1dd8aa2f60826d0bad8e914e1",
+  "declaration_revision": 1,
+  "optimization_checkpoints": {},
+  "budget_action_keys": {},
+  "budget_reservations": {},
+  "attempt_history": [],
+  "catalog_id": null,
+  "partition_revision": null,
+  "candidate_attempts": [],
+  "cards_path": "",
+  "product_seed_candidate_id": null,
+  "selected_candidate_id": null,
+  "run_dir": "/home/ly/Cloudra-mechanism-agent/ts/ts_0031",
+  "workspace_dir": "/home/ly/Cloudra-mechanism-agent",
+  "owner_conversation_id": "prj_244c6a3512cb4e52",
+  "owner_session_id": "as_50b09a025b4143c4",
+  "input": {
+    "reaction": {
+      "reactant_smiles": "NC=O",
+      "product_smiles": "[H]/N=C/O",
+      "charge": 0,
+      "multiplicity": 1,
+      "electronic_character": null,
+      "selected_candidate": null,
+      "reaction_center": []
+    },
+    "calculations": {
+      "g16": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      }
+    },
+    "conformers": {
+      "reactant": {
+        "kind": "file",
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/N_FORMAMIDE/geom/R_syn_opt.xyz",
+        "mol_path": null,
+        "evidence_refs": [],
+        "optimization": null
+      },
+      "product": {
+        "kind": "file",
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/N_FORMAMIDE/geom/I1_opt.xyz",
+        "mol_path": null,
+        "evidence_refs": [],
+        "optimization": null
+      },
+      "guidance": {
+        "ring_order": [],
+        "distance_filters": []
+      }
+    },
+    "guess": {
+      "kind": "provided",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/N_FORMAMIDE/inputs/E1_scan_H5toO2_ts_guess.xyz",
+      "evidence_refs": [
+        "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/N_FORMAMIDE/inputs/E1_scan_H5toO2.log"
+      ]
+    },
+    "ts_optimization": {
+      "ref": "g16"
+    },
+    "verification": {
+      "frequency": {
+        "ref": "g16"
+      },
+      "irc": {
+        "ref": "g16"
+      },
+      "irc_log": null,
+      "reactant_endpoint": {
+        "seed": null,
+        "optimization": null,
+        "frequency": null
+      },
+      "product_endpoint": {
+        "seed": null,
+        "optimization": null,
+        "frequency": null
+      }
+    },
+    "execution": {
+      "cpus": 4,
+      "memory_mb": 6144,
+      "limits": null
+    }
+  },
+  "structures": {
+    "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABByAoAAAAAwMGICgAAAADBAggKAAAAAMCASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAIAIBKAIDAAAEAAAFAQBCAAAAAEChAAAAAQAAAAEAAAAABpyk+WNaW/G/LhwIyQImxL9pHVVNEHX/vh8r+G2I8cQ/XW4w1GGF2D/VzFoKSPsfP9hhTPp7KfM/yf/k795Rz78YCtgORuwDv+9yEd+Jmf6/B3qobcMo2z+Z8iGoGr0KvxvyzwziA/O/mEwVjEqq8r97hQX3Ax4IPwKCOXr83sA/K4nsgywL+D/hDWlU4GQrvz8CAAAAAAASjwEAAAIADQAAAF9GaWxlQ29tbWVudHMACgAAAG9wdCBzdGVwPTYVAAAAY2xvdWRyYV9pbXBvcnRfc291cmNlAE8BAAB7InBhdGhzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvZ29sZF9maWxsXzIwMjYxMDE4L05fRk9STUFNSURFL2dlb20vUl9zeW5fb3B0Lnh5eiJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiMjBjNWI1ZjBkYzJlNjg4YWM0ZDgzNzA5M2NkOGFlMjJmYzZmOTIxNmY2NjczMTUxYThkNmMzNzQ0MTJmZGU1NCJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDAzMS9idWlsZC9pbnB1dF8wMDAxL3JlYWN0YW50L3NvdXJjZV8yMGM1YjVmMGRjMmU2ODhhLnh5eiJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfRMW",
+    "product": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABByAoAAAAAwMGICgAAAADBAggKAAAAAMCASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCwEAKgIDAgIDAgEkBAMABAMEAQQDBQIAQgAAAABAoQAAAAEAAAABAAAAAAY0uoPYmcLxP+HQWzy859W/AAAAAAAAAIAPYJFfP8S2P4lgHFw65tk/t18+WTFc7b4IWKt2TYjyv1rUJ7nDJra/8WjjiLX41D4VjiCVYof/P0HWU6uvrso/kL5J06Bo/j5W1GAaho+wP14td2aCIfg/8WjjiLX49D6D/Gzkuinxv2qJldHI5/C/je21oPfGsL4/AgAAAAAAEosBAAACAA0AAABfRmlsZUNvbW1lbnRzAAoAAABvcHQgc3RlcD01FQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBLAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmlsbF8yMDI2MTAxOC9OX0ZPUk1BTUlERS9nZW9tL0kxX29wdC54eXoifSwgImhhc2hlcyI6IHsieHl6IjogIjA5ZDBlNzQ0ZTFiNmUzMjQ5YjkyNGYwMmY5N2QzMmJjYjk1MzQ0OTBjNDhiYjAyNDVlNTJmNWQwMmY0YmZjM2EifSwgInNuYXBzaG90cyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L3RzL3RzXzAwMzEvYnVpbGQvaW5wdXRfMDAwMS9wcm9kdWN0L3NvdXJjZV8wOWQwZTc0NGUxYjZlMzI0Lnh5eiJ9LCAiaW5wdXRfcmV2aXNpb24iOiAxfRMW",
+    "product_to_reactant": null,
+    "candidate": null
+  },
+  "provided_guess_binding": null,
+  "failed_attempt": null,
+  "method_checks": {},
+  "stage": "map",
+  "stage_records": [
+    {
+      "stage": "declare",
+      "status": "done",
+      "detail": "reaction declared; each calculation requires its own method",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "build",
+      "status": "done",
+      "detail": "both endpoints built",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "map",
+      "status": "blocked",
+      "detail": "Heavy-atom element counts differ before and after the reaction: {(7, 0): 1, (6, 0): 1, (8, 0): 1} vs {(1, 0): 1, (7, 0): 1, (6, 0): 1, (8, 0): 1}",
+      "artifacts": [],
+      "source_input_revision": 1
+    }
+  ],
+  "terminal": null,
+  "stop_reason": null,
+  "blocked": {
+    "failure_class": "input_identity_unconfirmed",
+    "stage": "map",
+    "message": "Heavy-atom element counts differ before and after the reaction: {(7, 0): 1, (6, 0): 1, (8, 0): 1} vs {(1, 0): 1, (7, 0): 1, (6, 0): 1, (8, 0): 1}",
+    "atom_details": [],
+    "needs": [
+      "conformers",
+      "reaction.selected_candidate"
+    ],
+    "issues": []
+  },
+  "intervention_count": 0,
+  "path_kind": "not_attempted",
+  "guidance_attempt": 0,
+  "active_attempt_dir": "",
+  "guidance_manifest_path": "",
+  "job_id": null,
+  "job_input_path": "",
+  "waiting_for": "",
+  "scan_step": null,
+  "job_steps": [],
+  "evidence_candidates": [],
+  "revision": 5
+}

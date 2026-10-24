@@ -1,0 +1,90 @@
+{
+  "trajectory_id": "frag0-mmff94-attempt1",
+  "component_id": "frag0",
+  "attempt": 1,
+  "engine": "MMFF94",
+  "symbols": [
+    "N",
+    "H",
+    "H",
+    "H"
+  ],
+  "random_seed": 42,
+  "frame_count": 37,
+  "iterations": 36,
+  "initial_frame": {
+    "step": 0,
+    "symbols": [
+      "N",
+      "H",
+      "H",
+      "H"
+    ],
+    "positions": [
+      [
+        -0.0047209719593347185,
+        0.01052500287478635,
+        0.23987738694401567
+      ],
+      [
+        0.9519226993817524,
+        -0.22343174728443904,
+        -0.07848026586895084
+      ],
+      [
+        -0.6522851865499493,
+        -0.7466505364676003,
+        -0.07901498560190344
+      ],
+      [
+        -0.2949165408724684,
+        0.9595572808772528,
+        -0.08238213547316191
+      ]
+    ],
+    "energy": 2.118725003290703,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 28.069166072645444
+  },
+  "final_frame": {
+    "step": 36,
+    "symbols": [
+      "N",
+      "H",
+      "H",
+      "H"
+    ],
+    "positions": [
+      [
+        -0.0006550413366754118,
+        0.0013838669769239721,
+        0.2955902891431024
+      ],
+      [
+        0.9179154857967202,
+        -0.20257173648277055,
+        -0.0955505450220482
+      ],
+      [
+        -0.633672554230621,
+        -0.6941506496359239,
+        -0.09668737097920631
+      ],
+      [
+        -0.2835878902294239,
+        0.8953385191417705,
+        -0.10335237314184831
+      ]
+    ],
+    "energy": 4.345925903505374e-10,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 0.00030197581717545676
+  },
+  "convergence_code": 0,
+  "status": "converged",
+  "failure": "",
+  "notes": [],
+  "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NY3/jobs/structure_build/NY3_NH3_optfreq/trajectories/frag0-mmff94-attempt1/frames.xyz",
+  "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NY3/jobs/structure_build/NY3_NH3_optfreq/trajectories/frag0-mmff94-attempt1/frames.jsonl",
+  "json_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NY3/jobs/structure_build/NY3_NH3_optfreq/trajectories/frag0-mmff94-attempt1/trajectory.json"
+}

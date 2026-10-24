@@ -1,0 +1,116 @@
+{
+  "trajectory_id": "frag0-mmff94-attempt1",
+  "component_id": "frag0",
+  "attempt": 1,
+  "engine": "MMFF94",
+  "symbols": [
+    "N",
+    "C",
+    "O",
+    "H",
+    "H",
+    "H"
+  ],
+  "random_seed": 42,
+  "frame_count": 310,
+  "iterations": 309,
+  "initial_frame": {
+    "step": 0,
+    "symbols": [
+      "N",
+      "C",
+      "O",
+      "H",
+      "H",
+      "H"
+    ],
+    "positions": [
+      [
+        -0.7202927108398733,
+        -0.0363855481273858,
+        0.07214759192214885
+      ],
+      [
+        0.6968128708741794,
+        0.0828233754778898,
+        -0.06846969402645912
+      ],
+      [
+        1.3820158486858454,
+        -0.9241463092930636,
+        -0.3213878011232425
+      ],
+      [
+        -1.3589870556553667,
+        0.7769447830580449,
+        -0.11945996561775976
+      ],
+      [
+        -1.1002660068242067,
+        -0.9806860329439673,
+        0.3781550719712876
+      ],
+      [
+        1.1007170537594173,
+        1.0814497318284817,
+        0.05901479687402291
+      ]
+    ],
+    "energy": -21.663163155711402,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 57.90366819350517
+  },
+  "final_frame": {
+    "step": 309,
+    "symbols": [
+      "N",
+      "C",
+      "O",
+      "H",
+      "H",
+      "H"
+    ],
+    "positions": [
+      [
+        -0.6877198427377371,
+        -0.035841809586882566,
+        0.07516731044246466
+      ],
+      [
+        0.6601972708443878,
+        0.05063940273216297,
+        -0.07269069541479821
+      ],
+      [
+        1.3916588065271362,
+        -0.9250899294927946,
+        -0.12836168903239323
+      ],
+      [
+        -1.2845994057201102,
+        0.777343533151827,
+        0.12049690652390573
+      ],
+      [
+        -1.1014961568600838,
+        -0.9565742632864922,
+        0.1421473549805633
+      ],
+      [
+        1.0219593279464012,
+        1.0895230664821791,
+        -0.13675918749974486
+      ]
+    ],
+    "energy": -30.90736085323725,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 0.002568220077062602
+  },
+  "convergence_code": 0,
+  "status": "converged",
+  "failure": "",
+  "notes": [],
+  "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NR1/geoms/structure_build/formamide_R/trajectories/frag0-mmff94-attempt1/frames.xyz",
+  "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NR1/geoms/structure_build/formamide_R/trajectories/frag0-mmff94-attempt1/frames.jsonl",
+  "json_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NR1/geoms/structure_build/formamide_R/trajectories/frag0-mmff94-attempt1/trajectory.json"
+}

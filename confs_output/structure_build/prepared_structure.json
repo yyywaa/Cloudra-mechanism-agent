@@ -1,0 +1,103 @@
+{
+  "status": "ok",
+  "mol": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABBwAoAAAAAwMGACgAAAADBAgAKAAAAAMCAQAoAAAAAAEBACgAAAAAAQEAKAAAAAABCwABKAIBAiAAAwABBAACBQBCAAAAAEAJAAAAAAAAAD8AAAAAEgIAAAAAABM6SwAAAAAAAAAAAAAAAAEACgAAAGlzSW1wbGljaXQBAQAAAAABAAoAAABpc0ltcGxpY2l0AQEAAAAAAQAKAAAAaXNJbXBsaWNpdAEBAAAAABMW",
+  "message": "Structure resolved (split / AddHs / identity table / charge self-check); coordinate embedding was not requested.",
+  "has_coordinates": false,
+  "components": [
+    {
+      "component_id": "frag0",
+      "mol": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABBwAoAAAAAwMGACgAAAADBAgAKAAAAAMCAQAoAAAAAAEBACgAAAAAAQEAKAAAAAABCwABKAIBAiAAAwABBAACBQBCAAAAAEAJAAAAAAAAAD8AAAAAEgIAAAAAABM6SwAAAAAAAAAAAAAAAAEACgAAAGlzSW1wbGljaXQBAQAAAAABAAoAAABpc0ltcGxpY2l0AQEAAAAAAQAKAAAAaXNJbXBsaWNpdAEBAAAAABMW",
+      "source_atom_indices": [
+        0,
+        1,
+        2
+      ],
+      "embed_status": "not_required",
+      "optimization_status": "not_required",
+      "engine": "",
+      "trajectory_id": "",
+      "final_energy": null,
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/confs_output/structure_build/component_frag0.mol",
+      "xyz_path": "",
+      "diagnostics": [
+        "coordinate embedding was not requested (strategy.embed=False); only the structural resolution (split / AddHs / identity table / charge self-check) was performed"
+      ]
+    }
+  ],
+  "atom_identities": [
+    {
+      "index": 0,
+      "symbol": "N",
+      "component_id": "frag0",
+      "origin": "input_atom",
+      "input_atom_index": 0,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 1,
+      "symbol": "C",
+      "component_id": "frag0",
+      "origin": "input_atom",
+      "input_atom_index": 1,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 2,
+      "symbol": "O",
+      "component_id": "frag0",
+      "origin": "input_atom",
+      "input_atom_index": 2,
+      "parent_input_atom_index": null,
+      "hydrogen_ordinal": null
+    },
+    {
+      "index": 3,
+      "symbol": "H",
+      "component_id": "frag0",
+      "origin": "added_hydrogen",
+      "input_atom_index": null,
+      "parent_input_atom_index": 0,
+      "hydrogen_ordinal": 1
+    },
+    {
+      "index": 4,
+      "symbol": "H",
+      "component_id": "frag0",
+      "origin": "added_hydrogen",
+      "input_atom_index": null,
+      "parent_input_atom_index": 1,
+      "hydrogen_ordinal": 1
+    },
+    {
+      "index": 5,
+      "symbol": "H",
+      "component_id": "frag0",
+      "origin": "added_hydrogen",
+      "input_atom_index": null,
+      "parent_input_atom_index": 2,
+      "hydrogen_ordinal": 1
+    }
+  ],
+  "candidate_paths": [],
+  "component_paths": [
+    "/home/ly/Cloudra-mechanism-agent/confs_output/structure_build/component_frag0.mol"
+  ],
+  "assembly": null,
+  "trajectory_ids": [],
+  "trajectory_manifest_path": "",
+  "artifact_path": "/home/ly/Cloudra-mechanism-agent/confs_output/structure_build/prepared_structure.json",
+  "electronic_state": {
+    "charge": 0,
+    "multiplicity": 1,
+    "electronic_character": null,
+    "electron_count": 24,
+    "localized_radical_electrons": 0,
+    "n_alpha": 12,
+    "n_beta": 12,
+    "is_open_shell": false,
+    "requires_spin_aware_geometry": false
+  },
+  "diagnostics": []
+}

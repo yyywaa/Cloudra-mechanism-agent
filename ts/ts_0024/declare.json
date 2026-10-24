@@ -1,0 +1,130 @@
+{
+  "reaction": {
+    "reactant_smiles": "[CH3:1]/[C:2]([CH2:3][C@H:6]([OH:5])[c:7]1[cH:8][cH:9][cH:10][cH:11][cH:12]1)=[N+:20]1\\[CH2:19][CH2:18][CH2:17][C@H:16]1[C:14](=[O:13])[O-:15].[OH2:4]",
+    "product_smiles": "[CH3:1][C@@:2]([OH:4])([CH2:3][C@H:6]([OH:5])[c:7]1[cH:8][cH:9][cH:10][cH:11][cH:12]1)[N:20]1[CH2:19][CH2:18][CH2:17][C@H:16]1[C:14](=[O:13])[OH:15]",
+    "charge": 0,
+    "multiplicity": 1,
+    "electronic_character": "closed_shell",
+    "selected_candidate": 0,
+    "reaction_center": [
+      [
+        1,
+        24
+      ],
+      [
+        1,
+        3
+      ],
+      [
+        9,
+        26
+      ],
+      [
+        24,
+        26
+      ]
+    ]
+  },
+  "calculations": {
+    "g16": {
+      "engine": "gaussian",
+      "method": "B3LYP",
+      "basis_set": "def2SVP",
+      "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso)",
+      "frequency_mode": "auto",
+      "orca_blocks": null,
+      "end_setting": ""
+    },
+    "g16irc": {
+      "engine": "gaussian",
+      "method": "B3LYP",
+      "basis_set": "def2SVP",
+      "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso) irc=(calcfc,maxpoints=40,stepsize=10)",
+      "frequency_mode": "auto",
+      "orca_blocks": null,
+      "end_setting": ""
+    }
+  },
+  "conformers": {
+    "reactant": {
+      "kind": "file",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/runs/I2_optfreq/I2_min_v5.xyz",
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0011/build/input_0002/reactant/seed.bound.mol",
+      "evidence_refs": [
+        "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/runs/I2_optfreq/I2_optfreq.log sha256=63dda25e04529e65920526304fb88755db9393e9c22bd3a6efb76eeee0af0d0e; 41 atoms, 117 modes 0 imaginary, E(RB3LYP)=-939.320655479 (L19183) = HI1_E4 denominator (job 961 final frame)"
+      ],
+      "optimization": null
+    },
+    "product": {
+      "kind": "file",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/prep/hemiaminal_1028_lastframe.xyz",
+      "mol_path": null,
+      "evidence_refs": [
+        "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/runs/interm_c160/interm_c160_optfreq.log sha256=1ec7e4c6388415d0859939238f4f96ec7739c0bbf1f985a28f4dd3c23b7dcec1; 41-atom hemiaminal, 117 modes 0 imaginary (job 1028 final frame)"
+      ],
+      "optimization": null
+    },
+    "guidance": {
+      "ring_order": [],
+      "distance_filters": []
+    }
+  },
+  "guess": {
+    "kind": "provided",
+    "xyz_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0016/path/input_0007/provided.xyz",
+    "evidence_refs": [
+      "/home/ly/Cloudra-mechanism-agent/ts/ts_0016/path/input_0007/provided.xyz",
+      "/home/ly/Cloudra-mechanism-agent/ts/ts_0016/path/input_0007/provenance_0001.md",
+      "/home/ly/Cloudra-mechanism-agent/ts/ts_0016/jobs/declaration_0007/frequency/frequency.log"
+    ]
+  },
+  "ts_optimization": {
+    "ref": "g16"
+  },
+  "verification": {
+    "frequency": {
+      "ref": "g16"
+    },
+    "irc": {
+      "ref": "g16irc"
+    },
+    "irc_log": null,
+    "reactant_endpoint": {
+      "seed": {
+        "kind": "file",
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/runs/I2_optfreq/I2_min_v5.xyz",
+        "mol_path": null,
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/runs/I2_optfreq/I2_optfreq.log sha256=63dda25e04529e65920526304db88755db9393e9c22bd3a6efb76eeee0af0d0e"
+        ]
+      },
+      "optimization": {
+        "ref": "g16"
+      },
+      "frequency": {
+        "ref": "g16"
+      }
+    },
+    "product_endpoint": {
+      "seed": {
+        "kind": "file",
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/prep/hemiaminal_1028_lastframe.xyz",
+        "mol_path": null,
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E3/runs/interm_c160/interm_c160_optfreq.log sha256=1ec7e4c6388415d0859939238f4f96ec7739c0bbf1f985a28f4dd3c23b7dcec1"
+        ]
+      },
+      "optimization": {
+        "ref": "g16"
+      },
+      "frequency": {
+        "ref": "g16"
+      }
+    }
+  },
+  "execution": {
+    "cpus": 8,
+    "memory_mb": 10240,
+    "limits": null
+  }
+}

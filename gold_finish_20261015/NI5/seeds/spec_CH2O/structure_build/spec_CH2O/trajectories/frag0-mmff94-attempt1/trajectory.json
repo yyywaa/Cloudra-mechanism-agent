@@ -1,0 +1,90 @@
+{
+  "trajectory_id": "frag0-mmff94-attempt1",
+  "component_id": "frag0",
+  "attempt": 1,
+  "engine": "MMFF94",
+  "symbols": [
+    "C",
+    "O",
+    "H",
+    "H"
+  ],
+  "random_seed": 42,
+  "frame_count": 68,
+  "iterations": 67,
+  "initial_frame": {
+    "step": 0,
+    "symbols": [
+      "C",
+      "O",
+      "H",
+      "H"
+    ],
+    "positions": [
+      [
+        -0.04467801956632001,
+        -0.017405702547835737,
+        0.000786262347901582
+      ],
+      [
+        1.177803907432057,
+        -0.15228984851498548,
+        -0.017837921431572316
+      ],
+      [
+        -0.3978115483273606,
+        1.0072503214613107,
+        0.001496977094714645
+      ],
+      [
+        -0.7353143395383778,
+        -0.8375547703984894,
+        0.015554681988953472
+      ]
+    ],
+    "energy": 1.5258853634899858,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 35.99471469084997
+  },
+  "final_frame": {
+    "step": 67,
+    "symbols": [
+      "C",
+      "O",
+      "H",
+      "H"
+    ],
+    "positions": [
+      [
+        -0.012182403447629312,
+        0.0019116806112075824,
+        0.0001829099738899736
+      ],
+      [
+        1.1974985253430468,
+        -0.187997090490376,
+        -0.017979176687714156
+      ],
+      [
+        -0.4482281351176192,
+        1.0136430954531266,
+        0.0022610669734372327
+      ],
+      [
+        -0.7370879867778,
+        -0.8275576855739567,
+        0.015535199740384312
+      ]
+    ],
+    "energy": 0.054161208631090044,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 0.0005951123459434892
+  },
+  "convergence_code": 0,
+  "status": "converged",
+  "failure": "",
+  "notes": [],
+  "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/seeds/spec_CH2O/structure_build/spec_CH2O/trajectories/frag0-mmff94-attempt1/frames.xyz",
+  "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/seeds/spec_CH2O/structure_build/spec_CH2O/trajectories/frag0-mmff94-attempt1/frames.jsonl",
+  "json_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/NI5/seeds/spec_CH2O/structure_build/spec_CH2O/trajectories/frag0-mmff94-attempt1/trajectory.json"
+}

@@ -1,0 +1,77 @@
+{
+  "trajectory_id": "frag0-mmff94-attempt1",
+  "component_id": "frag0",
+  "attempt": 1,
+  "engine": "MMFF94",
+  "symbols": [
+    "C",
+    "N",
+    "H"
+  ],
+  "random_seed": 42,
+  "frame_count": 52,
+  "iterations": 51,
+  "initial_frame": {
+    "step": 0,
+    "symbols": [
+      "C",
+      "N",
+      "H"
+    ],
+    "positions": [
+      [
+        -0.02878801701642977,
+        0.0030991891034657265,
+        0.0
+      ],
+      [
+        1.1083700192979267,
+        -0.0016208023916189297,
+        0.0
+      ],
+      [
+        -1.0795820022814966,
+        -0.001478386711846955,
+        0.0
+      ]
+    ],
+    "energy": 0.7382953756187337,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 58.35930741084509
+  },
+  "final_frame": {
+    "step": 51,
+    "symbols": [
+      "C",
+      "N",
+      "H"
+    ],
+    "positions": [
+      [
+        -0.03166663122486062,
+        5.35586212934494e-6,
+        0.0
+      ],
+      [
+        1.1283332946914884,
+        -0.0001510653344969838,
+        0.0
+      ],
+      [
+        -1.0966666634666278,
+        0.00014570947236747974,
+        0.0
+      ]
+    ],
+    "energy": 2.1090393195321088e-10,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 0.00024185737123488452
+  },
+  "convergence_code": 0,
+  "status": "converged",
+  "failure": "",
+  "notes": [],
+  "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NR1/geoms/structure_build/prod_HCN_H2O/trajectories/frag0-mmff94-attempt1/frames.xyz",
+  "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NR1/geoms/structure_build/prod_HCN_H2O/trajectories/frag0-mmff94-attempt1/frames.jsonl",
+  "json_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NR1/geoms/structure_build/prod_HCN_H2O/trajectories/frag0-mmff94-attempt1/trajectory.json"
+}

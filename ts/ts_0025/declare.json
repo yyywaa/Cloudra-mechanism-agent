@@ -1,0 +1,116 @@
+{
+  "reaction": {
+    "reactant_smiles": "[CH3:1][C:2](=[CH2:3])[N:20]2[CH2:19][CH2:18][CH2:17][C@H:16]2[C:14](=[O:13])[OH:15].[O:4]([H:21])([H:22]).[O:5]=[CH:6][c:7]1[cH:8][cH:9][cH:10][cH:11][cH:12]1",
+    "product_smiles": "[CH3:1]/[C:2]([CH2:3][C@@H:6]([O-:5])[c:7]1[cH:8][cH:9][cH:10][cH:11][cH:12]1)=[N+:20]1\\[C@H:16]([C:14](=[O:13])[OH:15])[CH2:17][CH2:18][CH2:19]1.[OH2:4]",
+    "charge": 0,
+    "multiplicity": 1,
+    "electronic_character": "closed_shell",
+    "selected_candidate": null,
+    "reaction_center": [
+      [
+        0,
+        28
+      ],
+      [
+        1,
+        3
+      ],
+      [
+        1,
+        0
+      ],
+      [
+        27,
+        28
+      ]
+    ]
+  },
+  "calculations": {
+    "lane3_g16_dmso": {
+      "engine": "gaussian",
+      "method": "B3LYP",
+      "basis_set": "def2SVP",
+      "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=DMSO)",
+      "frequency_mode": "auto",
+      "orca_blocks": null,
+      "end_setting": ""
+    },
+    "lane3_g16_dmso_irc": {
+      "engine": "gaussian",
+      "method": "B3LYP",
+      "basis_set": "def2SVP",
+      "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=DMSO) IRC=(CalcFC,MaxPoints=140,StepSize=5,Recalc=20)",
+      "frequency_mode": "auto",
+      "orca_blocks": null,
+      "end_setting": ""
+    }
+  },
+  "conformers": {
+    "reactant": {
+      "kind": "file",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E2EM1/build/I1_S_from_job59.xyz",
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E2EM1/build/I1_S_from_job59_bonded.mol",
+      "evidence_refs": [
+        "gold_fill_20261018/HI1/HI1_EM1/build/TS_SEED_PROVENANCE_EM1_JOB1032.md"
+      ],
+      "optimization": null
+    },
+    "product": {
+      "kind": "file",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E2EM1/build/TS_guess_EM1_j59f9.xyz",
+      "mol_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E2EM1/build/TS_guess_EM1_j59f9_adduct.mol",
+      "evidence_refs": [
+        "gold_fill_20261018/HI1/HI1_EM1/build/TS_SEED_PROVENANCE_EM1_JOB1032.md"
+      ],
+      "optimization": null
+    },
+    "guidance": {
+      "ring_order": [],
+      "distance_filters": []
+    }
+  },
+  "guess": {
+    "kind": "provided",
+    "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_EM1/build/TS_EM1_job1032_final.xyz",
+    "evidence_refs": [
+      "gold_fill_20261018/HI1/HI1_EM1/build/TS_SEED_PROVENANCE_EM1_JOB1032.md",
+      "gold_fill_20261018/HI1/HI1_EM1/evidence/frequency_frozen.log",
+      "gold_fill_20261018/HI1/HI1_EM1/evidence/refine_frozen.log"
+    ]
+  },
+  "ts_optimization": {
+    "ref": "lane3_g16_dmso"
+  },
+  "verification": {
+    "frequency": {
+      "ref": "lane3_g16_dmso"
+    },
+    "irc": {
+      "ref": "lane3_g16_dmso_irc"
+    },
+    "irc_log": null,
+    "reactant_endpoint": {
+      "seed": null,
+      "optimization": {
+        "ref": "lane3_g16_dmso"
+      },
+      "frequency": {
+        "ref": "lane3_g16_dmso"
+      }
+    },
+    "product_endpoint": {
+      "seed": null,
+      "optimization": {
+        "ref": "lane3_g16_dmso"
+      },
+      "frequency": {
+        "ref": "lane3_g16_dmso"
+      }
+    }
+  },
+  "execution": {
+    "cpus": 4,
+    "memory_mb": 6144,
+    "limits": null
+  }
+}

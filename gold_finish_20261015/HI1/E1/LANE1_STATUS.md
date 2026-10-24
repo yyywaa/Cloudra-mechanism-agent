@@ -1085,9 +1085,388 @@ R(C2–N18) 沿 f 严格单调下降（3.7571 → 2.1000）。
 4. **E1a result / barrier 恒 null**；所有 ΔE **标非 ΔE‡**。
 5. **有界表述**：若纯 C2–N18 压缩坐标上另有驻点，只能位于 **R < 1.6920 Å** 一侧；**禁写「通道不存在 / 无 TS」**。
 
+## 63 协议快照更新后的状态复核（2026-10-18T02:41:23+08:00，只读）
+
+**零动作：未提交、未 ts_resume、未碰 ts/ 下文件、未 kill、未改交付面。**
+- 本轮接到「静态协议/工具目录已更新」广播（新增 `ts_stop`；各工具 revision 变更）。本 lane 无在跑作业，无需适配新工具；
+- 队列实测（query_compute_queue，02:41:23+08:00）：**running 只有 1074**（起于 20:28:54）；queued 空；**free 9 slots / 24 cpus / 40,960 MB**；terminal 新增 **1076 done @2026-10-18T00:20:14**、1078 done @00:08:42、**1071 done @2026-10-17T23:57:11**、**1077 done @23:21:50**、1075 **failed** @22:44:09（非本 lane 作业）。
+- ⇒ 支 A 续扫的 22:51 解冻条件中，**①「腾出 ≥8 cpus」已满足（free 24 cpus）**、**②1076 与 1077 均已终止**（是否「已记账」由协调者判定）。但按既定裁定，**提交仍须主协调点名口令**，本 lane 不自行提交，已把该事实报协调者待裁。
+- E1a 定稿措辞、barrier 恒 null、四条边 result/barrier 全 null、交付面不动等口径全部不变。
+
+
 ### 62.4 其它状态
 - 1071 参照不确定度现值：**「as of 23:22:38 ≥2.01 且不封顶」**（SCF min −939.322757510）。
 - 支 A 续扫仍按 22:51 解冻条件（腾出 ≥8 cpus **且** 1076/1077 已记账）：1077 已记账，但 **1076 仍在跑、free cpus 仍 0** ⇒ **仍不提交**。
+
+## 64 job 1075（E2 侧 1D 扫描）失败性质的只读取证（2026-10-18T02:52+08:00，只读）
+
+**零动作：未提交、未 ts_resume、未 kill、未改 E2 任何文件、未碰交付面。** 本条**仅登记**，**不作 E2 证据**；E2 result / barrier 维持 **null**。
+
+### 64.1 三件套（原生日志）
+- 路径：`gold_finish_20261015/HI1/E2/scan_1d/build/E2_1D_scan.log`
+- 行数：**103,879**（`wc -l`）
+- sha256：`445956fd7491b68f65da4b1d0172f68ac4e35e19a9a55215d9358390fbe2932e`
+- mtime：`2026-10-17 22:44:01.203275950 +0800`；大小 6,703,953 B；读取时刻 `2026-10-18T02:50:05+08:00`
+
+### 64.2 失败类别
+**failure_class =「Error imposing constraints」（冗余内坐标约束施加失败，l103）**——不是 SCF 失败、不是虚频判据、不是 NStep / 步数耗尽（`Number of steps exceeded` 全文 0 次）。
+
+### 64.3 逐字错误行（带行号）
+- L103822 `New curvilinear step failed:  FormB failed.`
+- L103874 `New curvilinear step failed:  FormB failed.`
+- L103875 `Error imposing constraints`
+- L103876 ` Error termination via Lnk1e in /home/ly/g16/l103.exe at Sat Oct 17 22:44:01 2026.`
+- L103877 `Job cpu time:       0 days 16 hours  4 minutes 41.9 seconds.`
+- L103878 `Elapsed time:        0 days  2 hours  4 minutes  2.1 seconds.`
+
+### 64.4 进度上下文（同一日志）
+- 扫描共 **15 点**；L84816 起为 `scan point 8 out of 15`，L86847 起为 **`scan point 9 out of 15`**。
+- 最后一次步进打印 L103757：`Step number  18 out of a maximum of  219 on scan point     9 out of    15`。
+- `Optimization completed.` 共 **8 次**（末四次 L75938 / L85975 及更早 L43674 / L56487 / L67553）。
+- 末三次 SCF Done：L101800 −939.296837073、L102708 −939.296843614、L103669 −939.296849384。
+- ⇒ **8 点收敛、第 9 点第 18 步在「施加约束」处中止**。
+
+### 64.5 输入（只读引用，不评价其设定，亦非本 lane 提交）
+`E2_1D_scan.gjf` sha256 `6301b836b6ca0006f365d80e28cff2f552bd06edae8f54475d6985e751ffbb16`，52 行，mtime 2026-10-17 20:35:47；
+L4 路由 `#p opt=(modredundant,maxstep=8) B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=DMSO)`；L51 约束 `B 1 29 S 14 -0.2000`。
+
+### 64.6 口径与边界
+- 本条**不**推断 E2 通道存在/不存在鞍点，**不**把该次中止当作 E2 的任何能量或势垒证据；E2 result / barrier 恒 **null**。
+- 另注（不重排既有章节）：§62.4 目前位于 `## 63` 标题之后（历史追加点所致）；**自本节起，新章节一律追加在文件最后一个非空行之后**（本次即文件物理末尾 1120 行前的空行之前），不改动 §35–§43 与既有编号顺序。
+## 65 支 A 成键侧续扫：主协调点名放行 + 提交（2026-10-18T02:52+08:00）
+
+### 65.1 口令来源（要点，含来源会话与时刻）
+- 来源：协调者会话 **as_a341823c436e47ed**（本 lane 收到 Incoming call），口令写明「放行权由协调者转交给我」；本 lane 记账时刻约 **2026-10-18T02:52+08:00**（实测 `date -Is` = 2026-10-18T02:53:07+08:00）。
+- 批准项：**仅此一项** —— E1a 支 A 成键侧续扫，2.5420 → 2.0420 Å，6 个几何。
+- 明文硬条件：①种子 `gold_finish_20261015/HI1/E1/split/E1A_neg_scan_p4_R2542_branchA.xyz` sha256 必须 = `f1ff21307918afaa6afa921f244969122b40f94183883d01bc2a232f4d8055e2`，不符即停并报；②扫描关键字 `B 2 18 S 5 -0.1000`（B 2 18 = C2–N18），`maxstep=6`，6 几何、端点 2.5420 → 2.0420；③8 cpus / 10,240 MB / **priority 0**；④输出名带新后缀、**禁覆盖既有文件**（尤其 E1A_constrained_scan_R2692_2192_stepneg.log 91,682 行 / 359937d4…、E1A_scan_cont1_C2N18.log 47,126 行 / 542706d4…）；⑤坐标不手写，方法口径与既有扫段一致（B3LYP/def2SVP + EmpiricalDispersion=GD3BJ + Int(UltraFine) + SCF=Tight + CPCM(DMSO)，引擎 Gaussian 16）。
+- 定性与记分：⑥全部产物标 post-freeze asset / non-delivery / 非 guess / 非鞍点；⑦**E1a result = barrier = null 不变**，峰只写「候选 / 下界」，不写 TS、不写 ΔE‡，**不触发 ts_prepare/ts_resume**；⑧ΔE 仅支 A 内部相对本段首点、标「非 ΔE‡」，**禁与 1077（支 B）或 cont1 拼接、禁跨支相减**。
+- 纪律：零 kill / 零 re-submit / 不碰 ts_0015、ts_0016、ts_0020、ts_0006 / 不改交付面（277 行 / a2964d8d…）/ 不改 registry、task、tests。
+- 同时批准（早前已批）：1075 只读核验（已完成，见 §64）。
+
+### 65.2 开跑前闸门读数（逐项单独命令实测）
+- 种子 sha256 = `f1ff21307918afaa6afa921f244969122b40f94183883d01bc2a232f4d8055e2` ✅ 与口令一致；size 1,118 B，mtime 2026-10-17 20:28:04.107574788；27 原子（1 行注释 + 27 坐标行，共 29 行）；实测时刻 `2026-10-18T02:51:48+08:00`。
+- 队列（同一轮）：running 仅 1074（8 cpus / 10,240 MB / priority 0，起于 2026-10-17T20:28:54）；queued 空；node-local free = 9 slots / 24 cpus / 40,960 MB ⇒ ≥8 cpus 可满足。
+
+### 65.3 输入生成（坐标不手写）
+- 生成器 `qm_input_writer`（source_type=xyz_file；engine gaussian / B3LYP / def2SVP / charge 0 / multiplicity 1 / nproc 8 / mem 10240MB / keywords `EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=DMSO)`）；首次因未声明 charge 被拒（诊断性质，非化学限制），补 charge=0 后成功。
+- 写盘后按既有可行路径补扫描：L4 由 `#p opt` 改为 `#p opt=(modredundant,maxstep=6)`，文件尾追加 `B 2 18 S 5 -0.1000`（write 前 sha de1c9bce… → 后 30a86899…）。
+- 最终输入：`gold_finish_20261015/HI1/E1/split/E1A_scanA_cont_2542_2042.gjf`，38 行，sha256 `30a8689980e776471a2df9f1f9ad20a3966e74da9158b9bc81236ceaeb46b4d9`。
+- L4 实测：`#p opt=(modredundant,maxstep=6) B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=DMSO)`；L8 `0 1`。
+- 坐标保真自检：gjf L9–35 的 x/y/z 与种子 xyz L3–29 逐行 diff ⇒ **COORD_IDENTICAL_TO_SEED**。
+
+### 65.4 提交与失败（attempt 1）
+- `submit_compute_job`（gaussian / local / is_async / cpus 8 / memory_mb 10,240 / priority 0）⇒ **job_id = 1079**，state=ready，job_dir `gold_finish_20261015/HI1/E1/split`。
+- **1079 立即失败（attempt 1）**：日志 `E1A_scanA_cont_2542_2042.log` 151 行 / sha256 `de4e9a6f9f2edd6bbe9005bff1a8d97ff114b93bfd12e5e8771526f20934ed0f` / 7,125 B / mtime 2026-10-18 02:52:18.457442750。详见 §66。
+- 该次提交是本 lane 在 partial 结算后的唯一一次 post-freeze / non-delivery 计算；**未产生任何能量**（停在输入解析阶段），故对 E1a 数据面零影响。
+
+### 65.5 报告口径预警（需协调者裁定，非本 lane 可自决）
+- 口令第 10 条要求相邻几何 Kabsch 报「heavy20 与 all-41 两套」，第 8 条又写「heavy20 0.7593 / max 1.1290 / a13」「all-27 0.9853 / 1.7398 / a9」。**本模型是 27 原子体系（12 重原子 + 15 H）**，不存在 heavy20 与 all-41 原子集；本 lane 已实测的对应量为 **heavy-12 与 all-27**，且 heavy-12 最大位移出现在**工作编号原子 7**（1.1290 Å），非 a13。
+- ⇒ 交付时按 **heavy-12 + all-27** 两套出表，逐项标注原子集定义与最差原子序号；「heavy20 / all-41」按**无法在本模型上产生**处理（不删项，只作命名不符说明），并回问协调者确认是否笔误。
+- E1a result = barrier = **null** 不变；本段任何峰只写「候选 / 下界」；**不触发** ts_prepare / ts_resume。
+
+## 66 job 1079（支 A 续扫 attempt 1）失败取证与修复方案（2026-10-18T02:53+08:00）
+
+**零重提（此刻）：本 lane 未提交 attempt 2，仅在报告中提出修复方案等待口令。** 未 kill 任何作业，未碰 ts_*，交付面未动。
+
+### 66.1 三件套
+- 路径：`gold_finish_20261015/HI1/E1/split/E1A_scanA_cont_2542_2042.log`
+- 行数：**151**；sha256 `de4e9a6f9f2edd6bbe9005bff1a8d97ff114b93bfd12e5e8771526f20934ed0f`；7,125 B；mtime `2026-10-18 02:52:18.457442750 +0800`。
+
+### 66.2 failure_class 与逐字行
+- failure_class = **Gaussian 输入解析错误（l101，「Wanted a floating point number」）**，不是 SCF、不是收敛、不是约束施加（与 1075 的 l103 完全不同）。
+- L144 `Wanted a floating point number as input.`
+- L145 `Found an integer as input.`
+- L146 `B 2 18 S 5 -0.1000`
+- L147 `?`
+- L148 `Error termination via Lnk1e in /home/ly/g16/l101.exe at Sun Oct 18 02:52:18 2026.`
+- L149 `Job cpu time:       0 days  0 hours  0 minutes 11.9 seconds.` / L150 `Elapsed time:        0 days  0 hours  0 minutes  1.5 seconds.`
+- 另：l1 解析后回显的**全部 27 原子符号与坐标正常**（L116–L143），路由回显正常（L87–L88）。
+
+### 66.3 根因（可判定，非猜测）
+- 分子坐标块与 modredundant 卡片之间**缺空行**：写盘时把 `B 2 18 S 5 -0.1000` 直接接在末原子行之后，Gaussian 把该卡片当作原子行解析（首字符 B 视为元素符号亦可，但随后 `2` 处要求浮点数）⇒ 报整数错误。
+- 对照：1072 / 1077 的既有成功输入均为「末原子行 → 空行 → 扫描卡片 → 空行」布局；本次我漏掉了末原子行后的空行。
+
+### 66.4 修复方案（待口令，只改格式不改科学设定）
+- 新输入 `E1A_scanA_cont_2542_2042_v2.gjf`（新后缀、不覆盖任何既有文件），内容 = 本次输入 + 在末原子行后插入一个空行；路由、约束、坐标、引擎、方法口径全部不变。
+- 预计提交参数不变：8 cpus / 10,240 MB / priority 0。
+- 若协调者认为「零 re-submit」亦涵盖本次输入格式修复，请明确禁止，本 lane 保持不再提交并只留本取证。
+## 67 判读更正：1074 不是「停滞」，是 stdout 块缓冲（2026-10-18T02:54+08:00）
+
+**零动作：未 kill、未重提、未改任何作业；交付面未动。**
+
+- 我此前（§64/回报第 8 条）以 log 大小 19,577,855 B 与 mtime 02:28:07.721 不变判「仍处停滞」，**依据不足，已更正**。
+- 协调者 as_ec848a7673b74e35 的独立实测（02:49:5x）：g16 主进程 pid 1234203 存活（ELAPSED 06:49:55）、scratch `/home/ly/g16/scratch/Gau-1234209.rwf` 236,371,968 B 且 mtime 02:49:06.045 → 02:49:56.173 持续推进 ⇒ **作业在算，log 只是按块缓冲**。
+- 本 lane 采纳的判据（升级）：**log 最近写入时间不得单独作为挂死判据，须与 .rwf mtime 或进程存活联合判**。今后本 lane 描述 1074 只写「log 自 02:28:07 静默（缓冲），进程/.rwf 判活由协调者核」。正确处置是核对平台 monitor（命令行含 `--timeout 1800`），不是 kill 重投。
+- §64 中 1075 的取证结论**不受此更正影响**（1075 已由 l103 真终止，L103876 逐字终止行 + mtime 22:44:01 固定），仍按「只登记、不作 E2 证据、E2 result/barrier 恒 null」执行。
+
+## 68 等待点（本 lane 当前唯一动作 = 等口令）
+
+- 支 A attempt 1（job 1079）因输入缺空行在 l101 失败，取证见 §66；**是否允许 _v2 格式修复重试，等主协调 as_a341823c436e47ed 一句话口令**；未获口令前不再提交。
+- 「heavy20 / all-41」原子集与 27 原子模型不符，等主协调确认（本 lane 拟按 heavy-12 + all-27 出表并标注定义）。
+- E1a result = barrier = **null** 不变；未触发 ts_prepare / ts_resume；不碰 ts_0015·ts_0016·ts_0020·ts_0006。
+## 69 主协调批准 v2 格式修复重试 + 提交 job 1080（2026-10-18T02:54+08:00）
+
+### 69.1 口令（来源 as_a341823c436e47ed，本 lane 记账 2026-10-18T02:53:5x）
+- 批准：**一次性**格式修复重试；唯一改动 = 末原子行与 modredundant 卡片之间插入一个空行；路由/约束/坐标/引擎/方法口径全不变；8 cpus / 10,240 MB / priority 0。
+- 约束：v2 若再现 l1xx 或任何非 Normal termination ⇒ **立即停、只留取证、不再重试**并报；此批准**不扩展到任何其他重试**（1075 仍不重投）。
+- 原子集口径：协调者确认 **「heavy20 / all-41」是笔误**（照抄 E3b 的 41 原子口径），本模型 27 原子（12 重 + 15 H）⇒ 报告用 **heavy-12 + all-27**，须标注元素筛选规则与原子编号来源（工作编号 / 输入序号）。
+
+### 69.2 种子与参照同构核对（提交前，逐项单独命令）
+- 种子 sha256 = `f1ff21307918afaa6afa921f244969122b40f94183883d01bc2a232f4d8055e2` ✅（1,118 B / mtime 2026-10-17 20:28:04.107574788 / 27 原子）。
+- 既有成功输入卡片行号：`E1A_constrained_scan_R2692_2192_stepneg.gjf` L37 = `B 2 18 S 10 -0.0500`（38 行）；`E1A_scan_cont1_C2N18.gjf` L37 = `B 2 18 S 5 -0.1000`（38 行）。
+- v2 实测：**距 38 行**、卡片在 **L37**、L35 = 末原子、L36 = 空行、L37 = 卡片、L38 = 空行（cat -A 确认 `$` 结尾）⇒ **与 1072/1077 同构**。
+
+### 69.3 v2 输入
+- 路径：`gold_finish_20261015/HI1/E1/split/E1A_scanA_cont_2542_2042_v2.gjf`；38 行；**1,740 B**；mtime `2026-10-18 02:53:58.799019343 +0800`；sha256 `3b77f40c727070cffa0dc506ff8e48e55a057fcfb1087dbfe88878a338402e00`。
+- 坐标保真：gjf L9–35 与种子 xyz L3–29 逐行 diff ⇒ **COORD_IDENTICAL_TO_SEED**（仍由 qm_input_writer 从同一种子生成，未手写）。
+- v1→v2 diff 三处、逐一分类：(a) `%chk` 文件名随新后缀变化（机械项）；(b) 标题行加 v2 说明（注释项）；(c) **坐标块与卡片之间新增一个空行**（唯一实质改动，卡片由 L36 移到 L37，与 1072/1077 同构）。除此外无其它差异。
+
+### 69.4 提交与队列快照
+- 提交前队列：running = [1074（8 cpus / 10,240 MB / priority 0，起于 2026-10-17T20:28:54）]；queued 空；node-local free = 9 slots / 24 cpus / 40,960 MB；terminal 新增 1079 failed @2026-10-18T02:52:25。
+- `submit_compute_job`（gaussian / local / async / cpus 8 / memory_mb 10,240 / priority 0）⇒ **job_id = 1080**，state=ready，job_dir `gold_finish_20261015/HI1/E1/split`。
+- 提交后即刻队列：running 仍只列 1074（1080 处于起步/调度中）；free 未变。
+- 输出日志预期 `E1A_scanA_cont_2542_2042_v2.log`（新后缀，未覆盖任何既有文件）。
+
+### 69.5 定性（不变）
+- post-freeze asset / non-delivery / 非 guess / 非鞍点；ΔE 只对支 A 内部相对本段首点、标「非 ΔE‡」、**禁与 1077（支 B）或 cont1 拼接或相减**；**E1a result = barrier = null 不变**；任何峰只写候选 / 下界；**不触发** ts_prepare / ts_resume；零 kill（含 1074）。
+## 70 job 1080（v2 支 A 续扫 attempt 2）终态：**外部 SIGTERM 终止**于第 3 点；仅 2/6 点收敛（2026-10-18T03:37+08:00；性质于 03:56 更正，见 §72）
+
+**零动作声明：未做第三次提交、未 kill、未改任何既有文件、未 ts_resume、未碰 ts_*；交付面 277 行 a2964d8d… 未动；E1a result = barrier = null 不变。** 按放行口令第 4 条「v2 若再现 l1xx 或任何非 Normal termination ⇒ 立即停、只留取证、不再重试」，本次不重试。
+
+### 70.1 输入（提交时）
+- `gold_finish_20261015/HI1/E1/split/E1A_scanA_cont_2542_2042_v2.gjf`；**38 行**；**1,740 B**；mtime `2026-10-18 02:53:58.799019343 +0800`；sha256 `3b77f40c727070cffa0dc506ff8e48e55a057fcfb1087dbfe88878a338402e00`。
+- 结构：L4 路由 `#p opt=(modredundant,maxstep=6) B3LYP/def2SVP EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight SCRF=(CPCM,Solvent=DMSO)`；L8 `0 1`；L35 末原子；L36 空行；L37 `B 2 18 S 5 -0.1000`；L38 空行（与 1072/1077 同构）。
+
+### 70.2 日志（同轮实测，逐项单独命令，读取于 2026-10-18T03:36:04+08:00）
+- 路径：`gold_finish_20261015/HI1/E1/split/E1A_scanA_cont_2542_2042_v2.log`
+- 行数：**47,015**；sha256 `7f11a2628c0c0b39db8d242bb695c675890dd1d908595815ae1a26fbc24b0c5f`；字节 **2,965,446**；mtime `2026-10-18 03:34:43.710427783 +0800`。
+- 包装日志（诊断用，非证据）：`.cloudra/calc-1080.out.log` 33 行 / 1,618 B / mtime `2026-10-18 03:34:45.173349804`。
+
+### 70.3 终止性质（非 Normal termination）
+- 原生日志内 `Normal termination` **0 次**、`Error termination via` **0 次**；平台作业状态 = **cancelled**（推送 2026-10-18T03:34:4x）。
+- 包装日志逐字：L1 `[calculator] isolated GAUSS_SCRDIR=/home/ly/g16/scratch/cloudra_g16_task1080_1781993`；L2 `Error: software termination`；L9 `Error: software termination`；L16–L33 为 backtrace，栈顶 L17 `  /home/ly/g16/l502.exe() [0xf84dd4]`、L33 `  /home/ly/g16/l502.exe() [0x40d169]`。
+- ⇒ **failure_class（2026-10-18T03:56 更正，见 §72）= 外部 SIGTERM 终止（信号 15）**：`calc-1080.exit.json` exit_code = **−15**（22 B，mtime 2026-10-18 03:34:45.026188639）；`guard-1080.log` 末行「calculator 退出，退出码：**241**」= 256−15（181 B，mtime 03:35:58.134836623）。
+- **不再使用**「Gaussian 内部软件终止 / l502 段错误」的定性：包装日志的 `Error: software termination` + 寄存器转储 + l502 backtrace 是 **Gaussian 收到 SIGTERM 时的标准输出**（全线已见 1080 l502、1074 l703、1087 l703 三例），**不能区分内部崩溃与外部终止**。仍成立的部分：**不是** l101 输入解析、**不是** l103 约束施加、**不是** NStep 步数耗尽、**不是** SCF 不收敛报错。
+- 原生日志末行上下文（逐字）：L46990 `DIIS: error= 2.78D-03 at cycle   1 NSaved=   1.`；L47001 `Cycle   2  Pass 1  IDiag  1:`；L47003 `E= -593.931117463493     Delta-E=       -0.002045361465 Rises=F Damp=F`；L47014 `Cycle   3  Pass 1  IDiag  1:`；L47015 `RMSU=  2.65D-05    CP:  1.00D+00  1.06D+00`（此后无输出）。
+
+### 70.4 进度与末计数行
+- `Optimization completed` 共 **2 次**：L1343（pt1）、L40451（pt2）。
+- 末计数行逐字 L46495 `Step number   9 out of a maximum of  152 on scan point     3 out of     6`。
+- ⇒ **6 点中仅 2 点收敛**（scan point 1、2），scan point 3 在 step 9→10 之间崩溃；scan point 3–6 **缺测**（4 点无数据，不插值、不外推）。
+
+### 70.5 两个收敛点的末次 SCF Done（行号 + 能量）
+- **pt1**：`SCF Done` L790 `E(RB3LYP) =  -593.931626205     A.U. after   12 cycles`；收敛行 L1343 `Optimization completed.`。
+- **pt2**：`SCF Done` L40160 `E(RB3LYP) =  -593.932746675     A.U. after    8 cycles`；收敛行 L40451 `Optimization completed.`。
+- 收敛帧导出（*只读 Optimization completed 之后的 orientation 块*）：`E1A_scanA_cont_2542_2042_v2_pt1.xyz` sha256 `9590138961f2c5105644c41c364629a344562f67bd885704adc9339e6184be30`（源块 L480–511）、`…_pt2.xyz` sha256 `0787686bd16f66b7f28c062a4d6e837838eba3d80a7d8e86b1d43124349d0aa6`（源块 L39924–39955），各 29 行 / 27 原子。
+
+### 70.6 逐点几何与相对能量（**非 ΔE‡**；仅支 A 内部，相对本段首点；不与 1077 / cont1 / 1072 跨段拼接或相减）
+| 点 | 目标 R(2,18) | 实测 R(2,18) | C2–O3 | N18–H27 | O3···H27 | minsep | E (a.u.) | ΔE vs pt1 (kcal/mol) | 收敛行 |
+|---|---|---|---|---|---|---|---|---|---|
+| pt1 | 2.5420 | 2.5420 | 1.2210 | 1.0151 | 2.5575 | 0.9741 (13–19) | −593.931626205 (L790) | 0.00 | L1343 |
+| pt2 | 2.4420 | 2.4420 | 1.2235 | 1.0155 | 3.1012 | 0.9745 (13–19) | −593.932746675 (L40160) | **−0.70**（非 ΔE‡） | L40451 |
+| pt3–pt6 | 2.3420 / 2.2420 / 2.1420 / 2.0420 | — | — | — | — | — | — | **缺测（崩溃）** | — |
+- 门限核对（对两个收敛点）：|实测−目标| = 0.0000 Å（≤0.002 ✅）；C2–O3 1.2210/1.2235 ∈ 1.22–1.28 ✅；N18–H27 1.0151/1.0155 ≪ 1.10 ✅；minsep 0.9741/0.9745 ≥ 0.90 ✅（无碰撞买来的距离）。
+- 1 Eh = 627.509474 kcal/mol；ΔE(pt1→pt2) = (−593.932746675 + 593.931626205) × 627.509474 = **−0.7031 kcal/mol**。
+
+### 70.7 相邻几何 Kabsch（pt1 → pt2；R 作用于前点→后点；SVD；det(R) 强制 +1）
+- **heavy-12**（元素筛选：非氢；共 12 个；编号 = 工作编号 = 该 27 原子 xyz 顺序 1 基）：n=12，det(R) = **+1.000000**，rms = **0.7390 Å**，max|Δ| = **1.0821 Å**，最差原子 = **工作编号 3**；前五：3:1.0821、13:1.0805、17:1.0033、4:0.9759、1:0.7615。
+- **all-27**（全部 27 原子含 15 H）：n=27，det(R) = **+1.000000**，rms = **0.9631 Å**，max|Δ| = **1.7259 Å**，最差原子 = **工作编号 9**；前五：9:1.7259、26:1.4917、5:1.4692、25:1.3809、19:1.3714。
+- 三条合成自检（脚本 `split/scripts/e1a_scanA_kabsch.py` sha256 `21ca3dab7b76b37311419ace8ff43b56214a74d747612737e766b1159f3d02f8`）：①已知旋转+平移 ⇒ rms **0.000000 Å** / max 0.000000 / det +1.000000；②镜像副本 ⇒ rms **1.9084 Å** / max 3.6425 / **det_raw = −1**（+1 修正后 det(R_used) = +1）；③同结构副本 ⇒ rms **0.00000000 Å** / max 0.00000000 / det +1.000000。
+- 原子编号口径：本节一律给**工作编号**（= 该 27 原子结构文件顺序，1 基）。原始/任务 atom-map 号仅对已确证的四个位置可写：工作 2 = 任务 C2、工作 3 = 任务 O4、工作 18 = 任务 N20、工作 27 = 任务 H21；其余原子（含本节最差原子 3 以外的 13/17/4/1/9/26/5/25/19）**任务编号不在本 ledger 重述**（避免臆造，需引用 ts run 的 atom_map 时另行核对）。
+
+### 70.8 构象判读（关键，影响 ΔE 的可解释性）
+- τ(3,2,18,14)（本 lane 带符号二面角）：pt1 = **−130.97°**、pt2 = **−64.74°** ⇒ |Δτ| = **66.23°**；O3···H27 2.5575 → **3.1012 Å**。
+- pt1 与种子 `E1A_neg_scan_p4_R2542_branchA.xyz` 的四个描述量完全一致（τ −130.97、R(2,18) 2.5420、R(2,3) 1.2210、R(18,27) 1.0151、O3···H27 2.5575）⇒ pt1 即种子，符合预期。
+- ⇒ **pt1→pt2 之间发生了一次与 sp4→sp5「分支切换」同量级的构象重排**（heavy-12 rms 0.7390 / max 1.0821；对照 sp4→sp5 的 0.7593 / 1.1290）。因此 **ΔE = −0.70 kcal/mol 不能读作「C2–N18 缩短 0.10 Å 的纯势能响应」**，其中含构象项；本段不可作为单支刚性弛豫序列处理。
+
+### 70.9 结论（按放行口令的措辞纪律）
+- 本段**只有 2/6 点收敛**（pt1 R=2.5420、pt2 R=2.4420），pt3–pt6 因 l502 崩溃缺测；**不能**写「本段 6/6 收敛、无内部极大、严格单调」——该结论在本段不成立/不适用。
+- 已收敛两点间能量下降 0.7031 kcal/mol（非 ΔE‡），但**伴随构象切换**，故只能作为支 A 内部的相对记录，不构成势垒/峰的任何证据，也不得与支 B（1077/cont1）拼接或相减。
+- 全段无任何可识别内部极大：仅因缺测，不构成「无极大」的证明；亦不得写「通道不存在」。
+- **E1a result = barrier = null 不变**；未触发 ts_prepare / ts_resume；未做第三次提交（按口令第 4 条）。
+### 70.10 协调者独立复核与停止决定（2026-10-18T03:38:07，来源 as_a341823c436e47ed）
+- 我方 1080 三件套（47,015 行 / 7f11a262… / 2,965,446 B / mtime 03:34:43.710427783）经其逐位独立复测**完全一致**；`Optimization completed` = 2、`Normal termination` = 0、`Error termination` = 0、末计数行 Step 9 / 152、scan point 3 / 6；包装日志 l502 backtrace 判断与其一致。
+- **停止决定（口令）**：不做第三次提交；1080 的 v2 输入与日志保留为 post-freeze asset / non-delivery，**不覆盖、不改写**。
+
+### 70.11 覆盖度与措辞（按协调者要求逐字落账）
+- **覆盖 2.5420 → 2.4420 两点，2.4420 以下无数据**（pt3–pt6 = 2.3420 / 2.2420 / 2.1420 / 2.0420 缺测，不插值、不外推）。
+- 构象限制：τ(3,2,18,14) −130.97° → −64.74°（|Δτ| 66.23°）、O3···H27 2.5575 → 3.1012 Å，配 heavy-12 0.7390 / 1.0821 / 工作编号 3 与 all-27 0.9631 / 1.7259 / 工作编号 9 ⇒ pt1→pt2 为**构象重排**（与 sp4→sp5 的 0.7593 / 1.1290 同量级），本段**不是单支刚性弛豫序列**，ΔE −0.7031 kcal/mol 不得读作 C–N 缩短 0.10 Å 的纯势能响应。
+- 三自检与编号口径原样保留：旋转+平移 0.000000 / 镜像 rms 1.9084（det_raw −1）/ 同结构副本 0.00000000；编号 = 27 原子文件顺序（工作编号 1 基），任务 atom-map 仅写已确证四处（工作 2=C2、工作 3=O4、工作 18=N20、工作 27=H21），其余不臆造。
+- 禁止措辞：不写「本段无极大」「通道不存在」（2/6 缺测不构成无极大的证明）；ΔE 只作支 A 内部相对差、标非 ΔE‡、不入任何跨段/跨支表。
+
+### 70.12 环境（协调者 03:38 实测，本 lane 记录，不行动）
+- running = 1074(8) / 1082(8) / 1087(8) / 1092(4) / 1093(4)；free = 5 slots / **0 cpus / 0 MB** ⇒ 满载；1074 仍在算，**不 kill**、不以 log 静默判死锁（以 .rwf 十秒级刷新为准）。
+## 71 平台元数据另一叙述 + 重复件 1089 孤儿进程（2026-10-18T03:40+08:00，只读）
+
+**零动作：未 kill 任何进程（含孤儿 1089）、未第三次提交、未 ts_resume、未改任何文件、交付面未动。**
+
+### 71.1 平台元数据（本轮实测，`query_compute_queue` terminal）
+- **1080**：state = **cancelled**，ended_at **2026-10-18T03:35:58+08:00**，last_error = `D23 cancel: HI1_E1a direction-disproven; cores reallocated to 1093/1095/1096`。
+- **1089**：state = **cancelled**，ended_at **2026-10-18T03:36:55+08:00**，last_error = `D23 cancel: duplicate of 1080 (same E1a scan R2.5420->2.0420); edge direction-disproven`。
+- ⇒ **顺序（2026-10-18T03:56 更正定性）**：(i) **外部 SIGTERM 终止**：calculator 退出码 −15 / 241，exit.json mtime 03:34:45.026188639，guard 记账 mtime 03:35:58.134836623；(ii) **平台事后记账**：state=cancelled、ended_at 03:35:58，附第三方理由串。故 `direction-disproven` 是**事后记账与事后归因**，不作终止原因、**不入交付证据链**、本 lane 不采信为结论；**也不再写「崩溃时刻」**（SIGTERM 与「软件终止」打印同时刻，73 s/72.8 s 只是记账延迟）。§70 的数据面（2/6 收敛、pt3–pt6 缺测、非 ΔE‡）全部保持。
+- 说明：本行原写「因果不可分」，现按新时序证据收窄为「先撞击、后取消」——属**有据修订**（非静默改写），依据 = v2.log / 包装日志 / 平台 ended_at 三个独立时间戳。
+
+### 71.2 重复件 1089（**非本 lane 提交**）
+- 输入 `gold_fill_20261018/HI1/HI1_E1a_scanfix/HI1_E1a_scanA_cont_2542_2042_fix1.gjf` sha256 `cb87a45a9c5286709deb57ba7ac62f999a72937ae69e07c9a2d3a5aa0930c263`（1,771 B / mtime 2026-10-18 03:07）；与本 lane v2 的差异据协调者为 %chk 路径、%mem=6GB（v2 为 10240MB）、标题行、末尾空行少一个；路由/约束/坐标相同。
+- 台账**不接受**其为本 lane 证据：%mem 不同 ⇒ 非同一次计算的等价重复，且其提交、取消与进程处置均不在本 lane 权限内。
+- 孤儿进程（本轮实测）：`ps -o pid,stat,etime,pcpu,comm -p 1867365` ⇒ pid **1867365 / STAT SN / g16 存活**；`fix1.log` = **247,617 B / 3,895 行 / mtime 03:39:55.701592068**（仍在增长）、`fix1.chk` = 8,310,784 B / mtime 03:39:55.597589673 ⇒ **取消只停记账、未停计算**。
+- 负荷后果：本 lane 观察到的 running = 1074(8) / 1082(8) / 1087(8) / 1092(4) / 1094(4)，free = 5 slots / **0 cpus / 0 MB**；若计入孤儿 1089 的 8 cpus，实际并发超过注册配额，单步变慢属预期。**本 lane 不处理孤儿**（处置权在主协调/平台）。
+
+### 71.3 边界重申
+- 本 lane 仍**不做第三次提交**；不 kill 1074、不 kill 1089-孤儿、不改 priority、不 ts_resume；不触碰 ts_0015·ts_0016·ts_0020·ts_0006；不碰交付面（277 行 / a2964d8d…）。
+- **E1a result = barrier = null 不变**；ΔE −0.7031 kcal/mol 仅是支 A 内部相对差、标非 ΔE‡、禁与 1077/cont1 拼接；不写「本段无极大」「通道不存在」。
+- 若后续任何来源（含 1089 孤儿）产出该段数据，须先经主协调明示授权并以**其自身日志三件套**登记，方可作为独立记录引用，且**不得**与本 lane §70 的两点混算。
+## 73 ts_0015 只读巡检（第八轮，2026-10-18T04:05:02+08:00）
+
+**零动作：未 ts_resume、未提交、未删锁、未 kill、未碰 ts/ 下任何文件。**
+- 自证：`test -d jobs/declaration_0001/frequency` ⇒ **FREQ_DIR_NO**；`ls jobs/declaration_0001/` ⇒ 仅 `ts_opt`；`.pipeline.lock` 存在（未动）；`process.json` = **30,059 B / mtime 2026-10-17 14:36:37.092354393**（冻结约 **13 h 28 m**）。
+- `ts_inspect(ts_0015)` 只读记录：revision **11**、**status = isolated**、stage **refine**、**result = null**、waiting_for = job **1055**（purpose ts_opt，state **done**，**evidence = null**，log `jobs/declaration_0001/ts_opt/refine.log`）；available_results 显示 declare/build/map/assemble/guess 均 done（guess: `Provided candidate bound; formal optimization and verification remain required.`），无 frequency 阶段目录。
+- 判读：仍为 **#197「ts run 在 stage 间推进处特定挂起」**，不是作业失败、不是输入被拒；本轮**无 frequency 阶段**，故不触发频率分析模板、不产生任何 ΔE‡、不改交付面。
+## 74 事件类①：job 1074（E3b 6×6 扫描）已终止——外部 SIGTERM，无 Gaussian 终止行（2026-10-18T04:58+08:00，只读）
+
+**零动作：未 kill、未提交、未 ts_resume、未改任何文件。** 本条为只读记录与事件上报（对象 as_ec848a7673b74e35）。
+
+### 74.1 三件套与终止元数据（逐项单独命令，2026-10-18T04:58:01+08:00 实测）
+- 主日志 `gold_finish_20261015/HI1/E3/runs/e3b_scan2d_c2n4_o25h26.log`：**303,154 行** / **19,577,855 B** / sha256 **9044f74b2dd8678f69e07b8eeaadc903694070a18d8c644ec400ab8bf5b49cfe**（与协调者 02:54:01 读数同值 ⇒ **内容未变**）/ mtime **2026-10-18 04:53:47.743635472**（mtime 变化来自收尾写入，字节数与行数未变）。
+- `guard-1074.log`（181 B / mtime **04:53:47.613998195**）三行逐字：L1 `[guard] Gaussian scratch: /home/ly/g16/scratch/cloudra_g16_task1074_1234148`；L2 `[guard] calculator 启动 (PID 1234195)，等待其结束...`；L3 `[guard] calculator 退出，退出码：241`。
+- ⇒ **241 = 256 − 15 = SIGTERM（信号 15）外部终止**；该目录下**无** `calc-1074.exit.json`（与 1080 情形不同，只有 guard 记账）。
+- 进程：`ps -o pid,stat,etime,pcpu -p 1234203` ⇒ **无输出（进程已退出）**；scratch `Gau-1234209.rwf` = 236,371,968 B / mtime **2026-10-18 03:45:35.805260811**（末次推进后停止）。
+
+### 74.2 主日志内终止行：**不存在**
+- `grep -n 'Normal termination of Gaussian'` = **0 次**；`grep -n 'Error termination via'` = **0 次** ⇒ 无正常终止行、无 l103/l101/9999 类终止行；按 21:17 纪律，**不得**因此写「作业失败」以外的科学定性，只登记「外部 SIGTERM 截断」。
+- 末 15 行逐字（行号）：L303140 `E= -939.251869210573     Delta-E=       -0.000000006260 Rises=F Damp=F`；L303143 `ErrMax= 6.77D-07  0.00D+00 EMaxC= 1.00D-01 BMatC= 5.12D-10 BMatP= 7.14D-09`；L303150 `RMSDP=9.04D-08 MaxDP=4.56D-06 DE=-6.26D-09 OVMax= 7.04D-06`；L303152 `Cycle   9  Pass 1  IDiag  1:`；L303153 `RMSU=  7.49D-08    CP:  1.00D+00  1.08D+00  6.78D-01  8.87D-01  6.92D-01`；L303154 `                   CP:  6.19D-01  7.78D-01  8.37D-01`（文件到此结束，无终止块）。
+
+### 74.3 进度（内容未变，仅登记）
+- `Optimization completed` = **17**；`on scan point 19 out of` = **0 次** ⇒ scan#18 仍未收敛、col3 缺末行、17/36、候选 0。（与协调者 03:41 判读一致。）
+- 队列（04:57:56 实测）：**running = 空**、queued 空、node-local free = 10 slots / **32 cpus / 51,200 MB**。
+
+### 74.4 边界
+- E3b 属他关心边，**result / barrier 仍 null**；本 lane 不以其任何数值入表。本 lane 的 E1a result = barrier = **null** 不变；未提交、未 kill、未 ts_resume、交付面 277 行 a2964d8d… 未动。
+- 判死纪律（§72.4）适用：以 guard 退出码 241/−15、`.rwf` 停止推进（03:45:35.805260811）、主日志无终止行为据；主日志 mtime 只作辅证。
+## 75 取证陷阱更正：1074 的 log / guard 日志在 04:53:47 被「同内容重写」，其 mtime 自此失效（2026-10-18T04:59+08:00，只读）
+
+**零动作：未提交、未 kill、未 ts_resume、未改任何文件；交付面未动。**
+
+### 75.1 现象（本 lane 独立实测，2026-10-18T04:58:47+08:00）
+- `guard-1074.log`：181 B / **sha256 7172971b6efa0f3ad141aea03d136ee5a20e2789d2f88b3faebd6d63b542b8a4** / mtime **04:53:47.613998195**。
+- `calc-1074.out.log`：**1,581 B / 32 行** / **sha256 f9e73b64815b76fdf38c497793a21cf49b47f2feef7d7aa78cc5b85911a79d6d** / mtime **04:53:47.613998195**；L2 `Error: software termination`、L10 `  /home/ly/g16/l703.exe() [0xdca494]`、L11 `Error: software termination`（Gaussian 收 SIGTERM 的标准输出）。
+- 主日志 `e3b_scan2d_c2n4_o25h26.log`：**303,154 行 / 19,577,855 B / sha256 9044f74b…**（内容与 02:54 同值）/ mtime **04:53:47.743635472**。
+- **关键**：三个文件构成**一组**重写（guard 与包装日志的 mtime **为同一微秒时间戳 04:53:47.613998195**，主日志晚 **0.1296 s**），而**字节数与 sha256 全部未变**；`.rwf` 未被重写（仍 03:45:35.805260811）⇒ 这是**归档/回写或 touch 类批量操作**，**不是计算行为**。mtime 失效范围 = **这三件**（guard、包装日志、主日志）。
+
+### 75.2 更正与影响范围
+- **此后不得再用 1074 主日志与 guard 日志的 mtime 作「最后写入时刻」**；其权威标识改为 **sha256 + 字节数**。本 lane §74.1 所记 mtime（04:53:47.xxxx）应读作「**重写之后的 mtime**」，不是计算结束时刻；此前协调者侧 03:47:00.785418768 一类读数应标为「**重写前的历史 mtime**」。
+- 1074 的真实终止时刻链（据协调者 as_ec848a7673b74e35 复核，本 lane 独立复核其两端证据）：`.rwf` 停写 **03:45:35.805260811** → 包装日志 `software termination` **03:45:46.453373043** → guard「退出码 241」→ 平台 ended_at **03:47:00**（平台条目已被后续作业挤出 terminal 列表，本 lane 现无法直接复读，按协调者记录登记）。
+- §74 的科学性结论不受影响：内容面 303,154 行 / 17 个 `Optimization completed` / `on scan point 19 out of` = 0 / 无任何 Gaussian 终止行 ⇒ **scan#18 未收敛、col3 缺末行、17/36、候选 0**；E3b result/barrier 仍 **null**，本 lane 不入表。
+
+### 75.3 纪律补一条（与 §72.4 四级制兼容）
+④ 若某文件在作业终态之后 mtime 被改动而 sha256 未变，判为**归档/回写**，**不得**据此重开判活或改动结论；判活只对**仍在跑**的作业有意义。终态认定顺序：guard 退出码 / exit.json → `.rwf` 停止推进 → 平台记录 → 主输出（仅辅证）。
+
+### 75.4 资源与授权边界
+- 队列（04:58:21–04:58:47 实测）：**running 空、queued 空、free = 10 slots / 32 cpus / 51,200 MB** ⇒ 资源式门槛（free cpus ≥ 8 且 running ≤ 2）**首次满足**；但 (r2,c4)≈pt23 单点、E2 cont2、支 B 2.9543 单点、E3b 加密网格/扩窗等**仍需主协调点名授权 + 新文件名**，本 lane **不自行提交**。
+- 另记（非本 lane 业务，仅登记事实）：同期 terminal 出现 1104 failed（退出码 137）/ 1115 failed（PATH 缺程序）/ 1117·1111·1118 failed（l9999），不由本 lane 处置。
+- E1a result = barrier = **null** 不变；交付面 277 行 a2964d8d… 未动；未提交 / 未 kill / 未 ts_resume / 不碰 ts_*；不写「该窗口无驻点」。
+
+### 75.5 终态窗口滚动的后果（2026-10-18T05:00+08:00 实测）
+- 1074 已**滚出** `query_compute_queue` 的 terminal 段：本 lane 04:58:47 的 recent_terminal(6) 已无 1074（其位被 1104/1115/1117/1111/1118/1112 等占去）⇒ **`ended_at 03:47:00` 与 last_error 逐字串今后只能引「当时落账的条目快照」**（协调者 03:50 条目即当时实测记录），**不得**因窗口滚动改写成「未终止 / 找不到」。这是「引历史终态只用各自条目快照」纪律的第二次实证。
+- 1074 内容面结论（不变）：17 个 `Optimization completed`、`Normal termination` / `Error termination via` = 0 / 0、`on scan point 19 out of` = 0、末行 L303140 / L303150 / L303152 / L303153–154 无终止块 ⇒ scan#18 未收敛、col3 缺末行、17/36、候选 0；**E3b result/barrier 仍 null**、本 lane 不入表。
+## 76 收文登记（无动作）：E3b 网格坐标自纠 + 原子集口径互不适用（2026-10-18T05:01+08:00）
+
+**零动作：未提交、未 kill、未 ts_resume、未改任何文件；本条只作收文与口径隔离登记。**
+- 收到 as_ec848a7673b74e35 的自纠：其此前对我的口述「(r2,c4) = R(2,4)=1.4248、只改一轴」有误，正确为 **(r2,c4) = (R(2,4)=1.6248, R(25,26)=1.7193)**；种子帧 = pt14 收敛帧（SCF L182507 = −939.225689108，六距离 R(2,4)=1.6248 / R(25,26)=1.4693 / R(4,26)=2.3243 / R(10,27)=0.9949 / R(2,25)=1.3793 / R(2,26)=2.1690）。
+- **该网格属 E3b 边、不属本 lane（HI1_E1）**：本 lane 不做 (r2,c4) 取点、不代提交、不以任何 E3b 数值入表；相关报告由其自身负责。
+- **原子集口径隔离（防串用）**：E3b 侧用「heavy20 / all-41」；本 lane 的 E1a 模型为 **27 原子（12 重 + 15 H）**，只用 **heavy-12 + all-27**（已由主协调 §R206 (e)/§R208 勘误确认）。两套编号体系**不得互换引用**。
+- 取证纪律照收：新作业若发生收尾同内容重写，不得以 mtime 作最后写入时刻；判活只用 `.rwf` 十秒级刷新 + 进程存活；判死用 guard 退出码（0 正常 / 241 ≡ −15 SIGTERM）/ exit.json / `.rwf` 停写时刻；日志终止消息仅辅证。
+- 边界不变：E1a result = barrier = **null**；交付面 277 行 a2964d8d… 未动。
+## 77 ts_0015 只读巡检（第九轮，2026-10-18T10:00:46+08:00）
+
+**零动作：未 ts_resume、未提交、未删锁、未 kill、未碰 ts/ 下任何文件。**
+- 自证：`test -d jobs/declaration_0001/frequency` ⇒ **FREQ_DIR_NO**；`ls jobs/declaration_0001/` ⇒ 仅 `ts_opt`；`.pipeline.lock` 存在（未动）；`process.json` = **30,059 B / mtime 2026-10-17 14:36:37.092354393**（冻结约 **19 h 24 m**）。
+- `ts_inspect(ts_0015)`：revision **11**、status **isolated**、stage **refine**、**result = null**、**blocked = null**、waiting_for = job **1055**（ts_opt，state **done**，**evidence = null**）；available_results 全为 done（declare / build / map / assemble / guess / validate / submit / ts_opt）。
+- 判读：仍为 **#197「ts run 在 stage 间推进处特定挂起」**；本轮**无 frequency 阶段** ⇒ 不触发频率模板、不产生任何 ΔE‡、不改交付面。
+## 78 ts_0015 只读巡检（第十轮，2026-10-18T15:54:03+08:00）
+
+**零动作：未 ts_resume、未提交、未删锁、未 kill、未碰 ts/ 下任何文件。**
+- 自证：`test -d jobs/declaration_0001/frequency` ⇒ **FREQ_DIR_NO**；`ls jobs/declaration_0001/` ⇒ 仅 `ts_opt`；`.pipeline.lock` 存在（未动）；`process.json` = **30,059 B / mtime 2026-10-17 14:36:37.092354393**（冻结约 **25 h 17 m**）。
+- `ts_inspect(ts_0015)`：revision **11**、status **isolated**、stage **refine**、**result = null**、**blocked = null**、waiting_for = job **1055**（state **done**，**evidence = null**）。
+- 判读：仍为 **#197「ts run 在 stage 间推进处特定挂起」**；无 frequency 阶段 ⇒ 不产生任何 ΔE‡、不改交付面。
+## 79 ts_0015 只读巡检（第十一轮，2026-10-18T21:51:07+08:00）
+
+**零动作：未 ts_resume、未提交、未删锁、未 kill、未碰 ts/ 下任何文件。**
+- 自证：`test -d jobs/declaration_0001/frequency` ⇒ **FREQ_DIR_NO**；`ls jobs/declaration_0001/` ⇒ 仅 `ts_opt`；`.pipeline.lock` 存在（未动）；`process.json` = **30,059 B / mtime 2026-10-17 14:36:37.092354393**（冻结约 **31 h 14 m**）。
+- `ts_inspect(ts_0015)`：revision **11**、status **isolated**、stage **refine**、**result = null**、**blocked = null**、waiting_for = job **1055**（state **done**，**evidence = null**）。
+- 判读：仍为 **#197「ts run 在 stage 间推进处特定挂起」**；本轮无 frequency 阶段 ⇒ 不产生任何 ΔE‡、不改交付面。
+## 80 ts_0015 只读巡检（第十二轮，2026-10-19T03:43:58+08:00）
+
+**零动作：未 ts_resume、未提交、未删锁、未 kill、未碰 ts/ 下任何文件。**
+- 自证：`test -d jobs/declaration_0001/frequency` ⇒ **FREQ_DIR_NO**；`ls jobs/declaration_0001/` ⇒ 仅 `ts_opt`；`.pipeline.lock` 存在（未动）；`process.json` = **30,059 B / mtime 2026-10-17 14:36:37.092354393**（冻结约 **37 h 07 m**）。
+- `ts_inspect(ts_0015)`：revision **11**、status **isolated**、stage **refine**、**result = null**、**blocked = null**、waiting_for = job **1055**（state **done**，**evidence = null**）。
+- 判读：仍为 **#197「ts run 在 stage 间推进处特定挂起」**；本轮无 frequency 阶段 ⇒ 不产生任何 ΔE‡、不改交付面。
+
+
+
+
+
+
+
+
+## 72 口径更正（重要）：1080 系**外部 SIGTERM 终止**，非「Gaussian 内部软件终止/l502 段错误」（2026-10-18T03:56+08:00）
+
+**零动作：未提交、未 kill、未改任何计算文件；交付面未动。** 本节的更正**已同步改进 §70 与 §71 的正文**（有据修订，非静默改写；原措辞在修订句中显式标注「不再使用」）。
+
+### 72.1 依据（本 lane 独立实测，逐项单独命令，2026-10-18T03:56:13+08:00）
+- `HI1/E1/split/.cloudra/calc-1080.exit.json`：22 B，mtime `2026-10-18 03:34:45.026188639`，内容 L2 `"exit_code": -15`。
+- `HI1/E1/split/.cloudra/guard-1080.log`：181 B，mtime `2026-10-18 03:35:58.134836623`，三行逐字 —— L1 `[guard] Gaussian scratch: /home/ly/g16/scratch/cloudra_g16_task1080_1781993`；L2 `[guard] calculator 启动 (PID 1782000)，等待其结束...`；L3 `[guard] calculator 退出，退出码：241`。
+- ⇒ **241 = 256 − 15**，与 exit_code −15 同义 = **SIGTERM（信号 15）外部终止**。
+- 对照：`calc-1079.exit.json`（20 B / mtime 02:52）为 l101 正常失败路径，与本条不同源。
+
+### 72.2 更正后的定性（逐字采用协调者口径）
+- 「**1080 于 2026-10-18T03:35:58 被外部 SIGTERM 终止（guard 退出码 241 / calc-1080.exit.json exit_code −15），随后平台以 state=cancelled 记账并附第三方理由串；理由串为事后记账与事后归因，不作终止原因。**」
+- 撤回项：`failure_class = Gaussian 内部软件终止（l502 段错误）` **不成立**；包装日志的 `Error: software termination` + 寄存器转储 + l502 backtrace 是 **Gaussian 收到 SIGTERM 时的标准输出**（同类三例：1080 l502、1074 l703、1087 l703），不能区分内部崩溃与外部终止。
+- 不再写「崩溃时刻 ≈ …」；73.5 s / 72.8 s 的「最后日志写入 → 平台终态记账」间隔只是**记账延迟**。
+
+### 72.3 数值面一律不变（不得因本节更动）
+- 覆盖度：**2/6 收敛**（pt1 R=2.5420、pt2 R=2.4420），pt3–pt6 缺测、不插值不外推；措辞「**覆盖 2.5420 → 2.4420 两点，2.4420 以下无数据**」。
+- 能量：pt1 SCF Done L790 −593.931626205（收敛 L1343）、pt2 L40160 −593.932746675（收敛 L40451）；ΔE(pt1→pt2) = **−0.7031 kcal/mol**，标**非 ΔE‡**、仅支 A 内部、禁与 1077/cont1 拼接。
+- 构象重排小节：τ(3,2,18,14) −130.97° → −64.74°（|Δτ| 66.23°）、O3···H27 2.5575 → 3.1012 Å；heavy-12 rms 0.7390 / max 1.0821 / 工作编号 3；all-27 rms 0.9631 / max 1.7259 / 工作编号 9；det(R)=+1；三自检 0.000000 / 1.9084（det_raw −1）/ 0.00000000；「ΔE 含构象项，不得读作 C–N 缩短 0.10 Å 的纯势能响应」。
+- **不做第三次提交**；**E1a result = barrier = null**；v2 输入与日志保留为 post-freeze asset / non-delivery、不覆盖不改写；不写「本段无极大」「通道不存在」。
+
+### 72.4 判死纪律（全线更新，本 lane 采纳并记录）
+1. `guard-<id>.log` 的「calculator 退出，退出码：」（241/−15 = SIGTERM；0 = 正常；其它单独解释）；2. `calc-<id>.exit.json`；3. `.rwf` 停止推进时刻；4. 主输出/包装日志的终止消息**只作辅证**。判活仍四级制：`.rwf` 十秒级刷新 > 子进程 CPU > 终止标记计数为 0 > 主输出 mtime。
+## 81 ts_0015 只读巡检（第十三轮，2026-10-19T09:23:36+08:00）
+
+**零动作：未 ts_resume、未提交、未删锁、未 kill、未碰 ts/ 下任何文件。**
+- 自证：`test -d jobs/declaration_0001/frequency` ⇒ **FREQ_DIR_NO**；`ls jobs/declaration_0001/` ⇒ 仅 `ts_opt`；`.pipeline.lock` 存在（未动）；`process.json` = **30,059 B / mtime 2026-10-17 14:36:37.092354393**（冻结约 **42 h 47 m**）。
+- `ts_inspect(ts_0015)`：revision **11**、status **isolated**、stage **refine**、**result = null**、**blocked = null**、waiting_for = job **1055**（state **done**，**evidence = null**）。
+- 判读：仍为 **#197「ts run 在 stage 间推进处特定挂起」**；本轮无 frequency 阶段 ⇒ 不产生任何 ΔE‡、不改交付面。
+
+### 81.1 台账顺序说明（编排勘误，不改内容）
+- 本文件当前物理顺序为 §70、§71、§73–§80、§72、§81：§72（SIGTERM 口径更正）落在 §73–§80 之后，原因是 §72 的追加锚点选在 §71 末行，而 §73–§80 的追加锚点反复落在 §73 的同一句上（该句在 §79/§80 重复出现，本轮首次尝试追加曾因多处匹配被拒：edit status=conflict，未写入）。
+- 处置：**不重排既有文本**（避免破坏既有引用与 sha 链）；自 §81 起一律以「文件最后一个非空行」为锚点追加。阅读顺序请按节号，物理顺序以本节说明为准。
+- 内容面无任何变化：§72 的 SIGTERM 口径更正、§73–§80 的巡检记录均逐字为当时写入版本。
+## 82 ts_0015 只读巡检（第十四轮，2026-10-19T15:12:59+08:00）
+
+**零动作：未 ts_resume、未提交、未删锁、未 kill、未碰 ts/ 下任何文件。**
+- 自证：`test -d jobs/declaration_0001/frequency` ⇒ **FREQ_DIR_NO**；`ls jobs/declaration_0001/` ⇒ 仅 `ts_opt`；`.pipeline.lock` 存在（未动）；`process.json` = **30,059 B / mtime 2026-10-17 14:36:37.092354393**（冻结约 **48 h 36 m**）。
+- `ts_inspect(ts_0015)`：revision **11**、status **isolated**、stage **refine**、**result = null**、**blocked = null**、waiting_for = job **1055**（state **done**，**evidence = null**）。
+- 判读：仍为 **#197「ts run 在 stage 间推进处特定挂起」**；本轮无 frequency 阶段 ⇒ 不产生任何 ΔE‡、不改交付面。
+## 83 ts_0015 只读巡检（第十五轮，2026-10-19T21:05:19+08:00）
+
+**零动作：未 ts_resume、未提交、未删锁、未 kill、未碰 ts/ 下任何文件。**
+- 自证：`test -d jobs/declaration_0001/frequency` ⇒ **FREQ_DIR_NO**；`ls jobs/declaration_0001/` ⇒ 仅 `ts_opt`；`.pipeline.lock` 存在（未动）；`process.json` = **30,059 B / mtime 2026-10-17 14:36:37.092354393**（冻结约 **54 h 29 m**）。
+- `ts_inspect(ts_0015)`：revision **11**、status **isolated**、stage **refine**、**result = null**、**blocked = null**、waiting_for = job **1055**（state **done**，**evidence = null**）。
+- 判读：仍为 **#197「ts run 在 stage 间推进处特定挂起」**；本轮无 frequency 阶段 ⇒ 不产生任何 ΔE‡、不改交付面。
+- 编排说明：本节以 §82 整节为唯一锚点追加（上一尝试用「最后一个非空行」作锚点因该句在 §79–§82 重复出现被 edit 拒绝，status=conflict、未写入）；自本节起，追加锚点一律取「上一节整节文本」，确保唯一匹配。
+
+
+
+
+
+
+
+
+
+
+
 
 
 

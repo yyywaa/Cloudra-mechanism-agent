@@ -1,0 +1,1311 @@
+{
+  "format_version": 7,
+  "run_id": "ts_0026",
+  "pipeline_id": "47d08de3e0882ed60d03c379360834ad46b4123924b459a9fde077dc667a4cf0",
+  "declaration_revision": 4,
+  "optimization_checkpoints": {},
+  "budget_action_keys": {},
+  "budget_reservations": {},
+  "attempt_history": [
+    {
+      "declaration_revision": 1,
+      "selected_candidate_id": null,
+      "job_steps": [],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "map",
+          "status": "blocked",
+          "detail": "reactant: The concrete structure has 2 symmetric heavy-atom bindings; without concrete atom-map labels the binding is not unique.",
+          "artifacts": [],
+          "source_input_revision": 1
+        }
+      ],
+      "reason": "C1 与 C3 在反应物图里同为甲基、重原子绑定对称（平台返回 2 个同分候选）；选 candidate 0 = heavy_atom_bindings 与声明的工作序一致（C1=struct1, C2=struct2, O4=struct3, C3=struct4, N20=struct18, C14=struct12, O13=struct11, O15=struct13），即 reaction_center (2,4)/(4,10)/(3,10)/(2,3) 指向真实 C2/C3/O4/H22。",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "[CH3:1][C:2]([CH2:3]([H:22]))([O:4]([H:21]))[N:20]1[CH2:19][CH2:18][CH2:17][C@H:16]1[C:14](=[O:13])[OH:15]",
+          "product_smiles": "[CH3:1][C:2](=[CH2:3])[N:20]2[CH2:19][CH2:18][CH2:17][C@H:16]2[C:14](=[O:13])[OH:15].[O:4]([H:21])([H:22])",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "selected_candidate": null,
+          "reaction_center": [
+            [
+              1,
+              3
+            ],
+            [
+              2,
+              9
+            ],
+            [
+              3,
+              9
+            ],
+            [
+              1,
+              2
+            ]
+          ]
+        },
+        "calculations": {
+          "g16": {
+            "engine": "gaussian",
+            "method": "b3lyp",
+            "basis_set": "def2svp",
+            "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/INT1_27_opt_frame.xyz",
+            "mol_path": null,
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/TS_GUESS_PROVENANCE.md"
+            ],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/build/product_start_27.xyz",
+            "mol_path": null,
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/TS_GUESS_PROVENANCE.md"
+            ],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": {
+          "kind": "provided",
+          "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/build/ts_guess_27.xyz",
+          "evidence_refs": [
+            "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/TS_GUESS_PROVENANCE.md"
+          ]
+        },
+        "ts_optimization": {
+          "ref": "g16"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "g16"
+          },
+          "irc": {
+            "ref": "g16"
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "g16"
+            },
+            "frequency": {
+              "ref": "g16"
+            }
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "g16"
+            },
+            "frequency": {
+              "ref": "g16"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 4,
+          "memory_mb": 6144,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGwAAAIABBiAgAAAABAYgIAAAAAQIICAAAAACBiAgAAAABAEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQggKAAAAAMCBiAoAAAAAwQIICgAAAADAgYgJAAAAAIEBiAgAAAABAYgIAAAAAQGICAAAAAEByAgAAAAAwEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQsBAAACAQADAQAEAAAFAAAGAAAHAwAIAwAJAwALCigCDAsgDQsADg0ADw4AEA8AERAAEQ0AEQEAEgwAEw0AFA4AFQ4AFg8AFw8AGBAAGRAAGgIAQgEAAAAFDQ4PEBFAmQIAAAEAAAABAAAAABu3JXLBGbzwv0d0z7pGy+a/4UIewY3U+T+jeJW1TXHvvzaxwFd0a++/mlyMgXUcuz9BLQYP076JP9RlMbH5uP+/Gof6Xdiarb/J6IAk7JsCwJkR3h6EgPi/FeEmo8ow2b9gj4mUZvP1v4RkARO49fm/PNo4Yi0eAUBM3gAz30H8vxWNtb+zPbY/t+wQ/7Bl/T+AZDp0et6tvz1EozuIndu/GxAhrpz9/z91WOGWj2QJwDkKEAUzJuy/3nNgOUIGwr+3Xz5ZMfwDwAzO4O8XEwTATDYebLHbsz+By2PNyGACwAcpeAq5kvq/Tny1ozjH978UQZyHE/gDQMLexJCczOe/IorJG2Cm8b8YIqev5yv+P5uOAG4WL8S/UOEIUil2zr+PjUC8rt8BQOolxjL9Esu/X/BpTl7k8D90tKolHWXnP1GjkGRWb+k/NxlVhnG34L/5ZwbxgR3gP9ds5SX/U/8/2xX6YBkb3j+d9pScE/vuv02CN6RR4QJAVYmyt5Tzyz+k/+VatMD3v8JpwYu+AvU/wXCuYYbG6b/gaTLjbaXiv+yEl+DUB8Q/LEXylUDK579yN4jWitYHQLMHWoEhq+q/29/ZHr0h8j8o1NNH4A/wP7lt36P+uvM/p+oe2Vz197+NtiqJ7APlP02+2ebG9Pk/n+QOm8gM+D/5254gsV3zP0BqEyf3OwZA5pSAmIQL0j+YhuEjYsr4v090XfjBmQJAWDfeHRlr8j+7RzZXzfPwv5lk5CzsCQtAxEFClC9ox786It+l1OX2v1yOVyB60vs/niRdM/km/b9kkLsIUzQEwL6jxoSYS/A/WI/7VutE5L+70cd8QKDBP1rXaDnQwwDA91j60AU18L8/AgAAAAAAEpYBAAACAA0AAABfRmlsZUNvbW1lbnRzAAsAAABvcHQgc3RlcD0zNxUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAVQEAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ISTEvRTEvc3BsaXQvSU5UMV8yN19vcHRfZnJhbWUueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICJiMmYyZmZhYWY2NDE2OTkxNmUyOWQ1OWZhNDRhNDllMjIzZTM5NGUyMWY2OTkwNzk4MGI4YTgzMTUxZmE1ZDM2In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDI2L2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlX2IyZjJmZmFhZjY0MTY5OTEueHl6In0sICJpbnB1dF9yZXZpc2lvbiI6IDF9EzpFAQAAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAABABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAAAAAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAgAAABfQ0lQQ29kZQABAAAAUwgBAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAABABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABMW",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGgAAAIABBiAgAAAABAYgKAAAAAMECCAgAAAAAgYgKAAAAAMEASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCCAoAAAAAwIGICgAAAADBAggKAAAAAMCBiAkAAAAAgQGICAAAAAEBiAgAAAABAYgIAAAAAQHICgAAAADAwEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQsBAAADASgCBAAABQAABgAABwMACAMACQIACwooAgwLIA0LAA4NAA8OABAPABEQABENABEBIBIMABMNABQOABUOABYPABcPABgQABkQABoCAEIBAAAABQ0ODxARQJkCAAABAAAAAQAAAAAbtyVywRm88L9HdM+6Rsvmv+FCHsGN1Pk/o3iVtU1x7782scBXdGvvv5pcjIF1HLs/KuWUBNHI/D8P4+JmwIIEwKGXOI8Wqbs/xp9Ns+Vh9L+OtI6JGHcBwJdFOJgTVdq/YI+JlGbz9b+EZAETuPX5vzzaOGItHgFATN4AM99B/L8VjbW/sz22P7fsEP+wZf0/gGQ6dHrerb89RKM7iJ3bvxsQIa6c/f8/sxXJka1C9b+8iL7UMjYAwBWk398cJeU/jNWLRuN177/O4K374N/1v9/qEGpMCfG/YGi//6Bf6z/3NA6SkV0DwAQZ6HftFMs/FEGchxP4A0DC3sSQnMznvyKKyRtgpvG/GCKnr+cr/j+bjgBuFi/Ev1DhCFIpds6/j41AvK7fAUDqJcYy/RLLv1/waU5e5PA/dLSqJR1l5z9Ro5BkVm/pPzcZVYZxt+C/+WcG8YEd4D/XbOUl/1P/P9sV+mAZG94/nfaUnBP77r9NgjekUeECQFWJsreU88s/pP/lWrTA97/CacGLvgL1P8FwrmGGxum/4Gky422l4r/shJfg1AfEPyxF8pVAyue/cjeI1orWB0CzB1qBIavqv9vf2R69IfI/KNTTR+AP8D+5bd+j/rrzP6fqHtlc9fe/jbYqiewD5T9NvtnmxvT5P5/kDpvIDPg/+dueILFd8z9AahMn9zsGQOaUgJiEC9I/mIbhI2LK+L9PdF34wZkCQFg33h0Za/I/u0c2V83z8L+ZZOQs7AkLQMRBQpQvaMe/OiLfpdTl9r9cjlcgetL7P54kXTP5Jv2/ZJC7CFM0BMC+o8aEmEvwP1iP+1brROS/cVYCMSLE/j/7NPY+uGcFwMBpj1F9y+q/PwIAAAAAABINAgAAAgANAAAAX0ZpbGVDb21tZW50cwCBAAAASEkxX0UxYiBwcm9kdWN0IHN0YXJ0IChlbmFtaW5lICsgSDJPLCAyNyBhdG9tcywgd29ya2luZyBvcmRlciA9IElOVDFfMjcgb3JkZXIpOiBDMj1DMyAxLjM0MCwgd2F0ZXIgPSBPNCtIMjErSDIyIGF0IDMuMjAgQSBmcm9tIEMyFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBWAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmlsbF8yMDI2MTAxOC9ISTEvSEkxX0UxYi9idWlsZC9wcm9kdWN0X3N0YXJ0XzI3Lnh5eiJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiMjFiOTEwZmU0MTE0NmJmMGY0N2JhNTYwM2VlMzY4OTIxNGU2OWMyYzVlMDllYWU4NTgyZWI4N2UzMWMzOThkNCJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDAyNi9idWlsZC9pbnB1dF8wMDAxL3Byb2R1Y3Qvc291cmNlXzIxYjkxMGZlNDExNDZiZjAueHl6In0sICJpbnB1dF9yZXZpc2lvbiI6IDF9EzoFAQAAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAACAAAAF9DSVBDb2RlAAEAAABTCAEAAQAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAABABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAAAEAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAExY=",
+        "product_to_reactant": null,
+        "candidate": null
+      },
+      "provided_guess_binding": null,
+      "terminal": null,
+      "blocked": {
+        "failure_class": "input_identity_unconfirmed",
+        "stage": "map",
+        "message": "reactant: The concrete structure has 2 symmetric heavy-atom bindings; without concrete atom-map labels the binding is not unique.",
+        "atom_details": [
+          "reactant built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0026/structures/reactant_b96745de703e74c83229.xyz",
+          "reactant atoms (1-based): 1=C, 2=C, 3=O, 4=C, 5=H, 6=H, 7=H, 8=H, 9=H, 10=H, 11=O, 12=C, 13=O, 14=C, 15=C, 16=C, 17=C, 18=N, 19=H, 20=H, 21=H, 22=H, 23=H, 24=H, 25=H, 26=H, 27=H",
+          "product built geometry: /home/ly/Cloudra-mechanism-agent/ts/ts_0026/structures/product_fa719a091f06e67f6a31.xyz",
+          "product atoms (1-based): 1=C, 2=C, 3=O, 4=C, 5=H, 6=H, 7=H, 8=H, 9=H, 10=H, 11=O, 12=C, 13=O, 14=C, 15=C, 16=C, 17=C, 18=N, 19=H, 20=H, 21=H, 22=H, 23=H, 24=H, 25=H, 26=H, 27=H"
+        ],
+        "needs": [
+          "reaction.selected_candidate"
+        ],
+        "issues": [
+          {
+            "candidates": [
+              {
+                "atom_map": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9,
+                  27,
+                  11,
+                  12,
+                  13,
+                  14,
+                  15,
+                  16,
+                  17,
+                  18,
+                  19,
+                  20,
+                  21,
+                  22,
+                  23,
+                  24,
+                  25,
+                  26,
+                  10
+                ],
+                "bond_edit_count": 2,
+                "broken_bonds": [
+                  [
+                    2,
+                    4
+                  ]
+                ],
+                "charge_mismatch": 0,
+                "concrete_watch_pairs": [
+                  [
+                    2,
+                    3
+                  ]
+                ],
+                "formed_bonds": [],
+                "graph_watch_pairs": [
+                  [
+                    2,
+                    4
+                  ]
+                ],
+                "heavy_atom_bindings": {
+                  "product": [
+                    1,
+                    2,
+                    4,
+                    18,
+                    17,
+                    16,
+                    15,
+                    14,
+                    12,
+                    11,
+                    13,
+                    3
+                  ],
+                  "reactant": [
+                    1,
+                    2,
+                    4,
+                    3,
+                    18,
+                    17,
+                    16,
+                    15,
+                    14,
+                    12,
+                    11,
+                    13
+                  ]
+                },
+                "heavy_atom_map": [
+                  1,
+                  2,
+                  3,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9,
+                  10,
+                  11,
+                  12,
+                  4
+                ],
+                "hydrogen_mismatch": 2,
+                "order_changes": [
+                  {
+                    "atoms": [
+                      2,
+                      3
+                    ],
+                    "product_order": 2.0,
+                    "reactant_order": 1.0
+                  }
+                ],
+                "radical_mismatch": 0,
+                "score": 11.0,
+                "source": "atom_map_labels",
+                "stereo_mismatch": 0
+              },
+              {
+                "atom_map": [
+                  4,
+                  2,
+                  3,
+                  1,
+                  8,
+                  9,
+                  10,
+                  5,
+                  6,
+                  27,
+                  11,
+                  12,
+                  13,
+                  14,
+                  15,
+                  16,
+                  17,
+                  18,
+                  19,
+                  20,
+                  21,
+                  22,
+                  23,
+                  24,
+                  25,
+                  26,
+                  7
+                ],
+                "bond_edit_count": 2,
+                "broken_bonds": [
+                  [
+                    2,
+                    4
+                  ]
+                ],
+                "charge_mismatch": 0,
+                "concrete_watch_pairs": [
+                  [
+                    2,
+                    3
+                  ]
+                ],
+                "formed_bonds": [],
+                "graph_watch_pairs": [
+                  [
+                    2,
+                    4
+                  ]
+                ],
+                "heavy_atom_bindings": {
+                  "product": [
+                    1,
+                    2,
+                    4,
+                    18,
+                    17,
+                    16,
+                    15,
+                    14,
+                    12,
+                    11,
+                    13,
+                    3
+                  ],
+                  "reactant": [
+                    4,
+                    2,
+                    1,
+                    3,
+                    18,
+                    17,
+                    16,
+                    15,
+                    14,
+                    12,
+                    11,
+                    13
+                  ]
+                },
+                "heavy_atom_map": [
+                  1,
+                  2,
+                  3,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9,
+                  10,
+                  11,
+                  12,
+                  4
+                ],
+                "hydrogen_mismatch": 2,
+                "order_changes": [
+                  {
+                    "atoms": [
+                      2,
+                      3
+                    ],
+                    "product_order": 2.0,
+                    "reactant_order": 1.0
+                  }
+                ],
+                "radical_mismatch": 0,
+                "score": 11.0,
+                "source": "atom_map_labels",
+                "stereo_mismatch": 0
+              }
+            ],
+            "code": "concrete_mapping_ambiguous",
+            "field": "reaction.selected_candidate"
+          }
+        ]
+      },
+      "failed_attempt": null,
+      "stop_reason": null
+    },
+    {
+      "declaration_revision": 2,
+      "selected_candidate_id": null,
+      "job_steps": [
+        {
+          "purpose": "ts_opt",
+          "job_id": 1091,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/jobs/declaration_0002/ts_opt/refine.gjf",
+          "state": "ready",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "b3lyp",
+            "basis_set": "def2svp",
+            "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 2,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              27,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              10
+            ],
+            "charge": 0,
+            "declaration_revision": 2,
+            "process_id": "47d08de3e0882ed60d03c379360834ad46b4123924b459a9fde077dc667a4cf0",
+            "product_mol": "\n     RDKit          3D\n\n 27 26  0  0  0  0  0  0  0  0999 V2000\n   -1.0459   -0.7123    1.6144 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9826   -0.9819    0.1059 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.7990   -2.5638    0.1080 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.2739   -2.1832   -0.4114 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3719   -1.6225    2.1397 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7661    0.0869    1.8373 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0583   -0.4315    1.9994 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3288   -2.0265    0.6608 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9831   -1.3672   -1.0648 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8554   -2.4207    0.2116 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.4961   -0.7437   -1.1031 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8857   -0.1577   -0.2380 C   0  0  0  0  0  0  0  0  0  0  0  0\n    2.2342   -0.2115    1.0558 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.7311    0.7948   -0.5224 C   0  0  2  0  0  0  0  0  0  0  0  0\n    0.5036    1.9580    0.4704 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9681    2.3600    0.2184 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4845    1.3132   -0.8055 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.5827    0.1565   -0.7434 N   0  0  0  0  0  0  0  0  0  0  0  0\n    2.9798   -0.8334    1.1332 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0039    1.2332   -1.4974 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.6567    1.6223    1.5031 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2104    2.7793    0.2820 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5494    2.3251    1.1511 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0595    3.3798   -0.1829 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4311    1.7389   -1.8220 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5255    1.0185   -0.6334 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.9229   -2.6756   -0.8373 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  1  0\n  4  2  2  0\n  5  1  1  0\n  6  1  1  0\n  7  1  1  0\n  8  4  1  0\n  9  4  1  0\n 10  3  1  0\n 12 11  2  0\n 13 12  1  0\n 14 12  1  0\n 15 14  1  0\n 16 15  1  0\n 17 16  1  0\n 18 17  1  0\n 18 14  1  0\n 18  2  1  0\n 19 13  1  0\n 14 20  1  6\n 21 15  1  0\n 22 15  1  0\n 23 16  1  0\n 24 16  1  0\n 25 17  1  0\n 26 17  1  0\n 27  3  1  0\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n 27 27  0  0  0  0  0  0  0  0999 V2000\n   -1.0459   -0.7123    1.6144 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9826   -0.9819    0.1059 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0126   -1.9827   -0.0578 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.3261   -1.5314   -0.3936 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3719   -1.6225    2.1397 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7661    0.0869    1.8373 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0583   -0.4315    1.9994 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.1741   -0.8797   -0.1408 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4981   -2.5093    0.0776 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.2973   -1.6608   -1.4861 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.4961   -0.7437   -1.1031 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8857   -0.1577   -0.2380 C   0  0  0  0  0  0  0  0  0  0  0  0\n    2.2342   -0.2115    1.0558 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.7311    0.7948   -0.5224 C   0  0  2  0  0  0  0  0  0  0  0  0\n    0.5036    1.9580    0.4704 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9681    2.3600    0.2184 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4845    1.3132   -0.8055 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.5827    0.1565   -0.7434 N   0  0  0  0  0  0  0  0  0  0  0  0\n    2.9798   -0.8334    1.1332 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0039    1.2332   -1.4974 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.6567    1.6223    1.5031 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2104    2.7793    0.2820 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5494    2.3251    1.1511 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0595    3.3798   -0.1829 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4311    1.7389   -1.8220 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5255    1.0185   -0.6334 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.1377   -2.0956   -1.0129 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  1  0\n  3  2  1  0\n  4  2  1  0\n  5  1  1  0\n  6  1  1  0\n  7  1  1  0\n  8  4  1  0\n  9  4  1  0\n 10  4  1  0\n 12 11  2  0\n 13 12  1  0\n 14 12  1  0\n 15 14  1  0\n 16 15  1  0\n 17 16  1  0\n 18 17  1  0\n 18 14  1  0\n 18  2  1  0\n 19 13  1  0\n 14 20  1  6\n 21 15  1  0\n 22 15  1  0\n 23 16  1  0\n 24 16  1  0\n 25 17  1  0\n 26 17  1  0\n 27  3  1  0\nM  END\n",
+            "ts_log_sha256": null
+          },
+          "frequency_analysis": null
+        }
+      ],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "map",
+          "status": "done",
+          "detail": "Concrete endpoint correspondence confirmed and owned by this reaction.",
+          "artifacts": [],
+          "source_input_revision": 2
+        },
+        {
+          "stage": "assemble",
+          "status": "done",
+          "detail": "single component: nothing to assemble (no inter-fragment orientation). The reaction coordinate is whatever the path guess explores",
+          "artifacts": [],
+          "source_input_revision": 2
+        },
+        {
+          "stage": "guess",
+          "status": "done",
+          "detail": "Provided candidate bound; formal optimization and verification remain required.",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/path/input_0002/provided.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/path/input_0002/provenance_0000.md"
+          ],
+          "source_input_revision": 2
+        },
+        {
+          "stage": "validate",
+          "status": "done",
+          "detail": "internal validation passed",
+          "artifacts": [],
+          "source_input_revision": 2
+        },
+        {
+          "stage": "submit",
+          "status": "done",
+          "detail": "refinement job 1091 submitted as 'ready' (gaussian, b3lyp); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/jobs/declaration_0002/ts_opt/refine.gjf"
+          ],
+          "source_input_revision": 2
+        },
+        {
+          "stage": "refine",
+          "status": "waiting",
+          "detail": "waiting for job 1091 (ts_opt) to reach a terminal state; the existing compute notification path advances the system driver, so this stage never polls and emits no event",
+          "artifacts": [],
+          "source_input_revision": 2
+        }
+      ],
+      "reason": "Build-script indexing bug (atom index 3-1 vs 4-1) displaced the two spectator C3 hydrogens H8/H9 by ~2.5 A in guess v1; the bound job 1091 geometry therefore contained two detached H atoms. Regenerated ts_guess_27.xyz with the corrected translation: every H now sits 0.97-1.10 A from its parent heavy atom (H8/H9 = 1.099 A on C3), key reaction distances unchanged (r(C2-O4)=2.200, r(C2-C3)=1.440, C3-H22=1.355, O4-H22=1.351, C2...H22=1.595, C3-H22...O4=152.8 deg). Same file path, new content.",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "[CH3:1][C:2]([CH2:3]([H:22]))([O:4]([H:21]))[N:20]1[CH2:19][CH2:18][CH2:17][C@H:16]1[C:14](=[O:13])[OH:15]",
+          "product_smiles": "[CH3:1][C:2](=[CH2:3])[N:20]2[CH2:19][CH2:18][CH2:17][C@H:16]2[C:14](=[O:13])[OH:15].[O:4]([H:21])([H:22])",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "selected_candidate": 0,
+          "reaction_center": [
+            [
+              1,
+              3
+            ],
+            [
+              2,
+              9
+            ],
+            [
+              3,
+              9
+            ],
+            [
+              1,
+              2
+            ]
+          ]
+        },
+        "calculations": {
+          "g16": {
+            "engine": "gaussian",
+            "method": "b3lyp",
+            "basis_set": "def2svp",
+            "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/INT1_27_opt_frame.xyz",
+            "mol_path": null,
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/TS_GUESS_PROVENANCE.md"
+            ],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/build/product_start_27.xyz",
+            "mol_path": null,
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/TS_GUESS_PROVENANCE.md"
+            ],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": {
+          "kind": "provided",
+          "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/build/ts_guess_27.xyz",
+          "evidence_refs": [
+            "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/TS_GUESS_PROVENANCE.md"
+          ]
+        },
+        "ts_optimization": {
+          "ref": "g16"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "g16"
+          },
+          "irc": {
+            "ref": "g16"
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "g16"
+            },
+            "frequency": {
+              "ref": "g16"
+            }
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "g16"
+            },
+            "frequency": {
+              "ref": "g16"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 4,
+          "memory_mb": 6144,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGwAAAIABBiAgAAAABAYgIAAAAAQIICAAAAACBiAgAAAABAEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQggKAAAAAMCBiAoAAAAAwQIICgAAAADAgYgJAAAAAIEBiAgAAAABAYgIAAAAAQGICAAAAAEByAgAAAAAwEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQsBAAACAQADAQAEAAAFAAAGAAAHAwAIAwAJAwALCigCDAsgDQsADg0ADw4AEA8AERAAEQ0AEQEAEgwAEw0AFA4AFQ4AFg8AFw8AGBAAGRAAGgIAQgEAAAAFDQ4PEBFAmQIAAAEAAAABAAAAABu3JXLBGbzwv0d0z7pGy+a/4UIewY3U+T+jeJW1TXHvvzaxwFd0a++/mlyMgXUcuz9BLQYP076JP9RlMbH5uP+/Gof6Xdiarb/J6IAk7JsCwJkR3h6EgPi/FeEmo8ow2b9gj4mUZvP1v4RkARO49fm/PNo4Yi0eAUBM3gAz30H8vxWNtb+zPbY/t+wQ/7Bl/T+AZDp0et6tvz1EozuIndu/GxAhrpz9/z91WOGWj2QJwDkKEAUzJuy/3nNgOUIGwr+3Xz5ZMfwDwAzO4O8XEwTATDYebLHbsz+By2PNyGACwAcpeAq5kvq/Tny1ozjH978UQZyHE/gDQMLexJCczOe/IorJG2Cm8b8YIqev5yv+P5uOAG4WL8S/UOEIUil2zr+PjUC8rt8BQOolxjL9Esu/X/BpTl7k8D90tKolHWXnP1GjkGRWb+k/NxlVhnG34L/5ZwbxgR3gP9ds5SX/U/8/2xX6YBkb3j+d9pScE/vuv02CN6RR4QJAVYmyt5Tzyz+k/+VatMD3v8JpwYu+AvU/wXCuYYbG6b/gaTLjbaXiv+yEl+DUB8Q/LEXylUDK579yN4jWitYHQLMHWoEhq+q/29/ZHr0h8j8o1NNH4A/wP7lt36P+uvM/p+oe2Vz197+NtiqJ7APlP02+2ebG9Pk/n+QOm8gM+D/5254gsV3zP0BqEyf3OwZA5pSAmIQL0j+YhuEjYsr4v090XfjBmQJAWDfeHRlr8j+7RzZXzfPwv5lk5CzsCQtAxEFClC9ox786It+l1OX2v1yOVyB60vs/niRdM/km/b9kkLsIUzQEwL6jxoSYS/A/WI/7VutE5L+70cd8QKDBP1rXaDnQwwDA91j60AU18L8/AgAAAAAAErsBAAADAA0AAABfRmlsZUNvbW1lbnRzAAsAAABvcHQgc3RlcD0zNxUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAVQEAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ISTEvRTEvc3BsaXQvSU5UMV8yN19vcHRfZnJhbWUueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICJiMmYyZmZhYWY2NDE2OTkxNmUyOWQ1OWZhNDRhNDllMjIzZTM5NGUyMWY2OTkwNzk4MGI4YTgzMTUxZmE1ZDM2In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDI2L2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlX2IyZjJmZmFhZjY0MTY5OTEueHl6In0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM66QIAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAAAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQEAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAwAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBCgAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEJAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQsAAAAAAwAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAgAAABfQ0lQQ29kZQABAAAAUxoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEIAAAACAEAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEHAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBgAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQUAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATFg==",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGgAAAIABBiAgAAAABAYgKAAAAAMECCAgAAAAAgYgKAAAAAMEASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCCAoAAAAAwIGICgAAAADBAggKAAAAAMCBiAkAAAAAgQGICAAAAAEBiAgAAAABAYgIAAAAAQHICgAAAADAwEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQsBAAADASgCBAAABQAABgAABwMACAMACQIACwooAgwLIA0LAA4NAA8OABAPABEQABENABEBIBIMABMNABQOABUOABYPABcPABgQABkQABoCAEIBAAAABQ0ODxARQJkCAAABAAAAAQAAAAAbtyVywRm88L9HdM+6Rsvmv+FCHsGN1Pk/o3iVtU1x7782scBXdGvvv5pcjIF1HLs/KuWUBNHI/D8P4+JmwIIEwKGXOI8Wqbs/xp9Ns+Vh9L+OtI6JGHcBwJdFOJgTVdq/YI+JlGbz9b+EZAETuPX5vzzaOGItHgFATN4AM99B/L8VjbW/sz22P7fsEP+wZf0/gGQ6dHrerb89RKM7iJ3bvxsQIa6c/f8/sxXJka1C9b+8iL7UMjYAwBWk398cJeU/jNWLRuN177/O4K374N/1v9/qEGpMCfG/YGi//6Bf6z/3NA6SkV0DwAQZ6HftFMs/FEGchxP4A0DC3sSQnMznvyKKyRtgpvG/GCKnr+cr/j+bjgBuFi/Ev1DhCFIpds6/j41AvK7fAUDqJcYy/RLLv1/waU5e5PA/dLSqJR1l5z9Ro5BkVm/pPzcZVYZxt+C/+WcG8YEd4D/XbOUl/1P/P9sV+mAZG94/nfaUnBP77r9NgjekUeECQFWJsreU88s/pP/lWrTA97/CacGLvgL1P8FwrmGGxum/4Gky422l4r/shJfg1AfEPyxF8pVAyue/cjeI1orWB0CzB1qBIavqv9vf2R69IfI/KNTTR+AP8D+5bd+j/rrzP6fqHtlc9fe/jbYqiewD5T9NvtnmxvT5P5/kDpvIDPg/+dueILFd8z9AahMn9zsGQOaUgJiEC9I/mIbhI2LK+L9PdF34wZkCQFg33h0Za/I/u0c2V83z8L+ZZOQs7AkLQMRBQpQvaMe/OiLfpdTl9r9cjlcgetL7P54kXTP5Jv2/ZJC7CFM0BMC+o8aEmEvwP1iP+1brROS/cVYCMSLE/j/7NPY+uGcFwMBpj1F9y+q/PwIAAAAAABIyAgAAAwANAAAAX0ZpbGVDb21tZW50cwCBAAAASEkxX0UxYiBwcm9kdWN0IHN0YXJ0IChlbmFtaW5lICsgSDJPLCAyNyBhdG9tcywgd29ya2luZyBvcmRlciA9IElOVDFfMjcgb3JkZXIpOiBDMj1DMyAxLjM0MCwgd2F0ZXIgPSBPNCtIMjErSDIyIGF0IDMuMjAgQSBmcm9tIEMyFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBWAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmlsbF8yMDI2MTAxOC9ISTEvSEkxX0UxYi9idWlsZC9wcm9kdWN0X3N0YXJ0XzI3Lnh5eiJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiMjFiOTEwZmU0MTE0NmJmMGY0N2JhNTYwM2VlMzY4OTIxNGU2OWMyYzVlMDllYWU4NTgyZWI4N2UzMWMzOThkNCJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDAyNi9idWlsZC9pbnB1dF8wMDAxL3Byb2R1Y3Qvc291cmNlXzIxYjkxMGZlNDExNDZiZjAueHl6In0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6qQIAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAAAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQsAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEJAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQgAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBCgAAAAADABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAACAAAAF9DSVBDb2RlAAEAAABTGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQcAAAAIAQACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQYAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEFAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBAAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABMW",
+        "product_to_reactant": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          26,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          9
+        ],
+        "candidate": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGwAAAIABBiAgAAAABAYgIAAAAAQIICAAAAACBiAgAAAABAEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQggKAAAAAMCBiAoAAAAAwQIICgAAAADAgYgJAAAAAIEBiAgAAAABAYgIAAAAAQGICAAAAAEByAgAAAAAwEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQsBAAACAQADAQAEAAAFAAAGAAAHAwAIAwAJAwALCigCDAsgDQsADg0ADw4AEA8AERAAEQ0AEQEAEgwAEw0AFA4AFQ4AFg8AFw8AGBAAGRAAGgIAQgEAAAAFDQ4PEBFAmQIAAAEAAAABAAAAABu3JXLBGbzwv0d0z7pGy+a/4UIewY3U+T+jeJW1TXHvvzaxwFd0a++/mlyMgXUcuz9olTaoP/OIv2Y+UgrbGwfAdamVMj4G2r9YtigWbPEBwNyEOUkM9fe/xMaC4641179gj4mUZvP1v4RkARO49fm/PNo4Yi0eAUBM3gAz30H8vxWNtb+zPbY/t+wQ/7Bl/T+AZDp0et6tvz1EozuIndu/GxAhrpz9/z99igxA3bcVwJSQQGqwPNm/0K9z9HSF3L8eDjshrgMTwJDd5DshMQDAnNB3+c4Wzb9nHBP3krX0v5xRbx1OtgPADg44Q1gq2b8UQZyHE/gDQMLexJCczOe/IorJG2Cm8b8YIqev5yv+P5uOAG4WL8S/UOEIUil2zr+PjUC8rt8BQOolxjL9Esu/X/BpTl7k8D90tKolHWXnP1GjkGRWb+k/NxlVhnG34L/5ZwbxgR3gP9ds5SX/U/8/2xX6YBkb3j+d9pScE/vuv02CN6RR4QJAVYmyt5Tzyz+k/+VatMD3v8JpwYu+AvU/wXCuYYbG6b/gaTLjbaXiv+yEl+DUB8Q/LEXylUDK579yN4jWitYHQLMHWoEhq+q/29/ZHr0h8j8o1NNH4A/wP7lt36P+uvM/p+oe2Vz197+NtiqJ7APlP02+2ebG9Pk/n+QOm8gM+D/5254gsV3zP0BqEyf3OwZA5pSAmIQL0j+YhuEjYsr4v090XfjBmQJAWDfeHRlr8j+7RzZXzfPwv5lk5CzsCQtAxEFClC9ox786It+l1OX2v1yOVyB60vs/niRdM/km/b9kkLsIUzQEwL6jxoSYS/A/WI/7VutE5L8hC6iiPuq8P9ZiImsuAwjAHO+vmr7J9b8/AgAAAAAAErsBAAADAA0AAABfRmlsZUNvbW1lbnRzAAsAAABvcHQgc3RlcD0zNxUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAVQEAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ISTEvRTEvc3BsaXQvSU5UMV8yN19vcHRfZnJhbWUueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICJiMmYyZmZhYWY2NDE2OTkxNmUyOWQ1OWZhNDRhNDllMjIzZTM5NGUyMWY2OTkwNzk4MGI4YTgzMTUxZmE1ZDM2In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDI2L2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlX2IyZjJmZmFhZjY0MTY5OTEueHl6In0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM66QIAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAAAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQEAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAwAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBCgAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEJAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQsAAAAAAwAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAgAAABfQ0lQQ29kZQABAAAAUxoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEIAAAACAEAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEHAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBgAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQUAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATFg=="
+      },
+      "provided_guess_binding": {
+        "xyz": {
+          "source_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/build/ts_guess_27.xyz",
+          "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/path/input_0002/provided.xyz",
+          "sha256": "0c8e46878665441cfe539115b884f25c95fadcdcd02a705e841633381f28d3cb"
+        },
+        "evidence": [
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/TS_GUESS_PROVENANCE.md",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/path/input_0002/provenance_0000.md",
+            "sha256": "510909cfcef9c7055a022a5d0772528efe59ad2a70b2cf7dd8c893f0b2947ce0"
+          }
+        ]
+      },
+      "terminal": null,
+      "blocked": null,
+      "failed_attempt": null,
+      "stop_reason": null
+    },
+    {
+      "declaration_revision": 3,
+      "selected_candidate_id": null,
+      "job_steps": [
+        {
+          "purpose": "ts_opt",
+          "job_id": 1092,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/jobs/declaration_0003/ts_opt/refine.gjf",
+          "state": "ready",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "b3lyp",
+            "basis_set": "def2svp",
+            "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 3,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              27,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              10
+            ],
+            "charge": 0,
+            "declaration_revision": 3,
+            "process_id": "47d08de3e0882ed60d03c379360834ad46b4123924b459a9fde077dc667a4cf0",
+            "product_mol": "\n     RDKit          3D\n\n 27 26  0  0  0  0  0  0  0  0999 V2000\n   -1.0459   -0.7123    1.6144 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9826   -0.9819    0.1059 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.7990   -2.5638    0.1080 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.2739   -2.1832   -0.4114 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3719   -1.6225    2.1397 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7661    0.0869    1.8373 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0583   -0.4315    1.9994 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3288   -2.0265    0.6608 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9831   -1.3672   -1.0648 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8554   -2.4207    0.2116 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.4961   -0.7437   -1.1031 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8857   -0.1577   -0.2380 C   0  0  0  0  0  0  0  0  0  0  0  0\n    2.2342   -0.2115    1.0558 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.7311    0.7948   -0.5224 C   0  0  2  0  0  0  0  0  0  0  0  0\n    0.5036    1.9580    0.4704 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9681    2.3600    0.2184 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4845    1.3132   -0.8055 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.5827    0.1565   -0.7434 N   0  0  0  0  0  0  0  0  0  0  0  0\n    2.9798   -0.8334    1.1332 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0039    1.2332   -1.4974 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.6567    1.6223    1.5031 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2104    2.7793    0.2820 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5494    2.3251    1.1511 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0595    3.3798   -0.1829 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4311    1.7389   -1.8220 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5255    1.0185   -0.6334 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.9229   -2.6756   -0.8373 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  1  0\n  4  2  2  0\n  5  1  1  0\n  6  1  1  0\n  7  1  1  0\n  8  4  1  0\n  9  4  1  0\n 10  3  1  0\n 12 11  2  0\n 13 12  1  0\n 14 12  1  0\n 15 14  1  0\n 16 15  1  0\n 17 16  1  0\n 18 17  1  0\n 18 14  1  0\n 18  2  1  0\n 19 13  1  0\n 14 20  1  6\n 21 15  1  0\n 22 15  1  0\n 23 16  1  0\n 24 16  1  0\n 25 17  1  0\n 26 17  1  0\n 27  3  1  0\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n 27 27  0  0  0  0  0  0  0  0999 V2000\n   -1.0459   -0.7123    1.6144 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9826   -0.9819    0.1059 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0126   -1.9827   -0.0578 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.3261   -1.5314   -0.3936 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3719   -1.6225    2.1397 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7661    0.0869    1.8373 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0583   -0.4315    1.9994 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.1741   -0.8797   -0.1408 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4981   -2.5093    0.0776 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.2973   -1.6608   -1.4861 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.4961   -0.7437   -1.1031 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8857   -0.1577   -0.2380 C   0  0  0  0  0  0  0  0  0  0  0  0\n    2.2342   -0.2115    1.0558 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.7311    0.7948   -0.5224 C   0  0  2  0  0  0  0  0  0  0  0  0\n    0.5036    1.9580    0.4704 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9681    2.3600    0.2184 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4845    1.3132   -0.8055 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.5827    0.1565   -0.7434 N   0  0  0  0  0  0  0  0  0  0  0  0\n    2.9798   -0.8334    1.1332 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0039    1.2332   -1.4974 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.6567    1.6223    1.5031 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2104    2.7793    0.2820 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5494    2.3251    1.1511 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0595    3.3798   -0.1829 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4311    1.7389   -1.8220 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5255    1.0185   -0.6334 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.1377   -2.0956   -1.0129 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  1  0\n  3  2  1  0\n  4  2  1  0\n  5  1  1  0\n  6  1  1  0\n  7  1  1  0\n  8  4  1  0\n  9  4  1  0\n 10  4  1  0\n 12 11  2  0\n 13 12  1  0\n 14 12  1  0\n 15 14  1  0\n 16 15  1  0\n 17 16  1  0\n 18 17  1  0\n 18 14  1  0\n 18  2  1  0\n 19 13  1  0\n 14 20  1  6\n 21 15  1  0\n 22 15  1  0\n 23 16  1  0\n 24 16  1  0\n 25 17  1  0\n 26 17  1  0\n 27  3  1  0\nM  END\n",
+            "ts_log_sha256": null
+          },
+          "frequency_analysis": null
+        }
+      ],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "map",
+          "status": "done",
+          "detail": "Concrete endpoint correspondence confirmed and owned by this reaction.",
+          "artifacts": [],
+          "source_input_revision": 2
+        },
+        {
+          "stage": "assemble",
+          "status": "done",
+          "detail": "single component: nothing to assemble (no inter-fragment orientation). The reaction coordinate is whatever the path guess explores",
+          "artifacts": [],
+          "source_input_revision": 2
+        },
+        {
+          "stage": "guess",
+          "status": "done",
+          "detail": "Provided candidate bound; formal optimization and verification remain required.",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/path/input_0003/provided.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/path/input_0003/provenance_0000.md"
+          ],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "validate",
+          "status": "done",
+          "detail": "internal validation passed",
+          "artifacts": [],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "submit",
+          "status": "done",
+          "detail": "refinement job 1092 submitted as 'ready' (gaussian, b3lyp); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/jobs/declaration_0003/ts_opt/refine.gjf"
+          ],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "refine",
+          "status": "waiting",
+          "detail": "waiting for job 1092 (ts_opt) to reach a terminal state; the existing compute notification path advances the system driver, so this stage never polls and emits no event",
+          "artifacts": [],
+          "source_input_revision": 3
+        }
+      ],
+      "reason": "IRC 段显式声明积分参数：Gaussian 默认 MaxPoints 过小会让 27 原子体系双向 IRC 过短，新增只多 IRC=(CalcFC,MaxPoints=80,StepSize=5,Recalc=10) 的命名配置 g16_irc（电子结构设置与 g16 相同），TS 优化阶段不变。",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "[CH3:1][C:2]([CH2:3]([H:22]))([O:4]([H:21]))[N:20]1[CH2:19][CH2:18][CH2:17][C@H:16]1[C:14](=[O:13])[OH:15]",
+          "product_smiles": "[CH3:1][C:2](=[CH2:3])[N:20]2[CH2:19][CH2:18][CH2:17][C@H:16]2[C:14](=[O:13])[OH:15].[O:4]([H:21])([H:22])",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "selected_candidate": 0,
+          "reaction_center": [
+            [
+              1,
+              3
+            ],
+            [
+              2,
+              9
+            ],
+            [
+              3,
+              9
+            ],
+            [
+              1,
+              2
+            ]
+          ]
+        },
+        "calculations": {
+          "g16": {
+            "engine": "gaussian",
+            "method": "b3lyp",
+            "basis_set": "def2svp",
+            "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso)",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/INT1_27_opt_frame.xyz",
+            "mol_path": null,
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/TS_GUESS_PROVENANCE.md"
+            ],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/build/product_start_27.xyz",
+            "mol_path": null,
+            "evidence_refs": [
+              "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/TS_GUESS_PROVENANCE.md"
+            ],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": {
+          "kind": "provided",
+          "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/build/ts_guess_27.xyz",
+          "evidence_refs": [
+            "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/TS_GUESS_PROVENANCE.md"
+          ]
+        },
+        "ts_optimization": {
+          "ref": "g16"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "g16"
+          },
+          "irc": {
+            "ref": "g16"
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "g16"
+            },
+            "frequency": {
+              "ref": "g16"
+            }
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": {
+              "ref": "g16"
+            },
+            "frequency": {
+              "ref": "g16"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 4,
+          "memory_mb": 6144,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGwAAAIABBiAgAAAABAYgIAAAAAQIICAAAAACBiAgAAAABAEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQggKAAAAAMCBiAoAAAAAwQIICgAAAADAgYgJAAAAAIEBiAgAAAABAYgIAAAAAQGICAAAAAEByAgAAAAAwEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQsBAAACAQADAQAEAAAFAAAGAAAHAwAIAwAJAwALCigCDAsgDQsADg0ADw4AEA8AERAAEQ0AEQEAEgwAEw0AFA4AFQ4AFg8AFw8AGBAAGRAAGgIAQgEAAAAFDQ4PEBFAmQIAAAEAAAABAAAAABu3JXLBGbzwv0d0z7pGy+a/4UIewY3U+T+jeJW1TXHvvzaxwFd0a++/mlyMgXUcuz9BLQYP076JP9RlMbH5uP+/Gof6Xdiarb/J6IAk7JsCwJkR3h6EgPi/FeEmo8ow2b9gj4mUZvP1v4RkARO49fm/PNo4Yi0eAUBM3gAz30H8vxWNtb+zPbY/t+wQ/7Bl/T+AZDp0et6tvz1EozuIndu/GxAhrpz9/z91WOGWj2QJwDkKEAUzJuy/3nNgOUIGwr+3Xz5ZMfwDwAzO4O8XEwTATDYebLHbsz+By2PNyGACwAcpeAq5kvq/Tny1ozjH978UQZyHE/gDQMLexJCczOe/IorJG2Cm8b8YIqev5yv+P5uOAG4WL8S/UOEIUil2zr+PjUC8rt8BQOolxjL9Esu/X/BpTl7k8D90tKolHWXnP1GjkGRWb+k/NxlVhnG34L/5ZwbxgR3gP9ds5SX/U/8/2xX6YBkb3j+d9pScE/vuv02CN6RR4QJAVYmyt5Tzyz+k/+VatMD3v8JpwYu+AvU/wXCuYYbG6b/gaTLjbaXiv+yEl+DUB8Q/LEXylUDK579yN4jWitYHQLMHWoEhq+q/29/ZHr0h8j8o1NNH4A/wP7lt36P+uvM/p+oe2Vz197+NtiqJ7APlP02+2ebG9Pk/n+QOm8gM+D/5254gsV3zP0BqEyf3OwZA5pSAmIQL0j+YhuEjYsr4v090XfjBmQJAWDfeHRlr8j+7RzZXzfPwv5lk5CzsCQtAxEFClC9ox786It+l1OX2v1yOVyB60vs/niRdM/km/b9kkLsIUzQEwL6jxoSYS/A/WI/7VutE5L+70cd8QKDBP1rXaDnQwwDA91j60AU18L8/AgAAAAAAErsBAAADAA0AAABfRmlsZUNvbW1lbnRzAAsAAABvcHQgc3RlcD0zNxUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAVQEAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ISTEvRTEvc3BsaXQvSU5UMV8yN19vcHRfZnJhbWUueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICJiMmYyZmZhYWY2NDE2OTkxNmUyOWQ1OWZhNDRhNDllMjIzZTM5NGUyMWY2OTkwNzk4MGI4YTgzMTUxZmE1ZDM2In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDI2L2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlX2IyZjJmZmFhZjY0MTY5OTEueHl6In0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM66QIAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAAAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQEAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAwAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBCgAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEJAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQsAAAAAAwAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAgAAABfQ0lQQ29kZQABAAAAUxoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEIAAAACAEAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEHAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBgAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQUAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATFg==",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGgAAAIABBiAgAAAABAYgKAAAAAMECCAgAAAAAgYgKAAAAAMEASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCCAoAAAAAwIGICgAAAADBAggKAAAAAMCBiAkAAAAAgQGICAAAAAEBiAgAAAABAYgIAAAAAQHICgAAAADAwEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQsBAAADASgCBAAABQAABgAABwMACAMACQIACwooAgwLIA0LAA4NAA8OABAPABEQABENABEBIBIMABMNABQOABUOABYPABcPABgQABkQABoCAEIBAAAABQ0ODxARQJkCAAABAAAAAQAAAAAbtyVywRm88L9HdM+6Rsvmv+FCHsGN1Pk/o3iVtU1x7782scBXdGvvv5pcjIF1HLs/KuWUBNHI/D8P4+JmwIIEwKGXOI8Wqbs/xp9Ns+Vh9L+OtI6JGHcBwJdFOJgTVdq/YI+JlGbz9b+EZAETuPX5vzzaOGItHgFATN4AM99B/L8VjbW/sz22P7fsEP+wZf0/gGQ6dHrerb89RKM7iJ3bvxsQIa6c/f8/sxXJka1C9b+8iL7UMjYAwBWk398cJeU/jNWLRuN177/O4K374N/1v9/qEGpMCfG/YGi//6Bf6z/3NA6SkV0DwAQZ6HftFMs/FEGchxP4A0DC3sSQnMznvyKKyRtgpvG/GCKnr+cr/j+bjgBuFi/Ev1DhCFIpds6/j41AvK7fAUDqJcYy/RLLv1/waU5e5PA/dLSqJR1l5z9Ro5BkVm/pPzcZVYZxt+C/+WcG8YEd4D/XbOUl/1P/P9sV+mAZG94/nfaUnBP77r9NgjekUeECQFWJsreU88s/pP/lWrTA97/CacGLvgL1P8FwrmGGxum/4Gky422l4r/shJfg1AfEPyxF8pVAyue/cjeI1orWB0CzB1qBIavqv9vf2R69IfI/KNTTR+AP8D+5bd+j/rrzP6fqHtlc9fe/jbYqiewD5T9NvtnmxvT5P5/kDpvIDPg/+dueILFd8z9AahMn9zsGQOaUgJiEC9I/mIbhI2LK+L9PdF34wZkCQFg33h0Za/I/u0c2V83z8L+ZZOQs7AkLQMRBQpQvaMe/OiLfpdTl9r9cjlcgetL7P54kXTP5Jv2/ZJC7CFM0BMC+o8aEmEvwP1iP+1brROS/cVYCMSLE/j/7NPY+uGcFwMBpj1F9y+q/PwIAAAAAABIyAgAAAwANAAAAX0ZpbGVDb21tZW50cwCBAAAASEkxX0UxYiBwcm9kdWN0IHN0YXJ0IChlbmFtaW5lICsgSDJPLCAyNyBhdG9tcywgd29ya2luZyBvcmRlciA9IElOVDFfMjcgb3JkZXIpOiBDMj1DMyAxLjM0MCwgd2F0ZXIgPSBPNCtIMjErSDIyIGF0IDMuMjAgQSBmcm9tIEMyFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBWAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmlsbF8yMDI2MTAxOC9ISTEvSEkxX0UxYi9idWlsZC9wcm9kdWN0X3N0YXJ0XzI3Lnh5eiJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiMjFiOTEwZmU0MTE0NmJmMGY0N2JhNTYwM2VlMzY4OTIxNGU2OWMyYzVlMDllYWU4NTgyZWI4N2UzMWMzOThkNCJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDAyNi9idWlsZC9pbnB1dF8wMDAxL3Byb2R1Y3Qvc291cmNlXzIxYjkxMGZlNDExNDZiZjAueHl6In0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6qQIAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAAAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQsAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEJAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQgAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBCgAAAAADABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAACAAAAF9DSVBDb2RlAAEAAABTGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQcAAAAIAQACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQYAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEFAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBAAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABMW",
+        "product_to_reactant": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          26,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          9
+        ],
+        "candidate": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGwAAAIABBiAgAAAABAYgIAAAAAQIICAAAAACBiAgAAAABAEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQggKAAAAAMCBiAoAAAAAwQIICgAAAADAgYgJAAAAAIEBiAgAAAABAYgIAAAAAQGICAAAAAEByAgAAAAAwEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQsBAAACAQADAQAEAAAFAAAGAAAHAwAIAwAJAwALCigCDAsgDQsADg0ADw4AEA8AERAAEQ0AEQEAEgwAEw0AFA4AFQ4AFg8AFw8AGBAAGRAAGgIAQgEAAAAFDQ4PEBFAmQIAAAEAAAABAAAAABu3JXLBGbzwv0d0z7pGy+a/4UIewY3U+T+jeJW1TXHvvzaxwFd0a++/mlyMgXUcuz9olTaoP/OIv2Y+UgrbGwfAdamVMj4G2r9YtigWbPEBwNyEOUkM9fe/xMaC4641179gj4mUZvP1v4RkARO49fm/PNo4Yi0eAUBM3gAz30H8vxWNtb+zPbY/t+wQ/7Bl/T+AZDp0et6tvz1EozuIndu/GxAhrpz9/z8EJomID7oIwMDwxllDD+u/eH4wdBUgvL9GLeZKsVEDwK2HDgVczQPAkJ+uaiDIuz9nHBP3krX0v5xRbx1OtgPADg44Q1gq2b8UQZyHE/gDQMLexJCczOe/IorJG2Cm8b8YIqev5yv+P5uOAG4WL8S/UOEIUil2zr+PjUC8rt8BQOolxjL9Esu/X/BpTl7k8D90tKolHWXnP1GjkGRWb+k/NxlVhnG34L/5ZwbxgR3gP9ds5SX/U/8/2xX6YBkb3j+d9pScE/vuv02CN6RR4QJAVYmyt5Tzyz+k/+VatMD3v8JpwYu+AvU/wXCuYYbG6b/gaTLjbaXiv+yEl+DUB8Q/LEXylUDK579yN4jWitYHQLMHWoEhq+q/29/ZHr0h8j8o1NNH4A/wP7lt36P+uvM/p+oe2Vz197+NtiqJ7APlP02+2ebG9Pk/n+QOm8gM+D/5254gsV3zP0BqEyf3OwZA5pSAmIQL0j+YhuEjYsr4v090XfjBmQJAWDfeHRlr8j+7RzZXzfPwv5lk5CzsCQtAxEFClC9ox786It+l1OX2v1yOVyB60vs/niRdM/km/b9kkLsIUzQEwL6jxoSYS/A/WI/7VutE5L8hC6iiPuq8P9ZiImsuAwjAHO+vmr7J9b8/AgAAAAAAErsBAAADAA0AAABfRmlsZUNvbW1lbnRzAAsAAABvcHQgc3RlcD0zNxUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAVQEAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ISTEvRTEvc3BsaXQvSU5UMV8yN19vcHRfZnJhbWUueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICJiMmYyZmZhYWY2NDE2OTkxNmUyOWQ1OWZhNDRhNDllMjIzZTM5NGUyMWY2OTkwNzk4MGI4YTgzMTUxZmE1ZDM2In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDI2L2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlX2IyZjJmZmFhZjY0MTY5OTEueHl6In0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM66QIAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAAAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQEAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAwAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBCgAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEJAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQsAAAAAAwAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAgAAABfQ0lQQ29kZQABAAAAUxoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEIAAAACAEAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEHAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBgAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQUAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATFg=="
+      },
+      "provided_guess_binding": {
+        "xyz": {
+          "source_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/build/ts_guess_27.xyz",
+          "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/path/input_0003/provided.xyz",
+          "sha256": "88162e53ae6598e8550cc1e4f2a0037fda402a0212e6b607267ee8d97f585d4d"
+        },
+        "evidence": [
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/TS_GUESS_PROVENANCE.md",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/path/input_0003/provenance_0000.md",
+            "sha256": "510909cfcef9c7055a022a5d0772528efe59ad2a70b2cf7dd8c893f0b2947ce0"
+          }
+        ]
+      },
+      "terminal": null,
+      "blocked": null,
+      "failed_attempt": null,
+      "stop_reason": null
+    }
+  ],
+  "catalog_id": null,
+  "partition_revision": null,
+  "candidate_attempts": [],
+  "cards_path": "",
+  "product_seed_candidate_id": null,
+  "selected_candidate_id": null,
+  "run_dir": "/home/ly/Cloudra-mechanism-agent/ts/ts_0026",
+  "workspace_dir": "/home/ly/Cloudra-mechanism-agent",
+  "owner_conversation_id": "prj_244c6a3512cb4e52",
+  "owner_session_id": "as_366eae50e5d341a6",
+  "input": {
+    "reaction": {
+      "reactant_smiles": "[CH3:1][C:2]([CH2:3]([H:22]))([O:4]([H:21]))[N:20]1[CH2:19][CH2:18][CH2:17][C@H:16]1[C:14](=[O:13])[OH:15]",
+      "product_smiles": "[CH3:1][C:2](=[CH2:3])[N:20]2[CH2:19][CH2:18][CH2:17][C@H:16]2[C:14](=[O:13])[OH:15].[O:4]([H:21])([H:22])",
+      "charge": 0,
+      "multiplicity": 1,
+      "electronic_character": "closed_shell",
+      "selected_candidate": 0,
+      "reaction_center": [
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          9
+        ],
+        [
+          3,
+          9
+        ],
+        [
+          1,
+          2
+        ]
+      ]
+    },
+    "calculations": {
+      "g16": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "g16_irc": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso) irc=(calcfc,maxpoints=80,stepsize=5,recalc=10)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      }
+    },
+    "conformers": {
+      "reactant": {
+        "kind": "file",
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_finish_20261015/HI1/E1/split/INT1_27_opt_frame.xyz",
+        "mol_path": null,
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/TS_GUESS_PROVENANCE.md"
+        ],
+        "optimization": null
+      },
+      "product": {
+        "kind": "file",
+        "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/build/product_start_27.xyz",
+        "mol_path": null,
+        "evidence_refs": [
+          "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/TS_GUESS_PROVENANCE.md"
+        ],
+        "optimization": null
+      },
+      "guidance": {
+        "ring_order": [],
+        "distance_filters": []
+      }
+    },
+    "guess": {
+      "kind": "provided",
+      "xyz_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/build/ts_guess_27.xyz",
+      "evidence_refs": [
+        "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/TS_GUESS_PROVENANCE.md"
+      ]
+    },
+    "ts_optimization": {
+      "ref": "g16"
+    },
+    "verification": {
+      "frequency": {
+        "ref": "g16"
+      },
+      "irc": {
+        "ref": "g16_irc"
+      },
+      "irc_log": null,
+      "reactant_endpoint": {
+        "seed": null,
+        "optimization": {
+          "ref": "g16"
+        },
+        "frequency": {
+          "ref": "g16"
+        }
+      },
+      "product_endpoint": {
+        "seed": null,
+        "optimization": {
+          "ref": "g16"
+        },
+        "frequency": {
+          "ref": "g16"
+        }
+      }
+    },
+    "execution": {
+      "cpus": 4,
+      "memory_mb": 6144,
+      "limits": null
+    }
+  },
+  "structures": {
+    "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGwAAAIABBiAgAAAABAYgIAAAAAQIICAAAAACBiAgAAAABAEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQggKAAAAAMCBiAoAAAAAwQIICgAAAADAgYgJAAAAAIEBiAgAAAABAYgIAAAAAQGICAAAAAEByAgAAAAAwEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQsBAAACAQADAQAEAAAFAAAGAAAHAwAIAwAJAwALCigCDAsgDQsADg0ADw4AEA8AERAAEQ0AEQEAEgwAEw0AFA4AFQ4AFg8AFw8AGBAAGRAAGgIAQgEAAAAFDQ4PEBFAmQIAAAEAAAABAAAAABu3JXLBGbzwv0d0z7pGy+a/4UIewY3U+T+jeJW1TXHvvzaxwFd0a++/mlyMgXUcuz9BLQYP076JP9RlMbH5uP+/Gof6Xdiarb/J6IAk7JsCwJkR3h6EgPi/FeEmo8ow2b9gj4mUZvP1v4RkARO49fm/PNo4Yi0eAUBM3gAz30H8vxWNtb+zPbY/t+wQ/7Bl/T+AZDp0et6tvz1EozuIndu/GxAhrpz9/z91WOGWj2QJwDkKEAUzJuy/3nNgOUIGwr+3Xz5ZMfwDwAzO4O8XEwTATDYebLHbsz+By2PNyGACwAcpeAq5kvq/Tny1ozjH978UQZyHE/gDQMLexJCczOe/IorJG2Cm8b8YIqev5yv+P5uOAG4WL8S/UOEIUil2zr+PjUC8rt8BQOolxjL9Esu/X/BpTl7k8D90tKolHWXnP1GjkGRWb+k/NxlVhnG34L/5ZwbxgR3gP9ds5SX/U/8/2xX6YBkb3j+d9pScE/vuv02CN6RR4QJAVYmyt5Tzyz+k/+VatMD3v8JpwYu+AvU/wXCuYYbG6b/gaTLjbaXiv+yEl+DUB8Q/LEXylUDK579yN4jWitYHQLMHWoEhq+q/29/ZHr0h8j8o1NNH4A/wP7lt36P+uvM/p+oe2Vz197+NtiqJ7APlP02+2ebG9Pk/n+QOm8gM+D/5254gsV3zP0BqEyf3OwZA5pSAmIQL0j+YhuEjYsr4v090XfjBmQJAWDfeHRlr8j+7RzZXzfPwv5lk5CzsCQtAxEFClC9ox786It+l1OX2v1yOVyB60vs/niRdM/km/b9kkLsIUzQEwL6jxoSYS/A/WI/7VutE5L+70cd8QKDBP1rXaDnQwwDA91j60AU18L8/AgAAAAAAErsBAAADAA0AAABfRmlsZUNvbW1lbnRzAAsAAABvcHQgc3RlcD0zNxUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAVQEAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ISTEvRTEvc3BsaXQvSU5UMV8yN19vcHRfZnJhbWUueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICJiMmYyZmZhYWY2NDE2OTkxNmUyOWQ1OWZhNDRhNDllMjIzZTM5NGUyMWY2OTkwNzk4MGI4YTgzMTUxZmE1ZDM2In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDI2L2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlX2IyZjJmZmFhZjY0MTY5OTEueHl6In0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM66QIAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAAAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQEAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAwAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBCgAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEJAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQsAAAAAAwAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAgAAABfQ0lQQ29kZQABAAAAUxoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEIAAAACAEAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEHAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBgAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQUAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATFg==",
+    "product": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGgAAAIABBiAgAAAABAYgKAAAAAMECCAgAAAAAgYgKAAAAAMEASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBCCAoAAAAAwIGICgAAAADBAggKAAAAAMCBiAkAAAAAgQGICAAAAAEBiAgAAAABAYgIAAAAAQHICgAAAADAwEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQsBAAADASgCBAAABQAABgAABwMACAMACQIACwooAgwLIA0LAA4NAA8OABAPABEQABENABEBIBIMABMNABQOABUOABYPABcPABgQABkQABoCAEIBAAAABQ0ODxARQJkCAAABAAAAAQAAAAAbtyVywRm88L9HdM+6Rsvmv+FCHsGN1Pk/o3iVtU1x7782scBXdGvvv5pcjIF1HLs/KuWUBNHI/D8P4+JmwIIEwKGXOI8Wqbs/xp9Ns+Vh9L+OtI6JGHcBwJdFOJgTVdq/YI+JlGbz9b+EZAETuPX5vzzaOGItHgFATN4AM99B/L8VjbW/sz22P7fsEP+wZf0/gGQ6dHrerb89RKM7iJ3bvxsQIa6c/f8/sxXJka1C9b+8iL7UMjYAwBWk398cJeU/jNWLRuN177/O4K374N/1v9/qEGpMCfG/YGi//6Bf6z/3NA6SkV0DwAQZ6HftFMs/FEGchxP4A0DC3sSQnMznvyKKyRtgpvG/GCKnr+cr/j+bjgBuFi/Ev1DhCFIpds6/j41AvK7fAUDqJcYy/RLLv1/waU5e5PA/dLSqJR1l5z9Ro5BkVm/pPzcZVYZxt+C/+WcG8YEd4D/XbOUl/1P/P9sV+mAZG94/nfaUnBP77r9NgjekUeECQFWJsreU88s/pP/lWrTA97/CacGLvgL1P8FwrmGGxum/4Gky422l4r/shJfg1AfEPyxF8pVAyue/cjeI1orWB0CzB1qBIavqv9vf2R69IfI/KNTTR+AP8D+5bd+j/rrzP6fqHtlc9fe/jbYqiewD5T9NvtnmxvT5P5/kDpvIDPg/+dueILFd8z9AahMn9zsGQOaUgJiEC9I/mIbhI2LK+L9PdF34wZkCQFg33h0Za/I/u0c2V83z8L+ZZOQs7AkLQMRBQpQvaMe/OiLfpdTl9r9cjlcgetL7P54kXTP5Jv2/ZJC7CFM0BMC+o8aEmEvwP1iP+1brROS/cVYCMSLE/j/7NPY+uGcFwMBpj1F9y+q/PwIAAAAAABIyAgAAAwANAAAAX0ZpbGVDb21tZW50cwCBAAAASEkxX0UxYiBwcm9kdWN0IHN0YXJ0IChlbmFtaW5lICsgSDJPLCAyNyBhdG9tcywgd29ya2luZyBvcmRlciA9IElOVDFfMjcgb3JkZXIpOiBDMj1DMyAxLjM0MCwgd2F0ZXIgPSBPNCtIMjErSDIyIGF0IDMuMjAgQSBmcm9tIEMyFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBWAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfZmlsbF8yMDI2MTAxOC9ISTEvSEkxX0UxYi9idWlsZC9wcm9kdWN0X3N0YXJ0XzI3Lnh5eiJ9LCAiaGFzaGVzIjogeyJ4eXoiOiAiMjFiOTEwZmU0MTE0NmJmMGY0N2JhNTYwM2VlMzY4OTIxNGU2OWMyYzVlMDllYWU4NTgyZWI4N2UzMWMzOThkNCJ9LCAic25hcHNob3RzIjogeyJ4eXoiOiAiL2hvbWUvbHkvQ2xvdWRyYS1tZWNoYW5pc20tYWdlbnQvdHMvdHNfMDAyNi9idWlsZC9pbnB1dF8wMDAxL3Byb2R1Y3Qvc291cmNlXzIxYjkxMGZlNDExNDZiZjAueHl6In0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6qQIAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAAAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQsAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEJAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQgAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBCgAAAAADABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAACAAAAF9DSVBDb2RlAAEAAABTGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQcAAAAIAQACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQYAAAAAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEFAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBAAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABMW",
+    "product_to_reactant": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      26,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      9
+    ],
+    "candidate": "776t3gAAAAAQAAAAAwAAAAAAAAAbAAAAGwAAAIABBiAgAAAABAYgIAAAAAQIICAAAAACBiAgAAAABAEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQggKAAAAAMCBiAoAAAAAwQIICgAAAADAgYgJAAAAAIEBiAgAAAABAYgIAAAAAQGICAAAAAEByAgAAAAAwEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQEgKAAAAAEBASAoAAAAAQEBICgAAAABAQsBAAACAQADAQAEAAAFAAAGAAAHAwAIAwAJAwALCigCDAsgDQsADg0ADw4AEA8AERAAEQ0AEQEAEgwAEw0AFA4AFQ4AFg8AFw8AGBAAGRAAGgIAQgEAAAAFDQ4PEBFAmQIAAAEAAAABAAAAABu3JXLBGbzwv0d0z7pGy+a/4UIewY3U+T+jeJW1TXHvvzaxwFd0a++/mlyMgXUcuz9olTaoP/OIv2Y+UgrbGwfAdamVMj4G2r9YtigWbPEBwNyEOUkM9fe/xMaC4641179gj4mUZvP1v4RkARO49fm/PNo4Yi0eAUBM3gAz30H8vxWNtb+zPbY/t+wQ/7Bl/T+AZDp0et6tvz1EozuIndu/GxAhrpz9/z8EJomID7oIwMDwxllDD+u/eH4wdBUgvL9GLeZKsVEDwK2HDgVczQPAkJ+uaiDIuz9nHBP3krX0v5xRbx1OtgPADg44Q1gq2b8UQZyHE/gDQMLexJCczOe/IorJG2Cm8b8YIqev5yv+P5uOAG4WL8S/UOEIUil2zr+PjUC8rt8BQOolxjL9Esu/X/BpTl7k8D90tKolHWXnP1GjkGRWb+k/NxlVhnG34L/5ZwbxgR3gP9ds5SX/U/8/2xX6YBkb3j+d9pScE/vuv02CN6RR4QJAVYmyt5Tzyz+k/+VatMD3v8JpwYu+AvU/wXCuYYbG6b/gaTLjbaXiv+yEl+DUB8Q/LEXylUDK579yN4jWitYHQLMHWoEhq+q/29/ZHr0h8j8o1NNH4A/wP7lt36P+uvM/p+oe2Vz197+NtiqJ7APlP02+2ebG9Pk/n+QOm8gM+D/5254gsV3zP0BqEyf3OwZA5pSAmIQL0j+YhuEjYsr4v090XfjBmQJAWDfeHRlr8j+7RzZXzfPwv5lk5CzsCQtAxEFClC9ox786It+l1OX2v1yOVyB60vs/niRdM/km/b9kkLsIUzQEwL6jxoSYS/A/WI/7VutE5L8hC6iiPuq8P9ZiImsuAwjAHO+vmr7J9b8/AgAAAAAAErsBAAADAA0AAABfRmlsZUNvbW1lbnRzAAsAAABvcHQgc3RlcD0zNxUAAABjbG91ZHJhX2ltcG9ydF9zb3VyY2UAVQEAAHsicGF0aHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC9nb2xkX2ZpbmlzaF8yMDI2MTAxNS9ISTEvRTEvc3BsaXQvSU5UMV8yN19vcHRfZnJhbWUueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICJiMmYyZmZhYWY2NDE2OTkxNmUyOWQ1OWZhNDRhNDllMjIzZTM5NGUyMWY2OTkwNzk4MGI4YTgzMTUxZmE1ZDM2In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDI2L2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvc291cmNlX2IyZjJmZmFhZjY0MTY5OTEueHl6In0sICJpbnB1dF9yZXZpc2lvbiI6IDF9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM66QIAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAAAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQEAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAwAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBCgAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEJAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQsAAAAAAwAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAAAgAAABfQ0lQQ29kZQABAAAAUxoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEIAAAACAEAAgAXAAAAX05vbkV4cGxpY2l0M0RDaGlyYWxpdHkBAQAAABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEHAAAAAAIAFwAAAF9Ob25FeHBsaWNpdDNEQ2hpcmFsaXR5AQEAAAAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBgAAAAACABcAAABfTm9uRXhwbGljaXQzRENoaXJhbGl0eQEBAAAAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQUAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATFg=="
+  },
+  "provided_guess_binding": {
+    "xyz": {
+      "source_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/build/ts_guess_27.xyz",
+      "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/path/input_0003/provided.xyz",
+      "sha256": "88162e53ae6598e8550cc1e4f2a0037fda402a0212e6b607267ee8d97f585d4d"
+    },
+    "evidence": [
+      {
+        "source_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/HI1/HI1_E1b/TS_GUESS_PROVENANCE.md",
+        "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/path/input_0003/provenance_0000.md",
+        "sha256": "510909cfcef9c7055a022a5d0772528efe59ad2a70b2cf7dd8c893f0b2947ce0"
+      }
+    ]
+  },
+  "failed_attempt": null,
+  "method_checks": {
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/jobs/declaration_0002/ts_opt/refine.gjf": {
+      "actual": {
+        "basis_set": "def2svp",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso)",
+        "method": "b3lyp",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 2,
+      "matched": true,
+      "purpose": "ts_opt",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/jobs/declaration_0003/ts_opt/refine.gjf": {
+      "actual": {
+        "basis_set": "def2svp",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso)",
+        "method": "b3lyp",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 3,
+      "matched": true,
+      "purpose": "ts_opt",
+      "source": "stage_declaration"
+    }
+  },
+  "stage": "refine",
+  "stage_records": [
+    {
+      "stage": "declare",
+      "status": "done",
+      "detail": "reaction declared; each calculation requires its own method",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "build",
+      "status": "done",
+      "detail": "both endpoints built",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "map",
+      "status": "done",
+      "detail": "Concrete endpoint correspondence confirmed and owned by this reaction.",
+      "artifacts": [],
+      "source_input_revision": 2
+    },
+    {
+      "stage": "assemble",
+      "status": "done",
+      "detail": "single component: nothing to assemble (no inter-fragment orientation). The reaction coordinate is whatever the path guess explores",
+      "artifacts": [],
+      "source_input_revision": 2
+    },
+    {
+      "stage": "guess",
+      "status": "done",
+      "detail": "Provided candidate bound; formal optimization and verification remain required.",
+      "artifacts": [
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/path/input_0003/provided.xyz",
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/path/input_0003/provenance_0000.md"
+      ],
+      "source_input_revision": 3
+    },
+    {
+      "stage": "validate",
+      "status": "done",
+      "detail": "internal validation passed",
+      "artifacts": [],
+      "source_input_revision": 3
+    },
+    {
+      "stage": "submit",
+      "status": "done",
+      "detail": "refinement job 1092 submitted as 'ready' (gaussian, b3lyp); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+      "artifacts": [
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/jobs/declaration_0003/ts_opt/refine.gjf"
+      ],
+      "source_input_revision": 3
+    }
+  ],
+  "terminal": null,
+  "stop_reason": "用户 05:0x 指令：HI1 作为被替换题，其剩余作业与 durable run 一律停止，把核让给两道新题（甲酰胺 / HNCO）。本次为调度终止，不构成科学失败结论；已有几何、日志、provenance 原样归档保留。",
+  "blocked": null,
+  "intervention_count": 3,
+  "path_kind": "provided",
+  "guidance_attempt": 0,
+  "active_attempt_dir": "",
+  "guidance_manifest_path": "",
+  "job_id": 1092,
+  "job_input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/jobs/declaration_0003/ts_opt/refine.gjf",
+  "waiting_for": "",
+  "scan_step": null,
+  "job_steps": [
+    {
+      "purpose": "ts_opt",
+      "job_id": 1092,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/jobs/declaration_0003/ts_opt/refine.gjf",
+      "state": "cancelled",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "b3lyp",
+        "basis_set": "def2svp",
+        "keywords": "empiricaldispersion=gd3bj int=ultrafine scf=tight scrf=(cpcm,solvent=dmso)",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 3,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": null,
+      "atom_binding": {
+        "atom_map": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          27,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          10
+        ],
+        "charge": 0,
+        "declaration_revision": 3,
+        "process_id": "47d08de3e0882ed60d03c379360834ad46b4123924b459a9fde077dc667a4cf0",
+        "product_mol": "\n     RDKit          3D\n\n 27 26  0  0  0  0  0  0  0  0999 V2000\n   -1.0459   -0.7123    1.6144 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9826   -0.9819    0.1059 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.7990   -2.5638    0.1080 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.2739   -2.1832   -0.4114 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3719   -1.6225    2.1397 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7661    0.0869    1.8373 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0583   -0.4315    1.9994 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3288   -2.0265    0.6608 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9831   -1.3672   -1.0648 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8554   -2.4207    0.2116 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.4961   -0.7437   -1.1031 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8857   -0.1577   -0.2380 C   0  0  0  0  0  0  0  0  0  0  0  0\n    2.2342   -0.2115    1.0558 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.7311    0.7948   -0.5224 C   0  0  2  0  0  0  0  0  0  0  0  0\n    0.5036    1.9580    0.4704 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9681    2.3600    0.2184 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4845    1.3132   -0.8055 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.5827    0.1565   -0.7434 N   0  0  0  0  0  0  0  0  0  0  0  0\n    2.9798   -0.8334    1.1332 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0039    1.2332   -1.4974 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.6567    1.6223    1.5031 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2104    2.7793    0.2820 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5494    2.3251    1.1511 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0595    3.3798   -0.1829 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4311    1.7389   -1.8220 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5255    1.0185   -0.6334 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.9229   -2.6756   -0.8373 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  1  0\n  4  2  2  0\n  5  1  1  0\n  6  1  1  0\n  7  1  1  0\n  8  4  1  0\n  9  4  1  0\n 10  3  1  0\n 12 11  2  0\n 13 12  1  0\n 14 12  1  0\n 15 14  1  0\n 16 15  1  0\n 17 16  1  0\n 18 17  1  0\n 18 14  1  0\n 18  2  1  0\n 19 13  1  0\n 14 20  1  6\n 21 15  1  0\n 22 15  1  0\n 23 16  1  0\n 24 16  1  0\n 25 17  1  0\n 26 17  1  0\n 27  3  1  0\nM  END\n",
+        "reactant_mol": "\n     RDKit          3D\n\n 27 27  0  0  0  0  0  0  0  0999 V2000\n   -1.0459   -0.7123    1.6144 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9826   -0.9819    0.1059 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0126   -1.9827   -0.0578 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.3261   -1.5314   -0.3936 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3719   -1.6225    2.1397 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7661    0.0869    1.8373 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0583   -0.4315    1.9994 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.1741   -0.8797   -0.1408 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.4981   -2.5093    0.0776 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.2973   -1.6608   -1.4861 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.4961   -0.7437   -1.1031 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8857   -0.1577   -0.2380 C   0  0  0  0  0  0  0  0  0  0  0  0\n    2.2342   -0.2115    1.0558 O   0  0  0  0  0  0  0  0  0  0  0  0\n    0.7311    0.7948   -0.5224 C   0  0  2  0  0  0  0  0  0  0  0  0\n    0.5036    1.9580    0.4704 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.9681    2.3600    0.2184 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4845    1.3132   -0.8055 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.5827    0.1565   -0.7434 N   0  0  0  0  0  0  0  0  0  0  0  0\n    2.9798   -0.8334    1.1332 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0039    1.2332   -1.4974 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.6567    1.6223    1.5031 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2104    2.7793    0.2820 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.5494    2.3251    1.1511 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0595    3.3798   -0.1829 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.4311    1.7389   -1.8220 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5255    1.0185   -0.6334 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.1377   -2.0956   -1.0129 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  1  0\n  3  2  1  0\n  4  2  1  0\n  5  1  1  0\n  6  1  1  0\n  7  1  1  0\n  8  4  1  0\n  9  4  1  0\n 10  4  1  0\n 12 11  2  0\n 13 12  1  0\n 14 12  1  0\n 15 14  1  0\n 16 15  1  0\n 17 16  1  0\n 18 17  1  0\n 18 14  1  0\n 18  2  1  0\n 19 13  1  0\n 14 20  1  6\n 21 15  1  0\n 22 15  1  0\n 23 16  1  0\n 24 16  1  0\n 25 17  1  0\n 26 17  1  0\n 27  3  1  0\nM  END\n",
+        "ts_log_sha256": null
+      },
+      "frequency_analysis": null
+    }
+  ],
+  "evidence_candidates": [
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/path/input_0003/provided.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/path/input_0003/provenance_0000.md",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0026/jobs/declaration_0003/ts_opt/refine.gjf"
+  ],
+  "revision": 25
+}

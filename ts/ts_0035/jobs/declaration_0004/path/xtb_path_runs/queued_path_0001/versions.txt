@@ -1,0 +1,2 @@
+xtb --version (returncode=0):
+    * xtb version 6.5.0 (746241f) compiled by 'ehlert@majestix' on 2022-05-15

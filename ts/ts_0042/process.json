@@ -1,0 +1,2417 @@
+{
+  "format_version": 7,
+  "run_id": "ts_0042",
+  "pipeline_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+  "declaration_revision": 5,
+  "optimization_checkpoints": {},
+  "budget_action_keys": {},
+  "budget_reservations": {},
+  "attempt_history": [
+    {
+      "declaration_revision": 1,
+      "selected_candidate_id": null,
+      "job_steps": [
+        {
+          "purpose": "ts_opt",
+          "job_id": 1295,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0001/ts_opt/refine.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 1,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              2,
+              1,
+              5,
+              3,
+              6,
+              4
+            ],
+            "charge": 0,
+            "declaration_revision": 1,
+            "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+            "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n    0.8424   -0.6037    0.1298 N   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0109    0.3601   -0.0483 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.2679    0.2073    0.4619 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8126   -0.5264   -0.2387 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.3273    1.2650   -0.5903 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7253   -0.7023    0.2855 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+            "ts_log_sha256": null
+          },
+          "frequency_analysis": null
+        },
+        {
+          "purpose": "frequency",
+          "job_id": 1296,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0001/frequency/frequency.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 1,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              2,
+              1,
+              5,
+              3,
+              6,
+              4
+            ],
+            "charge": 0,
+            "declaration_revision": 1,
+            "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+            "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n    0.8424   -0.6037    0.1298 N   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0109    0.3601   -0.0483 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.2679    0.2073    0.4619 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8126   -0.5264   -0.2387 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.3273    1.2650   -0.5903 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7253   -0.7023    0.2855 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+            "ts_log_sha256": null
+          },
+          "frequency_analysis": {
+            "fraction_basis": "unweighted_squared_displacement",
+            "log_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0001/frequency/frequency.log",
+            "log_sha256": "a5e4129ee7dbc7042151ca9838436700651bfc29baba4f049722dcc98e382231",
+            "mode_alignment": {
+              "aligned": true,
+              "details": [
+                "Atom pair (1,4) relative displacement=1.000 (threshold 0.50×1.073=0.536)",
+                "Atom pair (3,4) relative displacement=0.978 (threshold 0.50×1.073=0.536)"
+              ],
+              "message": "Imaginary mode is consistent with the declared reaction coordinate: watch_pairs max relative displacement 1.000 ≥ 0.50×global max 1.073 (max pair=(2,4)).",
+              "status": "aligned"
+            },
+            "modes": [
+              {
+                "frequency_cm": -1923.6069,
+                "heavy_atom_fraction": 0.01150575287643822,
+                "top_displaced_atoms": [
+                  {
+                    "atom": 4,
+                    "element": "H",
+                    "fraction": 0.9753876938469235
+                  },
+                  {
+                    "atom": 2,
+                    "element": "C",
+                    "fraction": 0.008204102051025513
+                  },
+                  {
+                    "atom": 6,
+                    "element": "H",
+                    "fraction": 0.006603301650825415
+                  },
+                  {
+                    "atom": 5,
+                    "element": "H",
+                    "fraction": 0.006503251625812908
+                  },
+                  {
+                    "atom": 3,
+                    "element": "O",
+                    "fraction": 0.0020010005002501254
+                  }
+                ],
+                "top_displaced_pairs": [
+                  [
+                    3,
+                    4,
+                    0.9035520031772154
+                  ],
+                  [
+                    4,
+                    6,
+                    0.8752622961567559
+                  ],
+                  [
+                    1,
+                    4,
+                    0.848236743582788
+                  ],
+                  [
+                    2,
+                    4,
+                    0.1855691026182619
+                  ],
+                  [
+                    2,
+                    3,
+                    0.12055262873454735
+                  ]
+                ],
+                "watch_atom_fraction": 0.9786893446723361,
+                "watch_pair_fraction": {
+                  "fraction": 0.5386600577882066,
+                  "pair_projections": {
+                    "1-4": 0.848236743582788,
+                    "3-4": 0.9035520031772154
+                  }
+                }
+              }
+            ],
+            "reaction_center_pairs": [
+              [
+                1,
+                4
+              ],
+              [
+                3,
+                4
+              ]
+            ]
+          }
+        }
+      ],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/build/input_0001/reactant/generated_seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/build/input_0001/reactant/generated_seed.mol",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/build/input_0001/reactant/prepared_structure.json"
+          ],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "map",
+          "status": "done",
+          "detail": "Concrete endpoint correspondence confirmed and owned by this reaction.",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "assemble",
+          "status": "done",
+          "detail": "single component: nothing to assemble (no inter-fragment orientation). The reaction coordinate is whatever the path guess explores",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "guess",
+          "status": "done",
+          "detail": "Provided candidate bound; formal optimization and verification remain required.",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0001/provided.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0001/provenance_0000.log",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0001/provenance_0001.log"
+          ],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "validate",
+          "status": "done",
+          "detail": "internal validation passed",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "submit",
+          "status": "done",
+          "detail": "refinement job 1295 submitted as 'ready' (gaussian, B3LYP); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0001/ts_opt/refine.gjf"
+          ],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "refine",
+          "status": "blocked",
+          "detail": "Explicit calculation required: verification.irc",
+          "artifacts": [],
+          "source_input_revision": 1
+        }
+      ],
+      "reason": "TS verified (exactly 1 imaginary -1923.61 cm-1; O3-H4 +0.9036 forming / N1-H4 -0.8482 breaking, no out-of-plane mode). Declare the short bidirectional IRC (10 forward + 10 reverse, IRC options in end_setting per issue #184) and give both endpoint verifications explicit file seeds with sha256: reactant = the validated INT-1c minimum (job 1125, E=-169.744844814), product = the HCN...H2O complex frame of job 1213 (E=-169.720742486).",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "N=C(O)",
+          "product_smiles": "C#N.O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "selected_candidate": null,
+          "reaction_center": [
+            [
+              0,
+              3
+            ],
+            [
+              2,
+              3
+            ]
+          ]
+        },
+        "calculations": {
+          "m": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "generate",
+            "generation": "ETKDGv3",
+            "seed": 20261018,
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_P_complex.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": {
+          "kind": "provided",
+          "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_frame_cand_b.xyz",
+          "evidence_refs": [
+            "gold_compute/queue_20261018/results/NR1/jobs/E4_relax_c1.log",
+            "gold_compute/queue_20261018/results/NR1/jobs/E4_freq_candB.log"
+          ]
+        },
+        "ts_optimization": {
+          "ref": "m"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "m"
+          },
+          "irc": null,
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": null,
+            "optimization": null,
+            "frequency": null
+          },
+          "product_endpoint": {
+            "seed": null,
+            "optimization": null,
+            "frequency": null
+          }
+        },
+        "execution": {
+          "cpus": 4,
+          "memory_mb": 6144,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABBwAoAAAAAwMGACgAAAADBAgAKAAAAAMCAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBCwABKAIBAiAAAwABBAACBQBCAAAAAEChAAAAAQAAAAEAAAAABq9zpROy9Oo/6jH3IXJR479/PxKr3J7AP+b0OVHZVYY/w49hqC8M1z+nR1ENI7aov9xInShqSfS/ADggmXGKyj99BWPVJpDdP3mstWc2AP0/UEhxZqfY4L9qlcA6JIzOvw+bHJk889Q/8jaD62899D/KxDqqyOPiv0G41CGgmvu/lcgWiXp55r/V1JOo0kTSPz8CAAAAAAASAgAAAAAAEzoxAgAAAwAPAAAAY2xvdWRyYV9hdG9tX2lkAAQAAABpbjowFAAAAGNsb3VkcmFfY29tcG9uZW50X2lkAAUAAABmcmFnMBoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEAAAAAAAMADwAAAGNsb3VkcmFfYXRvbV9pZAAEAAAAaW46MRQAAABjbG91ZHJhX2NvbXBvbmVudF9pZAAFAAAAZnJhZzAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAADAA8AAABjbG91ZHJhX2F0b21faWQABAAAAGluOjIUAAAAY2xvdWRyYV9jb21wb25lbnRfaWQABQAAAGZyYWcwGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAwAKAAAAaXNJbXBsaWNpdAEBAAAADwAAAGNsb3VkcmFfYXRvbV9pZAAHAAAAaW46MCNIMRQAAABjbG91ZHJhX2NvbXBvbmVudF9pZAAFAAAAZnJhZzAAAwAKAAAAaXNJbXBsaWNpdAEBAAAADwAAAGNsb3VkcmFfYXRvbV9pZAAHAAAAaW46MSNIMRQAAABjbG91ZHJhX2NvbXBvbmVudF9pZAAFAAAAZnJhZzAAAwAKAAAAaXNJbXBsaWNpdAEBAAAADwAAAGNsb3VkcmFfYXRvbV9pZAAHAAAAaW46MiNIMRQAAABjbG91ZHJhX2NvbXBvbmVudF9pZAAFAAAAZnJhZzAAExY=",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABAAAAIABBiAoAAAAAgQHICgAAAACAwEgKAAAAAEBCCAgAAAAAgEgKAAAAAEBASAoAAAAAQELAQAIAwIAAAQDAAUDAEIAAAAAQKEAAAABAAAAAQAAAAAGgv3XuWkTAMDLngQ25+BpvwAAAAAAAAAAvaYHBaVo679p5POKpx6ZPwAAAAAAAACADR07qMS1CMDxYmGInL6evwAAAAAAAAAA1e3sKw+SAUDxETElkui5vwAAAAAAAAAAUB2rlJ6p8z8iHLPsSWDFvwAAAAAAAACAm3RbIhe8AkClvcEXJlPrPwAAAAAAAAAAPwIAAAAAABITAgAAAwANAAAAX0ZpbGVDb21tZW50cwBdAAAATlIxIFAgY29tcGxleCBIQ04uLi5IMk8gbGFzdCBvcmllbnRhdGlvbiBmcm9tIE5SMV9QX2NvbXBsZXhfb3B0ZnJlcS5sb2cgKGxpbmUgNTYzMywgam9iIDEyMTMpFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBbAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9FNF9QX2NvbXBsZXgueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICI4ODczNjkwNmY0YzczYTUzOTkzNzY1NmZjYzk4YzI5ODkyN2JkYmY0OTEzYmIzNTZkODg3ZWU4ZDVmZGZmYzRlIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfODg3MzY5MDZmNGM3M2E1My54eXoifSwgImlucHV0X3JldmlzaW9uIjogMX0fAAAAY2xvdWRyYV9tYXBwaW5nX2JpbmRpbmdfZGVyaXZlZAMBEzp7AAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAAAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAAAAAAAAExY=",
+        "product_to_reactant": [
+          1,
+          0,
+          4,
+          2,
+          5,
+          3
+        ],
+        "candidate": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABBwAoAAAAAwMGACgAAAADBAgAKAAAAAMCAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBCwABKAIBAiAAAwABBAACBQBCAAAAAEChAAAAAQAAAAEAAAAABhB2ilWDMIc/3V7SGK1j9j8AAAAAAAAAAGpLHeT1YMC/Q8ajVMITyj8AAAAAAAAAAOSh725lifo/wOldvB+30b8AAAAAAAAAAFLwFHKlXvU//bypSIUx8j8AAAAAAAAAAG7dzVMdcui/XYsWoG215b8AAAAAAAAAAIAtr1xvuwFAuwm+afos8b8AAAAAAAAAAD8CAAAAAAASAgAAAAAAEzoxAgAAAwAPAAAAY2xvdWRyYV9hdG9tX2lkAAQAAABpbjowFAAAAGNsb3VkcmFfY29tcG9uZW50X2lkAAUAAABmcmFnMBoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEAAAAAAAMADwAAAGNsb3VkcmFfYXRvbV9pZAAEAAAAaW46MRQAAABjbG91ZHJhX2NvbXBvbmVudF9pZAAFAAAAZnJhZzAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAADAA8AAABjbG91ZHJhX2F0b21faWQABAAAAGluOjIUAAAAY2xvdWRyYV9jb21wb25lbnRfaWQABQAAAGZyYWcwGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAwAKAAAAaXNJbXBsaWNpdAEBAAAADwAAAGNsb3VkcmFfYXRvbV9pZAAHAAAAaW46MCNIMRQAAABjbG91ZHJhX2NvbXBvbmVudF9pZAAFAAAAZnJhZzAAAwAKAAAAaXNJbXBsaWNpdAEBAAAADwAAAGNsb3VkcmFfYXRvbV9pZAAHAAAAaW46MSNIMRQAAABjbG91ZHJhX2NvbXBvbmVudF9pZAAFAAAAZnJhZzAAAwAKAAAAaXNJbXBsaWNpdAEBAAAADwAAAGNsb3VkcmFfYXRvbV9pZAAHAAAAaW46MiNIMRQAAABjbG91ZHJhX2NvbXBvbmVudF9pZAAFAAAAZnJhZzAAExY="
+      },
+      "provided_guess_binding": {
+        "xyz": {
+          "source_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NR1/geoms/E4_frame_cand_b.xyz",
+          "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0001/provided.xyz",
+          "sha256": "7bc3bf96dddb629b3312179c1d4d86eb0a3a70cc7fcf6dff321e666b56727a6e"
+        },
+        "evidence": [
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NR1/jobs/E4_relax_c1.log",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0001/provenance_0000.log",
+            "sha256": "483d4588eefb462c3113e871dc85fca096c72ee27e9c0235973ba2ff933f2aad"
+          },
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NR1/jobs/E4_freq_candB.log",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0001/provenance_0001.log",
+            "sha256": "867299a4592b4f4a80818dfdf97dc16a4bb407f206e2d513a3148f2fb83c192b"
+          }
+        ]
+      },
+      "terminal": null,
+      "blocked": {
+        "failure_class": "missing_input",
+        "stage": "refine",
+        "message": "Explicit calculation required: verification.irc",
+        "atom_details": [],
+        "needs": [
+          "verification.irc"
+        ],
+        "issues": []
+      },
+      "failed_attempt": null,
+      "stop_reason": null
+    },
+    {
+      "declaration_revision": 2,
+      "selected_candidate_id": null,
+      "job_steps": [
+        {
+          "purpose": "ts_opt",
+          "job_id": 1295,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0001/ts_opt/refine.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 1,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              2,
+              1,
+              5,
+              3,
+              6,
+              4
+            ],
+            "charge": 0,
+            "declaration_revision": 1,
+            "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+            "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n    0.8424   -0.6037    0.1298 N   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0109    0.3601   -0.0483 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.2679    0.2073    0.4619 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8126   -0.5264   -0.2387 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.3273    1.2650   -0.5903 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7253   -0.7023    0.2855 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+            "ts_log_sha256": null
+          },
+          "frequency_analysis": null
+        },
+        {
+          "purpose": "frequency",
+          "job_id": 1296,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0001/frequency/frequency.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 1,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              2,
+              1,
+              5,
+              3,
+              6,
+              4
+            ],
+            "charge": 0,
+            "declaration_revision": 1,
+            "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+            "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n    0.8424   -0.6037    0.1298 N   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0109    0.3601   -0.0483 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.2679    0.2073    0.4619 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8126   -0.5264   -0.2387 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.3273    1.2650   -0.5903 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7253   -0.7023    0.2855 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+            "ts_log_sha256": null
+          },
+          "frequency_analysis": {
+            "fraction_basis": "unweighted_squared_displacement",
+            "log_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0001/frequency/frequency.log",
+            "log_sha256": "a5e4129ee7dbc7042151ca9838436700651bfc29baba4f049722dcc98e382231",
+            "mode_alignment": {
+              "aligned": true,
+              "details": [
+                "Atom pair (1,4) relative displacement=1.000 (threshold 0.50×1.073=0.536)",
+                "Atom pair (3,4) relative displacement=0.978 (threshold 0.50×1.073=0.536)"
+              ],
+              "message": "Imaginary mode is consistent with the declared reaction coordinate: watch_pairs max relative displacement 1.000 ≥ 0.50×global max 1.073 (max pair=(2,4)).",
+              "status": "aligned"
+            },
+            "modes": [
+              {
+                "frequency_cm": -1923.6069,
+                "heavy_atom_fraction": 0.01150575287643822,
+                "top_displaced_atoms": [
+                  {
+                    "atom": 4,
+                    "element": "H",
+                    "fraction": 0.9753876938469235
+                  },
+                  {
+                    "atom": 2,
+                    "element": "C",
+                    "fraction": 0.008204102051025513
+                  },
+                  {
+                    "atom": 6,
+                    "element": "H",
+                    "fraction": 0.006603301650825415
+                  },
+                  {
+                    "atom": 5,
+                    "element": "H",
+                    "fraction": 0.006503251625812908
+                  },
+                  {
+                    "atom": 3,
+                    "element": "O",
+                    "fraction": 0.0020010005002501254
+                  }
+                ],
+                "top_displaced_pairs": [
+                  [
+                    3,
+                    4,
+                    0.9035520031772154
+                  ],
+                  [
+                    4,
+                    6,
+                    0.8752622961567559
+                  ],
+                  [
+                    1,
+                    4,
+                    0.848236743582788
+                  ],
+                  [
+                    2,
+                    4,
+                    0.1855691026182619
+                  ],
+                  [
+                    2,
+                    3,
+                    0.12055262873454735
+                  ]
+                ],
+                "watch_atom_fraction": 0.9786893446723361,
+                "watch_pair_fraction": {
+                  "fraction": 0.5386600577882066,
+                  "pair_projections": {
+                    "1-4": 0.848236743582788,
+                    "3-4": 0.9035520031772154
+                  }
+                }
+              }
+            ],
+            "reaction_center_pairs": [
+              [
+                1,
+                4
+              ],
+              [
+                3,
+                4
+              ]
+            ]
+          }
+        },
+        {
+          "purpose": "irc",
+          "job_id": 1297,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0002/irc/irc.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": "IRC=(CalcFC,MaxPoints=10,StepSize=10)"
+          },
+          "source_input_revision": 2,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              2,
+              1,
+              5,
+              3,
+              6,
+              4
+            ],
+            "charge": 0,
+            "declaration_revision": 2,
+            "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+            "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n    0.8424   -0.6037    0.1298 N   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0109    0.3601   -0.0483 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.2679    0.2073    0.4619 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8126   -0.5264   -0.2387 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.3273    1.2650   -0.5903 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7253   -0.7023    0.2855 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+            "ts_log_sha256": "a5e4129ee7dbc7042151ca9838436700651bfc29baba4f049722dcc98e382231"
+          },
+          "frequency_analysis": null
+        }
+      ],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/build/input_0001/reactant/generated_seed.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/build/input_0001/reactant/generated_seed.mol",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/build/input_0001/reactant/prepared_structure.json"
+          ],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "map",
+          "status": "done",
+          "detail": "Concrete endpoint correspondence confirmed and owned by this reaction.",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "assemble",
+          "status": "done",
+          "detail": "single component: nothing to assemble (no inter-fragment orientation). The reaction coordinate is whatever the path guess explores",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "guess",
+          "status": "done",
+          "detail": "Provided candidate bound; formal optimization and verification remain required.",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0001/provided.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0001/provenance_0000.log",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0001/provenance_0001.log"
+          ],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "validate",
+          "status": "done",
+          "detail": "internal validation passed",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "submit",
+          "status": "done",
+          "detail": "refinement job 1295 submitted as 'ready' (gaussian, B3LYP); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0001/ts_opt/refine.gjf"
+          ],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "refine",
+          "status": "blocked",
+          "detail": "Endpoint replacement source/evidence missing",
+          "artifacts": [],
+          "source_input_revision": 2
+        }
+      ],
+      "reason": "IRC job 1297 (10F+10R) 已完成且两臂单调下降：FORWARD 臂 N1-H4 1.42→1.80 Å、O3-H4 1.21→0.98 Å、N1-C2 1.205→1.175 Å（趋向 HCN+H2O），REVERSE 臂 N1-H4 1.333→1.054 Å、O3-H4 1.303→1.734 Å（趋向 INT-1c）。为让端点优化/频率环节有明确结构来源，把 reactant 构象源由 ETKDGv3 生成改为文件 INT1c.xyz（job 1125 Opt+Freq、E=-169.744844814、0 虚频、sha256 00baf536…），并补上两个端点 seed 的 mol_path/证据日志路径；reactant_smiles 保持 N=C(O) 不变。TS opt(1295)/freq(1296) 与 IRC(1297) 证据应保留。",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "N=C(O)",
+          "product_smiles": "C#N.O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "selected_candidate": null,
+          "reaction_center": [
+            [
+              0,
+              3
+            ],
+            [
+              2,
+              3
+            ]
+          ]
+        },
+        "calculations": {
+          "m": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "generate",
+            "generation": "ETKDGv3",
+            "seed": 20261018,
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_P_complex.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": {
+          "kind": "provided",
+          "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_frame_cand_b.xyz",
+          "evidence_refs": [
+            "gold_compute/queue_20261018/results/NR1/jobs/E4_relax_c1.log",
+            "gold_compute/queue_20261018/results/NR1/jobs/E4_freq_candB.log"
+          ]
+        },
+        "ts_optimization": {
+          "ref": "m"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "m"
+          },
+          "irc": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": "IRC=(CalcFC,MaxPoints=10,StepSize=10)"
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": {
+              "kind": "file",
+              "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/opt/INT1c.xyz",
+              "mol_path": null,
+              "evidence_refs": [
+                "sha256 00baf536d2c5362354a3781dacffb4ae7616bf1b48f87f9d14a789cbdaa30646",
+                "results/NR1/jobs/imidic_dNH0_dOH180_optfreq.log (job 1125, E=-169.744844814)"
+              ]
+            },
+            "optimization": {
+              "ref": "m"
+            },
+            "frequency": {
+              "ref": "m"
+            }
+          },
+          "product_endpoint": {
+            "seed": {
+              "kind": "file",
+              "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_P_complex.xyz",
+              "mol_path": null,
+              "evidence_refs": [
+                "sha256 88736906f4c73a539937656fcc98c298927bdbf4913bb356d887ee8d5fdffc4e",
+                "results/NR1/jobs/NR1_P_complex_optfreq.log (job 1213, E=-169.720742486, orientation block at L5633)"
+              ]
+            },
+            "optimization": {
+              "ref": "m"
+            },
+            "frequency": {
+              "ref": "m"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 4,
+          "memory_mb": 6144,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABBwAoAAAAAwMGACgAAAADBAgAKAAAAAMCAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBCwABKAIBAiAAAwABBAACBQBCAAAAAEChAAAAAQAAAAEAAAAABq9zpROy9Oo/6jH3IXJR479/PxKr3J7AP+b0OVHZVYY/w49hqC8M1z+nR1ENI7aov9xInShqSfS/ADggmXGKyj99BWPVJpDdP3mstWc2AP0/UEhxZqfY4L9qlcA6JIzOvw+bHJk889Q/8jaD62899D/KxDqqyOPiv0G41CGgmvu/lcgWiXp55r/V1JOo0kTSPz8CAAAAAAASAgAAAAAAEzoxAgAAAwAPAAAAY2xvdWRyYV9hdG9tX2lkAAQAAABpbjowFAAAAGNsb3VkcmFfY29tcG9uZW50X2lkAAUAAABmcmFnMBoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEAAAAAAAMADwAAAGNsb3VkcmFfYXRvbV9pZAAEAAAAaW46MRQAAABjbG91ZHJhX2NvbXBvbmVudF9pZAAFAAAAZnJhZzAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAADAA8AAABjbG91ZHJhX2F0b21faWQABAAAAGluOjIUAAAAY2xvdWRyYV9jb21wb25lbnRfaWQABQAAAGZyYWcwGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAwAKAAAAaXNJbXBsaWNpdAEBAAAADwAAAGNsb3VkcmFfYXRvbV9pZAAHAAAAaW46MCNIMRQAAABjbG91ZHJhX2NvbXBvbmVudF9pZAAFAAAAZnJhZzAAAwAKAAAAaXNJbXBsaWNpdAEBAAAADwAAAGNsb3VkcmFfYXRvbV9pZAAHAAAAaW46MSNIMRQAAABjbG91ZHJhX2NvbXBvbmVudF9pZAAFAAAAZnJhZzAAAwAKAAAAaXNJbXBsaWNpdAEBAAAADwAAAGNsb3VkcmFfYXRvbV9pZAAHAAAAaW46MiNIMRQAAABjbG91ZHJhX2NvbXBvbmVudF9pZAAFAAAAZnJhZzAAExY=",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABAAAAIABBiAoAAAAAgQHICgAAAACAwEgKAAAAAEBCCAgAAAAAgEgKAAAAAEBASAoAAAAAQELAQAIAwIAAAQDAAUDAEIAAAAAQKEAAAABAAAAAQAAAAAGgv3XuWkTAMDLngQ25+BpvwAAAAAAAAAAvaYHBaVo679p5POKpx6ZPwAAAAAAAACADR07qMS1CMDxYmGInL6evwAAAAAAAAAA1e3sKw+SAUDxETElkui5vwAAAAAAAAAAUB2rlJ6p8z8iHLPsSWDFvwAAAAAAAACAm3RbIhe8AkClvcEXJlPrPwAAAAAAAAAAPwIAAAAAABITAgAAAwANAAAAX0ZpbGVDb21tZW50cwBdAAAATlIxIFAgY29tcGxleCBIQ04uLi5IMk8gbGFzdCBvcmllbnRhdGlvbiBmcm9tIE5SMV9QX2NvbXBsZXhfb3B0ZnJlcS5sb2cgKGxpbmUgNTYzMywgam9iIDEyMTMpFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBbAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9FNF9QX2NvbXBsZXgueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICI4ODczNjkwNmY0YzczYTUzOTkzNzY1NmZjYzk4YzI5ODkyN2JkYmY0OTEzYmIzNTZkODg3ZWU4ZDVmZGZmYzRlIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfODg3MzY5MDZmNGM3M2E1My54eXoifSwgImlucHV0X3JldmlzaW9uIjogMX0fAAAAY2xvdWRyYV9tYXBwaW5nX2JpbmRpbmdfZGVyaXZlZAMBEzp7AAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAAAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAAAAAAAAExY=",
+        "product_to_reactant": [
+          1,
+          0,
+          4,
+          2,
+          5,
+          3
+        ],
+        "candidate": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABBwAoAAAAAwMGACgAAAADBAgAKAAAAAMCAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBCwABKAIBAiAAAwABBAACBQBCAAAAAEChAAAAAQAAAAEAAAAABhB2ilWDMIc/3V7SGK1j9j8AAAAAAAAAAGpLHeT1YMC/Q8ajVMITyj8AAAAAAAAAAOSh725lifo/wOldvB+30b8AAAAAAAAAAFLwFHKlXvU//bypSIUx8j8AAAAAAAAAAG7dzVMdcui/XYsWoG215b8AAAAAAAAAAIAtr1xvuwFAuwm+afos8b8AAAAAAAAAAD8CAAAAAAASAgAAAAAAEzoxAgAAAwAPAAAAY2xvdWRyYV9hdG9tX2lkAAQAAABpbjowFAAAAGNsb3VkcmFfY29tcG9uZW50X2lkAAUAAABmcmFnMBoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEAAAAAAAMADwAAAGNsb3VkcmFfYXRvbV9pZAAEAAAAaW46MRQAAABjbG91ZHJhX2NvbXBvbmVudF9pZAAFAAAAZnJhZzAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAADAA8AAABjbG91ZHJhX2F0b21faWQABAAAAGluOjIUAAAAY2xvdWRyYV9jb21wb25lbnRfaWQABQAAAGZyYWcwGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAwAKAAAAaXNJbXBsaWNpdAEBAAAADwAAAGNsb3VkcmFfYXRvbV9pZAAHAAAAaW46MCNIMRQAAABjbG91ZHJhX2NvbXBvbmVudF9pZAAFAAAAZnJhZzAAAwAKAAAAaXNJbXBsaWNpdAEBAAAADwAAAGNsb3VkcmFfYXRvbV9pZAAHAAAAaW46MSNIMRQAAABjbG91ZHJhX2NvbXBvbmVudF9pZAAFAAAAZnJhZzAAAwAKAAAAaXNJbXBsaWNpdAEBAAAADwAAAGNsb3VkcmFfYXRvbV9pZAAHAAAAaW46MiNIMRQAAABjbG91ZHJhX2NvbXBvbmVudF9pZAAFAAAAZnJhZzAAExY="
+      },
+      "provided_guess_binding": {
+        "xyz": {
+          "source_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NR1/geoms/E4_frame_cand_b.xyz",
+          "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0001/provided.xyz",
+          "sha256": "7bc3bf96dddb629b3312179c1d4d86eb0a3a70cc7fcf6dff321e666b56727a6e"
+        },
+        "evidence": [
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NR1/jobs/E4_relax_c1.log",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0001/provenance_0000.log",
+            "sha256": "483d4588eefb462c3113e871dc85fca096c72ee27e9c0235973ba2ff933f2aad"
+          },
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NR1/jobs/E4_freq_candB.log",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0001/provenance_0001.log",
+            "sha256": "867299a4592b4f4a80818dfdf97dc16a4bb407f206e2d513a3148f2fb83c192b"
+          }
+        ]
+      },
+      "terminal": null,
+      "blocked": {
+        "failure_class": "endpoint_input_failed",
+        "stage": "refine",
+        "message": "Endpoint replacement source/evidence missing",
+        "atom_details": [],
+        "needs": [
+          "verification.reactant_endpoint",
+          "reaction.reactant_smiles"
+        ],
+        "issues": []
+      },
+      "failed_attempt": null,
+      "stop_reason": null
+    },
+    {
+      "declaration_revision": 3,
+      "selected_candidate_id": null,
+      "job_steps": [],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "map",
+          "status": "done",
+          "detail": "Concrete endpoint correspondence confirmed and owned by this reaction.",
+          "artifacts": [],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "assemble",
+          "status": "done",
+          "detail": "single component: nothing to assemble (no inter-fragment orientation). The reaction coordinate is whatever the path guess explores",
+          "artifacts": [],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "guess",
+          "status": "blocked",
+          "detail": "Explicit guess source required",
+          "artifacts": [],
+          "source_input_revision": 3
+        }
+      ],
+      "reason": "conformers.reactant 改为文件源后，旧 provided guess 随旧 reactant 绑定失效（blocked: Explicit guess source required）。重新声明同一 TS 初猜 E4_frame_cand_b.xyz（job 1290 三距离受约束重优化帧，sha256 7bc3bf96…，原子序 N1,C2,O3,H4,H5,H6 与 INT1c.xyz 一致），证据为 E4_relax_c1.log 与 E4_freq_candB.log；ts_optimization 与 verification.irc 配置保持不变。",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "N=C(O)",
+          "product_smiles": "C#N.O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "selected_candidate": null,
+          "reaction_center": []
+        },
+        "calculations": {
+          "m": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/opt/INT1c.xyz",
+            "mol_path": "ts/ts_0042/build/input_0001/reactant/generated_seed.mol",
+            "evidence_refs": [
+              "gold_compute/queue_20261018/results/NR1/jobs/imidic_dNH0_dOH180_optfreq.log"
+            ],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_P_complex.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": null,
+        "ts_optimization": {
+          "ref": "m"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "m"
+          },
+          "irc": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": "IRC=(CalcFC,MaxPoints=10,StepSize=10)"
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": {
+              "kind": "file",
+              "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/opt/INT1c.xyz",
+              "mol_path": "ts/ts_0042/build/input_0001/reactant/generated_seed.mol",
+              "evidence_refs": [
+                "gold_compute/queue_20261018/results/NR1/jobs/imidic_dNH0_dOH180_optfreq.log"
+              ]
+            },
+            "optimization": {
+              "ref": "m"
+            },
+            "frequency": {
+              "ref": "m"
+            }
+          },
+          "product_endpoint": {
+            "seed": {
+              "kind": "file",
+              "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_P_complex.xyz",
+              "mol_path": null,
+              "evidence_refs": [
+                "gold_compute/queue_20261018/results/NR1/jobs/NR1_P_complex_optfreq.log"
+              ]
+            },
+            "optimization": {
+              "ref": "m"
+            },
+            "frequency": {
+              "ref": "m"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 4,
+          "memory_mb": 6144,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABBwAoAAAAAwMGACgAAAADBAgAKAAAAAMCAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBCwABKgIBAAECIAADAAEEAAIFAEIAAAAAQKEAAAABAAAAAQAAAAAGE57Q60/i87+is8wiFFu5vwAAAAAAAAAAyTmxh/axtr/kMm5qoPnZPwAAAAAAAACA1jbF46Ia8T8EH4MVp1rTvwAAAAAAAACAX1/rUiP08r8T8GskCQLyvwAAAAAAAAAA/3ivWpnwoz9zafzCKwn4PwAAAAAAAAAAV9Efmnky/T8D7KNTVz7TPwAAAAAAAAAAPwIAAAAAABIlAwAABgAFAAAAX05hbWUAAAAAAAwAAABfTW9sRmlsZUluZm8AFgAAACAgICAgUkRLaXQgICAgICAgICAgM0QQAAAAX01vbEZpbGVDb21tZW50cwAAAAAAEgAAAF9Nb2xGaWxlQ2hpcmFsRmxhZwIAAAAAFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBzAgAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9vcHQvSU5UMWMueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvZ2VuZXJhdGVkX3NlZWQubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICIwMGJhZjUzNmQyYzUzNjIzNTRhMzc4MWRhY2ZmYjRhZTc2MTZiZjFiNDhmODdmOWQxNGE3ODljYmRhYTMwNjQ2IiwgIm1vbCI6ICJiMzk4Y2U3ZjJlMjIzN2I0YjBjNjc0YWVhYjIzMWNkOTBlNjIxZjcwZTNiYzQ4NDUwODJkYjkxY2UyYTJhNGQ5In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDMvcmVhY3RhbnQvc291cmNlXzAwYmFmNTM2ZDJjNTM2MjMueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDMvcmVhY3RhbnQvc291cmNlX2IzOThjZTdmMmUyMjM3YjQubW9sIn0sICJpbnB1dF9yZXZpc2lvbiI6IDN9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6ewAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQAAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAECAAAAAAAAAAAAAAAAABM7FQAAAAAAAwIDAAABAQAAAQEAAAEBAAABARMW",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABAAAAIABBiAoAAAAAgQHICgAAAACAwEgKAAAAAEBCCAgAAAAAgEgKAAAAAEBASAoAAAAAQELAQAIAwIAAAQDAAUDAEIAAAAAQKEAAAABAAAAAQAAAAAGgv3XuWkTAMDLngQ25+BpvwAAAAAAAAAAvaYHBaVo679p5POKpx6ZPwAAAAAAAACADR07qMS1CMDxYmGInL6evwAAAAAAAAAA1e3sKw+SAUDxETElkui5vwAAAAAAAAAAUB2rlJ6p8z8iHLPsSWDFvwAAAAAAAACAm3RbIhe8AkClvcEXJlPrPwAAAAAAAAAAPwIAAAAAABITAgAAAwANAAAAX0ZpbGVDb21tZW50cwBdAAAATlIxIFAgY29tcGxleCBIQ04uLi5IMk8gbGFzdCBvcmllbnRhdGlvbiBmcm9tIE5SMV9QX2NvbXBsZXhfb3B0ZnJlcS5sb2cgKGxpbmUgNTYzMywgam9iIDEyMTMpFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBbAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9FNF9QX2NvbXBsZXgueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICI4ODczNjkwNmY0YzczYTUzOTkzNzY1NmZjYzk4YzI5ODkyN2JkYmY0OTEzYmIzNTZkODg3ZWU4ZDVmZGZmYzRlIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfODg3MzY5MDZmNGM3M2E1My54eXoifSwgImlucHV0X3JldmlzaW9uIjogMX0fAAAAY2xvdWRyYV9tYXBwaW5nX2JpbmRpbmdfZGVyaXZlZAMBEzp7AAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAAAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAAAAAAAAExY=",
+        "product_to_reactant": [
+          1,
+          0,
+          4,
+          2,
+          5,
+          3
+        ],
+        "candidate": null
+      },
+      "provided_guess_binding": null,
+      "terminal": null,
+      "blocked": {
+        "failure_class": "missing_input",
+        "stage": "guess",
+        "message": "Explicit guess source required",
+        "atom_details": [],
+        "needs": [
+          "guess"
+        ],
+        "issues": []
+      },
+      "failed_attempt": null,
+      "stop_reason": null
+    },
+    {
+      "declaration_revision": 4,
+      "selected_candidate_id": null,
+      "job_steps": [
+        {
+          "purpose": "ts_opt",
+          "job_id": 1299,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/ts_opt/refine.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 4,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              2,
+              1,
+              5,
+              3,
+              6,
+              4
+            ],
+            "charge": 0,
+            "declaration_revision": 4,
+            "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+            "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n   -1.2428   -0.0990    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0887    0.4059   -0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0690   -0.3024   -0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.1846   -1.1255    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0389    1.5022    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8248    0.3007    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+            "ts_log_sha256": null
+          },
+          "frequency_analysis": null
+        },
+        {
+          "purpose": "frequency",
+          "job_id": 1300,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/frequency/frequency.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 4,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              2,
+              1,
+              5,
+              3,
+              6,
+              4
+            ],
+            "charge": 0,
+            "declaration_revision": 4,
+            "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+            "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n   -1.2428   -0.0990    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0887    0.4059   -0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0690   -0.3024   -0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.1846   -1.1255    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0389    1.5022    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8248    0.3007    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+            "ts_log_sha256": null
+          },
+          "frequency_analysis": {
+            "fraction_basis": "unweighted_squared_displacement",
+            "log_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/frequency/frequency.log",
+            "log_sha256": "3f2dc64f7cfa4c3ba34925a9c2b66c925fe937faa85edc6b241b6274918a37e1",
+            "mode_alignment": {
+              "aligned": null,
+              "details": [
+                "Global max relative-displacement pair=(2,4)"
+              ],
+              "message": "No watch_pairs provided; skipping the imaginary-mode vs reaction-coordinate alignment check.",
+              "status": "skipped"
+            },
+            "modes": [
+              {
+                "frequency_cm": -1923.6069,
+                "heavy_atom_fraction": 0.01150575287643822,
+                "top_displaced_atoms": [
+                  {
+                    "atom": 4,
+                    "element": "H",
+                    "fraction": 0.9753876938469235
+                  },
+                  {
+                    "atom": 2,
+                    "element": "C",
+                    "fraction": 0.008204102051025513
+                  },
+                  {
+                    "atom": 6,
+                    "element": "H",
+                    "fraction": 0.006603301650825415
+                  },
+                  {
+                    "atom": 5,
+                    "element": "H",
+                    "fraction": 0.006503251625812908
+                  },
+                  {
+                    "atom": 3,
+                    "element": "O",
+                    "fraction": 0.0020010005002501254
+                  }
+                ],
+                "top_displaced_pairs": [
+                  [
+                    3,
+                    4,
+                    0.9035520031772154
+                  ],
+                  [
+                    4,
+                    6,
+                    0.8752622961567559
+                  ],
+                  [
+                    1,
+                    4,
+                    0.848236743582788
+                  ],
+                  [
+                    2,
+                    4,
+                    0.1855691026182619
+                  ],
+                  [
+                    2,
+                    3,
+                    0.12055262873454735
+                  ]
+                ],
+                "watch_atom_fraction": null,
+                "watch_pair_fraction": null
+              }
+            ],
+            "reaction_center_pairs": []
+          }
+        },
+        {
+          "purpose": "irc",
+          "job_id": 1301,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/irc/irc.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": "IRC=(CalcFC,MaxPoints=10,StepSize=10)"
+          },
+          "source_input_revision": 4,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": null,
+          "atom_binding": {
+            "atom_map": [
+              2,
+              1,
+              5,
+              3,
+              6,
+              4
+            ],
+            "charge": 0,
+            "declaration_revision": 4,
+            "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+            "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n   -1.2428   -0.0990    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0887    0.4059   -0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0690   -0.3024   -0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.1846   -1.1255    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0389    1.5022    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8248    0.3007    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+            "ts_log_sha256": "3f2dc64f7cfa4c3ba34925a9c2b66c925fe937faa85edc6b241b6274918a37e1"
+          },
+          "frequency_analysis": null
+        },
+        {
+          "purpose": "reactant_opt",
+          "job_id": 1303,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/reactant_opt/reactant_opt.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 4,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": {
+            "kind": "species_reference",
+            "label": "reactant",
+            "source_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/reactant_opt/reactant_source.xyz",
+            "sha256": "52554b80c6abd79312ea0265e8b417047ce9066334a8eb0b3057205181e6bce2",
+            "irc_job_id": null,
+            "irc_log_sha256": null
+          },
+          "atom_binding": {
+            "atom_map": [
+              2,
+              1,
+              5,
+              3,
+              6,
+              4
+            ],
+            "charge": 0,
+            "declaration_revision": 4,
+            "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+            "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n   -1.2428   -0.0990    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0887    0.4059   -0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0690   -0.3024   -0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.1846   -1.1255    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0389    1.5022    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8248    0.3007    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+            "ts_log_sha256": "3f2dc64f7cfa4c3ba34925a9c2b66c925fe937faa85edc6b241b6274918a37e1"
+          },
+          "frequency_analysis": null
+        },
+        {
+          "purpose": "reactant_frequency",
+          "job_id": 1304,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/reactant_frequency/reactant_frequency.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 4,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": {
+            "kind": "species_reference",
+            "label": "reactant",
+            "source_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/reactant_opt/reactant_source.xyz",
+            "sha256": "52554b80c6abd79312ea0265e8b417047ce9066334a8eb0b3057205181e6bce2",
+            "irc_job_id": null,
+            "irc_log_sha256": null
+          },
+          "atom_binding": {
+            "atom_map": [
+              2,
+              1,
+              5,
+              3,
+              6,
+              4
+            ],
+            "charge": 0,
+            "declaration_revision": 4,
+            "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+            "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n   -1.2428   -0.0990    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0887    0.4059   -0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0690   -0.3024   -0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.1846   -1.1255    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0389    1.5022    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8248    0.3007    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+            "ts_log_sha256": "3f2dc64f7cfa4c3ba34925a9c2b66c925fe937faa85edc6b241b6274918a37e1"
+          },
+          "frequency_analysis": null
+        },
+        {
+          "purpose": "product_opt",
+          "job_id": 1305,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/product_opt/product_opt.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 4,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": {
+            "kind": "species_reference",
+            "label": "product",
+            "source_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/product_opt/product_source.xyz",
+            "sha256": "bf7cb786c78414030160523717ff4b24d01e698e644b4e5c8513bb20a83e5bf7",
+            "irc_job_id": null,
+            "irc_log_sha256": null
+          },
+          "atom_binding": {
+            "atom_map": [
+              2,
+              1,
+              5,
+              3,
+              6,
+              4
+            ],
+            "charge": 0,
+            "declaration_revision": 4,
+            "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+            "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n   -1.2428   -0.0990    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0887    0.4059   -0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0690   -0.3024   -0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.1846   -1.1255    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0389    1.5022    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8248    0.3007    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+            "ts_log_sha256": "3f2dc64f7cfa4c3ba34925a9c2b66c925fe937faa85edc6b241b6274918a37e1"
+          },
+          "frequency_analysis": null
+        },
+        {
+          "purpose": "product_frequency",
+          "job_id": 1306,
+          "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/product_frequency/product_frequency.gjf",
+          "state": "done",
+          "actual_calculation": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          },
+          "source_input_revision": 4,
+          "method_contract": null,
+          "stage_key": null,
+          "external_source": null,
+          "endpoint_source": {
+            "kind": "species_reference",
+            "label": "product",
+            "source_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/product_opt/product_source.xyz",
+            "sha256": "bf7cb786c78414030160523717ff4b24d01e698e644b4e5c8513bb20a83e5bf7",
+            "irc_job_id": null,
+            "irc_log_sha256": null
+          },
+          "atom_binding": {
+            "atom_map": [
+              2,
+              1,
+              5,
+              3,
+              6,
+              4
+            ],
+            "charge": 0,
+            "declaration_revision": 4,
+            "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+            "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n",
+            "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n   -1.2428   -0.0990    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0887    0.4059   -0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0690   -0.3024   -0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.1846   -1.1255    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0389    1.5022    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8248    0.3007    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+            "ts_log_sha256": "3f2dc64f7cfa4c3ba34925a9c2b66c925fe937faa85edc6b241b6274918a37e1"
+          },
+          "frequency_analysis": null
+        }
+      ],
+      "stage_records": [
+        {
+          "stage": "declare",
+          "status": "done",
+          "detail": "reaction declared; each calculation requires its own method",
+          "artifacts": [],
+          "source_input_revision": 1
+        },
+        {
+          "stage": "build",
+          "status": "done",
+          "detail": "both endpoints built",
+          "artifacts": [],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "map",
+          "status": "done",
+          "detail": "Concrete endpoint correspondence confirmed and owned by this reaction.",
+          "artifacts": [],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "assemble",
+          "status": "done",
+          "detail": "single component: nothing to assemble (no inter-fragment orientation). The reaction coordinate is whatever the path guess explores",
+          "artifacts": [],
+          "source_input_revision": 3
+        },
+        {
+          "stage": "guess",
+          "status": "done",
+          "detail": "Provided candidate bound; formal optimization and verification remain required.",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0004/provided.xyz",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0004/provenance_0000.log",
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0004/provenance_0001.log"
+          ],
+          "source_input_revision": 4
+        },
+        {
+          "stage": "validate",
+          "status": "done",
+          "detail": "internal validation passed",
+          "artifacts": [],
+          "source_input_revision": 4
+        },
+        {
+          "stage": "submit",
+          "status": "done",
+          "detail": "refinement job 1299 submitted as 'ready' (gaussian, B3LYP); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+          "artifacts": [
+            "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/ts_opt/refine.gjf"
+          ],
+          "source_input_revision": 4
+        },
+        {
+          "stage": "refine",
+          "status": "done",
+          "detail": "refinement sequence complete: ['ts_opt', 'frequency', 'irc', 'reactant_opt', 'reactant_frequency', 'product_opt', 'product_frequency']",
+          "artifacts": [],
+          "source_input_revision": 4
+        },
+        {
+          "stage": "verdict",
+          "status": "done",
+          "detail": "The optimized IRC outer frames did not establish one consistent species identity, source provenance, and endpoint interval proof: IRC interval proof: product minimum could not be aligned to the TS atom order (composition mismatch, no element-consistent assignment, or aligned distance-matrix rmsd above the gate); this combination is undecidable. Optimized endpoint in reactant slot, geometry-perceived SMILES: [H]/N=C\\O; Optimized endpoint in product slot, geometry-perceived SMILES: C#N.O. These observations do not override the failed checks. The candidate stays UNVERIFIED",
+          "artifacts": [],
+          "source_input_revision": 4
+        }
+      ],
+      "reason": "verdict=candidate_only 的唯一原因是 IRC 区间证明：产物臂 10 步只走到 C2-O3=1.82 Å，而产物极小值是 C2-O3=4.21 Å 的 HCN···H2O 弱结合/渐近对，故 IRC 外侧帧与产物极小无法几何对齐（实测帧 vs 产物极小 Kabsch 1.47 Å / 距离矩阵 RMSD 1.68 Å）——这是步数不足，不是化学连接性问题（两端点均已独立复现：reactant -169.744844755 与 INT1c 完全一致、占位 RMSD<1e-4；product -169.720742511 与 job1213 差 2.5e-8 Ha，两端 0 虚频）。因此把 IRC 加长到 MaxPoints=100、StepSize=20，让产物臂真正走到 4.2 Å 的产物极小，其它输入（TS 几何、方法、端点 seed）全部不动。",
+      "input": {
+        "reaction": {
+          "reactant_smiles": "N=C(O)",
+          "product_smiles": "C#N.O",
+          "charge": 0,
+          "multiplicity": 1,
+          "electronic_character": "closed_shell",
+          "selected_candidate": null,
+          "reaction_center": []
+        },
+        "calculations": {
+          "m": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": ""
+          }
+        },
+        "conformers": {
+          "reactant": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/opt/INT1c.xyz",
+            "mol_path": "ts/ts_0042/build/input_0001/reactant/generated_seed.mol",
+            "evidence_refs": [
+              "gold_compute/queue_20261018/results/NR1/jobs/imidic_dNH0_dOH180_optfreq.log"
+            ],
+            "optimization": null
+          },
+          "product": {
+            "kind": "file",
+            "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_P_complex.xyz",
+            "mol_path": null,
+            "evidence_refs": [],
+            "optimization": null
+          },
+          "guidance": {
+            "ring_order": [],
+            "distance_filters": []
+          }
+        },
+        "guess": {
+          "kind": "provided",
+          "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_frame_cand_b.xyz",
+          "evidence_refs": [
+            "gold_compute/queue_20261018/results/NR1/jobs/E4_relax_c1.log",
+            "gold_compute/queue_20261018/results/NR1/jobs/E4_freq_candB.log"
+          ]
+        },
+        "ts_optimization": {
+          "ref": "m"
+        },
+        "verification": {
+          "frequency": {
+            "ref": "m"
+          },
+          "irc": {
+            "engine": "gaussian",
+            "method": "B3LYP",
+            "basis_set": "def2SVP",
+            "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+            "frequency_mode": "auto",
+            "orca_blocks": null,
+            "end_setting": "IRC=(CalcFC,MaxPoints=10,StepSize=10)"
+          },
+          "irc_log": null,
+          "reactant_endpoint": {
+            "seed": {
+              "kind": "file",
+              "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/opt/INT1c.xyz",
+              "mol_path": "ts/ts_0042/build/input_0001/reactant/generated_seed.mol",
+              "evidence_refs": [
+                "gold_compute/queue_20261018/results/NR1/jobs/imidic_dNH0_dOH180_optfreq.log"
+              ]
+            },
+            "optimization": {
+              "ref": "m"
+            },
+            "frequency": {
+              "ref": "m"
+            }
+          },
+          "product_endpoint": {
+            "seed": {
+              "kind": "file",
+              "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_P_complex.xyz",
+              "mol_path": null,
+              "evidence_refs": [
+                "gold_compute/queue_20261018/results/NR1/jobs/NR1_P_complex_optfreq.log"
+              ]
+            },
+            "optimization": {
+              "ref": "m"
+            },
+            "frequency": {
+              "ref": "m"
+            }
+          }
+        },
+        "execution": {
+          "cpus": 4,
+          "memory_mb": 6144,
+          "limits": null
+        }
+      },
+      "structures": {
+        "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABBwAoAAAAAwMGACgAAAADBAgAKAAAAAMCAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBCwABKgIBAAECIAADAAEEAAIFAEIAAAAAQKEAAAABAAAAAQAAAAAGE57Q60/i87+is8wiFFu5vwAAAAAAAAAAyTmxh/axtr/kMm5qoPnZPwAAAAAAAACA1jbF46Ia8T8EH4MVp1rTvwAAAAAAAACAX1/rUiP08r8T8GskCQLyvwAAAAAAAAAA/3ivWpnwoz9zafzCKwn4PwAAAAAAAAAAV9Efmnky/T8D7KNTVz7TPwAAAAAAAAAAPwIAAAAAABIlAwAABgAFAAAAX05hbWUAAAAAAAwAAABfTW9sRmlsZUluZm8AFgAAACAgICAgUkRLaXQgICAgICAgICAgM0QQAAAAX01vbEZpbGVDb21tZW50cwAAAAAAEgAAAF9Nb2xGaWxlQ2hpcmFsRmxhZwIAAAAAFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBzAgAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9vcHQvSU5UMWMueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvZ2VuZXJhdGVkX3NlZWQubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICIwMGJhZjUzNmQyYzUzNjIzNTRhMzc4MWRhY2ZmYjRhZTc2MTZiZjFiNDhmODdmOWQxNGE3ODljYmRhYTMwNjQ2IiwgIm1vbCI6ICJiMzk4Y2U3ZjJlMjIzN2I0YjBjNjc0YWVhYjIzMWNkOTBlNjIxZjcwZTNiYzQ4NDUwODJkYjkxY2UyYTJhNGQ5In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDMvcmVhY3RhbnQvc291cmNlXzAwYmFmNTM2ZDJjNTM2MjMueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDMvcmVhY3RhbnQvc291cmNlX2IzOThjZTdmMmUyMjM3YjQubW9sIn0sICJpbnB1dF9yZXZpc2lvbiI6IDN9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6ewAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQAAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAECAAAAAAAAAAAAAAAAABM7FQAAAAAAAwIDAAABAQAAAQEAAAEBAAABARMW",
+        "product": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABAAAAIABBiAoAAAAAgQHICgAAAACAwEgKAAAAAEBCCAgAAAAAgEgKAAAAAEBASAoAAAAAQELAQAIAwIAAAQDAAUDAEIAAAAAQKEAAAABAAAAAQAAAAAGgv3XuWkTAMDLngQ25+BpvwAAAAAAAAAAvaYHBaVo679p5POKpx6ZPwAAAAAAAACADR07qMS1CMDxYmGInL6evwAAAAAAAAAA1e3sKw+SAUDxETElkui5vwAAAAAAAAAAUB2rlJ6p8z8iHLPsSWDFvwAAAAAAAACAm3RbIhe8AkClvcEXJlPrPwAAAAAAAAAAPwIAAAAAABITAgAAAwANAAAAX0ZpbGVDb21tZW50cwBdAAAATlIxIFAgY29tcGxleCBIQ04uLi5IMk8gbGFzdCBvcmllbnRhdGlvbiBmcm9tIE5SMV9QX2NvbXBsZXhfb3B0ZnJlcS5sb2cgKGxpbmUgNTYzMywgam9iIDEyMTMpFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBbAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9FNF9QX2NvbXBsZXgueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICI4ODczNjkwNmY0YzczYTUzOTkzNzY1NmZjYzk4YzI5ODkyN2JkYmY0OTEzYmIzNTZkODg3ZWU4ZDVmZGZmYzRlIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfODg3MzY5MDZmNGM3M2E1My54eXoifSwgImlucHV0X3JldmlzaW9uIjogMX0fAAAAY2xvdWRyYV9tYXBwaW5nX2JpbmRpbmdfZGVyaXZlZAMBEzp7AAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAAAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAAAAAAAAExY=",
+        "product_to_reactant": [
+          1,
+          0,
+          4,
+          2,
+          5,
+          3
+        ],
+        "candidate": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABBwAoAAAAAwMGACgAAAADBAgAKAAAAAMCAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBCwABKgIBAAECIAADAAEEAAIFAEIAAAAAQKEAAAABAAAAAQAAAAAGEHaKVYMwhz/dXtIYrWP2PwAAAAAAAAAAaksd5PVgwL9DxqNUwhPKPwAAAAAAAAAA5KHvbmWJ+j/A6V28H7fRvwAAAAAAAAAAUvAUcqVe9T/9vKlIhTHyPwAAAAAAAAAAbt3NUx1y6L9dixagbbXlvwAAAAAAAAAAgC2vXG+7AUC7Cb5p+izxvwAAAAAAAAAAPwIAAAAAABIlAwAABgAFAAAAX05hbWUAAAAAAAwAAABfTW9sRmlsZUluZm8AFgAAACAgICAgUkRLaXQgICAgICAgICAgM0QQAAAAX01vbEZpbGVDb21tZW50cwAAAAAAEgAAAF9Nb2xGaWxlQ2hpcmFsRmxhZwIAAAAAFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBzAgAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9vcHQvSU5UMWMueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvZ2VuZXJhdGVkX3NlZWQubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICIwMGJhZjUzNmQyYzUzNjIzNTRhMzc4MWRhY2ZmYjRhZTc2MTZiZjFiNDhmODdmOWQxNGE3ODljYmRhYTMwNjQ2IiwgIm1vbCI6ICJiMzk4Y2U3ZjJlMjIzN2I0YjBjNjc0YWVhYjIzMWNkOTBlNjIxZjcwZTNiYzQ4NDUwODJkYjkxY2UyYTJhNGQ5In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDMvcmVhY3RhbnQvc291cmNlXzAwYmFmNTM2ZDJjNTM2MjMueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDMvcmVhY3RhbnQvc291cmNlX2IzOThjZTdmMmUyMjM3YjQubW9sIn0sICJpbnB1dF9yZXZpc2lvbiI6IDN9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6ewAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQAAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAECAAAAAAAAAAAAAAAAABM7FQAAAAAAAwIDAAABAQAAAQEAAAEBAAABARMW"
+      },
+      "provided_guess_binding": {
+        "xyz": {
+          "source_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NR1/geoms/E4_frame_cand_b.xyz",
+          "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0004/provided.xyz",
+          "sha256": "7bc3bf96dddb629b3312179c1d4d86eb0a3a70cc7fcf6dff321e666b56727a6e"
+        },
+        "evidence": [
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NR1/jobs/E4_relax_c1.log",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0004/provenance_0000.log",
+            "sha256": "483d4588eefb462c3113e871dc85fca096c72ee27e9c0235973ba2ff933f2aad"
+          },
+          {
+            "source_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NR1/jobs/E4_freq_candB.log",
+            "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0004/provenance_0001.log",
+            "sha256": "867299a4592b4f4a80818dfdf97dc16a4bb407f206e2d513a3148f2fb83c192b"
+          }
+        ]
+      },
+      "terminal": "candidate_only",
+      "blocked": null,
+      "failed_attempt": null,
+      "stop_reason": null
+    }
+  ],
+  "catalog_id": null,
+  "partition_revision": null,
+  "candidate_attempts": [],
+  "cards_path": "",
+  "product_seed_candidate_id": null,
+  "selected_candidate_id": null,
+  "run_dir": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042",
+  "workspace_dir": "/home/ly/Cloudra-mechanism-agent",
+  "owner_conversation_id": "prj_244c6a3512cb4e52",
+  "owner_session_id": "as_ebc2eac267254580",
+  "input": {
+    "reaction": {
+      "reactant_smiles": "N=C(O)",
+      "product_smiles": "C#N.O",
+      "charge": 0,
+      "multiplicity": 1,
+      "electronic_character": "closed_shell",
+      "selected_candidate": null,
+      "reaction_center": []
+    },
+    "calculations": {
+      "m": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      }
+    },
+    "conformers": {
+      "reactant": {
+        "kind": "file",
+        "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/opt/INT1c.xyz",
+        "mol_path": "ts/ts_0042/build/input_0001/reactant/generated_seed.mol",
+        "evidence_refs": [
+          "gold_compute/queue_20261018/results/NR1/jobs/imidic_dNH0_dOH180_optfreq.log"
+        ],
+        "optimization": null
+      },
+      "product": {
+        "kind": "file",
+        "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_P_complex.xyz",
+        "mol_path": null,
+        "evidence_refs": [],
+        "optimization": null
+      },
+      "guidance": {
+        "ring_order": [],
+        "distance_filters": []
+      }
+    },
+    "guess": {
+      "kind": "provided",
+      "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_frame_cand_b.xyz",
+      "evidence_refs": [
+        "gold_compute/queue_20261018/results/NR1/jobs/E4_relax_c1.log",
+        "gold_compute/queue_20261018/results/NR1/jobs/E4_freq_candB.log"
+      ]
+    },
+    "ts_optimization": {
+      "ref": "m"
+    },
+    "verification": {
+      "frequency": {
+        "ref": "m"
+      },
+      "irc": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": "IRC=(CalcFC,MaxPoints=100,StepSize=20)"
+      },
+      "irc_log": null,
+      "reactant_endpoint": {
+        "seed": {
+          "kind": "file",
+          "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/opt/INT1c.xyz",
+          "mol_path": "ts/ts_0042/build/input_0001/reactant/generated_seed.mol",
+          "evidence_refs": [
+            "gold_compute/queue_20261018/results/NR1/jobs/imidic_dNH0_dOH180_optfreq.log"
+          ]
+        },
+        "optimization": {
+          "ref": "m"
+        },
+        "frequency": {
+          "ref": "m"
+        }
+      },
+      "product_endpoint": {
+        "seed": {
+          "kind": "file",
+          "xyz_path": "gold_compute/queue_20261018/results/NR1/geoms/E4_P_complex.xyz",
+          "mol_path": null,
+          "evidence_refs": [
+            "gold_compute/queue_20261018/results/NR1/jobs/NR1_P_complex_optfreq.log"
+          ]
+        },
+        "optimization": {
+          "ref": "m"
+        },
+        "frequency": {
+          "ref": "m"
+        }
+      }
+    },
+    "execution": {
+      "cpus": 4,
+      "memory_mb": 6144,
+      "limits": null
+    }
+  },
+  "structures": {
+    "reactant": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABBwAoAAAAAwMGACgAAAADBAgAKAAAAAMCAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBCwABKgIBAAECIAADAAEEAAIFAEIAAAAAQKEAAAABAAAAAQAAAAAGE57Q60/i87+is8wiFFu5vwAAAAAAAAAAyTmxh/axtr/kMm5qoPnZPwAAAAAAAACA1jbF46Ia8T8EH4MVp1rTvwAAAAAAAACAX1/rUiP08r8T8GskCQLyvwAAAAAAAAAA/3ivWpnwoz9zafzCKwn4PwAAAAAAAAAAV9Efmnky/T8D7KNTVz7TPwAAAAAAAAAAPwIAAAAAABIlAwAABgAFAAAAX05hbWUAAAAAAAwAAABfTW9sRmlsZUluZm8AFgAAACAgICAgUkRLaXQgICAgICAgICAgM0QQAAAAX01vbEZpbGVDb21tZW50cwAAAAAAEgAAAF9Nb2xGaWxlQ2hpcmFsRmxhZwIAAAAAFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBzAgAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9vcHQvSU5UMWMueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvZ2VuZXJhdGVkX3NlZWQubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICIwMGJhZjUzNmQyYzUzNjIzNTRhMzc4MWRhY2ZmYjRhZTc2MTZiZjFiNDhmODdmOWQxNGE3ODljYmRhYTMwNjQ2IiwgIm1vbCI6ICJiMzk4Y2U3ZjJlMjIzN2I0YjBjNjc0YWVhYjIzMWNkOTBlNjIxZjcwZTNiYzQ4NDUwODJkYjkxY2UyYTJhNGQ5In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDMvcmVhY3RhbnQvc291cmNlXzAwYmFmNTM2ZDJjNTM2MjMueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDMvcmVhY3RhbnQvc291cmNlX2IzOThjZTdmMmUyMjM3YjQubW9sIn0sICJpbnB1dF9yZXZpc2lvbiI6IDN9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6ewAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQAAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAECAAAAAAAAAAAAAAAAABM7FQAAAAAAAwIDAAABAQAAAQEAAAEBAAABARMW",
+    "product": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABAAAAIABBiAoAAAAAgQHICgAAAACAwEgKAAAAAEBCCAgAAAAAgEgKAAAAAEBASAoAAAAAQELAQAIAwIAAAQDAAUDAEIAAAAAQKEAAAABAAAAAQAAAAAGgv3XuWkTAMDLngQ25+BpvwAAAAAAAAAAvaYHBaVo679p5POKpx6ZPwAAAAAAAACADR07qMS1CMDxYmGInL6evwAAAAAAAAAA1e3sKw+SAUDxETElkui5vwAAAAAAAAAAUB2rlJ6p8z8iHLPsSWDFvwAAAAAAAACAm3RbIhe8AkClvcEXJlPrPwAAAAAAAAAAPwIAAAAAABITAgAAAwANAAAAX0ZpbGVDb21tZW50cwBdAAAATlIxIFAgY29tcGxleCBIQ04uLi5IMk8gbGFzdCBvcmllbnRhdGlvbiBmcm9tIE5SMV9QX2NvbXBsZXhfb3B0ZnJlcS5sb2cgKGxpbmUgNTYzMywgam9iIDEyMTMpFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBbAQAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9FNF9QX2NvbXBsZXgueHl6In0sICJoYXNoZXMiOiB7Inh5eiI6ICI4ODczNjkwNmY0YzczYTUzOTkzNzY1NmZjYzk4YzI5ODkyN2JkYmY0OTEzYmIzNTZkODg3ZWU4ZDVmZGZmYzRlIn0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDEvcHJvZHVjdC9zb3VyY2VfODg3MzY5MDZmNGM3M2E1My54eXoifSwgImlucHV0X3JldmlzaW9uIjogMX0fAAAAY2xvdWRyYV9tYXBwaW5nX2JpbmRpbmdfZGVyaXZlZAMBEzp7AAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAAAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAEBAAAAAAAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQIAAAAAAAAAAAAAExY=",
+    "product_to_reactant": [
+      1,
+      0,
+      4,
+      2,
+      5,
+      3
+    ],
+    "candidate": "776t3gAAAAAQAAAAAwAAAAAAAAAGAAAABQAAAIABBwAoAAAAAwMGACgAAAADBAgAKAAAAAMCAQAoAAAAAQEBACgAAAABAQEAKAAAAAEBCwABKgIBAAECIAADAAEEAAIFAEIAAAAAQKEAAAABAAAAAQAAAAAGEHaKVYMwhz/dXtIYrWP2PwAAAAAAAAAAaksd5PVgwL9DxqNUwhPKPwAAAAAAAAAA5KHvbmWJ+j/A6V28H7fRvwAAAAAAAAAAUvAUcqVe9T/9vKlIhTHyPwAAAAAAAAAAbt3NUx1y6L9dixagbbXlvwAAAAAAAAAAgC2vXG+7AUC7Cb5p+izxvwAAAAAAAAAAPwIAAAAAABIlAwAABgAFAAAAX05hbWUAAAAAAAwAAABfTW9sRmlsZUluZm8AFgAAACAgICAgUkRLaXQgICAgICAgICAgM0QQAAAAX01vbEZpbGVDb21tZW50cwAAAAAAEgAAAF9Nb2xGaWxlQ2hpcmFsRmxhZwIAAAAAFQAAAGNsb3VkcmFfaW1wb3J0X3NvdXJjZQBzAgAAeyJwYXRocyI6IHsieHl6IjogIi9ob21lL2x5L0Nsb3VkcmEtbWVjaGFuaXNtLWFnZW50L2dvbGRfY29tcHV0ZS9xdWV1ZV8yMDI2MTAxOC9yZXN1bHRzL05SMS9nZW9tcy9vcHQvSU5UMWMueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDEvcmVhY3RhbnQvZ2VuZXJhdGVkX3NlZWQubW9sIn0sICJoYXNoZXMiOiB7Inh5eiI6ICIwMGJhZjUzNmQyYzUzNjIzNTRhMzc4MWRhY2ZmYjRhZTc2MTZiZjFiNDhmODdmOWQxNGE3ODljYmRhYTMwNjQ2IiwgIm1vbCI6ICJiMzk4Y2U3ZjJlMjIzN2I0YjBjNjc0YWVhYjIzMWNkOTBlNjIxZjcwZTNiYzQ4NDUwODJkYjkxY2UyYTJhNGQ5In0sICJzbmFwc2hvdHMiOiB7Inh5eiI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDMvcmVhY3RhbnQvc291cmNlXzAwYmFmNTM2ZDJjNTM2MjMueHl6IiwgIm1vbCI6ICIvaG9tZS9seS9DbG91ZHJhLW1lY2hhbmlzbS1hZ2VudC90cy90c18wMDQyL2J1aWxkL2lucHV0XzAwMDMvcmVhY3RhbnQvc291cmNlX2IzOThjZTdmMmUyMjM3YjQubW9sIn0sICJpbnB1dF9yZXZpc2lvbiI6IDN9HwAAAGNsb3VkcmFfbWFwcGluZ19iaW5kaW5nX2Rlcml2ZWQDARM6ewAAAAEAGgAAAGNsb3VkcmFfc21pbGVzX2hlYXZ5X2luZGV4AQAAAAAAAQAaAAAAY2xvdWRyYV9zbWlsZXNfaGVhdnlfaW5kZXgBAQAAAAABABoAAABjbG91ZHJhX3NtaWxlc19oZWF2eV9pbmRleAECAAAAAAAAAAAAAAAAABM7FQAAAAAAAwIDAAABAQAAAQEAAAEBAAABARMW"
+  },
+  "provided_guess_binding": {
+    "xyz": {
+      "source_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NR1/geoms/E4_frame_cand_b.xyz",
+      "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0004/provided.xyz",
+      "sha256": "7bc3bf96dddb629b3312179c1d4d86eb0a3a70cc7fcf6dff321e666b56727a6e"
+    },
+    "evidence": [
+      {
+        "source_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NR1/jobs/E4_relax_c1.log",
+        "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0004/provenance_0000.log",
+        "sha256": "483d4588eefb462c3113e871dc85fca096c72ee27e9c0235973ba2ff933f2aad"
+      },
+      {
+        "source_path": "/home/ly/Cloudra-mechanism-agent/gold_compute/queue_20261018/results/NR1/jobs/E4_freq_candB.log",
+        "snapshot_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0004/provenance_0001.log",
+        "sha256": "867299a4592b4f4a80818dfdf97dc16a4bb407f206e2d513a3148f2fb83c192b"
+      }
+    ]
+  },
+  "failed_attempt": null,
+  "method_checks": {
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0001/frequency/frequency.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 1,
+      "matched": true,
+      "purpose": "frequency",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0001/ts_opt/refine.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 1,
+      "matched": true,
+      "purpose": "ts_opt",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0002/irc/irc.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "IRC=(CalcFC,MaxPoints=10,StepSize=10)",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 2,
+      "matched": true,
+      "purpose": "irc",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/frequency/frequency.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 4,
+      "matched": true,
+      "purpose": "frequency",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/irc/irc.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "IRC=(CalcFC,MaxPoints=10,StepSize=10)",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 4,
+      "matched": true,
+      "purpose": "irc",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/product_frequency/product_frequency.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 4,
+      "matched": true,
+      "purpose": "product_frequency",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/product_opt/product_opt.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 4,
+      "matched": true,
+      "purpose": "product_opt",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/reactant_frequency/reactant_frequency.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 4,
+      "matched": true,
+      "purpose": "reactant_frequency",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/reactant_opt/reactant_opt.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 4,
+      "matched": true,
+      "purpose": "reactant_opt",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/ts_opt/refine.gjf": {
+      "actual": {
+        "basis_set": "def2SVP",
+        "end_setting": "",
+        "engine": "gaussian",
+        "frequency_mode": "auto",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "method": "B3LYP",
+        "orca_blocks": null
+      },
+      "differences": [],
+      "input_revision": 4,
+      "matched": true,
+      "purpose": "ts_opt",
+      "source": "stage_declaration"
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0005/irc/irc.gjf": {
+      "input_revision": 5,
+      "purpose": "irc",
+      "actual": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": "IRC=(CalcFC,MaxPoints=100,StepSize=20)"
+      },
+      "source": "stage_declaration",
+      "differences": [],
+      "matched": true
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0005/reactant_opt/reactant_opt.gjf": {
+      "input_revision": 5,
+      "purpose": "reactant_opt",
+      "actual": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source": "stage_declaration",
+      "differences": [],
+      "matched": true
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0005/reactant_frequency/reactant_frequency.gjf": {
+      "input_revision": 5,
+      "purpose": "reactant_frequency",
+      "actual": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source": "stage_declaration",
+      "differences": [],
+      "matched": true
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0005/product_opt/product_opt.gjf": {
+      "input_revision": 5,
+      "purpose": "product_opt",
+      "actual": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source": "stage_declaration",
+      "differences": [],
+      "matched": true
+    },
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0005/product_frequency/product_frequency.gjf": {
+      "input_revision": 5,
+      "purpose": "product_frequency",
+      "actual": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source": "stage_declaration",
+      "differences": [],
+      "matched": true
+    }
+  },
+  "stage": "verdict",
+  "stage_records": [
+    {
+      "stage": "declare",
+      "status": "done",
+      "detail": "reaction declared; each calculation requires its own method",
+      "artifacts": [],
+      "source_input_revision": 1
+    },
+    {
+      "stage": "build",
+      "status": "done",
+      "detail": "both endpoints built",
+      "artifacts": [],
+      "source_input_revision": 3
+    },
+    {
+      "stage": "map",
+      "status": "done",
+      "detail": "Concrete endpoint correspondence confirmed and owned by this reaction.",
+      "artifacts": [],
+      "source_input_revision": 3
+    },
+    {
+      "stage": "assemble",
+      "status": "done",
+      "detail": "single component: nothing to assemble (no inter-fragment orientation). The reaction coordinate is whatever the path guess explores",
+      "artifacts": [],
+      "source_input_revision": 3
+    },
+    {
+      "stage": "guess",
+      "status": "done",
+      "detail": "Provided candidate bound; formal optimization and verification remain required.",
+      "artifacts": [
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0004/provided.xyz",
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0004/provenance_0000.log",
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0004/provenance_0001.log"
+      ],
+      "source_input_revision": 4
+    },
+    {
+      "stage": "validate",
+      "status": "done",
+      "detail": "internal validation passed",
+      "artifacts": [],
+      "source_input_revision": 4
+    },
+    {
+      "stage": "submit",
+      "status": "done",
+      "detail": "refinement job 1299 submitted as 'ready' (gaussian, B3LYP); the scheduler daemon claims it and its terminal state arrives through the existing compute notification path",
+      "artifacts": [
+        "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/ts_opt/refine.gjf"
+      ],
+      "source_input_revision": 4
+    },
+    {
+      "stage": "refine",
+      "status": "done",
+      "detail": "refinement sequence complete: ['ts_opt', 'frequency', 'irc', 'reactant_opt', 'reactant_frequency', 'product_opt', 'product_frequency']",
+      "artifacts": [],
+      "source_input_revision": 5
+    },
+    {
+      "stage": "verdict",
+      "status": "done",
+      "detail": "The optimized IRC outer frames did not establish one consistent species identity, source provenance, and endpoint interval proof: IRC interval proof: product minimum could not be aligned to the TS atom order (composition mismatch, no element-consistent assignment, or aligned distance-matrix rmsd above the gate); this combination is undecidable. Optimized endpoint in reactant slot, geometry-perceived SMILES: [H]/N=C\\O; Optimized endpoint in product slot, geometry-perceived SMILES: C#N.O. These observations do not override the failed checks. The candidate stays UNVERIFIED",
+      "artifacts": [],
+      "source_input_revision": 5
+    }
+  ],
+  "terminal": "candidate_only",
+  "stop_reason": null,
+  "blocked": null,
+  "intervention_count": 4,
+  "path_kind": "provided",
+  "guidance_attempt": 0,
+  "active_attempt_dir": "",
+  "guidance_manifest_path": "",
+  "job_id": 1299,
+  "job_input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/ts_opt/refine.gjf",
+  "waiting_for": "",
+  "scan_step": null,
+  "job_steps": [
+    {
+      "purpose": "ts_opt",
+      "job_id": 1299,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/ts_opt/refine.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 4,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": null,
+      "atom_binding": {
+        "atom_map": [
+          2,
+          1,
+          5,
+          3,
+          6,
+          4
+        ],
+        "charge": 0,
+        "declaration_revision": 4,
+        "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+        "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n",
+        "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n   -1.2428   -0.0990    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0887    0.4059   -0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0690   -0.3024   -0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.1846   -1.1255    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0389    1.5022    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8248    0.3007    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+        "ts_log_sha256": null
+      },
+      "frequency_analysis": null
+    },
+    {
+      "purpose": "frequency",
+      "job_id": 1300,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/frequency/frequency.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 4,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": null,
+      "atom_binding": {
+        "atom_map": [
+          2,
+          1,
+          5,
+          3,
+          6,
+          4
+        ],
+        "charge": 0,
+        "declaration_revision": 4,
+        "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+        "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n",
+        "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n   -1.2428   -0.0990    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0887    0.4059   -0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0690   -0.3024   -0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.1846   -1.1255    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0389    1.5022    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8248    0.3007    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+        "ts_log_sha256": null
+      },
+      "frequency_analysis": {
+        "fraction_basis": "unweighted_squared_displacement",
+        "log_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/frequency/frequency.log",
+        "log_sha256": "3f2dc64f7cfa4c3ba34925a9c2b66c925fe937faa85edc6b241b6274918a37e1",
+        "mode_alignment": {
+          "aligned": null,
+          "details": [
+            "Global max relative-displacement pair=(2,4)"
+          ],
+          "message": "No watch_pairs provided; skipping the imaginary-mode vs reaction-coordinate alignment check.",
+          "status": "skipped"
+        },
+        "modes": [
+          {
+            "frequency_cm": -1923.6069,
+            "heavy_atom_fraction": 0.01150575287643822,
+            "top_displaced_atoms": [
+              {
+                "atom": 4,
+                "element": "H",
+                "fraction": 0.9753876938469235
+              },
+              {
+                "atom": 2,
+                "element": "C",
+                "fraction": 0.008204102051025513
+              },
+              {
+                "atom": 6,
+                "element": "H",
+                "fraction": 0.006603301650825415
+              },
+              {
+                "atom": 5,
+                "element": "H",
+                "fraction": 0.006503251625812908
+              },
+              {
+                "atom": 3,
+                "element": "O",
+                "fraction": 0.0020010005002501254
+              }
+            ],
+            "top_displaced_pairs": [
+              [
+                3,
+                4,
+                0.9035520031772154
+              ],
+              [
+                4,
+                6,
+                0.8752622961567559
+              ],
+              [
+                1,
+                4,
+                0.848236743582788
+              ],
+              [
+                2,
+                4,
+                0.1855691026182619
+              ],
+              [
+                2,
+                3,
+                0.12055262873454735
+              ]
+            ],
+            "watch_atom_fraction": null,
+            "watch_pair_fraction": null
+          }
+        ],
+        "reaction_center_pairs": []
+      }
+    },
+    {
+      "purpose": "irc",
+      "job_id": 1308,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0005/irc/irc.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": "IRC=(CalcFC,MaxPoints=100,StepSize=20)"
+      },
+      "source_input_revision": 5,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": null,
+      "atom_binding": {
+        "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+        "declaration_revision": 5,
+        "atom_map": [
+          2,
+          1,
+          5,
+          3,
+          6,
+          4
+        ],
+        "charge": 0,
+        "ts_log_sha256": "3f2dc64f7cfa4c3ba34925a9c2b66c925fe937faa85edc6b241b6274918a37e1",
+        "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n   -1.2428   -0.0990    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0887    0.4059   -0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0690   -0.3024   -0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.1846   -1.1255    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0389    1.5022    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8248    0.3007    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+        "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n"
+      },
+      "frequency_analysis": null
+    },
+    {
+      "purpose": "reactant_opt",
+      "job_id": 1309,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0005/reactant_opt/reactant_opt.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 5,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": {
+        "kind": "species_reference",
+        "label": "reactant",
+        "source_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0005/reactant_opt/reactant_source.xyz",
+        "sha256": "52554b80c6abd79312ea0265e8b417047ce9066334a8eb0b3057205181e6bce2",
+        "irc_job_id": null,
+        "irc_log_sha256": null
+      },
+      "atom_binding": {
+        "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+        "declaration_revision": 5,
+        "atom_map": [
+          2,
+          1,
+          5,
+          3,
+          6,
+          4
+        ],
+        "charge": 0,
+        "ts_log_sha256": "3f2dc64f7cfa4c3ba34925a9c2b66c925fe937faa85edc6b241b6274918a37e1",
+        "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n   -1.2428   -0.0990    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0887    0.4059   -0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0690   -0.3024   -0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.1846   -1.1255    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0389    1.5022    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8248    0.3007    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+        "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n"
+      },
+      "frequency_analysis": null
+    },
+    {
+      "purpose": "reactant_frequency",
+      "job_id": 1310,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0005/reactant_frequency/reactant_frequency.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 5,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": {
+        "kind": "species_reference",
+        "label": "reactant",
+        "source_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0005/reactant_opt/reactant_source.xyz",
+        "sha256": "52554b80c6abd79312ea0265e8b417047ce9066334a8eb0b3057205181e6bce2",
+        "irc_job_id": null,
+        "irc_log_sha256": null
+      },
+      "atom_binding": {
+        "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+        "declaration_revision": 5,
+        "atom_map": [
+          2,
+          1,
+          5,
+          3,
+          6,
+          4
+        ],
+        "charge": 0,
+        "ts_log_sha256": "3f2dc64f7cfa4c3ba34925a9c2b66c925fe937faa85edc6b241b6274918a37e1",
+        "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n   -1.2428   -0.0990    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0887    0.4059   -0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0690   -0.3024   -0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.1846   -1.1255    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0389    1.5022    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8248    0.3007    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+        "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n"
+      },
+      "frequency_analysis": null
+    },
+    {
+      "purpose": "product_opt",
+      "job_id": 1311,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0005/product_opt/product_opt.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 5,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": {
+        "kind": "species_reference",
+        "label": "product",
+        "source_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0005/product_opt/product_source.xyz",
+        "sha256": "bf7cb786c78414030160523717ff4b24d01e698e644b4e5c8513bb20a83e5bf7",
+        "irc_job_id": null,
+        "irc_log_sha256": null
+      },
+      "atom_binding": {
+        "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+        "declaration_revision": 5,
+        "atom_map": [
+          2,
+          1,
+          5,
+          3,
+          6,
+          4
+        ],
+        "charge": 0,
+        "ts_log_sha256": "3f2dc64f7cfa4c3ba34925a9c2b66c925fe937faa85edc6b241b6274918a37e1",
+        "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n   -1.2428   -0.0990    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0887    0.4059   -0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0690   -0.3024   -0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.1846   -1.1255    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0389    1.5022    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8248    0.3007    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+        "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n"
+      },
+      "frequency_analysis": null
+    },
+    {
+      "purpose": "product_frequency",
+      "job_id": 1312,
+      "input_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0005/product_frequency/product_frequency.gjf",
+      "state": "done",
+      "actual_calculation": {
+        "engine": "gaussian",
+        "method": "B3LYP",
+        "basis_set": "def2SVP",
+        "keywords": "EmpiricalDispersion=GD3BJ Int(UltraFine) SCF=Tight",
+        "frequency_mode": "auto",
+        "orca_blocks": null,
+        "end_setting": ""
+      },
+      "source_input_revision": 5,
+      "method_contract": null,
+      "stage_key": null,
+      "external_source": null,
+      "endpoint_source": {
+        "kind": "species_reference",
+        "label": "product",
+        "source_path": "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0005/product_opt/product_source.xyz",
+        "sha256": "bf7cb786c78414030160523717ff4b24d01e698e644b4e5c8513bb20a83e5bf7",
+        "irc_job_id": null,
+        "irc_log_sha256": null
+      },
+      "atom_binding": {
+        "process_id": "7a17cefc6f8a51a1e63d05844205cb50010d2ceffe5f84aee92f7987b64b8ad9",
+        "declaration_revision": 5,
+        "atom_map": [
+          2,
+          1,
+          5,
+          3,
+          6,
+          4
+        ],
+        "charge": 0,
+        "ts_log_sha256": "3f2dc64f7cfa4c3ba34925a9c2b66c925fe937faa85edc6b241b6274918a37e1",
+        "reactant_mol": "\n     RDKit          3D\n\n  6  5  0  0  0  0  0  0  0  0999 V2000\n   -1.2428   -0.0990    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.0887    0.4059   -0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.0690   -0.3024   -0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.1846   -1.1255    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.0389    1.5022    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.8248    0.3007    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  2  3\n  2  3  1  0\n  1  4  1  0\n  2  5  1  0\n  3  6  1  0\nM  END\n",
+        "product_mol": "\n     RDKit          3D\n\n  6  4  0  0  0  0  0  0  0  0999 V2000\n   -2.0095   -0.0032    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8565    0.0245   -0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.0888   -0.0300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1963   -0.1012    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.2289   -0.1670   -0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.3418    0.8539    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n  2  1  3  0\n  3  1  1  0\n  5  4  1  0\n  6  4  1  0\nM  END\n"
+      },
+      "frequency_analysis": null
+    }
+  ],
+  "evidence_candidates": [
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0004/provided.xyz",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0004/provenance_0000.log",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/path/input_0004/provenance_0001.log",
+    "/home/ly/Cloudra-mechanism-agent/ts/ts_0042/jobs/declaration_0004/ts_opt/refine.gjf"
+  ],
+  "revision": 90
+}

@@ -1,0 +1,129 @@
+{
+  "trajectory_id": "frag0-mmff94-attempt1",
+  "component_id": "frag0",
+  "attempt": 1,
+  "engine": "MMFF94",
+  "symbols": [
+    "N",
+    "C",
+    "O",
+    "O",
+    "H",
+    "H",
+    "H"
+  ],
+  "random_seed": 42,
+  "frame_count": 381,
+  "iterations": 380,
+  "initial_frame": {
+    "step": 0,
+    "symbols": [
+      "N",
+      "C",
+      "O",
+      "O",
+      "H",
+      "H",
+      "H"
+    ],
+    "positions": [
+      [
+        -1.1042590455950434,
+        -0.14308242061833099,
+        -0.008031759231825163
+      ],
+      [
+        0.2568743050060315,
+        0.2903424032889658,
+        -0.04688573013069499
+      ],
+      [
+        0.5888545195503204,
+        1.4617165033886221,
+        -0.3052265453283356
+      ],
+      [
+        1.2316717182834769,
+        -0.6588412296530562,
+        0.21945194367927123
+      ],
+      [
+        -1.6556922923374793,
+        0.12081027519633072,
+        0.8159004383540476
+      ],
+      [
+        -1.5164658661082857,
+        -0.7035815244300596,
+        -0.7856169567134589
+      ],
+      [
+        2.1990166612009827,
+        -0.367364007172474,
+        0.11040860937099768
+      ]
+    ],
+    "energy": -72.44401981304514,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 46.48755959644865
+  },
+  "final_frame": {
+    "step": 380,
+    "symbols": [
+      "N",
+      "C",
+      "O",
+      "O",
+      "H",
+      "H",
+      "H"
+    ],
+    "positions": [
+      [
+        -1.0116952835123838,
+        -0.1329380414564057,
+        0.0007559058310709824
+      ],
+      [
+        0.2582233974424593,
+        0.294065746070514,
+        0.05871696370783124
+      ],
+      [
+        0.6389708934613777,
+        1.4217015501709438,
+        0.3001875985832452
+      ],
+      [
+        1.1000362883946586,
+        -0.7115031922890713,
+        -0.19190783036726639
+      ],
+      [
+        -1.7651279273443308,
+        0.5160257992810628,
+        0.16742852262917932
+      ],
+      [
+        -1.2001739306594805,
+        -1.0999624451891479,
+        -0.21236191173708097
+      ],
+      [
+        1.9797665622177016,
+        -0.2873894165879036,
+        -0.12281924864697724
+      ]
+    ],
+    "energy": -105.27287957677378,
+    "energy_unit": "kcal/mol",
+    "max_gradient": 0.01034669878109875
+  },
+  "convergence_code": 0,
+  "status": "converged",
+  "failure": "",
+  "notes": [],
+  "frames_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/N_HNCO/geom/structure_build/carbamic_raw/trajectories/frag0-mmff94-attempt1/frames.xyz",
+  "frames_jsonl_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/N_HNCO/geom/structure_build/carbamic_raw/trajectories/frag0-mmff94-attempt1/frames.jsonl",
+  "json_path": "/home/ly/Cloudra-mechanism-agent/gold_fill_20261018/N_HNCO/geom/structure_build/carbamic_raw/trajectories/frag0-mmff94-attempt1/trajectory.json"
+}
