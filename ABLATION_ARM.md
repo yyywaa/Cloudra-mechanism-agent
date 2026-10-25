@@ -66,3 +66,13 @@ available. Helpers are stubbed; no chemistry calculation is launched.
 facts, execution failures, protocol limits, raw ledger/export separation,
 workspace-scoped durable reads and unchanged standalone reads. They do not
 constitute a paid benchmark run or full-repository acceptance.
+
+## Common basic delivery check
+
+All four arms require a parseable `mechanism_graph.json` at the workspace
+root before final delivery. Missing files and format errors are returned
+to the research agent for repair. The shared check does not evaluate
+scientific evidence, write the graph, or change each arm's scientific
+acceptance rules. Background waits, child/peer tasks and actual user
+cancellation retain their existing behavior. Runs made before this fix
+must remain separate from runs made with the updated commits.
