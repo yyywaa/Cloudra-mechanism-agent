@@ -7,8 +7,9 @@ Synchronized with master `8c568ca6753ecf2cd40a90a8f0f8b5c8e19dd1d2`.
   (`ABLATION_ARM` in `cloudra/benchmark/runner.py`).
 - Tools, mechanism graph and agent-invoked chemistry verification stay.
 - No supervisor review (already absent in this mode).
-- The stop gate is advisory: `complete` and `partial` both end the run without
-  required scientific coverage, a delivery artifact or endpoint-evidence publication.
+- The scientific stop gate is advisory: `complete` and `partial` do not require
+  scientific coverage or endpoint-evidence publication. The common basic
+  delivery check still requires a parseable mechanism_graph.json.
 - The recorded basis is `declared` for complete (verification label `unverified`)
   and `partial_recorded` for partial (label `partial`), never `dag_verified`.
   The scientific report still records missing evidence honestly.
@@ -52,3 +53,12 @@ LLM runner, and socket connections are prohibited.
 malformed delivery artifacts, honest completion labels and retained operational
 safeguards, using only temporary local databases.
 
+## Common basic delivery check
+
+All four arms require a parseable `mechanism_graph.json` at the workspace
+root before final delivery. Missing files and format errors are returned
+to the research agent for repair. The shared check does not evaluate
+scientific evidence, write the graph, or change each arm's scientific
+acceptance rules. Background waits, child/peer tasks and actual user
+cancellation retain their existing behavior. Runs made before this fix
+must remain separate from runs made with the updated commits.

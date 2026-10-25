@@ -71,7 +71,9 @@ class _DeliveredNode(MechanismNode):
         # 时，以 type 的映射值为 role；自由文本并进 label，不丢信息。role 本身
         # 是合法枚举值时不动；type 也映射不了则留原样，让校验 fail-loud。
         alias = _NODE_TYPE_ALIASES.get(str(data.get("type") or "").strip().lower())
-        if alias is not None and data.get("role") not in {r.value for r in NodeRole}:
+        role = data.get("role")
+        # 别名只补缺省/自由文本；列表等错误类型交给 Pydantic 指明字段。
+        if alias is not None and (role is None or isinstance(role, str)) and role not in {r.value for r in NodeRole}:
             free_text = str(data["role"]).strip() if data.get("role") is not None else ""
             if free_text:
                 label = str(data.get("label") or "").strip()
@@ -169,29 +171,35 @@ def find_graph_json(sandbox: Path) -> Optional[Path]:
     return None
 
 
-def load_delivered_graph(path: Path) -> Optional[GoldMechanismGraph]:
-    """Parse a delivered graph JSON into GoldMechanismGraph.
+def parse_delivered_graph(data: object) -> GoldMechanismGraph:
+    """解析共用交付格式，保留字段错误供收尾检查反馈给模型。
 
     交付侧宽松加载（Postel）：agent 多写的键（energy/metadata 等）忽略、
     边缺 id 自动补；gold 侧仍由 strict schema 约束。端点引用完整性由
     GoldMechanismGraph 的 validator 把关：悬空 from/to/via → 校验失败、
-    返回 None（不可解析），不再静默造幽灵节点进图比较。"""
+    不再静默造幽灵节点进图比较。此处只检查格式，不判断科学交付是否完整。"""
+    if not isinstance(data, dict):
+        raise ValueError("Delivery graph must be a JSON object.")
+    if "nodes" not in data or not isinstance(data["nodes"], list):
+        raise ValueError("Delivery graph requires a nodes list.")
+    if not isinstance(data.get("edges", []), list):
+        raise ValueError("Delivery graph edges must be a list.")
+    nodes = [_DeliveredNode.model_validate(n) for n in data["nodes"]]
+    edges = [_DeliveredEdge.model_validate(e) for e in data.get("edges", [])]
+    return GoldMechanismGraph(
+        nodes=[MechanismNode(**n.model_dump()) for n in nodes],
+        edges=[
+            MechanismEdge(**(e.model_dump() | {"id": e.id or f"e{i}"}))
+            for i, e in enumerate(edges)
+        ],
+    )
+
+
+def load_delivered_graph(path: Path) -> Optional[GoldMechanismGraph]:
+    """Read a delivered graph; scoring records malformed delivery as unparseable."""
     try:
         data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
-    except Exception:
-        return None
-    if not isinstance(data, dict):
-        return None
-    try:
-        nodes = [_DeliveredNode.model_validate(n) for n in data.get("nodes", [])]
-        edges = [_DeliveredEdge.model_validate(e) for e in data.get("edges", [])]
-        return GoldMechanismGraph(
-            nodes=[MechanismNode(**n.model_dump()) for n in nodes],
-            edges=[
-                MechanismEdge(**(e.model_dump() | {"id": e.id or f"e{i}"}))
-                for i, e in enumerate(edges)
-            ],
-        )
+        return parse_delivered_graph(data)
     except Exception:
         return None
 
@@ -287,9 +295,11 @@ def evidence_within_sandbox(path: Path, sandbox: Path) -> bool:
 def scan_evidence_files(sandbox: Path, exclude: Optional[Path] = None) -> list[EvidenceFile]:
     files: list[EvidenceFile] = []
     for p in sorted(sandbox.rglob("*")):
-        if not evidence_within_sandbox(p, sandbox):
-            continue
+        # 先按后缀筛掉二进制波函文件（.chk/.fchk 等），避免为它们做路径解析：
+        # 证据只可能是文本输入/输出（.log/.out 及少量结构文件）。
         if p.suffix.lower() not in _EVIDENCE_SUFFIXES:
+            continue
+        if not evidence_within_sandbox(p, sandbox):
             continue
         if p.name == "mechanism_graph.json":
             continue
@@ -398,6 +408,15 @@ def _species_file_qualities(
     return best, paths
 
 
+def _evidence_paths(value) -> list[str]:
+    """evidence_log may be one path or a list of paths; keep declared order."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        return [item for item in value if isinstance(item, str)]
+    return []
+
+
 def bind_graph_to_evidence(
     graph: GoldMechanismGraph,
     files: list[EvidenceFile],
@@ -450,25 +469,28 @@ def bind_graph_to_evidence(
         if node.id in ts_ids:
             continue
         if 'evidence_log' in node.properties:
-            raw = node.properties['evidence_log']
-            try:
-                path = (sandbox / raw).resolve() if isinstance(raw, str) else None
-                relative = str(path.relative_to(sandbox.resolve())) if path is not None else None
-                evidence = next((item for item in available if item.path == relative
-                                 and item.kind in {'gaussian', 'orca'}), None)
-                if evidence and node.smiles and normal_log(path):
-                    identities = next(item.smiles_found for item in files if item.path == relative)
-                    identities = list(identities)
-                    identities.extend(identity for identity in node.smiles if _geometry_species(str(path), identity))
-                    candidate = replace(evidence, smiles_found=list(dict.fromkeys(identities)))
-                    qualities = [_species_file_qualities(identity, [candidate], cfg, match_threshold, partial_quality)[0]
-                                 for identity in node.smiles]
-                    if all(quality > 0 for quality in qualities):
-                        nb.bound_files, nb.matched, nb.quality = [relative], True, min(qualities)
-            except (ValueError, RuntimeError, OSError) as exc:
-                if isinstance(exc, RuntimeError) and isinstance(exc.__cause__, ImportError):
-                    raise
-                pass
+            # evidence_log 可以是单个路径或路径列表；逐个尝试，直到某个文件
+            # 真能把该节点绑到证据。只使用模型当前声明的路径，不回溯历史尝试。
+            for raw in _evidence_paths(node.properties['evidence_log']):
+                try:
+                    path = (sandbox / raw).resolve()
+                    relative = str(path.relative_to(sandbox.resolve()))
+                    evidence = next((item for item in available if item.path == relative
+                                     and item.kind in {'gaussian', 'orca'}), None)
+                    if evidence and node.smiles and normal_log(path):
+                        identities = next(item.smiles_found for item in files if item.path == relative)
+                        identities = list(identities)
+                        identities.extend(identity for identity in node.smiles if _geometry_species(str(path), identity))
+                        candidate = replace(evidence, smiles_found=list(dict.fromkeys(identities)))
+                        qualities = [_species_file_qualities(identity, [candidate], cfg, match_threshold, partial_quality)[0]
+                                     for identity in node.smiles]
+                        if all(quality > 0 for quality in qualities):
+                            nb.bound_files, nb.matched, nb.quality = [relative], True, min(qualities)
+                            break
+                except (ValueError, RuntimeError, OSError) as exc:
+                    if isinstance(exc, RuntimeError) and isinstance(exc.__cause__, ImportError):
+                        raise
+                    continue
             continue  # A bad explicit reference must never select other history.
         if not node.smiles:
             # 物种节点不带 SMILES = 只有声明没有可取证内容，不予绑定；
@@ -497,16 +519,21 @@ def bind_graph_to_evidence(
             continue
         node = next(n for n in graph.nodes if n.id == ts_id)
         if 'evidence_log' in node.properties:
-            raw = node.properties['evidence_log']
-            try:
-                path = (sandbox / raw).resolve() if isinstance(raw, str) else None
-                relative = str(path.relative_to(sandbox.resolve())) if path is not None else None
-                if any(f.path == relative and f.kind in {'gaussian', 'orca'} for f in available) and normal_log(path):
-                    endpoint_quality = max((min(by_id[e.from_node].quality, by_id[e.to_node].quality)
-                                            for e in graph.edges if e.via == ts_id and e.from_node in by_id and e.to_node in by_id), default=0.0)
-                    nb.bound_files, nb.matched, nb.quality = [relative], True, endpoint_quality
-            except (ValueError, OSError):
-                pass
+            # 绑定列表里所有可用的原生日志（TS opt 与 frequency 常分开提交），
+            # accuracy 才能在频率日志里找到鞍点；缺失路径不等同于伪造证据。
+            for raw in _evidence_paths(node.properties['evidence_log']):
+                try:
+                    path = (sandbox / raw).resolve()
+                    relative = str(path.relative_to(sandbox.resolve()))
+                    if any(f.path == relative and f.kind in {'gaussian', 'orca'} for f in available) and normal_log(path):
+                        endpoint_quality = max((min(by_id[e.from_node].quality, by_id[e.to_node].quality)
+                                                for e in graph.edges if e.via == ts_id and e.from_node in by_id and e.to_node in by_id), default=0.0)
+                        nb.bound_files.append(relative)
+                        nb.matched = True
+                        nb.quality = max(nb.quality, endpoint_quality)
+                except (ValueError, OSError):
+                    continue
+            nb.bound_files = sorted(set(nb.bound_files))
             continue
         for e in graph.edges:
             if e.via != ts_id:
