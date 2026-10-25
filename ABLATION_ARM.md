@@ -41,3 +41,12 @@ child inheritance, provenance, scored/error/cancelled result metadata, and the
 complete-only guided IRC gate. Model scheduling is stubbed, the Web core has no
 LLM runner, and socket connections are prohibited.
 
+## Common basic delivery check
+
+All four arms require a parseable `mechanism_graph.json` at the workspace
+root before final delivery. Missing files and format errors are returned
+to the research agent for repair. The shared check does not evaluate
+scientific evidence, write the graph, or change each arm's scientific
+acceptance rules. Background waits, child/peer tasks and actual user
+cancellation retain their existing behavior. Runs made before this fix
+must remain separate from runs made with the updated commits.
