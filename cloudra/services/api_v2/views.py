@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any, Iterable
 from cloudra.runtime_v2.completion import (
     COMPLETION_EVENT_TYPES,
     COMPLETION_TAIL,
-    completion_state,
     completion_summary,
 )
 
@@ -24,7 +23,9 @@ if TYPE_CHECKING:
     from cloudra.runtime_v2.schemas import AgentSession
 
 
-def agent_dict(core: "RuntimeCore", agent: "AgentSession") -> dict[str, Any]:
+def agent_dict(
+    core: "RuntimeCore", agent: "AgentSession", *, before_session_seq: int | None = None,
+) -> dict[str, Any]:
     """单个 agent 的线缆字典（GET /api/v2/agents/{id}、命令响应用）。"""
     data = agent.model_dump(mode="json")
     if agent.current_run is not None:
@@ -33,25 +34,13 @@ def agent_dict(core: "RuntimeCore", agent: "AgentSession") -> dict[str, Any]:
         return data
     data["completion"] = completion_summary(
         core.event_log.query_session(
-            agent.id, types=COMPLETION_EVENT_TYPES, limit=COMPLETION_TAIL
+            agent.id, types=COMPLETION_EVENT_TYPES, limit=COMPLETION_TAIL,
+            before_session_seq=before_session_seq,
         )
     )
     return data
 
 
 def agent_dicts(core: "RuntimeCore", agents: Iterable["AgentSession"]) -> list[dict[str, Any]]:
-    """一个项目全部 agent 的线缆字典（列表端点用）：事件只扫一遍。"""
-    listed = list(agents)
-    if not listed:
-        return []
-    states = completion_state(
-        core.event_log.query_project(
-            listed[0].project_id, types=COMPLETION_EVENT_TYPES, limit=None
-        )
-    )
-    out = []
-    for agent in listed:
-        data = agent.model_dump(mode="json")
-        data["completion"] = None if agent.current_run is not None else states.get(agent.id)
-        out.append(data)
-    return out
+    """列表与单 Agent 共用有界的完成依据读取。"""
+    return [agent_dict(core, agent) for agent in agents]

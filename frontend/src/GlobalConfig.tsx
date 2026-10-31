@@ -11,8 +11,12 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import CodexAuthPanel from './CodexAuthPanel';
+import SearchConfigSection from './SearchConfigSection';
+import ToolDocumentLoadingSection from './ToolDocumentLoadingSection';
 import { isTrustedAuthMessageOrigin } from './runtimeUrl';
 import type { ProviderPreset, RuntimeConfig } from './types';
+import { APPEARANCES, applyAppearance, useAppearance } from './appearance';
+import { useI18n } from './i18n';
 
 interface GlobalConfigProps {
   onClose: () => void;
@@ -212,7 +216,7 @@ function SlotSection({
 
       <div className="field-row">
         <label className="field" style={{ flex: 1, marginBottom: 0 }}>
-          context_window
+          上下文窗口（Token）
           <input
             className="input"
             type="number"
@@ -220,6 +224,9 @@ function SlotSection({
             value={draft.context_window}
             onChange={(e) => onChange({ context_window: e.target.value })}
           />
+          <span className="field-hint">
+            输入与输出共享此容量。扣除最大输出上限后预留余量，提前压缩历史；未单独设置窗口的智能体从下一轮继承。
+          </span>
         </label>
         <label className="field" style={{ flex: 1, marginBottom: 0 }}>
           timeout (s)
@@ -254,6 +261,8 @@ function SlotSection({
           <option value="low">low</option>
           <option value="medium">medium</option>
           <option value="high">high</option>
+          <option value="max">max</option>
+          <option value="ultra">ultra (max + 并行智能体)</option>
         </select>
         <span className="field-hint">
           global fallback for agents without a per-agent override; empty = parameter not sent
@@ -282,6 +291,8 @@ export default function GlobalConfig({
   onClose,
   onToast,
 }: GlobalConfigProps) {
+  const { lang } = useI18n();
+  const appearance = useAppearance();
   const [cfg, setCfg] = useState<RuntimeConfig | null>(null);
   const [presets, setPresets] = useState<ProviderPreset[]>([]);
   const [drafts, setDrafts] = useState<Record<Slot, SlotDraft>>({
@@ -439,6 +450,22 @@ export default function GlobalConfig({
             close
           </button>
         </div>
+        <div className="modal-section" role="group" aria-label={lang === 'zh' ? '界面风格' : 'Appearance'}>
+          <div className="modal-section-title">{lang === 'zh' ? '界面风格' : 'Appearance'}</div>
+          <div className="modal-actions">
+            {APPEARANCES.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={`btn ${appearance === option.id ? 'primary' : 'outline'} sm`}
+                aria-pressed={appearance === option.id}
+                onClick={() => applyAppearance(option.id)}
+              >
+                {lang === 'zh' ? option.zh : option.en}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="modal-sub">
           The two fallback slots behind empty per-agent settings: the coordinator role falls back to
           the <b>coordinator</b> slot, every other role to the <b>follower</b> slot. Changes are
@@ -482,6 +509,9 @@ export default function GlobalConfig({
               onSave={(s, clearKey) => void save(s, clearKey)}
               onConnectOpenRouter={connectOpenRouter}
             />
+            <SearchConfigSection config={cfg} onSaved={setCfg} onToast={onToast} />
+            <ToolDocumentLoadingSection config={cfg.tool_document_loading}
+              onSaved={setCfg} onToast={onToast} />
           </>
         )}
       </div>

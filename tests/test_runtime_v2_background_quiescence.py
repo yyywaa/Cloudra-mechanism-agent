@@ -101,8 +101,28 @@ async def test_parked_history_check_survives_concurrent_registry_changes(tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_guided_parent_wakes_after_previously_reported_child_and_supervisor_settle(tmp_path):
+@pytest.mark.parametrize("scientific_review_pending", [False, True])
+async def test_guided_parent_wakes_after_previously_reported_child_and_supervisor_settle(
+    tmp_path, scientific_review_pending,
+):
+    from cloudra.dag.review_requests import ReviewDecision, ReviewRequest
+    from cloudra.dag.store import DagStore
+    from cloudra.persistence.database import ConversationDB
+
     core, runner, bus, project, parent = await _setup(tmp_path)
+
+    def queue_review():
+        store = DagStore(ConversationDB(project.id).init())
+        store.ensure_bundle("s1")
+        request = ReviewRequest(
+            kind="evidence", requester=parent.id, question="inspect pending scientific evidence",
+            basis_fingerprint="pending",
+        )
+        basis = store.review_basis(request)
+        request_id = store.enqueue_review(request.model_copy(update={"basis_fingerprint": basis}))
+        return request_id, basis
+
+    review = await asyncio.to_thread(queue_review) if scientific_review_pending else None
     child = await _spawn(bus, project, "explorer", parent=parent)
     supervisor = await _spawn(bus, project, "supervisor")
 
@@ -119,9 +139,19 @@ async def test_guided_parent_wakes_after_previously_reported_child_and_superviso
 
     await core.agent_host.finish_run(child, outcome="succeeded")
     await runner._deliver_completion(child)
-    assert parent.state.value == "succeeded", "supervisor still running"
+    assert parent.state.value == ("succeeded" if scientific_review_pending else "running")
     assert len(_notices(core, parent, "child_completion")) == 1
 
+    if review is not None:
+        def resolve_review():
+            request_id, basis = review
+            store = DagStore(ConversationDB(project.id).init())
+            return store.resolve_review(ReviewDecision(
+                request_id=request_id, basis_fingerprint=basis, verdict="accept", reason="review resolved",
+            ), expected_basis=basis)
+
+        resolved = await asyncio.to_thread(resolve_review)
+        assert resolved["accepted"]
     await core.agent_host.finish_run(supervisor, outcome="succeeded")
     await runner._deliver_completion(supervisor)
     assert parent.state.value == "running"
@@ -322,3 +352,34 @@ async def test_durable_quiescence_marker_recovers_wake_without_second_message(tm
     assert parent.state.value == "running"
     assert len(_notices(core, parent, "background_quiescence")) == 1
     assert core.mailbox.inbox(parent.id).get_nowait()["message_id"] == "msg_quiescence"
+
+
+@pytest.mark.asyncio
+async def test_quiescence_marker_lookup_starts_after_current_gate(tmp_path, monkeypatch):
+    core, runner, _bus, project, parent = await _setup(tmp_path)
+    for number in range(600):
+        core.event_log.append(
+            "agent.message_injected", stream="project", project_id=project.id, session_id=parent.id,
+            data={"message_id": f"old-{number}", "sender": "background_quiescence", "content": "old",
+                  "manifest": {"kind": "background_quiescence", "parked_run_id": f"old-run-{number}"}},
+        )
+    await core.event_writer.flush()
+    parked_run = await _finish(core, parent, "wait_background")
+    marker = await core.event_writer.commit(EventDraft(
+        "agent.message_injected", stream="project", project_id=project.id, session_id=parent.id,
+        data={"message_id": "current-marker", "sender": "background_quiescence", "content": "settled",
+              "manifest": {"kind": "background_quiescence", "parked_run_id": parked_run}},
+    ))
+    assert core.event_log.resident_start_index > 0, "old markers must have left the recent cache"
+    original_read = core.store.iter_events
+
+    def reject_old_markers(**filters):
+        assert not (filters.get("session_id") == parent.id and filters.get("types") == {"agent.message_injected"}), (
+            "Current parked-run marker is in the recent cache; older history is unrelated"
+        )
+        return original_read(**filters)
+
+    monkeypatch.setattr(core.store, "iter_events", reject_old_markers)
+    await runner.maybe_wake_parked_delivery(project.id)
+    assert parent.state.value == "running"
+    assert core.mailbox.inbox(parent.id).get_nowait()["message_id"] == marker.data["message_id"]

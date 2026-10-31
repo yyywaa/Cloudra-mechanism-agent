@@ -1,37 +1,52 @@
 """远端计算执行器：``ssh_local`` / ``ssh_slurm`` 作业的看守 poller（唯一实现）。
 
 形状对齐 ``infra/slurm.py:run_slurm_compute``：认领进程内 async 轮询即看守，
-远端**不起 guard、不需要远端 Python/cloudra**（只要求 bash + 引擎 + rsync）。
+远端不起 guard。ssh_local 使用随任务发送的独立 Python 3.11+ owner（不安装
+cloudra），与本地共享进程归属和取消实现；ssh_slurm 仍只需 bash + 引擎 + rsync。
 生命周期：
 
     stage   rsync 推整棵本地 workdir（VASP 的 INCAR/POSCAR 等邻接文件必须同行；
             排除 .cloudra/ 与 .g16_scratch/ 运行时缓存）+ 单独推内置
             calculator.sh（绝不落进 workdir——compute.allow_local_calculator
-            开启时它会被误拾为本地执行入口）
+            开启时它会被误拾为本地执行入口）；Gaussian/ORCA 只在执行副本中
+            重定位原生文件路径，路径映射及原始输入另存本地运行时收据
     submit  ssh_slurm → 远端 sbatch（job-name 锚点 cloudra-<id>）；
             ssh_local → nohup 直跑 runner 脚本，句柄按 ``shell:<pid>`` 落账
     poll    sacct over ssh / 远端退出文件 + pid 探活；scheduler_state 回写账本
-    终态    rsync 拉回远端目录全部产物到本地输入目录（有界重试），本地跑
+    终态    rsync 拉回远端全部产物到隔离收据，再按映射发布无冲突的新产物
+            （保留原始输入、依赖和旧产物；有界重试），本地跑
             ``infra/slurm.py:_engine_success_from_log`` 引擎文本闸门复核，
             afinalize_compute_job CAS 落账本
 
-取消只走账本 cancel_requested → 远端 scancel（ssh_slurm）/ kill runner 与
-其 calculator 子进程（ssh_local，仅显式取消路径；best-effort，账本收口不依赖
-远端应答）。传输错误按瞬态容忍（下一轮重试）；重启恢复由 scheduler 对账器
+取消只走账本 cancel_requested。ssh_local 的 owner 消费取消请求文件，
+终止自己启动的计算家族，写出退出文件后账本才确认取消；ssh_slurm 发出
+scancel 后等待调度终态。传输错误按瞬态容忍（下一轮重试）；重启恢复由 scheduler 对账器
 调本模块的 recover/probe 函数找回句柄后重挂 poller。
 """
 
 from __future__ import annotations
 
 import asyncio
+import filecmp
+import hashlib
 import json
 import logging
 import os
 import shlex
+import shutil
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
-from cloudra.infra.compute_utils import XtbParams, _default_calculator_path
+from cloudra.infra.compute_utils import (
+    XtbParams,
+    _default_calculator_path,
+    _gaussian_include_reference,
+    _orca_code_mask,
+    _orca_file_references,
+    _orca_file_tokens,
+    _orca_geometry_output_paths,
+    get_log_path,
+)
 from cloudra.infra.slurm import (
     SLURM_TERMINAL_FAILURE,
     SLURM_TERMINAL_SUCCESS,
@@ -52,6 +67,7 @@ from cloudra.infra.ssh_transport import (
     run_remote_checked,
 )
 from cloudra.persistence.database import ComputeDB
+from cloudra.persistence.fs_utils import atomic_write_text
 from cloudra.services.compute_store import (
     acancel_compute_job,
     afinalize_compute_job,
@@ -128,7 +144,7 @@ def build_remote_runner_script(
     """ssh_local 直跑脚本（无 SBATCH 头）。
 
     刻意不带 ``set -e``：引擎失败也必须写出退出文件——``.cloudra-exit-<id>``
-    是 poller 的终态信号，缺它只能按 runner 消失（VANISHED）定性。calculator
+    是 poller 的终态信号，缺它即使 runner 消失也保留在途状态。calculator
     stdout/stderr 统一捕获到 ``.cloudra/calc-<id>.out.log``（拉回后即被
     ``resolve_log_path`` 命中，与本地 guard / Slurm ORCA 捕获同口径）。
     """
@@ -140,15 +156,18 @@ def build_remote_runner_script(
         f"echo $$ > {shlex.quote(f'.cloudra-runner-{task_id}.pid')}",
         "mkdir -p .cloudra",
         *scheduler_setup_lines(scheduler),
+    ]
+    # The same standalone owner as local execution reserves its fresh session.
+    # This shell waits for its receipt; it never guesses ownership from a PID.
+    lines.extend([
+        "python3 .cloudra/calc_lock_wrapper.py "
+        f"{shlex.quote(f'.cloudra/calc-{task_id}.lock')} -- "
         f"{shlex.join(calculator_cmd or remote_calculator_argv(input_name, job_type, xtb_params))}"
-        f" > {shlex.quote(capture)} 2>&1 &",
-        "calc_pid=$!",
-        f"echo \"$calc_pid\" > {shlex.quote(f'.cloudra-pid-{task_id}')}",
-        "wait $calc_pid",
+        f" > {shlex.quote(capture)} 2>&1",
         "rc=$?",
         f"echo \"$rc\" > {shlex.quote(f'.cloudra-exit-{task_id}')}",
         "",
-    ]
+    ])
     return "\n".join(lines)
 
 
@@ -206,23 +225,15 @@ def _query_shell_state(
 
 
 def _cancel_remote(transport, kind: str, remote_dir: str, task_id: int, handle: str) -> None:
-    """显式取消的远端执行侧（best-effort：账本收口不依赖远端应答）。
-
-    ssh_slurm 走 scancel；ssh_local TERM runner 与其 calculator 子进程
-    （pid 文件由 runner 脚本落盘）。只在账本 cancel_requested 后被调用，
-    与「任何路径不主动杀未要求取消的计算进程」铁律一致。
-    """
+    """Request cancellation; sacct or the owning runner must still confirm exit."""
     try:
         if kind == "ssh_slurm":
-            transport.run(f"scancel {handle}", timeout=30)
+            transport.checked(f"scancel {handle}", timeout=30)
         else:
-            pid = handle[len(_SHELL_HANDLE_PREFIX):]
-            pid_file = shlex.quote(f"{remote_dir}/.cloudra-pid-{task_id}")
-            transport.run(
-                f"kill -TERM $(cat {pid_file} 2>/dev/null) 2>/dev/null; "
-                f"kill -TERM {pid} 2>/dev/null; true",
-                timeout=30,
-            )
+            # The live owner consumes the request and records actual family exit.
+            # Repeating a request after an SSH interruption is harmless.
+            cancel_file = shlex.quote(f"{remote_dir}/.cloudra/calc-{task_id}.cancel")
+            transport.checked(f"touch {cancel_file}", timeout=30)
     except SshError:
         logger.warning("remote cancel failed for job %s (%s)", task_id, handle, exc_info=True)
 
@@ -291,6 +302,390 @@ def _stage_chem_runtime(workdir: Path) -> str:
     return name
 
 
+def _same_existing_file(left: Path, right: Path) -> bool:
+    return left.is_file() and right.is_file() and left.samefile(right)
+
+
+def _check_native_receipt_aliases(receipt: Path, workdir: Path) -> None:
+    """Execution receipts must own their paths and file bytes before any write."""
+    parent = receipt
+    while parent != workdir:
+        if parent.is_symlink():
+            raise ValueError(f'native receipt contains a symlink directory: {parent}')
+        parent = parent.parent
+    for path in (receipt, *receipt.rglob('*')):
+        if path.is_symlink():
+            raise ValueError(f'native receipt contains a symlink: {path}')
+        if path.is_file() and path.stat().st_nlink > 1:
+            raise ValueError(f'native receipt contains a hard-linked file: {path}')
+
+
+def _stage_native_paths(input_file: Path, workdir: Path, task_id: int, job_type: str) -> Path | None:
+    """Build an execution-only input overlay and a durable native path map.
+
+    Native options are copied verbatim. Only declared file destinations and
+    dependencies move into the remote job tree; the submitted local input stays
+    immutable. The original files and pulled execution copy remain inspectable.
+    """
+    if job_type not in {'gaussian', 'orca'}:
+        return None
+    receipt = workdir / '.cloudra' / f'remote-{task_id}'
+    _check_native_receipt_aliases(receipt, workdir)
+    stage = receipt / 'stage'
+    stage.mkdir(parents=True, exist_ok=True)
+    original = input_file.read_bytes()
+    original_copy = receipt / 'original' / input_file.name
+    original_copy.parent.mkdir(parents=True, exist_ok=True)
+    if original_copy.exists() and original_copy.read_bytes() != original:
+        raise ValueError('submitted native input changed since remote staging')
+    original_copy.write_bytes(original)
+    text = original.decode('utf-8', errors='surrogateescape')
+    files: dict[str, dict] = {}
+    geometry_outputs = _orca_geometry_output_paths(str(input_file)) if job_type == 'orca' else set()
+    include_paths: set[Path] = set()
+    output_paths: set[Path] = set()
+
+    def reject_native_alias(local: Path, role: str) -> None:
+        if _same_existing_file(local, input_file):
+            raise ValueError('native artifact path aliases the submitted input')
+        if not local.is_file() or local.stat().st_nlink < 2:
+            return
+        if any(_same_existing_file(local, saved) for saved in (workdir / '.cloudra').rglob('*')):
+            raise ValueError('native artifact path aliases a runtime receipt file')
+        for previous in files.values():
+            other = Path(previous['local_path'])
+            if local != other and (role == 'dependency' or previous['role'] == 'dependency'):
+                if _same_existing_file(local, other):
+                    raise ValueError('native file path aliases another native dependency or output')
+
+    def relocate(value: str, role: str, *, directory: bool = False, prefix: bool = False) -> str:
+        if not value:
+            raise ValueError('empty native file path cannot be staged')
+        # Freeze the actual destination before execution, including pre-existing
+        # system/user symlinks. Later symlink changes cannot redirect results.
+        local = (workdir / value).resolve()
+        if local.resolve().is_relative_to((workdir / '.cloudra').resolve()):
+            raise ValueError('native file path collides with the runtime receipt directory')
+        if local.resolve() == input_file.resolve():
+            raise ValueError('native artifact path would overwrite the submitted input')
+        reject_native_alias(local, role)
+        try:
+            relative = local.relative_to(workdir)
+        except ValueError:
+            digest = hashlib.sha256(str(local).encode()).hexdigest()[:16]
+            relative = Path(f'.cloudra-files-{task_id}') / digest / local.name
+        if relative.parts and relative.parts[0] == '.cloudra':
+            raise ValueError('native file path collides with the runtime receipt directory')
+        if relative in {Path('calculator.sh'), Path(f'.cloudra-run-{task_id}.sh'),
+                        Path(f'.cloudra-slurm-{task_id}.sh'), Path(f'.cloudra-path-map-{task_id}.json')}:
+            raise ValueError('native file path collides with a runtime execution file')
+        existing = workdir / relative
+        if existing.exists() and existing.resolve() != local:
+            raise ValueError('relocated native file path collides with an existing local file')
+        if role != 'dependency' and local in include_paths:
+            raise ValueError('native output collides with a Gaussian include dependency')
+        staged = stage / relative
+        if directory:
+            staged.mkdir(parents=True, exist_ok=True)
+        else:
+            staged.parent.mkdir(parents=True, exist_ok=True)
+        if role == 'dependency' and not local.is_file():
+            raise ValueError(f'native file dependency is missing or not a regular file: {local}')
+        if local.exists() and not directory and not prefix:
+            if not local.is_file():
+                raise ValueError(f'native file path is not a regular file: {local}')
+            shutil.copy2(local, staged)
+            saved = receipt / 'original-files' / relative
+            saved.parent.mkdir(parents=True, exist_ok=True)
+            if not saved.exists():
+                shutil.copy2(local, saved)
+        key = str(local)
+        previous = files.get(key)
+        source_sha256 = None
+        if local.is_file() and not prefix:
+            with local.open('rb') as stream:
+                source_sha256 = hashlib.file_digest(stream, 'sha256').hexdigest()
+        files[key] = {
+            'local_path': key,
+            'staged_path': relative.as_posix(),
+            'role': role if previous is None or previous['role'] == 'dependency' else previous['role'],
+            'directory': directory,
+            'prefix': prefix,
+            'source_sha256': source_sha256,
+        }
+        if prefix and local.parent.is_dir():
+            for child in local.parent.iterdir():
+                suffix = child.name[len(local.name):] if child.name.startswith(local.name) else ''
+                if not suffix.startswith(('.', '_')) or not child.is_file():
+                    continue
+                if (child.resolve() == input_file.resolve() or child.suffix.casefold() in {'.out', '.log'}
+                        or child.name == 'irc_endpoints.json' or child in geometry_outputs
+                        or child.name.endswith(('_IRC_F.xyz', '_IRC_B.xyz', '_IRC_F_trj.xyz', '_IRC_B_trj.xyz',
+                                                '_NEB-TS_converged.xyz'))):
+                    continue  # Logs and the submitted input are not restart data.
+                reject_native_alias(child, 'inout')
+                staged_child = staged.with_name(staged.name + suffix)
+                shutil.copy2(child, staged_child)
+                saved = receipt / 'original-files' / relative.with_name(relative.name + suffix)
+                saved.parent.mkdir(parents=True, exist_ok=True)
+                if not saved.exists():
+                    shutil.copy2(child, saved)
+                with child.open('rb') as stream:
+                    digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+                files[str(child)] = {
+                    'local_path': str(child), 'staged_path': staged_child.relative_to(stage).as_posix(),
+                    'role': 'inout', 'directory': False, 'prefix': False, 'source_sha256': digest,
+                }
+        return relative.as_posix() + ('/' if directory else '')
+
+    if job_type == 'gaussian':
+        in_link0 = True
+        produced: set[Path] = set()
+        pending_outputs: dict[str, set[Path]] = {}
+
+        def rewrite_gaussian(body: str, active: tuple[Path, ...]) -> str:
+            nonlocal in_link0
+            lines = []
+            for line in body.splitlines(keepends=True):
+                stripped = line.lstrip()
+                include_reference = _gaussian_include_reference(line)
+                if include_reference is not None:
+                    path, start, end = include_reference
+                    quote = line[start] if line[start] in {'"', "'"} else ''
+                    local = (workdir / path).resolve()
+                    if local in active:
+                        raise ValueError(f'Gaussian include cycle: {local}')
+                    if local in output_paths:
+                        raise ValueError('Gaussian include dependency collides with a native output')
+                    mapped = relocate(path, 'dependency')
+                    include_paths.add(local)
+                    include = local.read_bytes().decode('utf-8', errors='surrogateescape')
+                    rewritten = rewrite_gaussian(include, (*active, local))
+                    (stage / mapped).write_bytes(rewritten.encode('utf-8', errors='surrogateescape'))
+                    line = line[:start] + quote + mapped + quote + line[end:]
+                    lines.append(line)
+                    continue
+                if stripped.strip().casefold() == '--link1--':
+                    for outputs in pending_outputs.values():
+                        produced.update(outputs)
+                    pending_outputs.clear()
+                    in_link0 = True
+                elif stripped.startswith('#'):
+                    in_link0 = False
+                key, separator, value = stripped.partition('=')
+                directive = key.strip().casefold()
+                roles = {'%chk': 'inout', '%oldchk': 'dependency', '%rwf': 'inout',
+                         '%fchk': 'output', '%int': 'inout', '%d2e': 'inout'}
+                if in_link0 and separator and directive in roles:
+                    bare = value.strip()
+                    quote = bare[0] if bare and bare[0] in {'"', "'"} else ''
+                    if quote:
+                        if not bare.endswith(quote):
+                            raise ValueError('unterminated Gaussian file path')
+                        bare = bare[1:-1]
+                    role = roles[directive]
+                    if directive == '%rwf':
+                        parts = bare.split(',')
+                        outputs = set()
+                        for index in range(0, len(parts), 2):
+                            path = parts[index].strip()
+                            parts[index] = relocate(path, role, directory=path.endswith('/'))
+                            output_paths.add((workdir / path).resolve())
+                            outputs.add((workdir / path).resolve())
+                        pending_outputs[directive] = outputs
+                        mapped = ','.join(parts)
+                    else:
+                        local = (workdir / bare).resolve()
+                        # Only preceding Link1 steps can supply a missing input.
+                        effective_role = 'inout' if role == 'dependency' and local in produced else role
+                        mapped = relocate(bare, effective_role)
+                        if role != 'dependency':
+                            output_paths.add(local)
+                            pending_outputs[directive] = {local}
+                    start = len(line) - len(value.lstrip())
+                    end = len(line.rstrip())
+                    line = line[:start] + quote + mapped + quote + line[end:]
+                lines.append(line)
+            return ''.join(lines)
+
+        text = rewrite_gaussian(text, (input_file.resolve(),))
+    else:
+        replacements = []
+        code = _orca_code_mask(text)
+        boundaries = [start for start, end, value in _orca_file_tokens(text)
+                      if value and value.casefold() == '$new_job'
+                      and not code[code.rfind('\n', 0, start) + 1:start].strip()
+                      and not text[start:end].startswith(('"', "'"))]
+        current_job = 0
+        current_base = None
+        produced_bases: set[Path] = set()
+        for keyword, path, start, end in _orca_file_references(text):
+            job = sum(boundary < start for boundary in boundaries)
+            if job != current_job:
+                if current_base is not None:
+                    produced_bases.add(current_base)
+                current_base = None
+                current_job = job
+            raw = text[start:end]
+            prefix = keyword == '%base'
+            local = (workdir / path).resolve()
+            generated = any(local.parent == base.parent and local.name.startswith((base.name + '.', base.name + '_'))
+                            for base in produced_bases)
+            role = 'output' if prefix else 'inout' if generated else 'dependency'
+            mapped = relocate(path, role, prefix=prefix)
+            if prefix:
+                current_base = local
+            quote = raw[0] if raw[0] in {'"', "'"} else ''
+            if not quote and any(c.isspace() or c in {'#', '=', '\\', '"', "'"} for c in mapped):
+                quote = '"'
+            if quote == "'" and "'" in mapped:
+                quote = '"'
+            if quote == '"':
+                mapped = mapped.replace('\\', '\\\\').replace('"', '\\"')
+            replacements.append((start, end, quote + mapped + quote))
+        for start, end, mapped in sorted(replacements, reverse=True):
+            text = text[:start] + mapped + text[end:]
+    (stage / input_file.name).write_bytes(text.encode('utf-8', errors='surrogateescape'))
+    staged_files = {}
+    for directory, directories, filenames in os.walk(workdir, followlinks=False):
+        directories[:] = [name for name in directories if name not in {'.cloudra', '.g16_scratch'}]
+        for name in filenames:
+            path = Path(directory) / name
+            if path.is_file() and not path.is_symlink():
+                with path.open('rb') as stream:
+                    staged_files[path.relative_to(workdir).as_posix()] = hashlib.file_digest(stream, 'sha256').hexdigest()
+    manifest = {'input_file': str(input_file), 'job_type': job_type,
+                'input_sha256': hashlib.sha256(original).hexdigest(),
+                'files': list(files.values()), 'staged_files': staged_files}
+    manifest_text = json.dumps(manifest, indent=2, ensure_ascii=False) + '\n'
+    (receipt / 'path-map.json').write_text(manifest_text, encoding='utf-8')
+    (stage / f'.cloudra-path-map-{task_id}.json').write_text(manifest_text, encoding='utf-8')
+    return stage
+
+
+def _pull_remote_artifacts(transport, remote_dir: str, workdir: Path, input_file: Path, task_id: int,
+                           job_type: str | None = None) -> None:
+    """Pull to a receipt first, then publish outputs without replacing the input.
+
+    Every downloaded byte stays in results, including the relocated execution
+    input. Replaced local artifacts are retained alongside the receipt.
+    """
+    receipt = workdir / '.cloudra' / f'remote-{task_id}'
+    try:
+        _check_native_receipt_aliases(receipt, workdir)
+    except ValueError as exc:
+        raise SshError(str(exc)) from exc
+    results = receipt / 'results'
+    results.mkdir(parents=True, exist_ok=True)
+    transport.pull_dir(remote_dir, str(results))
+    manifest_path = receipt / 'path-map.json'
+    manifest = json.loads(manifest_path.read_text()) if manifest_path.is_file() else {'files': []}
+    bundled_files = set()
+    if (job_type or manifest.get('job_type')) == 'orca':
+        from cloudra.tools.core.orca_frames import snapshot_irc_endpoints
+
+        native = results / Path(get_log_path(str(input_file), 'orca')).name
+        captured = results / '.cloudra' / f'calc-{task_id}.out.log'
+        source = native if native.is_file() and native.stat().st_size else captured
+        if source.is_file():
+            snapshot_irc_endpoints(str(source), source.parent)
+        archive = source.parent / 'irc_endpoints.json'
+        if archive.is_file():
+            endpoints = json.loads(archive.read_text())['endpoints']
+            bundled_files = {(archive.parent / item['filename']).relative_to(results).as_posix()
+                             for item in endpoints.values() if item.get('filename')}
+    protected = {input_file.resolve()}
+    protected.update(Path(item['local_path']).resolve() for item in manifest['files'] if item['role'] == 'dependency')
+    protected.update(path.resolve() for directory in (receipt / 'original', receipt / 'original-files')
+                     for path in directory.rglob('*') if path.is_file())
+    if manifest_path.is_file():
+        protected.add(manifest_path.resolve())
+    staged_files = manifest.get('staged_files', {})
+    baselines = {str(workdir / name): digest for name, digest in staged_files.items()}
+    baselines.update({item['local_path']: item['source_sha256'] for item in manifest['files']
+                      if not item['directory'] and not item['prefix']})
+    protected.update((workdir / name).resolve() for name in staged_files if Path(name).suffix.casefold() in {'.gjf', '.com', '.inp'})
+
+    def publish(source: Path, target: Path) -> None:
+        relative = source.relative_to(results)
+        if (relative in {Path('irc_endpoints.json'), Path('.cloudra/irc_endpoints.json')}
+                or relative.as_posix() in bundled_files):
+            return  # Derived receipt metadata is never a native output to publish.
+        if target.resolve() in protected or source.is_symlink():
+            return
+        if target.is_symlink():
+            raise SshError(f'artifact conflicts with local symlink; retained in {results}: {target}')
+        if any(_same_existing_file(target, source_path) for source_path in protected):
+            raise SshError(f'artifact aliases a protected local file through a hard link; retained in {results}: {target}')
+        parent = target.parent
+        while parent != parent.parent:
+            if parent.is_symlink():
+                raise SshError(f'artifact conflicts with parent symlink; retained in {results}: {target}')
+            parent = parent.parent
+        if 'staged_files' in manifest:
+            baseline = baselines.get(str(target))
+            with source.open('rb') as stream:
+                incoming = hashlib.file_digest(stream, 'sha256').hexdigest()
+            if incoming == baseline:
+                return  # This is an unchanged staged file, not an output.
+            current = None
+            if target.is_file():
+                with target.open('rb') as stream:
+                    current = hashlib.file_digest(stream, 'sha256').hexdigest()
+            if current != baseline and current != incoming:
+                raise SshError(f'local/remote artifact conflict; retained in {results}: {target}')
+        if target.exists():
+            if target.is_file() and filecmp.cmp(source, target, shallow=False):
+                return
+            digest = hashlib.sha256(str(target).encode()).hexdigest()
+            backup = receipt / 'replaced' / digest / target.name
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            if not backup.exists():
+                if target.is_dir():
+                    shutil.copytree(target, backup, symlinks=True)
+                else:
+                    shutil.copy2(target, backup, follow_symlinks=False)
+            if target.is_dir():
+                raise SshError(f'artifact file conflicts with local directory; retained in {results}: {target}')
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+
+    for source in results.rglob('*'):
+        if not source.is_file() or source.is_symlink():
+            continue
+        relative = source.relative_to(results)
+        if (relative in {Path('calculator.sh'), Path('.cloudra/calc_lock_wrapper.py')}
+                or relative.parts[0].startswith('.cloudra-files-')
+                or relative.parts[:2] == ('.cloudra', f'remote-{task_id}')):
+            continue
+        publish(source, workdir / relative)
+    for item in manifest['files']:
+        if item['role'] == 'dependency':
+            continue
+        source = results / item['staged_path']
+        target = Path(item['local_path'])
+        if item['directory']:
+            for child in source.rglob('*'):
+                if child.is_file() and not child.is_symlink():
+                    publish(child, target / child.relative_to(source))
+        elif item['prefix']:
+            for child in source.parent.iterdir():
+                if child.name.startswith(source.name) and child.is_file() and not child.is_symlink():
+                    publish(child, target.with_name(target.name + child.name[len(source.name):]))
+        elif source.is_file() and not source.is_symlink():
+            publish(source, target)
+
+    if (job_type or manifest.get('job_type')) in {'gaussian', 'orca'}:
+        from cloudra.tools.core.irc_endpoint_artifacts import write_irc_endpoint_artifacts
+
+        engine = job_type or manifest['job_type']
+        native = results / Path(get_log_path(str(input_file), engine)).name
+        captured = results / '.cloudra' / f'calc-{task_id}.out.log'
+        selected = native if native.is_file() and native.stat().st_size else captured
+        if selected.is_file():
+            write_irc_endpoint_artifacts(selected)
+
+
 def _stage_and_submit(
     transport,
     kind: str,
@@ -334,42 +729,42 @@ def _stage_and_submit(
         )
         script_name = f".cloudra-run-{task_id}.sh"
     script_path = workdir / script_name
-    script_path.write_text(script, encoding="utf-8")
-    os.chmod(script_path, 0o700)
-    transport.push_dir(workdir, remote_dir, excludes=(".cloudra/", ".g16_scratch/"))
+    if script_path == input_file or _same_existing_file(script_path, input_file):
+        raise ValueError('runtime execution script would replace the submitted input')
+    native_stage = _stage_native_paths(input_file, workdir, task_id, job_type)
+    if kind == "ssh_local":
+        transport.checked(
+            shlex.join(["python3", "-c", "import fcntl,sys; assert sys.version_info >= (3,11), 'ssh_local requires Python 3.11+ for its calculation owner'"]),
+            timeout=30,
+        )
+    atomic_write_text(str(script_path), script, mode=0o700)
+    excludes = ('.cloudra/', '.g16_scratch/')
+    if native_stage:
+        excludes += (input_file.name, Path(get_log_path(str(input_file), job_type)).name, f'state_{task_id}.json',
+                     'irc_endpoints.json')
+    if job_type == 'orca':
+        excludes += ('*_IRC_F.xyz', '*_IRC_B.xyz', '*_IRC_F_trj.xyz', '*_IRC_B_trj.xyz',
+                     '*_im[0-9]*.xyz', '*_NEB-TS_converged.xyz')
+    transport.push_dir(workdir, remote_dir, excludes=excludes)
     transport.push_files([_default_calculator_path()], remote_dir)
+    if kind == "ssh_local":
+        owner_dir = remote_dir + "/.cloudra"
+        transport.checked("mkdir -p " + shlex.quote(owner_dir), timeout=30)
+        transport.push_files([Path(__file__).with_name("calc_lock_wrapper.py")], owner_dir)
+    if native_stage:
+        transport.push_dir(native_stage, remote_dir)
     if kind == "ssh_slurm":
         return _submit_slurm(transport, remote_dir, script_name), str(script_path)
     return _submit_shell(transport, remote_dir, script_name, task_id), str(script_path)
 
 
-def _terminal_verdict(
-    kind: str, state: str, exit_code: str, engine_ok: bool | None, base_error: str | None
-) -> tuple[str, str | None]:
-    """终态判定：引擎文本闸门是权威（与本地 guard / Slurm COMPLETED 复核同口径）。
-
-    engine_ok=True → done；False → failed。None（没有可判定日志）时回落调度侧
-    信号：ssh_slurm 保持 sacct 结论（同本地 slurm 口径），ssh_local 看 runner
-    退出码（0 → done；非 0 / runner 消失 → failed）。
-    """
+def _terminal_verdict(engine_ok: bool | None, base_error: str | None) -> tuple[str, str | None]:
+    """A scientific job needs native termination evidence, not a scheduler exit code."""
     if engine_ok is True:
         return "done", None
     if engine_ok is False:
-        if base_error:
-            return "failed", base_error
-        reason = (
-            "engine error termination (Slurm COMPLETED)"
-            if kind == "ssh_slurm"
-            else "engine error termination"
-        )
-        return "failed", reason
-    if base_error:
-        return "failed", base_error
-    if kind == "ssh_slurm":
-        return "done", None
-    if exit_code == "0":
-        return "done", None
-    return "failed", f"remote runner exit code {exit_code or 'unknown'}"
+        return "failed", base_error or "engine error termination"
+    return "failed", base_error or "native termination log unavailable"
 
 
 async def run_remote_compute(
@@ -384,6 +779,8 @@ async def run_remote_compute(
     row = await aget_compute_job(db, task_id)
     if not row:
         raise SshError(f"compute job {task_id} 不存在")
+    if row["state"] not in {"running", "cancel_requested"}:
+        return 0 if row["state"] == "done" else 1
     kind = (row["scheduler"] or "").strip()
     if kind not in REMOTE_KINDS:
         raise SshError(f"compute job {task_id} 不是远端作业: {kind!r}")
@@ -396,9 +793,16 @@ async def run_remote_compute(
     handle = (row["scheduler_job_id"] or "").strip()
 
     if not handle:
+        # No handle is not proof that a previous submission never started.
+        if row["state"] == "cancel_requested":
+            return 1
         # 正常认领路径（ready → running 无句柄）与对账安全重投路径
         # （ssh_local 探明远端无 runner）共用：stage 幂等（rsync 覆盖）。
-        input_file = input_file.resolve(strict=True)
+        # Native relative paths belong to the submitted input directory, just
+        # as at admission and in the local calculator. Resolving a file symlink
+        # here would silently switch its include/restart dependencies.
+        input_file = input_file.absolute()
+        await asyncio.to_thread(input_file.stat)
         workdir = input_file.parent
         handle, script_path = await asyncio.to_thread(
             _stage_and_submit,
@@ -421,12 +825,12 @@ async def run_remote_compute(
     pull_failures = 0
     while True:
         current = await aget_compute_job(db, task_id)
-        if current and current["state"] in {"cancelled", "cancel_requested"}:
+        if current and current["state"] not in {"running", "cancel_requested"}:
+            return 0 if current["state"] == "done" else 1
+        if current and current["state"] == "cancel_requested":
             await asyncio.to_thread(
                 _cancel_remote, transport, kind, remote_dir, task_id, handle
             )
-            await acancel_compute_job(db, task_id)
-            return 1
         try:
             if kind == "ssh_slurm":
                 state, exit_code = await asyncio.to_thread(
@@ -437,6 +841,18 @@ async def run_remote_compute(
                     _query_shell_state, transport, remote_dir, task_id, handle
                 )
         except SshError:
+            await sleep(poll_seconds)
+            continue
+
+        latest = await aget_compute_job(db, task_id)
+        if latest and latest["state"] == "cancel_requested":
+            exited = (state in SLURM_TERMINAL_SUCCESS | SLURM_TERMINAL_FAILURE
+                      if kind == "ssh_slurm" else state == "EXIT")
+            if exited:
+                await acancel_compute_job(db, task_id)
+                return 1
+            # Request acceptance, missing accounting and a vanished runner do not
+            # establish child-process exit. Keep the request and capacity pending.
             await sleep(poll_seconds)
             continue
 
@@ -468,19 +884,16 @@ async def run_remote_compute(
             await aupdate_scheduler_state(
                 db, task_id, f"EXIT:{exit_code}" if state == "EXIT" else state
             )
-            if state == "RUNNING":
+            if state in {"RUNNING", "VANISHED"}:
+                # A missing observer is not an execution receipt: its engine
+                # children may still be alive. Retain capacity until real exit.
                 await sleep(poll_seconds)
                 continue
-            if state == "VANISHED":
-                base_error = (
-                    "remote runner vanished before writing its exit file "
-                    "(node reboot or SIGKILL)"
-                )
 
-        # 终态：拉回全部产物（有界重试），再本地跑引擎文本闸门复核
+        # 终态：拉回全部产物（有界重试），shell 只认退出码，其余引擎复核日志。
         try:
-            await asyncio.to_thread(transport.pull_dir, remote_dir, str(workdir))
-        except SshError as exc:
+            await asyncio.to_thread(_pull_remote_artifacts, transport, remote_dir, workdir, input_file, task_id, job_type)
+        except (SshError, OSError, ValueError) as exc:
             pull_failures += 1
             if pull_failures < _MAX_PULL_ATTEMPTS:
                 await sleep(poll_seconds)
@@ -495,19 +908,20 @@ async def run_remote_compute(
                 )[:500],
             )
             return 1
-        engine_ok = await asyncio.to_thread(
-            _engine_success_from_log, job_type, str(input_file), task_id
-        )
-        final, last_error = _terminal_verdict(
-            kind, state, exit_code, engine_ok, base_error
-        )
+        if job_type == "shell":
+            succeeded = not base_error and exit_code == ("0:0" if kind == "ssh_slurm" else "0")
+            final = "done" if succeeded else "failed"
+            last_error = None if succeeded else base_error or f"shell exit code {exit_code or 'unknown'}"
+        else:
+            engine_ok = await asyncio.to_thread(
+                _engine_success_from_log, job_type, str(input_file), task_id
+            )
+            final, last_error = _terminal_verdict(engine_ok, base_error)
         wrote = await afinalize_compute_job(db, task_id, final, last_error=last_error)
         if not wrote:
             latest = await aget_compute_job(db, task_id)
             if latest and latest["state"] in {"cancelled", "cancel_requested"}:
-                await asyncio.to_thread(
-                    _cancel_remote, transport, kind, remote_dir, task_id, handle
-                )
+                # The query already confirmed actual execution exit.
                 await acancel_compute_job(db, task_id)
                 return 1
         # 终态通知由 ComputeNotifyBroker 轮询 compute_jobs 表补投，不再发 IPC

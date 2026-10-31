@@ -26,7 +26,6 @@ the turn pipeline; the state machine itself is handle-agnostic.
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
 from cloudra.runtime_v2.apply import apply_event
@@ -294,8 +293,10 @@ def plan_finish_run(
         return None, []
     data = _run_finished_data(outcome, error=error, failure_kind=failure_kind)
     target = AgentState.SUCCEEDED if outcome == "succeeded" else AgentState.FAILED
-    return run_id, [
-        plan_transition(agent, target, reason=outcome, run_id=run_id),
+    # The state transition may already be durable when a previous finish
+    # stopped before writing run.finished. Close the remaining run directly.
+    transition = [] if agent.state is target else [plan_transition(agent, target, reason=outcome, run_id=run_id)]
+    return run_id, [*transition,
         EventDraft(
             "run.finished",
             stream="agent",
@@ -360,6 +361,7 @@ class AgentHost:
         role: RoleProfile,
         parent_session_id: str | None,
         requested_by_session_id: str | None = None,
+        final_review_request_id: str | None = None,
         display_name: str | None,
         settings: RuntimeSettings,
     ) -> AgentSession:
@@ -372,7 +374,19 @@ class AgentHost:
 
             tools = supervisor_tool_names()
         else:
-            tools = list(role.tool_policy.allow)
+            from cloudra.tools import get_tools_lst
+
+            tools = set(role.tool_policy.allow)
+            if '*' in tools:
+                tools.remove('*')
+                tools.update(entry.tool_name for entry in get_tools_lst() if entry.tool_name)
+            tools.difference_update(role.tool_policy.deny)
+            tools = sorted(tools)
+        if role.permissions.read:
+            if 'get_tool_docs' in role.tool_policy.deny:
+                raise CommandRejected('invalid', 'get_tool_docs is required for on-demand tool documentation')
+            if '*' not in tools and 'get_tool_docs' not in tools:
+                tools.append('get_tool_docs')
         agent = AgentSession(
             id=new_id("as"),
             project_id=project.id,
@@ -380,6 +394,7 @@ class AgentHost:
             display_name=display_name or role.display_name,
             parent_session_id=parent_session_id,
             requested_by_session_id=requested_by_session_id,
+            final_review_request_id=final_review_request_id,
             settings=settings,
             capabilities=AgentCapabilities(
                 permissions=role.permissions,
@@ -400,40 +415,9 @@ class AgentHost:
         落库失败时仍应用本次已持久化的前缀，丢掉未持久化的尾巴。本批全部
         落盘后其他写入失败不影响本批成功；本批不完整则抛出，绝不执行后续效果。
         """
-        from cloudra.runtime_v2.event_writer import EventPersistenceError
-
-        keep = len(self.event_log)
-        envelopes = []
-        for draft in drafts:
-            envelopes.append(
-                self.event_log.append(
-                    draft.type,
-                    stream=draft.stream,
-                    project_id=draft.project_id,
-                    session_id=draft.session_id,
-                    run_id=draft.run_id,
-                    data=draft.data,
-                )
-            )
-        try:
-            await self.core.event_writer.flush()
-        except EventPersistenceError:
-            self.core.event_writer.discard_unpersisted(keep=keep)
-            # Only our durable envelopes can survive the tail discard. Keep
-            # the live projection aligned with that prefix, even when the
-            # failure was inside our batch rather than in a concurrent tail.
-            durable = await asyncio.to_thread(lambda: [
-                envelope for envelope in envelopes
-                if self.event_log.get(envelope.event_id) is not None
-            ])
-            for envelope in durable:
-                apply_event(self.core, envelope)
-            await self.core.event_writer.publish_persisted()
-            if len(durable) != len(envelopes):
-                raise
-            return
-        for envelope in envelopes:
-            apply_event(self.core, envelope)
+        await self.core.event_writer.commit_and_apply(
+            drafts, lambda envelope: apply_event(self.core, envelope),
+        )
 
     async def transition(
         self,

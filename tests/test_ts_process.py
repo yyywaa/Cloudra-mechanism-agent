@@ -25,7 +25,7 @@ from cloudra.tools.core.ts_process import (  # noqa: E402
     load_record,
     start,
 )
-from tests.ts_fixtures import calculation_input
+from tests.ts_fixtures import calculation_input, native_qm_log
 
 
 @pytest.fixture(autouse=True)
@@ -71,11 +71,10 @@ def _declaration(**overrides) -> TsInput:
         "multiplicity": 1,
         "method": "b3lyp/def2svp",
         "reaction_center": REACTION_CENTER,
-        "atom_map": ATOM_MAP,
     }
     # Historical fixture literals below use human-readable 1-based ring/map rows;
     # the process core now receives only normalized zero-based declarations.
-    for field in ("atom_map", "ring_order"):
+    for field in ("ring_order",):
         if field in overrides:
             overrides[field] = [i - 1 for i in overrides[field]]
     if "distance_filters" in overrides:
@@ -203,57 +202,24 @@ def test_evidence_candidates_never_include_per_iteration_frames(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_missing_atom_map_blocks_with_an_actionable_request(tmp_path):
-    """原子映射歧义必须显式呈现：缺 atom_map 就阻塞，并要求补齐——不猜。"""
-    record = _start(tmp_path, atom_map=[])
-    assert record.terminal is None
-    blocked = record.blocked
-    assert blocked is not None
-    assert blocked.stage == "map"
-    assert blocked.failure_class == "atom_map_missing"
-    assert blocked.needs == ["reaction.atom_map"]
-    assert "ambiguous" in blocked.message
 
 
-def test_missing_atom_map_block_carries_endpoint_numbering(tmp_path):
-    """缺 atom_map 的阻塞必须自诊断：atom_details 直接给出两端 built XYZ 的
-    路径与 1-based 元素序列（atom_map 的编号参照系），并指向 reaction_mapping
-    草稿通道——agent 不该靠猜编号再试一轮。"""
-    record = _start(tmp_path, atom_map=[])
-    blocked = record.blocked
-    details = "\n".join(blocked.atom_details)
-    assert "reactant atoms (1-based): 1=F, 2=C, 3=Cl, 4=H, 5=H, 6=H" in details
-    assert "product atoms (1-based): 1=C, 2=F, 3=H, 4=H, 5=H, 6=Cl" in details
-    assert ".xyz" in details
-    assert "reaction_mapping" in blocked.message
-    assert "hydrogen" in blocked.message.lower()
 
 
-def test_negative_internal_atom_map_is_diagnosed(tmp_path):
-    """含 0 的映射点名 0-based 笔误：重试引导必须说清错在哪，不只是"不对"。"""
-    record = _start(tmp_path, atom_map=[1, 0, 3, 4, 5, 2])
-    blocked = record.blocked
-    assert blocked.failure_class == "atom_map_not_a_permutation"
-    assert "negative" in blocked.message
 
 
-def test_heavy_atom_only_map_is_diagnosed(tmp_path):
-    """只覆盖重原子的映射（reaction_mapping 的 heavy_atom_map 形态）被点名：
-    atom_map 必须覆盖每个氢。"""
-    record = _start(tmp_path, atom_map=[2, 1, 3])
-    blocked = record.blocked
-    assert blocked.failure_class == "atom_map_not_a_permutation"
-    assert "heavy-atom" in blocked.message
-    assert "hydrogen" in blocked.message.lower()
 
 
-def test_missing_reaction_center_blocks_with_a_reason(tmp_path):
-    """没有反应中心 → 普通复合物模式；不能当成"反应复合物已生成"，因此阻塞。"""
+def test_missing_reaction_center_is_derived_from_confirmed_atom_mapping(tmp_path):
+    """已有完整对应时复用成断键，不要求模型回填同一份编号。"""
+    from cloudra.tools.core.ts_process import _active_reaction_center
+
     record = _start(tmp_path, reaction_center=[])
     assert record.terminal is None
-    assert record.blocked.stage == "assemble"
-    assert record.blocked.failure_class == "reaction_center_missing"
-    assert record.blocked.needs == ["reaction.reaction_center"]
+    assert record.blocked.stage == "guess"
+    assert set(_active_reaction_center(record)) == {(0, 1), (1, 2)}
+    assert record.stage_record('assemble').status == 'done'
+    assert record.input.reaction.reaction_center == []
 
 
 def test_out_of_range_reaction_center_blocks_with_built_atom_numbering(tmp_path):
@@ -263,7 +229,7 @@ def test_out_of_range_reaction_center_blocks_with_built_atom_numbering(tmp_path)
         reactant_smiles="[F-].N",
         product_smiles="[F-].N",
         reaction_center=[(0, 5)],
-        atom_map=[1,2,3,4,5],
+
     )
 
     assert record.run_id == "ts_0001"
@@ -286,7 +252,7 @@ def test_m16_product_reaction_center_reports_its_five_built_atoms(tmp_path):
         product_smiles="O=C=O.[H][H]",
         charge=0,
         reaction_center=[(4, 5)],
-        atom_map=[1, 2, 3, 4, 5],
+        selected_candidate=0,
     )
 
     assert record.blocked is not None
@@ -310,7 +276,7 @@ def test_single_fragment_reaction_center_is_checked_after_atom_mapping(tmp_path)
         product_smiles="OC=O",
         charge=0,
         reaction_center=[(4, 5)],
-        atom_map=[1, 2, 3, 4, 5],
+
     )
 
     assert record.blocked is not None
@@ -352,9 +318,9 @@ def test_built_endpoints_are_delivered_through_the_shared_builder(tmp_path):
 
 
 def test_load_record_round_trips_from_disk(tmp_path):
-    record = _start(tmp_path, atom_map=[])
+    record = _start(tmp_path)
     reloaded = load_record(str(tmp_path), record.run_id)
-    assert reloaded.blocked.stage == "map"
+    assert reloaded.blocked.stage == "guess"
     assert reloaded.run_id == record.run_id
 
 
@@ -367,13 +333,13 @@ def test_only_blocked_and_terminal_events_are_emitted(tmp_path):
     """阶段推进不推事件（避免污染上下文）；阻塞与终态才推。"""
     events: list[tuple[str, dict]] = []
     start(
-        TsStartRequest(request_key='fixture-prepare', input=_declaration(atom_map=[]), workspace_dir=str(tmp_path)),
+        TsStartRequest(request_key='fixture-prepare', input=_declaration(), workspace_dir=str(tmp_path)),
         event_sink=lambda name, payload: events.append((name, payload)),
     )
     assert [name for name, _ in events] == ["ts.blocked"]
     payload = events[0][1]
-    assert payload["blocked"]["needs"] == ["reaction.atom_map"]
-    assert payload["blocked"]["failure_class"] == "atom_map_missing"
+    assert payload["blocked"]["needs"] == ["guess"]
+    assert payload["blocked"]["failure_class"] == "executable_missing"
 
 
 def test_terminal_event_carries_evidence_candidates(tmp_path):
@@ -418,22 +384,8 @@ def test_submit_without_owner_is_refused(tmp_path):
 
 
 
-def test_wrong_atom_map_blocks_with_element_level_detail(tmp_path):
-    """错映射必须点名到原子地报出来，而不是让路径搜索拿着错序去跑。"""
-    record = _start(tmp_path, atom_map=[1, 2, 3, 4, 5, 6])
-    assert record.terminal is None
-    blocked = record.blocked
-    assert blocked.stage == "map"
-    assert blocked.failure_class == "atom_map_element_mismatch"
-    assert blocked.needs == ["reaction.atom_map"]
-    # 每个错配都要说清是哪个原子对不上哪个元素
-    assert blocked.atom_details
-    assert any("but the map points it at reactant atom" in d for d in blocked.atom_details)
 
 
-def test_atom_map_must_be_a_permutation(tmp_path):
-    record = _start(tmp_path, atom_map=[1, 1, 2, 3, 4, 5])
-    assert record.blocked.failure_class == "atom_map_not_a_permutation"
 
 
 def test_atom_count_mismatch_blocks_before_any_path_search(tmp_path):
@@ -442,7 +394,7 @@ def test_atom_count_mismatch_blocks_before_any_path_search(tmp_path):
     注意顺序：电荷不符会在 build 阶段先落 invalid_input（那是"输入不成立"），
     这里刻意用一个电荷正确、原子数不同的产物，才能单独测原子数这条。
     """
-    record = _start(tmp_path, product_smiles="[F-]", atom_map=[1])
+    record = _start(tmp_path, product_smiles="[F-]")
     assert record.terminal is None
     assert record.blocked.stage == "map"
     assert record.blocked.failure_class == "atom_count_mismatch"
@@ -536,11 +488,13 @@ def test_ts_frequency_input_keeps_declared_solvation(tmp_path):
     log_path = Path(_refinement_log_path(record, record.job_steps[-1]))
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_path.write_text(
+        "O   R   C   A\nTHE OPTIMIZATION HAS CONVERGED\n"
+        "FINAL ENERGY EVALUATION AT THE STATIONARY POINT\n"
         "CARTESIAN COORDINATES (ANGSTROEM)\n"
         "---------------------------------\n"
         "O 0.000000 0.000000 0.000000\n"
         "H 0.960000 0.000000 0.000000\n"
-        "H -0.240000 0.930000 0.000000\n\n",
+        "H -0.240000 0.930000 0.000000\n\nORCA TERMINATED NORMALLY\n",
     )
     job_dir = Path(record.run_dir) / "jobs" / "job_0002"
     job_dir.mkdir()
@@ -568,8 +522,8 @@ def test_xtb_path_guess_uses_explicit_path_solvation(tmp_path, monkeypatch):
 
 
 
-def test_irc_input_reuses_the_hessian_only_when_the_file_is_actually_there(tmp_path):
-    """Hessian 分支由**证据**决定：文件在就用 read+Hess_Filename，不在就 calc_numfreq。"""
+def test_irc_input_never_selects_a_hessian_policy_from_files(tmp_path):
+    """A Hessian file is evidence, not authorization to select solver settings."""
     from cloudra.tools.core.ts_process import TsJobStep, _write_irc_input
 
     record = _start(tmp_path, keywords="CPCM(Water)")
@@ -586,20 +540,20 @@ def test_irc_input_reuses_the_hessian_only_when_the_file_is_actually_there(tmp_p
 
     job3 = Path(record.run_dir) / "jobs" / "job_0003"
     job3.mkdir(parents=True, exist_ok=True)
-    # 没有 .hess -> 数值评估
+    # An absent Hessian does not select a numerical evaluation.
     error, path = _write_irc_input(record, str(job3))
     assert error == ""
-    assert "InitHess calc_numfreq" in Path(path).read_text(encoding="utf-8")
+    assert "%irc" not in Path(path).read_text(encoding="utf-8")
 
-    # 落下 .hess -> 复用同一几何的 Hessian
+    # An existing Hessian does not select a read/reuse policy.
     (job2 / "frequency.hess").write_text("$hessian\n", encoding="utf-8")
     new_attempt = job3 / "with_hessian"
     new_attempt.mkdir()
     error, path = _write_irc_input(record, str(new_attempt))
     assert error == ""
     content = Path(path).read_text(encoding="utf-8")
-    assert "InitHess read" in content
-    assert str(job2 / "frequency.hess") in content
+    assert "InitHess" not in content
+    assert str(job2 / "frequency.hess") not in content
     assert "CPCM(Water)" in content
 
 
@@ -702,14 +656,14 @@ def test_refine_endpoint_jobs_survive_reload_and_use_optimized_frames(tmp_path, 
                 reactant[2] if purpose.startswith("reactant") else product_path
             )
             opt_log.write_text(
-                "GEOMETRY OPTIMIZATION CYCLE\n"
+                "O   R   C   A\nGEOMETRY OPTIMIZATION CYCLE\n"
                 "CARTESIAN COORDINATES (ANGSTROEM)\n"
                 "---------------------------------\n"
                 + "\n".join(
                     f"{symbol} {x + 0.2:.8f} {y:.8f} {z:.8f}"
                     for symbol, (x, y, z) in final_atoms
                 )
-                + "\n\nTHE OPTIMIZATION HAS CONVERGED\n",
+                + "\n\nTHE OPTIMIZATION HAS CONVERGED\nORCA TERMINATED NORMALLY\n",
                 encoding="utf-8",
             )
         else:
@@ -719,13 +673,13 @@ def test_refine_endpoint_jobs_survive_reload_and_use_optimized_frames(tmp_path, 
             freq_log.parent.mkdir(parents=True, exist_ok=True)
             optimized_atoms = read_xyz_atoms(str(optimized))
             freq_log.write_text(
-                "CARTESIAN COORDINATES (ANGSTROEM)\n"
+                "O   R   C   A\nCARTESIAN COORDINATES (ANGSTROEM)\n"
                 "---------------------------------\n"
                 + "\n".join(
                     f"{symbol} {x:.8f} {y:.8f} {z:.8f}"
                     for symbol, (x, y, z) in optimized_atoms
                 )
-                + "\n\nfrequency evidence\n",
+                + "\n\nORCA TERMINATED NORMALLY\n",
                 encoding="utf-8",
             )
             source = reactant[2] if purpose.startswith("reactant") else product_path
@@ -740,8 +694,8 @@ def test_refine_endpoint_jobs_survive_reload_and_use_optimized_frames(tmp_path, 
     assert record.stage_record("refine").status == "done"
 
 
-def test_gaussian_irc_uses_the_skill_recipe(tmp_path):
-    """Gaussian 走原生 calcfc 写法，不强加步数上限或 ORCA 的 %irc 块。"""
+def test_gaussian_irc_has_only_the_stage_task_by_default(tmp_path):
+    """An IRC stage does not imply an initial-Hessian or step-size policy."""
     from cloudra.tools.core.ts_process import TsJobStep, _write_irc_input
 
     record = _start(tmp_path, engine="gaussian")
@@ -760,9 +714,173 @@ def test_gaussian_irc_uses_the_skill_recipe(tmp_path):
     error, path = _write_irc_input(record, str(job3))
     assert error == ""
     content = Path(path).read_text(encoding="utf-8")
-    assert "irc=calcfc" in content
+    assert "#p irc " in content
+    assert "calcfc" not in content
     assert "maxpoints" not in content.lower()
     assert "%irc" not in content
+
+
+@pytest.mark.parametrize("keywords", ['IRC=(CalcFC,MaxPoints=40,StepSize=10) NoSymm', 'IRC=(MaxPoints=40,StepSize=10)', 'IRC', 'MaxPoints=50,StepSize=5'])
+def test_gaussian_irc_keywords_are_rendered_verbatim(tmp_path, keywords):
+    """Exercise native rendering instead of an unused keyword-rewriting helper."""
+    from cloudra.tools.Chemtool.qm_input_writer import QmInputWriter, QmInputWriter_input_schema
+    from cloudra.tools.core.molecule import read_molecule
+
+    request = QmInputWriter_input_schema(engine="gaussian", method="HF", basis_set="STO-3G",
+        source_type="xyz_file", source_value="water.xyz", output_path=str(tmp_path / "native.gjf"),
+        charge=0, task_type=[], keywords=keywords)
+    molecule = read_molecule(input_text="3\nwater\nO 0 0 0\nH .96 0 0\nH -.24 .93 0\n", charge=0)
+    content = QmInputWriter.render_input(request, molecule)
+    route = next(line for line in content.splitlines() if line.startswith("#p"))
+    assert route == f"#p HF/STO-3G {keywords}"
+
+
+def test_gaussian_irc_custom_options_missing_calcfc_preserves_input_and_warns(tmp_path):
+    """Native solver advice is visible without rewriting the accepted route."""
+
+    from cloudra.tools.core.ts_process import TsJobStep, _write_irc_input
+
+    record = _start(tmp_path, engine="gaussian", keywords="irc=(maxpoints=40,stepsize=10)")
+    job2 = Path(record.run_dir) / "jobs" / "job_0002"
+    job2.mkdir(parents=True, exist_ok=True)
+    (job2 / "optimized.xyz").write_text(
+        "3\noptimised\nO 0.0 0.0 0.0\nH 0.96 0.0 0.0\nH -0.24 0.93 0.0\n", encoding="utf-8"
+    )
+    freq_input = job2 / "frequency.gjf"
+    freq_input.write_text("#p freq\n", encoding="utf-8")
+    record.job_steps.append(TsJobStep(
+        purpose="frequency", job_id=9002, input_path=str(freq_input), state="done",
+    ))
+    job3 = Path(record.run_dir) / "jobs" / "job_0003"
+    job3.mkdir(parents=True, exist_ok=True)
+
+    error, path = _write_irc_input(record, str(job3))
+    assert any(item["code"] == "initial_hessian_unspecified" for item in record.warnings)
+
+    assert error == ""
+    content = Path(path).read_text(encoding="utf-8")
+    route_lines = [line for line in content.splitlines() if line.startswith("#")]
+    assert len(route_lines) == 1
+    route = route_lines[0].lower()
+    assert "irc=(maxpoints=40,stepsize=10)" in route
+    assert "calcfc" not in route
+    assert route.count("irc") == 1  # 绝不出现两个 irc 关键词导致 Gaussian 语法崩溃
+
+
+def test_gaussian_irc_custom_options_with_calcfc_clean_route(tmp_path, recwarn):
+    """模型正确写出 calcfc 时，保留选项且不发伪警告，路线合并整洁。"""
+    from cloudra.tools.core.ts_process import TsJobStep, _write_irc_input
+
+    record = _start(tmp_path, engine="gaussian", keywords="irc=(calcfc,maxpoints=40,stepsize=10) empiricaldispersion=gd3bj")
+    job2 = Path(record.run_dir) / "jobs" / "job_0002"
+    job2.mkdir(parents=True, exist_ok=True)
+    (job2 / "optimized.xyz").write_text(
+        "3\noptimised\nO 0.0 0.0 0.0\nH 0.96 0.0 0.0\nH -0.24 0.93 0.0\n", encoding="utf-8"
+    )
+    freq_input = job2 / "frequency.gjf"
+    freq_input.write_text("#p freq\n", encoding="utf-8")
+    record.job_steps.append(TsJobStep(
+        purpose="frequency", job_id=9002, input_path=str(freq_input), state="done",
+    ))
+    job3 = Path(record.run_dir) / "jobs" / "job_0003"
+    job3.mkdir(parents=True, exist_ok=True)
+
+    error, path = _write_irc_input(record, str(job3))
+    assert error == ""
+    # 确认没有弹出 UserWarning
+    user_warnings = [w for w in recwarn if issubclass(w.category, UserWarning) and "irc" in str(w.message)]
+    assert not user_warnings
+
+    content = Path(path).read_text(encoding="utf-8")
+    route_lines = [line for line in content.splitlines() if line.startswith("#")]
+    assert len(route_lines) == 1
+    route = route_lines[0].lower()
+    assert "irc=(calcfc,maxpoints=40,stepsize=10)" in route
+    assert "empiricaldispersion=gd3bj" in route
+    assert route.count("irc") == 1
+
+
+@pytest.mark.parametrize("keywords", ['Opt=(TS,CalcFC,NoEigen,MaxStep=10) NoSymm', 'Opt=(MaxStep=10)', 'Opt=(Tight,CalcFC) NoSymm', 'Opt NoSymm'])
+def test_gaussian_opt_keywords_are_rendered_verbatim(tmp_path, keywords):
+    """Exercise native rendering instead of an unused keyword-rewriting helper."""
+    from cloudra.tools.Chemtool.qm_input_writer import QmInputWriter, QmInputWriter_input_schema
+    from cloudra.tools.core.molecule import read_molecule
+
+    request = QmInputWriter_input_schema(engine="gaussian", method="HF", basis_set="STO-3G",
+        source_type="xyz_file", source_value="water.xyz", output_path=str(tmp_path / "native.gjf"),
+        charge=0, task_type=[], keywords=keywords)
+    molecule = read_molecule(input_text="3\nwater\nO 0 0 0\nH .96 0 0\nH -.24 .93 0\n", charge=0)
+    content = QmInputWriter.render_input(request, molecule)
+    route = next(line for line in content.splitlines() if line.startswith("#p"))
+    assert route == f"#p HF/STO-3G {keywords}"
+
+
+@pytest.mark.parametrize("keywords", ['Freq=NoRaman NoSymm', 'Freq=(NoRaman) NoSymm', 'Freq NoSymm'])
+def test_gaussian_freq_keywords_are_rendered_verbatim(tmp_path, keywords):
+    """Exercise native rendering instead of an unused keyword-rewriting helper."""
+    from cloudra.tools.Chemtool.qm_input_writer import QmInputWriter, QmInputWriter_input_schema
+    from cloudra.tools.core.molecule import read_molecule
+
+    request = QmInputWriter_input_schema(engine="gaussian", method="HF", basis_set="STO-3G",
+        source_type="xyz_file", source_value="water.xyz", output_path=str(tmp_path / "native.gjf"),
+        charge=0, task_type=[], keywords=keywords)
+    molecule = read_molecule(input_text="3\nwater\nO 0 0 0\nH .96 0 0\nH -.24 .93 0\n", charge=0)
+    content = QmInputWriter.render_input(request, molecule)
+    route = next(line for line in content.splitlines() if line.startswith("#p"))
+    assert route == f"#p HF/STO-3G {keywords}"
+
+
+def test_gaussian_refinement_input_merges_keywords_without_duplicate_opt(tmp_path):
+    """Gaussian TS 精修输入正确合并用户声明的 opt 关键词，避免重复 opt。"""
+    from cloudra.tools.core.ts_process import _write_refinement_input
+
+    source = tmp_path / "guess.xyz"
+    source.write_text("3\nguess\nO 0.0 0.0 0.0\nH 0.96 0.0 0.0\nH -0.24 0.93 0.0\n", encoding="utf-8")
+    record = _start(tmp_path, reactant_smiles="O", product_smiles="O", charge=0, reaction_center=[], engine="gaussian", keywords="opt=(ts,calcfc,noeigen,maxstep=10) nosymm")
+    from cloudra.tools.core.ts_process import _accept_candidate
+    _accept_candidate(record, str(source))
+    record.path_kind = "provided"
+    job1 = Path(record.run_dir) / "jobs" / "job_0001"
+    job1.mkdir(parents=True, exist_ok=True)
+    error, path = _write_refinement_input(record, str(job1))
+    assert error == ""
+    content = Path(path).read_text(encoding="utf-8")
+    route_lines = [line for line in content.splitlines() if line.startswith("#")]
+    assert len(route_lines) == 1
+    route = route_lines[0].lower()
+    assert "opt=(ts,calcfc,noeigen,maxstep=10)" in route
+    assert "nosymm" in route
+    assert route.count("opt") == 1
+
+
+def test_gaussian_frequency_input_merges_keywords_without_duplicate_freq(tmp_path, monkeypatch):
+    """Gaussian 频率作业正确合并用户声明的 freq 关键词，避免重复 freq。"""
+    from cloudra.tools.core.ts_process import TsJobStep, _write_frequency_input
+
+    record = _start(tmp_path, engine="gaussian", keywords="freq=noraman nosymm")
+    job1 = Path(record.run_dir) / "jobs" / "job_0001"
+    job1.mkdir(parents=True, exist_ok=True)
+    xyz_content = "3\noptimised\nO 0.0 0.0 0.0\nH 0.96 0.0 0.0\nH -0.24 0.93 0.0\n"
+    (job1 / "optimized.xyz").write_text(xyz_content, encoding="utf-8")
+    (job1 / "refinement.log").write_text(native_qm_log('gaussian', ['O', 'H', 'H'],
+        [[0., 0., 0.], [.96, 0., 0.], [-.24, .93, 0.]]), encoding="utf-8")
+    opt_input = job1 / "refinement.gjf"
+    opt_input.write_text("#p opt=ts\n", encoding="utf-8")
+    record.job_steps.append(TsJobStep(
+        purpose="ts_opt", job_id=9001, input_path=str(opt_input), state="done",
+    ))
+    job2 = Path(record.run_dir) / "jobs" / "job_0002"
+    job2.mkdir(parents=True, exist_ok=True)
+
+    error, path = _write_frequency_input(record, str(job2))
+    assert error == ""
+    content = Path(path).read_text(encoding="utf-8")
+    route_lines = [line for line in content.splitlines() if line.startswith("#")]
+    assert len(route_lines) == 1
+    route = route_lines[0].lower()
+    assert "freq=noraman" in route
+    assert "nosymm" in route
+    assert route.count("freq") == 1
 
 
 # ---------------------------------------------------------------------------
@@ -776,7 +894,7 @@ def test_product_geometry_rejects_a_different_declared_product_graph(tmp_path):
 
     record = _start(
         tmp_path, reactant_smiles="CC", product_smiles="CO", charge=0,
-        reaction_center=[], atom_map=[],
+        reaction_center=[],
         product_geometry=RotatedConformer(kind="rotate_about_bond", atoms=(0, 1), degrees=180).model_dump(),
     )
     assert record.terminal == "invalid_input"
@@ -911,12 +1029,12 @@ def test_same_smiles_endpoints_are_distinguished_by_declared_geometry(tmp_path):
     )
     # map 阶段按"构造保证恒等"通过，且不再要求 atom_map
     assert record.stage_record("map").status == "done"
-    assert "identity by construction" in record.stage_record("map").detail
+    assert record.structures.product_to_reactant == tuple(range(record.structures.reactant.GetNumAtoms()))
     del json
 
 
 # ---------------------------------------------------------------------------
-# verdict 第二道闸：IRC 双侧几何及端点区间证明才可 verified
+# verdict：真实 IRC 双侧外帧优化到正确极小值；区间分析只作建议
 # ---------------------------------------------------------------------------
 
 
@@ -925,6 +1043,163 @@ def _xyz_text(symbols, positions, comment=""):
     for s, p in zip(symbols, positions):
         lines.append(f"{s} {p[0]:.6f} {p[1]:.6f} {p[2]:.6f}")
     return "\n".join(lines) + "\n"
+
+
+@pytest.mark.parametrize('with_mol', [False, True])
+def test_product_endpoint_seed_uses_declared_mapping_before_writing_input(tmp_path, with_mol):
+    """A native product-order seed must reach QM in the TS working order."""
+    from cloudra.tools.core.structure_artifacts import read_xyz_atoms
+    from cloudra.tools.core.ts_inputs import EndpointSeed
+    from cloudra.tools.core.ts_process import _read_built_xyz, _write_endpoint_input
+
+    record = _start(tmp_path)
+    built = _read_built_xyz(record, "product")
+    original_xyz = Path(built[2]).read_bytes()
+    original_mol = Path(built[3]).read_bytes()
+    record.input.verification.product_endpoint.seed = EndpointSeed(
+        kind="file", xyz_path=built[2], mol_path=built[3] if with_mol else None, evidence_refs=[built[2]],
+    )
+    job_dir = Path(record.run_dir) / "jobs" / "product_seed_regression"
+    job_dir.mkdir(parents=True)
+
+    error, input_path = _write_endpoint_input(record, str(job_dir), "product", "opt")
+
+    assert error == "", error
+    assert Path(input_path).is_file()
+    atoms = read_xyz_atoms(job_dir / "product_source.xyz")
+    assert [symbol for symbol, _ in atoms] == ["F", "C", "Cl", "H", "H", "H"]
+    # Product atom 0 is the carbon, mapped to TS atom 1; coordinates travel with it.
+    assert atoms[1][1] == pytest.approx(built[1][0], abs=1e-6)
+    assert Path(built[2]).read_bytes() == original_xyz
+    assert Path(built[3]).read_bytes() == original_mol
+
+
+@pytest.mark.parametrize('with_mol', [False, True])
+@pytest.mark.parametrize('trajectory', [False, True])
+@pytest.mark.parametrize('role', ['reactant', 'product'])
+def test_native_irc_seed_is_not_reordered_a_second_time(tmp_path, with_mol, trajectory, role):
+    from cloudra.tools.core.structure_artifacts import read_xyz_atoms
+    from cloudra.tools.core.ts_inputs import EndpointSeed
+    from cloudra.tools.core.ts_process import TsJobStep, _read_built_xyz, _refinement_log_path, _write_endpoint_input
+
+    record = _start(tmp_path)
+    built = _read_built_xyz(record, role)
+    # Native IRC is already in F,C,Cl,H,H,H order, unlike the species seed.
+    positions = [built[1][i] for i in [1, 0, 5, 2, 3, 4]] if role == 'product' else built[1]
+    irc_dir = Path(record.run_dir) / 'jobs' / 'irc_seed_regression'
+    (irc_dir / '.cloudra').mkdir(parents=True)
+    irc_input = irc_dir / 'irc.inp'
+    irc_input.write_text('! IRC\n')
+    step = TsJobStep(purpose='irc', job_id=9100, input_path=str(irc_input), state='done',
+                     actual_calculation=record.input.verification.irc)
+    record.job_steps.append(step)
+    Path(_refinement_log_path(record, step)).write_text('ORCA TERMINATED NORMALLY\n')
+    seed_path = irc_dir / ('irc_IRC_F_trj.xyz' if trajectory else 'irc_IRC_F.xyz')
+    xyz = _xyz_text(['F', 'C', 'Cl', 'H', 'H', 'H'], positions)
+    if trajectory:
+        first = [[x, y + 5.0, z] for x, y, z in positions]
+        xyz = _xyz_text(['F', 'C', 'Cl', 'H', 'H', 'H'], first) + xyz
+    seed_path.write_text(xyz)
+    getattr(record.input.verification, role + '_endpoint').seed = EndpointSeed(
+        kind='file', xyz_path=str(seed_path), mol_path=built[3] if with_mol else None,
+        evidence_refs=[str(seed_path)],
+    )
+    job_dir = Path(record.run_dir) / 'jobs' / 'irc_endpoint_regression'
+    job_dir.mkdir()
+
+    error, _ = _write_endpoint_input(record, str(job_dir), role, 'opt')
+
+    assert error == '', error
+    atoms = read_xyz_atoms(job_dir / f'{role}_source.xyz')
+    assert [symbol for symbol, _ in atoms] == ['F', 'C', 'Cl', 'H', 'H', 'H']
+    assert atoms[0][1] == pytest.approx(positions[0], abs=1e-6)
+
+
+def test_gaussian_outer_frame_preserves_native_working_atom_order(tmp_path):
+    from cloudra.tools.core import gaussian_frames
+    from cloudra.tools.core.irc_path import parse_xyz
+    from cloudra.tools.core.ts_inputs import EndpointSeed
+    from cloudra.tools.core.ts_process import TsJobStep, _endpoint_seed_atoms, _refinement_log_path
+
+    record = _start(tmp_path, reactant_smiles='C#N', product_smiles='[NH+]#[C-]',
+                    charge=0,  reaction_center=[(0, 1)])
+    job_dir = Path(record.run_dir) / 'jobs' / 'gaussian_irc_seed'
+    (job_dir / '.cloudra').mkdir(parents=True)
+    step = TsJobStep(purpose='irc', job_id=9200, input_path=str(job_dir / 'irc.gjf'), state='done',
+                     actual_calculation=record.input.verification.irc.model_copy(update={'engine': 'gaussian'}))
+    record.job_steps.append(step)
+    fixture = Path(__file__).parent / 'fixtures' / 'gaussian' / 'hcn_ts_irc_g16.log'
+    log = Path(_refinement_log_path(record, step))
+    log.write_bytes(fixture.read_bytes())
+    frames, _ = gaussian_frames.extract_irc(str(log))
+    outer = min((f for f in frames if f.xyz and f.reaction_coordinate is not None),
+                key=lambda f: f.reaction_coordinate)
+    seed_path = tmp_path / 'gaussian_endpoint.xyz'
+    seed_path.write_text(outer.xyz)
+
+    atoms = _endpoint_seed_atoms(record, 'product', EndpointSeed(
+        kind='file', xyz_path=str(seed_path), evidence_refs=[str(log)],
+    ))
+
+    assert [symbol for symbol, _ in atoms] == ['C', 'N', 'H']
+    assert atoms[0][1] == pytest.approx([0.480862, -0.459245, 0.0], abs=1e-8)
+    assert parse_xyz(seed_path.read_text())[0] == ['C', 'N', 'H']
+
+
+def test_product_seed_with_working_order_mol_keeps_coordinate_rows(tmp_path):
+    from rdkit import Chem
+
+    from cloudra.tools.core.structure_artifacts import read_xyz_atoms
+    from cloudra.tools.core.ts_inputs import EndpointSeed
+    from cloudra.tools.core.ts_process import _read_built_xyz, _write_endpoint_input
+
+    record = _start(tmp_path)
+    built = _read_built_xyz(record, 'product')
+    mol = Chem.MolFromMolFile(built[3], removeHs=False)
+    seed_mol = tmp_path / 'working_product.mol'
+    Chem.MolToMolFile(Chem.RenumberAtoms(mol, [1, 0, 5, 2, 3, 4]), str(seed_mol))
+    positions = [built[1][i] for i in [1, 0, 5, 2, 3, 4]]
+    seed_xyz = tmp_path / 'working_product.xyz'
+    seed_xyz.write_text(_xyz_text(['F', 'C', 'Cl', 'H', 'H', 'H'], positions))
+    record.input.verification.product_endpoint.seed = EndpointSeed(
+        kind='file', xyz_path=str(seed_xyz), mol_path=str(seed_mol), evidence_refs=[str(seed_xyz)],
+    )
+    job_dir = Path(record.run_dir) / 'jobs' / 'working_mol_seed'
+    job_dir.mkdir(parents=True)
+
+    error, _ = _write_endpoint_input(record, str(job_dir), 'product', 'opt')
+
+    assert error == '', error
+    assert read_xyz_atoms(job_dir / 'product_source.xyz') == read_xyz_atoms(seed_xyz)
+
+
+def test_symmetric_working_mol_keeps_bound_atom_rows(tmp_path):
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+
+    from cloudra.tools.core.structure_artifacts import read_xyz_atoms
+    from cloudra.tools.core.ts_inputs import EndpointSeed
+    from cloudra.tools.core.ts_process import TsProcessRecord, _endpoint_seed_atoms
+
+    mol = Chem.AddHs(Chem.MolFromSmiles('CC'))
+    assert AllChem.EmbedMolecule(mol, randomSeed=42) == 0
+    mapping = [1, 0, 5, 6, 7, 2, 3, 4]
+    working = Chem.RenumberAtoms(mol, mapping)
+    native_mol, working_mol = tmp_path / 'native.mol', tmp_path / 'working.mol'
+    native_xyz, working_xyz = tmp_path / 'native.xyz', tmp_path / 'working.xyz'
+    for graph, mol_path, xyz_path in [(mol, native_mol, native_xyz), (working, working_mol, working_xyz)]:
+        Chem.MolToMolFile(graph, str(mol_path))
+        xyz_path.write_text(Chem.MolToXYZBlock(graph))
+    record = TsProcessRecord(run_id='symmetric', run_dir=str(tmp_path), workspace_dir=str(tmp_path),
+        input=_declaration(reactant_smiles='CC', product_smiles='CC', charge=0,
+                            reaction_center=[(0, 1)]),
+        structures=dict(reactant=working, product=mol, product_to_reactant=tuple(mapping)))
+
+    atoms = _endpoint_seed_atoms(record, 'product', EndpointSeed(
+        kind='file', xyz_path=str(working_xyz), mol_path=str(working_mol), evidence_refs=[str(working_xyz)],
+    ))
+
+    assert atoms == read_xyz_atoms(working_xyz)
 
 
 def _install_fake_irc_endpoints(monkeypatch, symbols, end_a_pos, end_b_pos):
@@ -1029,11 +1304,25 @@ def _sn2_minima(record, symbols):
 
 def _install_endpoint_minimum_jobs(record, monkeypatch, symbols, reactant, product,
                                    *, reactant_opt_converged=True,
-                                   reactant_freqs=None):
-    """Only external QM parsing is replaced; verdict and interval proof stay real."""
+                                   reactant_freqs=None, origins=None):
+    """Keep native TS geometry, endpoint provenance and species checks real."""
     from types import SimpleNamespace
 
     from cloudra.tools.core.ts_process import TsJobStep, _refinement_log_path
+
+    frequency = next(step for step in record.job_steps if step.purpose == 'frequency')
+    irc = next(step for step in record.job_steps if step.purpose == 'irc')
+    ts_path = Path(frequency.input_path).parent / 'optimized.xyz'
+    if ts_path.is_file():
+        ts_rows = '\n'.join(ts_path.read_text().splitlines()[2:])
+        ts_geometry = ('O   R   C   A\nCARTESIAN COORDINATES (ANGSTROEM)\n'
+                       '---------------------------------\n' + ts_rows + '\n\n')
+        Path(_refinement_log_path(record, frequency)).write_text(
+            ts_geometry + 'VIBRATIONAL FREQUENCIES\n 0: -500.0 cm**-1\n'
+            ' 1: 120.0 cm**-1\n 2: 300.0 cm**-1\n\nORCA TERMINATED NORMALLY\n')
+        Path(_refinement_log_path(record, irc)).write_text(
+            ts_geometry + 'Intrinsic Reaction Coordinate Calculation\n'
+            '* FORWARD IRC *\n* BACKWARD IRC *\nORCA TERMINATED NORMALLY\n')
 
     endpoint_freqs = [120.0, 300.0] if reactant_freqs is None else reactant_freqs
     for role, positions, opt_id, freq_id, number in (
@@ -1051,34 +1340,61 @@ def _install_endpoint_minimum_jobs(record, monkeypatch, symbols, reactant, produ
         (freq_dir / "optimized.xyz").write_text(
             _xyz_text(symbols, positions, f"optimized {role}"), encoding="utf-8"
         )
+        import hashlib
+        source_path = opt_dir / f'{role}_source.xyz'
+        origin = (origins or {}).get(role, 'A' if role == 'reactant' else 'B')
+        irc = next(s for s in record.job_steps if s.purpose == 'irc')
+        source_xyz = _xyz_text(symbols, positions, 'accepted explicit species source')
+        if origin in {'A', 'B'}:
+            from cloudra.tools.Chemtool.ts_guess import TsGuess
+            try:
+                info = TsGuess._extract_irc_endpoints(_refinement_log_path(record, irc), [],
+                    output_dir=str(opt_dir / 'native_outer_frames'), engine='orca', require_two_sides=True)
+                if info is not None:
+                    source_xyz = info['end_a' if origin == 'A' else 'end_b'].xyz
+            except ValueError:
+                pass  # Deliberately missing IRC fixtures remain unverified.
+        source_path.write_text(source_xyz)
+        source = dict(kind='species_reference' if origin in {'reactant', 'product'} else 'irc_outer_frame',
+            label=origin, source_path=str(source_path), sha256=hashlib.sha256(source_path.read_bytes()).hexdigest(),
+            irc_job_id=irc.job_id, irc_log_sha256=hashlib.sha256(Path(_refinement_log_path(record, irc)).read_bytes()).hexdigest())
         opt_step = TsJobStep(
             purpose=f"{role}_opt", job_id=opt_id, input_path=str(opt_input), state="done",
+            endpoint_source=source,
         )
         freq_step = TsJobStep(
             purpose=f"{role}_frequency", job_id=freq_id,
             input_path=str(freq_input), state="done",
+            endpoint_source=source,
         )
         record.job_steps.extend((opt_step, freq_step))
         coordinate_rows = "\n".join(
             f"{symbol} {position[0]:.8f} {position[1]:.8f} {position[2]:.8f}"
             for symbol, position in zip(symbols, positions)
         )
+        initial_rows = '\n'.join(source_xyz.splitlines()[2:])
         Path(_refinement_log_path(record, opt_step)).write_text(
+            "* O   R   C   A *\n"
             "GEOMETRY OPTIMIZATION CYCLE\n"
             "CARTESIAN COORDINATES (ANGSTROEM)\n"
             "---------------------------------\n"
-            f"{coordinate_rows}\n\n"
+            f"{initial_rows}\n\n"
             + (
                 "THE OPTIMIZATION HAS CONVERGED\n" if (
                     role != "reactant" or reactant_opt_converged
                 ) else "The optimization did not converge\n"
-            ),
+            )
+            + "FINAL ENERGY EVALUATION AT THE STATIONARY POINT\n"
+            + "CARTESIAN COORDINATES (ANGSTROEM)\n"
+            "---------------------------------\n"
+            f"{coordinate_rows}\n\n"
+            "ORCA TERMINATED NORMALLY\n",
             encoding="utf-8",
         )
         Path(_refinement_log_path(record, freq_step)).write_text(
-            "CARTESIAN COORDINATES (ANGSTROEM)\n"
+            "O   R   C   A\nCARTESIAN COORDINATES (ANGSTROEM)\n"
             "---------------------------------\n"
-            + coordinate_rows + "\n\nfrequency evidence\n",
+            + coordinate_rows + "\n\nORCA TERMINATED NORMALLY\n",
             encoding="utf-8",
         )
 
@@ -1098,11 +1414,8 @@ def _install_endpoint_minimum_jobs(record, monkeypatch, symbols, reactant, produ
     monkeypatch.setattr("cloudra.dag.evidence_ingest.snapshot_evidence_file", snapshot)
 
 
-def test_verdict_verified_requires_and_passes_interval_proof(tmp_path, monkeypatch):
-    """freq(1 imag) + IRC 双侧几何 + 区间证明通过 → verified。
-
-    区间证明是本次新增的必要条件：端点几何各自位于 TS 与对应声明极小值之间。
-    """
+def test_verdict_verified_keeps_passing_interval_as_advisory(tmp_path, monkeypatch):
+    """A valid endpoint lineage also reports its consistent geometric interval."""
     from cloudra.tools.core.ts_process import _verdict
 
     record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
@@ -1117,12 +1430,12 @@ def test_verdict_verified_requires_and_passes_interval_proof(tmp_path, monkeypat
     _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
     # The original build geometry is only a path seed. Corrupting its shape
     # must not replace the separately optimized endpoint reference in proof.
-    from cloudra.tools.core.ts_process import _read_built_xyz
 
-    record.current_seed_mol_path = _read_built_xyz(record, "reactant")[3]
     raw_seed = Path(record.run_dir) / "raw_search_seed.xyz"
     raw_seed.write_text(_xyz_text(symbols, b, "not a minimum"), encoding="utf-8")
-    record.current_seed_xyz_path = str(raw_seed)
+    from cloudra.tools.core.molecule import with_positions
+    from cloudra.tools.core.structure_artifacts import read_xyz_atoms
+    record.structures.reactant = with_positions(record.structures.reactant, [point for _, point in read_xyz_atoms(raw_seed)])
 
     record = _verdict(record)
     assert record.terminal == "verified", record.stage_record("verdict").detail
@@ -1175,11 +1488,86 @@ def test_verdict_accepts_reversed_irc_side_identity_with_matching_provenance(
     _install_fake_irc_endpoints(
         monkeypatch, symbols, 0.25 * a + 0.75 * b, 0.75 * a + 0.25 * b,
     )
-    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, b, a)
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b,
+        origins={'reactant': 'B', 'product': 'A'})
 
     result = _verdict(record)
     assert result.terminal == "verified", result.stage_record("verdict").detail
     assert "swapped" in result.stage_record("verdict").detail
+
+
+@pytest.mark.parametrize('origins', [
+    {'reactant': 'reactant', 'product': 'product'},
+])
+def test_explicit_species_seed_does_not_prove_irc_endpoint_lineage(tmp_path, monkeypatch, origins):
+    from cloudra.tools.core.ts_process import _verdict
+
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    a, b = _sn2_minima(record, symbols)
+    (job_dir / 'optimized.xyz').write_text(_xyz_text(symbols, 0.5 * (a + b), 'TS'))
+    _install_fake_irc_endpoints(monkeypatch, symbols, 0.25 * a + 0.75 * b, 0.75 * a + 0.25 * b)
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b, origins=origins)
+    result = _verdict(record)
+    assert result.terminal == 'candidate_only'
+    assert 'outer-frame' in result.stage_record('verdict').detail
+
+
+def test_endpoint_cannot_label_an_optimized_minimum_as_native_outer_frame(tmp_path, monkeypatch):
+    import hashlib
+
+    from cloudra.tools.core.ts_process import _verdict
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    a, b = _sn2_minima(record, symbols)
+    (job_dir/'optimized.xyz').write_text(_xyz_text(symbols, 0.5*(a+b), 'TS'))
+    _install_fake_irc_endpoints(monkeypatch, symbols, 0.75*a+0.25*b, 0.25*a+0.75*b)
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
+    opt = next(s for s in record.job_steps if s.purpose == 'reactant_opt')
+    source_path = Path(opt.endpoint_source.source_path)
+    source_path.write_text(_xyz_text(symbols, a, 'minimum falsely labeled A'))
+    forged = opt.endpoint_source.model_copy(update={'sha256': hashlib.sha256(source_path.read_bytes()).hexdigest()})
+    for step in record.job_steps:
+        if step.purpose in {'reactant_opt', 'reactant_frequency'}:
+            step.endpoint_source = forged
+    assert _verdict(record).terminal == 'candidate_only'
+
+
+def test_verdict_rejects_opt_log_starting_from_a_different_geometry(tmp_path, monkeypatch):
+    from cloudra.tools.core.ts_process import _refinement_log_path, _verdict
+
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    a, b = _sn2_minima(record, symbols)
+    (job_dir / 'optimized.xyz').write_text(_xyz_text(symbols, 0.5 * (a + b), 'TS'))
+    _install_fake_irc_endpoints(monkeypatch, symbols, 0.75 * a + 0.25 * b, 0.25 * a + 0.75 * b)
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
+    opt = next(step for step in record.job_steps if step.purpose == 'reactant_opt')
+    source_rows = '\n'.join(Path(opt.endpoint_source.source_path).read_text().splitlines()[2:])
+    wrong_rows = '\n'.join(_xyz_text(symbols, a).splitlines()[2:])
+    opt_log = Path(_refinement_log_path(record, opt))
+    opt_log.write_text(opt_log.read_text().replace(source_rows, wrong_rows, 1))
+    # The archived source/hash and final Opt/Freq geometries remain correct;
+    # the native Opt actually started elsewhere and cannot prove this IRC side.
+
+    result = _verdict(record)
+
+    assert result.terminal == 'candidate_only'
+    assert 'native optimization' in result.stage_record('verdict').detail.lower()
+
+
+@pytest.mark.parametrize('explicit_role', ['reactant', 'product'])
+@pytest.mark.parametrize('swapped', [False, True])
+def test_mixed_seed_branches_do_not_prove_both_irc_endpoint_lineages(tmp_path, monkeypatch, explicit_role, swapped):
+    from cloudra.tools.core.ts_process import _verdict
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    a, b = _sn2_minima(record, symbols)
+    (job_dir/'optimized.xyz').write_text(_xyz_text(symbols, 0.5*(a+b), 'TS'))
+    ends = (0.25*a+0.75*b, 0.75*a+0.25*b) if swapped else (0.75*a+0.25*b, 0.25*a+0.75*b)
+    _install_fake_irc_endpoints(monkeypatch, symbols, *ends)
+    origins = {'reactant': 'B', 'product': 'A'} if swapped else {'reactant': 'A', 'product': 'B'}
+    origins[explicit_role] = explicit_role
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b, origins=origins)
+    result = _verdict(record)
+    assert result.terminal == 'candidate_only'
+    assert 'outer-frame' in result.stage_record('verdict').detail
 
 
 def test_verdict_rejects_two_irc_sides_optimized_to_same_species(tmp_path, monkeypatch):
@@ -1200,7 +1588,28 @@ def test_verdict_rejects_two_irc_sides_optimized_to_same_species(tmp_path, monke
     assert "identity" in result.stage_record("verdict").detail
 
 
-def test_verdict_rejects_identity_pairing_that_contradicts_irc_side_provenance(
+def test_wrong_input_mol_does_not_hide_observed_endpoint_species(tmp_path, monkeypatch):
+    from rdkit import Chem
+
+    from cloudra.tools.core.ts_process import _read_built_xyz, _verdict
+
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    a, b = _sn2_minima(record, symbols)
+    (job_dir / 'optimized.xyz').write_text(_xyz_text(symbols, 0.5 * (a + b), 'TS'))
+    _install_fake_irc_endpoints(monkeypatch, symbols, b, b)
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, b, b)
+    # Deliberately wrong input MOL triggers the old early return before geometry feedback.
+    product = Chem.MolFromMolFile(_read_built_xyz(record, 'product')[3], removeHs=False)
+    record.structures.reactant = Chem.RenumberAtoms(product, [1, 0, 5, 2, 3, 4])
+
+    result = _verdict(record)
+
+    assert result.terminal == 'candidate_only'
+    assert 'built MOL' in result.stage_record('verdict').detail
+    assert 'CF.[Cl-]' in result.stage_record('verdict').detail
+
+
+def test_verdict_uses_actual_optimized_origins_over_interval_pairing(
     tmp_path, monkeypatch,
 ):
     from cloudra.tools.core.ts_process import _verdict
@@ -1210,22 +1619,20 @@ def test_verdict_rejects_identity_pairing_that_contradicts_irc_side_provenance(
     (job_dir / "optimized.xyz").write_text(
         _xyz_text(symbols, 0.5 * (a + b), "TS geometry"), encoding="utf-8",
     )
-    # The IRC goes A→reactant/B→product, but the recorded optimization origins
-    # end up A→product/B→reactant. The two facts cannot be combined into proof.
+    # Pair distances prefer A→reactant/B→product, but actual optimizations
+    # establish A→product/B→reactant; geometry is only advisory.
     _install_fake_irc_endpoints(
         monkeypatch, symbols, 0.75 * a + 0.25 * b, 0.25 * a + 0.75 * b,
     )
-    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, b, a)
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b,
+        origins={'reactant': 'B', 'product': 'A'})
 
     result = _verdict(record)
-    assert result.terminal == "candidate_only"
-    assert "provenance" in result.stage_record("verdict").detail
+    assert result.terminal == "verified", result.stage_record("verdict").detail
+    assert "advisory" in result.stage_record("verdict").detail.lower()
 
 
-@pytest.mark.parametrize("defect", ["missing_side", "wrong_direction"])
-def test_partial_irc_still_requires_two_valid_directions(
-    tmp_path, monkeypatch, defect,
-):
+def test_partial_irc_still_requires_both_native_outer_frames(tmp_path, monkeypatch):
     from cloudra.tools.Chemtool.ts_guess import TsGuess
     from cloudra.tools.core import orca_frames
     from cloudra.tools.core.ts_process import _verdict
@@ -1239,17 +1646,14 @@ def test_partial_irc_still_requires_two_valid_directions(
     (job_dir / "optimized.xyz").write_text(
         _xyz_text(symbols, 0.5 * (a + b), "TS geometry"), encoding="utf-8",
     )
-    if defect == "missing_side":
-        monkeypatch.setattr(TsGuess, "_extract_irc_endpoints", staticmethod(
-            lambda *_args, **_kwargs: None,
-        ))
-    else:
-        _install_fake_irc_endpoints(monkeypatch, symbols, 0.75 * a + 0.25 * b, a)
+    monkeypatch.setattr(TsGuess, "_extract_irc_endpoints", staticmethod(
+        lambda *_args, **_kwargs: None,
+    ))
     _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
 
     result = _verdict(record)
     assert result.terminal == "candidate_only"
-    assert "interval proof" in result.stage_record("verdict").detail
+    assert "bidirectional" in result.stage_record("verdict").detail
 
 
 def test_verdict_rejects_raw_endpoint_guesses_even_when_irc_interval_matches(
@@ -1335,7 +1739,8 @@ def test_verdict_rejects_endpoint_xyz_unrelated_to_optimization_log(
     )
     _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
     stale = Path(next(s for s in record.job_steps if s.purpose=="reactant_frequency").input_path).parent / "optimized.xyz"
-    shifted = [[x + 0.01, y, z] for x, y, z in a]
+    shifted = [list(row) for row in a]
+    shifted[0][0] += 0.01
     stale.write_text(_xyz_text(symbols, shifted, "stale"), encoding="utf-8")
 
     result = _verdict(record)
@@ -1384,7 +1789,7 @@ def test_endpoint_identity_accepts_an_ionic_contact_pair(tmp_path):
 
     record = _start(
         tmp_path, reactant_smiles="[Na+].[Cl-]", product_smiles="[Na+].[Cl-]",
-        charge=0, reaction_center=[], atom_map=[],
+        charge=0, reaction_center=[],
     )
     assert _endpoint_identity_error(
         record, "reactant", (["Na", "Cl"], [[0.0, 0.0, 0.0], [2.4, 0.0, 0.0]]),
@@ -1400,7 +1805,7 @@ def test_endpoint_identity_detects_bond_order_change_with_same_bond_pairs(
 
     record = _start(
         tmp_path, reactant_smiles="C=CC", product_smiles="C=CC", charge=0,
-        reaction_center=[], atom_map=[],
+        reaction_center=[],
     )
     symbols, positions, _xyz, _mol = _read_built_xyz(record, "reactant")
     original = irc_path.perceive_bonds
@@ -1464,7 +1869,7 @@ def test_refine_unconverged_endpoint_opt_is_candidate_not_unfixable_block(
     record.waiting_for = "job:9011"
     opt_log = Path(process._refinement_log_path(record, step))
     opt_log.parent.mkdir(parents=True, exist_ok=True)
-    opt_log.write_text("The optimization did not converge\n", encoding="utf-8")
+    opt_log.write_text("O   R   C   A\nThe optimization did not converge\nORCA TERMINATED NORMALLY\n", encoding="utf-8")
     monkeypatch.setattr(process, "_read_job_state", lambda _record, _job_id: "done")
 
     result = process._refine(record)
@@ -1477,8 +1882,9 @@ def test_unreadable_gaussian_endpoint_opt_log_finishes_candidate_only(
     tmp_path, monkeypatch,
 ):
     """Parser failure after a completed compute job must not strand a waiting run."""
+    import cclib
+
     import cloudra.tools.core.ts_process as process
-    from cloudra.tools.core import gaussian_frames
     from cloudra.tools.core.ts_process import TsJobStep
 
     record = _start(tmp_path, engine="gaussian")
@@ -1495,24 +1901,19 @@ def test_unreadable_gaussian_endpoint_opt_log_finishes_candidate_only(
     record.waiting_for = "job:9011"
     opt_log = Path(process._refinement_log_path(record, step))
     opt_log.parent.mkdir(parents=True, exist_ok=True)
-    opt_log.write_text("Normal termination of Gaussian\n", encoding="utf-8")
+    opt_log.write_text(native_qm_log('gaussian', ['O', 'H', 'H'],
+        [[0., 0., 0.], [.96, 0., 0.], [-.24, .93, 0.]]).replace('0.96000000', 'unreadable'), encoding='utf-8')
     monkeypatch.setattr(process, "_read_job_state", lambda _record, _job_id: "done")
-    monkeypatch.setattr(
-        gaussian_frames, "extract_frames",
-        lambda _path: (_ for _ in ()).throw(ValueError("unreadable geometry")),
-    )
+    monkeypatch.setattr(cclib.io, 'ccread', lambda *_a, **_k: None)
 
     result = process._refine(record)
     assert result.terminal == "candidate_only"
     assert result.blocked is None
-    assert "unreadable" in result.stage_record("verdict").detail.lower()
+    assert "geometry" in result.stage_record("verdict").detail.lower()
 
 
-def test_verdict_converged_irc_without_connectivity_is_candidate_only(tmp_path, monkeypatch):
-    """IRC 双侧有几何但端点不在 TS 与声明极小值之间 → candidate_only。
-
-    「IRC 跑完了」本身不构成「落回声明的极小值」的证据。
-    """
+def test_verdict_accepts_actual_outer_frame_minima_when_interval_fails(tmp_path, monkeypatch):
+    """Real A/B optimizations to the correct minima outweigh pair-distance intervals."""
     import numpy as np
 
     from cloudra.tools.core.ts_process import _verdict
@@ -1530,10 +1931,59 @@ def test_verdict_converged_irc_without_connectivity_is_candidate_only(tmp_path, 
     _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
 
     record = _verdict(record)
-    assert record.terminal == "candidate_only"
+    assert record.terminal == "verified", record.stage_record("verdict").detail
     detail = record.stage_record("verdict").detail
-    assert "interval proof" in detail
-    assert "UNVERIFIED" in detail
+    assert "advisory" in detail.lower()
+    assert "warning" in detail.lower()
+    assert "inspect the trajectory" in detail.lower()
+
+
+def test_verdict_keeps_lineage_verified_when_interval_analysis_errors(tmp_path, monkeypatch):
+    import cloudra.tools.core.ts_process as process
+
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    a, b = _sn2_minima(record, symbols)
+    (job_dir / 'optimized.xyz').write_text(_xyz_text(symbols, 0.5 * (a + b), 'TS'))
+    _install_fake_irc_endpoints(monkeypatch, symbols, 0.75 * a + 0.25 * b, 0.25 * a + 0.75 * b)
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
+
+    def unreadable_interval(*_args, **_kwargs):
+        raise ValueError('interval analysis failed')
+
+    monkeypatch.setattr(process, '_irc_interval_proof', unreadable_interval)
+    result = process._verdict(record)
+
+    assert result.terminal == 'verified', result.stage_record('verdict').detail
+    assert 'warning' in result.stage_record('verdict').detail.lower()
+    assert 'inspect the trajectory' in result.stage_record('verdict').detail.lower()
+
+
+def test_verdict_rejects_endpoint_lineage_from_a_different_ts(tmp_path, monkeypatch):
+    import hashlib
+
+    from cloudra.tools.core.ts_process import _refinement_log_path, _verdict
+
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    a, b = _sn2_minima(record, symbols)
+    (job_dir / 'optimized.xyz').write_text(_xyz_text(symbols, 0.5 * (a + b), 'TS'))
+    _install_fake_irc_endpoints(monkeypatch, symbols, 0.75 * a + 0.25 * b, 0.25 * a + 0.75 * b)
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, a, b)
+    irc = next(step for step in record.job_steps if step.purpose == 'irc')
+    irc_log = Path(_refinement_log_path(record, irc))
+    wrong_rows = '\n'.join(_xyz_text(symbols, a).splitlines()[2:])
+    irc_log.write_text('O   R   C   A\nCARTESIAN COORDINATES (ANGSTROEM)\n'
+                       '---------------------------------\n' + wrong_rows + '\n\n'
+                       'Intrinsic Reaction Coordinate Calculation\n'
+                       '* FORWARD IRC *\n* BACKWARD IRC *\nORCA TERMINATED NORMALLY\n')
+    digest = hashlib.sha256(irc_log.read_bytes()).hexdigest()
+    for step in record.job_steps:
+        if step.endpoint_source is not None:
+            step.endpoint_source = step.endpoint_source.model_copy(update={'irc_log_sha256': digest})
+
+    result = _verdict(record)
+
+    assert result.terminal == 'candidate_only'
+    assert 'same frequency-verified TS' in result.stage_record('verdict').detail
 
 
 # ---------------------------------------------------------------------------
@@ -1679,8 +2129,7 @@ def test_file_complex_assembly_uses_bound_structure_components(tmp_path):
         {"index": i, "symbol": symbol} for i, symbol in enumerate(["F", "C", "Cl", "H", "H", "H"])]}))
     record = TsProcessRecord(run_id="file-complex", run_dir=str(tmp_path), workspace_dir=str(tmp_path),
         owner_conversation_id="test", owner_session_id="test", input=_declaration(reaction_center=[]),
-        current_reactant_prepared_path=str(prepared),
-        structures={"reactant": {"components": 2}})
+        structures=dict(reactant=__import__("rdkit").Chem.MolFromSmiles(REACTANT)))
     result = _assemble(record)
     assert result.blocked is not None
     assert result.blocked.failure_class == "reaction_center_missing"
@@ -1691,3 +2140,48 @@ def test_truncated_path_requests_current_guess_revision_not_obsolete_budget(tmp_
     record = _start(tmp_path)
     assert record.blocked.failure_class == "path_not_converged"
     assert record.blocked.needs == ["guess"]
+
+
+def test_ts_interval_reference_reordering_retains_unresolved_molecular_properties(tmp_path, monkeypatch):
+    from rdkit import Chem
+
+    from cloudra.tools.core import irc_path
+    from cloudra.tools.core.molecule import read_molecule, serialize_molecule, total_charge
+    from cloudra.tools.core.ts_process import _irc_interval_proof
+
+    record, symbols, job_dir = _record_with_freq_and_converged_irc(tmp_path, monkeypatch)
+    reactant, product = _sn2_minima(record, symbols)
+    (job_dir / 'optimized.xyz').write_text(_xyz_text(symbols, 0.5 * (reactant + product)))
+    _install_fake_irc_endpoints(monkeypatch, symbols, 0.75 * reactant + 0.25 * product,
+                                0.25 * reactant + 0.75 * product)
+    _install_endpoint_minimum_jobs(record, monkeypatch, symbols, reactant, product)
+    native = record.structures.product
+    reference = read_molecule(input_text=Chem.MolToXYZBlock(native), input_format='xyz', charge=-1)
+    reference.SetIntProp('reference_revision', 7)
+    reference.SetProp('_source_note', 'original coordinate reference')
+    record.structures.product = reference
+    before = serialize_molecule(reference)
+
+    def inspect_references(*_args, reference_molecules, **_kwargs):
+        reordered = reference_molecules[1]
+        assert reordered.GetProp('cloudra_graph_status') == 'unresolved'
+        assert total_charge(reordered) == -1
+        assert reordered.GetIntProp('reference_revision') == 7
+        assert reordered.GetProp('_source_note') == 'original coordinate reference'
+        return dict(is_decidable=True, is_match=True, assignment='direct')
+
+    monkeypatch.setattr(irc_path, 'assign_irc_endpoints', inspect_references)
+    frequency = next(step for step in record.job_steps if step.purpose == 'frequency')
+    accepted, detail = _irc_interval_proof(record, 'unused.log', frequency,
+        (symbols, reactant), (symbols, product), {})
+    assert accepted, detail
+    assert serialize_molecule(reference) == before
+
+
+def test_unique_mapping_is_owned_without_agent_transport(tmp_path):
+    record = _start(tmp_path)
+    assert record.structures.product_to_reactant == tuple(ATOM_MAP)
+    assert record.stage_record('map').status == 'done'
+    data = record.model_dump(mode='json')
+    assert 'atom_map' not in data['input']['reaction']
+    assert not {'input_binding', 'seed_molecules', 'current_seed_xyz_path', 'current_ts_guess_path'} & data.keys()

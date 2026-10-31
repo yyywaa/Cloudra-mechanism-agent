@@ -1,14 +1,16 @@
 """RDS 能垒的交付物推导：只读 log 文件与交付 JSON，不解析任何 LLM 散文。
 
 能垒口径（题库 query 协议一致）：**决速步（RDS）基元反应的能垒**，相对该步
-起点最小值（单步题即"相对反应物络合物"）。推导链完全确定性：
+稳定起点最小值（单步题即"相对反应物络合物"）。化学反应步可沿图中已声明的
+同物种构象连接选稳定中间体；构象步本身仍相对其局部起点。推导链完全确定性：
 
 1. 交付 ``mechanism_graph.json`` 声明每条边的 ``barrier_kcal_mol``；
 2. harness 从绑定到该步的日志算出 ``E(TS) − E(起点最小值)``（Hartree →
    kcal/mol，用 ``tools/core/*_frames`` 的文本权威能量，不解析散文）；
 3. 逐步比较，RDS = 推算能垒最大的那一步（并列按 edge id 排序，确定性）；
-4. 评分要求声明值与推算值**都存在且一致**（复用 accuracy 的 sigma 容差），
-   任一缺失/冲突一律 fail-loud 记 0 并写明原因——绝不用最终消息里的数字兜底。
+4. 评分要求声明值与推算值**都存在且一致**（复用 accuracy 的 sigma 容差）。
+   缺失只计该边 0 分；声明与日志冲突按 accuracy 的证据核对规则处理。
+   绝不用最终消息里的数字兜底。
 
 TS 日志的识别是内容权威而非文件名猜谜：优先取物理上就是一阶鞍点（恰一个
 虚频）的证据文件；多个候选/无法唯一确定时**不猜**，记 note 并跳过该步。
@@ -26,6 +28,8 @@ from cloudra.benchmark.integrity import (
     scan_evidence_files,
 )
 from cloudra.benchmark.schema import GoldMechanismGraph
+from cloudra.tools.core.irc_evidence import normal_log
+from cloudra.tools.core.qm_log_facts import read_qm_log
 
 # CODATA Hartree → kcal/mol
 HARTREE_TO_KCAL_MOL = 627.5094740631
@@ -36,7 +40,7 @@ _SCORING_ENGINES = ("gaussian", "orca")
 # 声明能量用于"指认交付日志"（同节点绑定多份合法日志时选哪一份）的容差：
 # 声明值与日志解析值来自同一份日志，正常应严格一致；留 1e-4 Ha（≈0.06 kcal）
 # 吸收交付侧的舍入。
-_DECLARED_ENERGY_TOL_HARTREE = 1e-4
+DECLARED_ENERGY_TOL_HARTREE = 1e-4
 
 
 @dataclass(frozen=True)
@@ -55,7 +59,7 @@ class StepBarrier:
 class BarrierEvidence:
     """交付物的能垒证据集合（steps 为空即无法从交付物推出能垒）。
 
-    ``steps`` 是策略选中的组合（声明能量指认优先、否则启发式）；
+    ``steps`` 是策略选中的组合（TS 声明能量指认，反应步取稳定中间体）；
     ``alternatives[edge_id]`` 保留该边**全部合法组合**（TS 日志 × 起点极小值
     日志）——当交付声明的是一个构象、而参考答案对应另一个已算好的构象时，
     评分侧需要看到这些组合才能区分"指认/定义差异"与"无据声明"。"""
@@ -92,40 +96,13 @@ def _resolve_in_sandbox(sandbox: Path, rel_path: str) -> Optional[Path]:
     return candidate
 
 
-def _frames_for(sandbox: Path, rel_path: str):
-    """(引擎, 帧列表)；非 ORCA/Gaussian 或解析失败返回 (engine, [])。"""
-    from cloudra.tools.core import gaussian_frames, orca_frames
-    from cloudra.tools.core.qm_engine import detect_qm_engine
-
-    path = _resolve_in_sandbox(sandbox, rel_path)
-    if path is None:
-        return None, []
-    engine = detect_qm_engine(str(path)) if path.is_file() else None
-    if engine not in _SCORING_ENGINES:
-        return engine, []
-    mod = orca_frames if engine == "orca" else gaussian_frames
-    try:
-        return engine, list(mod.extract_frames(str(path)))
-    except Exception:
-        return engine, []
-
-
-def _last_frequencies(frames) -> list[float]:
-    """末帧携带的频率列表（有符号，负值 = 虚频）；没有频率块返回 []。"""
-    for frame in reversed(frames):
-        if frame.frequencies_cm:
-            return list(frame.frequencies_cm)
-    return []
-
-
 def _engine_energy_kcal(sandbox: Path, rel_path: str) -> tuple[Optional[float], str]:
     """证据日志 → 最终能量（kcal/mol）。(值, 原因) —— 原因非空即不可用。
 
-    ORCA 走文本权威能量行（cclib 对外部势/ExtOpt 日志常失败）；Gaussian 走
-    帧记录的 cclib 能量。两者都不读任何散文。
+    两引擎使用同一原生事实入口的最终方法电子能，独立于 SCF 中间能。
     """
-    from cloudra.tools.core import gaussian_frames, orca_frames
     from cloudra.tools.core.qm_engine import detect_qm_engine
+    from cloudra.tools.core.qm_log_facts import parse_qm_log_text
 
     path = _resolve_in_sandbox(sandbox, rel_path)
     if path is None:
@@ -135,6 +112,8 @@ def _engine_energy_kcal(sandbox: Path, rel_path: str) -> tuple[Optional[float], 
         )
     if not path.is_file():
         return None, f"{rel_path}: evidence file missing"
+    if not normal_log(path):
+        return None, f'{rel_path}: normally terminated native evidence required'
     engine = detect_qm_engine(str(path))
     if engine not in _SCORING_ENGINES:
         return None, (
@@ -144,14 +123,7 @@ def _engine_energy_kcal(sandbox: Path, rel_path: str) -> tuple[Optional[float], 
     text = _read_text(path)
     if not text.strip():
         return None, f"{rel_path}: empty log"
-    if engine == "orca":
-        energy = orca_frames.final_energy_hartree(text)
-    else:
-        energy = None
-        for frame in reversed(gaussian_frames.extract_frames(str(path))):
-            if frame.scf_energy_hartree is not None:
-                energy = frame.scf_energy_hartree
-                break
+    energy = parse_qm_log_text(text, source_path=str(path)).electronic_energy_hartree
     if energy is None:
         return None, f"{rel_path}: no final energy in the {engine} log"
     return float(energy) * HARTREE_TO_KCAL_MOL, ""
@@ -159,30 +131,30 @@ def _engine_energy_kcal(sandbox: Path, rel_path: str) -> tuple[Optional[float], 
 
 def _imaginary_frequency_count(sandbox: Path, rel_path: str) -> Optional[int]:
     """证据文件里的虚频个数（判定它物理上是不是一阶鞍点）；不可判定返回 None。"""
-    engine, frames = _frames_for(sandbox, rel_path)
-    if engine not in _SCORING_ENGINES:
+    path = _resolve_in_sandbox(sandbox, rel_path)
+    if path is None or not normal_log(path):
         return None
-    if engine == "orca":
-        # cclib 对 ORCA 6.1 日志裸抛 IndexError——走带文本回退的统一入口
-        path = _resolve_in_sandbox(sandbox, rel_path)
-        if path is None or not path.is_file():
-            return None
-        from cloudra.tools.core import orca_frames
-
-        freqs = orca_frames.frequencies_with_text_fallback(str(path))
-    else:
-        freqs = _last_frequencies(frames)
+    facts = read_qm_log(path)
+    if facts.engine not in _SCORING_ENGINES:
+        return None
+    freqs = facts.frequencies_cm
     if not freqs:
         return None
     return sum(1 for f in freqs if f < 0)
 
 
-def _is_step_ts(sandbox: Path, rel_path: str) -> Optional[bool]:
-    """该证据文件是否是一阶鞍点（TS）：True/False/None(不可判定)。"""
-    imag = _imaginary_frequency_count(sandbox, rel_path)
-    if imag is None:
-        return None
-    return imag == 1
+def _frequency_supported(sandbox, path, candidates, expected):
+    """A separate Freq can support an energy log only at the same geometry."""
+    from cloudra.tools.core.irc_path import same_geometry
+    resolved = _resolve_in_sandbox(sandbox, path)
+    if resolved is None or not normal_log(resolved):
+        return False
+    if _imaginary_frequency_count(sandbox, path) == expected:
+        return True
+    source = read_qm_log(resolved).geometry
+    return any(_imaginary_frequency_count(sandbox, other) == expected and
+               same_geometry(source, read_qm_log(sandbox / other).geometry)
+               for other in candidates)
 
 
 def _declared_node_energy_hartree(node) -> Optional[float]:
@@ -210,15 +182,56 @@ def _identify_by_declared_energy(
     """候选日志里最终能量与声明值最接近（容差内）的那份；无声明/无命中 None。"""
     if declared is None:
         return None
-    best: Optional[tuple[float, str]] = None
+    from cloudra.tools.core.irc_path import same_geometry
+
+    matches = []
     for path in candidates:
         energy = _log_energy_hartree(sandbox, path)
         if energy is None:
             continue
         delta = abs(energy - declared)
-        if delta <= _DECLARED_ENERGY_TOL_HARTREE and (best is None or delta < best[0]):
-            best = (delta, path)
-    return best[1] if best else None
+        if delta <= DECLARED_ENERGY_TOL_HARTREE:
+            matches.append((delta, path))
+    if not matches:
+        return None
+    matches.sort()
+    anchor = read_qm_log(sandbox / matches[0][1]).geometry
+    if any(not same_geometry(anchor, read_qm_log(sandbox / path).geometry)
+           for _, path in matches[1:]):
+        return None  # An energy alone cannot select between different structures.
+    return matches[0][1]
+
+
+def _reference_node_ids(graph: GoldMechanismGraph, edge) -> list[str]:
+    """反应步沿同物种构象边找稳定参考；不合并独立通道或立体异构底物。"""
+    selected = {edge.from_node}
+    if not edge.bond_changes.pairs():
+        return [edge.from_node]
+    from cloudra.benchmark.graph_similarity import GedConfig, species_substitution_cost
+
+    nodes = {node.id: node for node in graph.nodes}
+    source = nodes[edge.from_node]
+    cfg = GedConfig(stereo_free=False)
+    pending = [edge.from_node]
+    while pending:
+        current = pending.pop()
+        for link in graph.edges:
+            if link.bond_changes.pairs() or not graph.edge_effectively_accessible(link):
+                continue
+            if link.from_node == current:
+                candidate = link.to_node
+            elif link.to_node == current:
+                candidate = link.from_node
+            else:
+                continue
+            node = nodes[candidate]
+            if (
+                candidate not in selected and node.accessible and node.smiles
+                and species_substitution_cost(source.smiles, node.smiles, cfg) == 0.0
+            ):
+                selected.add(candidate)
+                pending.append(candidate)
+    return [edge.from_node, *sorted(selected - {edge.from_node})]
 
 
 def collect_barrier_evidence(sandbox: Path | str) -> BarrierEvidence:
@@ -238,7 +251,8 @@ def collect_barrier_evidence(sandbox: Path | str) -> BarrierEvidence:
     files = scan_evidence_files(sandbox, exclude=graph_path)
     from cloudra.benchmark.integrity import bind_graph_to_evidence
 
-    bindings = {b.node_id: b for b in bind_graph_to_evidence(graph, files)}
+    bindings = {b.node_id: b for b in bind_graph_to_evidence(graph, files, sandbox=sandbox)}
+    log_paths = [f.path for f in files if f.kind in _SCORING_ENGINES]
     by_id = {node.id: node for node in graph.nodes}
 
     for edge in graph.edges:
@@ -251,8 +265,19 @@ def collect_barrier_evidence(sandbox: Path | str) -> BarrierEvidence:
         if base_node is None:
             report.notes.append(f"edge {edge.id}: unknown base node {edge.from_node}")
             continue
-        base_binding = bindings.get(edge.from_node)
-        base_candidates = list(base_binding.bound_files) if base_binding else []
+        if len(base_node.smiles) > 1:
+            report.notes.append(
+                f"edge {edge.id}: separated source species have no single complex energy reference; "
+                "component energies are not substituted for it"
+            )
+            continue
+        reference_nodes = _reference_node_ids(graph, edge)
+        base_owners = {}
+        for node_id in reference_nodes:
+            binding = bindings.get(node_id)
+            for path in binding.bound_files if binding else []:
+                base_owners.setdefault(path, node_id)
+        base_candidates = sorted(base_owners)
         if not base_candidates:
             report.notes.append(
                 f"edge {edge.id}: base node {edge.from_node} has no bound evidence"
@@ -264,7 +289,7 @@ def collect_barrier_evidence(sandbox: Path | str) -> BarrierEvidence:
         ts_binding = bindings.get(edge.via)
         ts_candidates = list(ts_binding.bound_files) if ts_binding else []
         saddles = [
-            p for p in sorted(set(ts_candidates)) if _is_step_ts(sandbox, p) is True
+            p for p in sorted(set(ts_candidates)) if _frequency_supported(sandbox, p, log_paths, 1)
         ]
         if not saddles:
             report.notes.append(
@@ -285,12 +310,13 @@ def collect_barrier_evidence(sandbox: Path | str) -> BarrierEvidence:
                     "energy_hartree)"
                 )
             saddles = [matched_ts]
-        elif declared_ts_energy is not None and len(saddles) > 1:
+        elif declared_ts_energy is not None:
             report.notes.append(
                 f"edge {edge.id}: TS {edge.via} declares energy_hartree "
                 f"{declared_ts_energy:.6f} but no bound saddle log matches it; "
-                "falling back to name/deterministic selection"
+                "barrier not derivable from the declared evidence"
             )
+            continue
         if len(saddles) > 1:
             tokens = [t.lower() for t in (edge.id, edge.via, ts_node_name) if t]
             preferred = [
@@ -318,12 +344,10 @@ def collect_barrier_evidence(sandbox: Path | str) -> BarrierEvidence:
             report.notes.append(f"edge {edge.id}: {ts_reason}")
             continue
 
-        # 起点最小值的选择：节点声明的 energy_hartree 优先指认交付的是哪份
-        # 极小值日志（同一中间体的不同构象都是合法极小值）；无声明或未命中时
-        # 退回启发式——鞍点连通的是它正下方**最浅**的那个阱（拿更深的远端极小值
-        # 当起点会把别的阱的稳定化能错算进能垒）。
+        # 反应步按用户确认的稳定中间体作分母，不用声明能量强制选较浅构象。
+        # 构象步只在自己的起点节点内指认局部参考，不把另一端稳定化重复计入。
         minima = [
-            p for p in base_candidates if _imaginary_frequency_count(sandbox, p) == 0
+            p for p in base_candidates if _frequency_supported(sandbox, p, log_paths, 0)
         ]
         minima_energies: dict[str, float] = {}
         for candidate in minima:
@@ -346,7 +370,7 @@ def collect_barrier_evidence(sandbox: Path | str) -> BarrierEvidence:
                 edge_id=edge.id,
                 ts_path=ts_candidate,
                 base_path=base_candidate,
-                base_node_id=edge.from_node,
+                base_node_id=base_owners[base_candidate],
                 barrier_kcal_mol=ts_e - base_e,
                 declared_kcal_mol=edge.barrier_kcal_mol,
             )
@@ -354,18 +378,12 @@ def collect_barrier_evidence(sandbox: Path | str) -> BarrierEvidence:
             for base_candidate, base_e in sorted(minima_energies.items())
             if base_e < ts_e
         ]
-        declared_base_energy = _declared_node_energy_hartree(base_node)
+        declared_base_energy = (
+            _declared_node_energy_hartree(base_node) if not edge.bond_changes.pairs() else None
+        )
         matched_base = None
         if declared_base_energy is not None:
-            target_kcal = declared_base_energy * HARTREE_TO_KCAL_MOL
-            tol_kcal = _DECLARED_ENERGY_TOL_HARTREE * HARTREE_TO_KCAL_MOL
-            matches = sorted(
-                (abs(energy - target_kcal), path)
-                for energy, path in below
-                if abs(energy - target_kcal) <= tol_kcal
-            )
-            if matches:
-                matched_base = matches[0][1]
+            matched_base = _identify_by_declared_energy(sandbox, [path for _, path in below], declared_base_energy)
         if matched_base is not None:
             base_energy, base_path = next(
                 (energy, path) for energy, path in below if path == matched_base
@@ -377,19 +395,20 @@ def collect_barrier_evidence(sandbox: Path | str) -> BarrierEvidence:
                     "energy_hartree)"
                 )
         else:
-            if declared_base_energy is not None and len(below) > 1:
+            if declared_base_energy is not None:
                 report.notes.append(
                     f"edge {edge.id}: {edge.from_node} declares energy_hartree "
                     f"{declared_base_energy:.6f} but no bound minimum matches it; "
-                    "falling back to the highest minimum below the saddle"
+                    "barrier not derivable from the declared evidence"
                 )
-            below.sort(key=lambda item: (-item[0], item[1]))
+                continue
+            below.sort(key=lambda item: (item[0], item[1]))
             base_energy, base_path = below[0]
             if len(below) > 1:
                 report.notes.append(
                     f"edge {edge.id}: several minima of {edge.from_node} below the "
-                    f"saddle; using {base_path} (highest-energy minimum below the "
-                    "saddle — the basin the saddle connects to)"
+                    f"saddle; using {base_path} (lowest-energy stable intermediate "
+                    "in the declared source conformational state)"
                 )
 
         report.steps.append(
@@ -397,7 +416,7 @@ def collect_barrier_evidence(sandbox: Path | str) -> BarrierEvidence:
                 edge_id=edge.id,
                 ts_path=ts_path,
                 base_path=base_path,
-                base_node_id=edge.from_node,
+                base_node_id=base_owners[base_path],
                 barrier_kcal_mol=ts_energy - base_energy,
                 declared_kcal_mol=edge.barrier_kcal_mol,
             )

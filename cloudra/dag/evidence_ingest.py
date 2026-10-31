@@ -37,15 +37,14 @@ class TSValidationResult(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    is_valid: bool
-    verified: bool = Field(
-        description="Whether the verdict is backed by actual frequency data. False means "
-                    "'unverified': there was nothing to judge, so this result must never be used "
-                    "to mark a step complete.",
+    frequency_count_valid: bool
+    frequency_data_present: bool = Field(
+        description="Whether actual frequency data was available. This checks only imaginary-frequency count, "
+                    "not optimization convergence, molecular identity or the reaction direction.",
     )
     n_imag: int
     imaginary_frequencies: list[float] = Field(default_factory=list)
-    mode_matched: bool = True
+    mode_matched: bool = False
     message: str = ""
 
 
@@ -54,11 +53,10 @@ class SpeciesValidationResult(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    is_valid: bool
-    verified: bool = Field(
-        description="Whether the verdict is backed by actual frequency data. False means "
-                    "'unverified': no frequency analysis was provided, so the species is NOT a "
-                    "verified stationary minimum and must never be marked complete.",
+    frequency_count_valid: bool
+    frequency_data_present: bool = Field(
+        description="Whether actual frequency data was available. Zero imaginary frequencies alone "
+                    "do not verify the declared molecular identity or a complete species delivery.",
     )
     n_imag: int
     imaginary_frequencies: list[float] = Field(default_factory=list)
@@ -66,60 +64,20 @@ class SpeciesValidationResult(BaseModel):
 
 
 def _extract_qm_log(path: Path) -> tuple[bool, str | None, list[float] | None, list[float] | None, float | None, list[dict[str, Any]] | None]:
-    """尝试从文件中解析 QM 属性（引擎、虚频、实频、能量）。"""
+    """Extract the same native facts used by tools and TS verification."""
+    from cloudra.tools.core.qm_log_facts import read_qm_log
+
     try:
-        from cloudra.tools.core import orca_frames, xtb_frames
-        from cloudra.tools.core.qm_engine import detect_qm_engine
-    except ImportError:
+        facts = read_qm_log(path)
+    except (OSError, ImportError) as exc:
+        logger.debug("QM facts unavailable for %s: %s", path, exc)
         return False, None, None, None, None, None
-
-    engine = detect_qm_engine(str(path))
-    if engine == "unknown" and path.suffix.lower() not in (".log", ".out", ".txt"):
+    if facts.engine == 'unknown' and facts.parser_data is None:
         return False, None, None, None, None, None
-
-    orca_text: str | None = None
-    xtb_text: str | None = None
-    vibfreqs: list[float] | None = None
-    final_energy: float | None = None
-
-    if engine in ("orca", "xtb"):
-        try:
-            with open(path, encoding="utf-8", errors="replace") as f:
-                content = f.read()
-            if engine == "orca":
-                orca_text = content
-                vibfreqs = orca_frames.vibfreqs_from_text(orca_text) or None
-                final_energy = orca_frames.final_energy_hartree(orca_text)
-            else:
-                xtb_text = content
-                vibfreqs = xtb_frames.vibfreqs_from_text(xtb_text) or None
-                final_energy = xtb_frames.final_energy_hartree(xtb_text)
-        except Exception as exc:
-            logger.debug("Failed reading %s frames for %s: %s", engine, path, exc)
-
-    if vibfreqs is None or final_energy is None:
-        try:
-            import cclib
-            import numpy as np
-
-            data = cclib.io.ccread(str(path))
-            if data is not None:
-                if vibfreqs is None and hasattr(data, "vibfreqs") and data.vibfreqs is not None:
-                    vibfreqs = [float(x) for x in np.asarray(data.vibfreqs, dtype=float)]
-                if final_energy is None and hasattr(data, "scfenergies") and data.scfenergies is not None and len(data.scfenergies) > 0:
-                    ev = float(data.scfenergies[-1])
-                    from cloudra.tools.core.cclib_units import energy_ev_to_hartree
-
-                    final_energy = energy_ev_to_hartree(ev)
-        except Exception as exc:
-            logger.debug("cclib parsing skipped/failed for %s: %s", path, exc)
-
-    if vibfreqs is None and final_energy is None and engine == "unknown":
-        return False, None, None, None, None, None
-
-    imag_freqs = [f for f in vibfreqs if f < 0] if vibfreqs is not None else None
-
-    return True, engine if engine != "unknown" else None, vibfreqs, imag_freqs, final_energy, None
+    freqs = facts.frequencies_cm
+    imaginary = [freq for freq in freqs if freq < 0] if freqs is not None else None
+    return (True, facts.engine if facts.engine != 'unknown' else None,
+            freqs, imaginary, facts.electronic_energy_hartree, None)
 
 
 def snapshot_evidence_file(
@@ -177,18 +135,34 @@ def snapshot_evidence_file(
                     sidecar = Path(endpoint["geometry_ref"]).resolve(strict=True)
                     sidecar.relative_to(root)
                     sidecars.append((sidecar, hashlib.sha256(sidecar.read_bytes()).hexdigest()))
+    elif engine == "gaussian":
+        from cloudra.tools.core import gaussian_frames, orca_frames
+
+        try:
+            _, irc_meta = gaussian_frames.extract_irc(str(resolved))
+        except ValueError:
+            pass
+        else:
+            archived = orca_frames._archived_irc_endpoints(str(resolved))
+            # Gaussian's real outer frames live in the hashed native log;
+            # the shared archive retains binding without inventing XYZ files.
+            irc_endpoints = archived or {
+                direction: {"geometry_ref": None, "origin": "native_log",
+                            "converged": irc_meta.get(f"{direction}_converged")}
+                for direction in ("forward", "backward")
+            }
     metadata = {}
+    from cloudra.services.ts_pipeline_context import pipeline_database
+    from cloudra.services.ts_pipeline_store import atom_binding_for_log
+    atom_binding = irc_endpoints['forward'].get('atom_binding') if irc_endpoints else None
+    if atom_binding is None:
+        atom_binding = atom_binding_for_log(pipeline_database(), resolved, root)
+    if atom_binding is not None:
+        metadata['atom_binding'] = atom_binding
     if irc_endpoints is not None:
-        bundle_hash = hashlib.sha256(json.dumps([sha256_hex, [(p.name, h) for p, h in sidecars]]).encode()).hexdigest()
-        evidence_dir = evidence_dir / bundle_hash
-        evidence_dir.mkdir(parents=True, exist_ok=True)
-        metadata["irc_sidecars"] = []
-        for original, digest in sidecars:
-            archived = evidence_dir / original.name
-            if not archived.exists():
-                shutil.copy2(original, archived)
-            metadata["irc_sidecars"].append({"snapshot_path": str(archived), "sha256": digest})
         manifest = {"log_sha256": sha256_hex, "endpoints": {}}
+        if atom_binding is not None:
+            manifest["atom_binding"] = atom_binding
         for direction, endpoint in irc_endpoints.items():
             original = endpoint.get("geometry_ref")
             match = next(((p, h) for p, h in sidecars if str(p) == original), None)
@@ -197,6 +171,15 @@ def snapshot_evidence_file(
                 "sha256": match[1] if match else None,
                 "origin": endpoint.get("origin"), "converged": endpoint.get("converged"),
             }
+        bundle_hash = hashlib.sha256(json.dumps(manifest).encode()).hexdigest()
+        evidence_dir = evidence_dir / bundle_hash
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        metadata["irc_sidecars"] = []
+        for original, digest in sidecars:
+            archived = evidence_dir / original.name
+            if not archived.exists():
+                shutil.copy2(original, archived)
+            metadata["irc_sidecars"].append({"snapshot_path": str(archived), "sha256": digest})
         manifest_path = evidence_dir / "irc_endpoints.json"
         if not manifest_path.exists():
             manifest_path.write_text(json.dumps(manifest))
@@ -205,7 +188,17 @@ def snapshot_evidence_file(
     snapshot_filename = f"{sha256_hex[:16]}_{resolved.name}"
     snapshot_path = evidence_dir / snapshot_filename
     if not snapshot_path.exists():
-        shutil.copy2(resolved, snapshot_path)
+        snapshot_path.write_bytes(data)
+    if hashlib.sha256(snapshot_path.read_bytes()).hexdigest() != sha256_hex:
+        raise ValueError('Evidence snapshot contents differ from their recorded hash.')
+    if hashlib.sha256(resolved.read_bytes()).hexdigest() != sha256_hex:
+        raise ValueError('Evidence file changed during snapshot; submit the settled file again.')
+    # Parse the archived bytes rather than mutable source contents.
+    is_qm, engine, freqs, imag_freqs, energy, normal_modes = _extract_qm_log(snapshot_path)
+    if irc_endpoints is not None:
+        from cloudra.tools.core.irc_endpoint_artifacts import write_irc_endpoint_artifacts
+
+        metadata.update(write_irc_endpoint_artifacts(snapshot_path))
 
     return FileEvidenceSnapshot(
         original_path=str(resolved),
@@ -228,14 +221,14 @@ def validate_ts_mode(
     description: str = "",
     imaginary_freqs: list[float] | None = None,
 ) -> TSValidationResult:
-    """校验过渡态是否具有恰好 1 个虚频，并匹配反应坐标描述。"""
+    """只检查恰好一个虚频；不验证优化、反应坐标或端点身份。"""
     has_freq_data = (freqs is not None and len(freqs) > 0) or (
         imaginary_freqs is not None and len(imaginary_freqs) > 0
     )
     if not has_freq_data:
         return TSValidationResult(
-            is_valid=False,
-            verified=False,
+            frequency_count_valid=False,
+            frequency_data_present=False,
             n_imag=0,
             imaginary_frequencies=[],
             message=(
@@ -251,12 +244,12 @@ def validate_ts_mode(
     n_imag = len(imag)
 
     if n_imag == 1:
-        msg = f"Valid transition state saddle point with exactly 1 imaginary frequency ({imag[0]:.1f} cm⁻¹)."
+        msg = f"Imaginary-frequency count criterion met: exactly 1 imaginary frequency ({imag[0]:.1f} cm⁻¹)."
         if description:
-            msg += f" Mode description: {description}."
+            msg += f" Submitted mode description (not verified): {description}."
         return TSValidationResult(
-            is_valid=True,
-            verified=True,
+            frequency_count_valid=True,
+            frequency_data_present=True,
             n_imag=1,
             imaginary_frequencies=imag,
             mode_matched=False,
@@ -264,8 +257,8 @@ def validate_ts_mode(
         )
     elif n_imag == 0:
         return TSValidationResult(
-            is_valid=False,
-            verified=True,
+            frequency_count_valid=False,
+            frequency_data_present=True,
             n_imag=0,
             imaginary_frequencies=[],
             mode_matched=False,
@@ -273,8 +266,8 @@ def validate_ts_mode(
         )
     else:
         return TSValidationResult(
-            is_valid=False,
-            verified=True,
+            frequency_count_valid=False,
+            frequency_data_present=True,
             n_imag=n_imag,
             imaginary_frequencies=imag,
             mode_matched=False,
@@ -295,8 +288,8 @@ def validate_species_minimum(
     )
     if not has_freq_data:
         return SpeciesValidationResult(
-            is_valid=False,
-            verified=False,
+            frequency_count_valid=False,
+            frequency_data_present=False,
             n_imag=0,
             imaginary_frequencies=[],
             message=(
@@ -314,16 +307,16 @@ def validate_species_minimum(
 
     if n_imag == 0:
         return SpeciesValidationResult(
-            is_valid=True,
-            verified=True,
+            frequency_count_valid=True,
+            frequency_data_present=True,
             n_imag=0,
             imaginary_frequencies=[],
-            message="Valid stationary local minimum (0 imaginary frequencies).",
+            message="Imaginary-frequency count criterion met: 0 imaginary frequencies; molecular identity is checked separately.",
         )
     else:
         return SpeciesValidationResult(
-            is_valid=False,
-            verified=True,
+            frequency_count_valid=False,
+            frequency_data_present=True,
             n_imag=n_imag,
             imaginary_frequencies=imag,
             message=f"Invalid local minimum: found {n_imag} imaginary frequencies ({imag}).",

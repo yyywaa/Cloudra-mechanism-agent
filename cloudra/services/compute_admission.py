@@ -12,7 +12,7 @@ SOP 在自己的工作线程里走同步入库）。
 from __future__ import annotations
 
 import os
-import re
+from decimal import ROUND_CEILING, Decimal
 from pathlib import Path
 from typing import Optional
 
@@ -34,34 +34,226 @@ class AdmissionOutcome(BaseModel):
     message: str = ""
 
 
+def _resource_integer(value: str, declaration: str) -> int:
+    if not value.isascii() or not value.isdecimal() or int(value) < 1:
+        raise ValueError(f"Invalid resource declaration {declaration}: expected a positive integer, got {value!r}")
+    return int(value)
+
+
+def _record_resource(resources: dict[str, int], name: str, value: int) -> None:
+    previous = resources.get(name)
+    if previous is not None and previous != value:
+        raise ValueError(f"Conflicting resource declarations for {name}: {previous} and {value}")
+    resources[name] = value
+
+
+def _orca_resources(content: str) -> tuple[Optional[int], Optional[int]]:
+    from cloudra.infra.compute_utils import _orca_code_mask, _orca_file_tokens
+
+    resources: dict[str, int] = {}
+    sections = [resources]
+    in_pal = False
+    for line in _orca_code_mask(content).splitlines():
+        stripped = line.strip()
+        if stripped.lower() == '$new_job':
+            if in_pal:
+                raise ValueError('Invalid resource declaration %pal: missing end before $new_job')
+            resources = {}
+            sections.append(resources)
+            continue
+        if not in_pal:
+            command = stripped.split(maxsplit=1)[0].lower().partition("=")[0] if stripped else ""
+            if not stripped.startswith("!") and command not in ("%pal", "%maxcore"):
+                continue
+        # Reuse native file tokenization, including escaped quotes. Retain raw
+        # quoted/escaped tokens so a scientific string cannot declare resources.
+        tokens = []
+        for start, end, value in _orca_file_tokens(stripped):
+            if value is None:
+                # An unrelated malformed scientific suffix does not invalidate
+                # complete resources; missing values/end still fail below.
+                break
+            raw = stripped[start:end]
+            tokens.append(raw if any(char in raw for char in ('\\', '"', "'")) else value)
+        if not tokens:
+            continue
+        if not in_pal and tokens[0].startswith("!"):
+            keywords = [tokens[0][1:], *tokens[1:]]
+            for keyword in keywords:
+                suffix = keyword[3:] if keyword.lower().startswith("pal") else ""
+                if suffix and (suffix[0].isdecimal() or suffix[0] in "+-"):
+                    _record_resource(resources, "cpus", _resource_integer(suffix, keyword))
+            continue
+        index = 0
+        while index < len(tokens):
+            token = tokens[index].lower()
+            if not in_pal and token == "%pal":
+                in_pal = True
+            elif not in_pal and token == "%maxcore":
+                index += 1
+                if index < len(tokens) and tokens[index] == "=":
+                    index += 1
+                if index == len(tokens):
+                    raise ValueError("Invalid resource declaration %maxcore: missing MB value")
+                _record_resource(resources, "maxcore", _resource_integer(tokens[index], "%maxcore"))
+                if index + 1 < len(tokens) and not tokens[index + 1].startswith("%"):
+                    raise ValueError("Invalid resource declaration %maxcore: expected one positive MB value")
+            elif not in_pal:
+                break
+            elif token == "end":
+                in_pal = False
+            elif token == "nprocs":
+                index += 1
+                if index < len(tokens) and tokens[index] == "=":
+                    index += 1
+                if index == len(tokens):
+                    raise ValueError("Invalid resource declaration %pal nprocs: missing CPU count")
+                _record_resource(resources, "cpus", _resource_integer(tokens[index], "%pal nprocs"))
+            index += 1
+    if in_pal:
+        raise ValueError("Invalid resource declaration %pal: missing end")
+    # $new_job carries preceding native settings forward. A declaration in a
+    # later job replaces the inherited resource, while contradictory settings
+    # inside one job still fail through _record_resource above. Jobs execute
+    # sequentially: reserve each resource's peak, not max(cpus)*max(maxcore).
+    effective: dict[str, int] = {}
+    peak_cpus = peak_memory = None
+    for section in sections:
+        effective.update(section)
+        cpus = effective.get('cpus')
+        if cpus is not None:
+            peak_cpus = max(peak_cpus or 0, cpus)
+        maxcore = effective.get('maxcore')
+        if maxcore is not None:
+            peak_memory = max(peak_memory or 0, maxcore * (cpus or 1))
+    return peak_cpus, peak_memory
+
+
+def _gaussian_memory_mb(value: str) -> int:
+    parts = value.split()
+    if len(parts) not in (1, 2) or (len(parts) == 2 and not parts[1].isalpha()):
+        raise ValueError(f"Invalid resource declaration %mem={value!r}: expected one amount and unit")
+    compact = "".join(parts).upper()
+    index = 0
+    while index < len(compact) and (compact[index] in "0123456789."):
+        index += 1
+    number, unit = compact[:index], compact[index:]
+    scales = {
+        "B": Decimal(1) / 1024**2, "KB": Decimal(1) / 1024,
+        "MB": Decimal(1), "GB": Decimal(1024),
+        "": Decimal(8) / 1024**2, "W": Decimal(8) / 1024**2,
+        "KW": Decimal(8) / 1024, "MW": Decimal(8), "GW": Decimal(8192),
+    }
+    if (not number or number == "." or number.count(".") > 1
+            or unit not in scales or Decimal(number) <= 0):
+        raise ValueError(f"Invalid resource declaration %mem={value!r}: expected a positive byte/word amount")
+    return int((Decimal(number) * scales[unit]).to_integral_value(rounding=ROUND_CEILING))
+
+
+def _gaussian_cpu_count(value: str) -> int:
+    """Count Gaussian's zero-based processor list without expanding ranges."""
+    intervals = []
+    for item in value.split(','):
+        bounds = [bound.strip() for bound in item.strip().split('-')]
+        if (len(bounds) not in (1, 2)
+                or any(not bound.isascii() or not bound.isdecimal() for bound in bounds)):
+            raise ValueError(f'Invalid resource declaration %cpu={value!r}: expected processor indices or ranges')
+        start, end = int(bounds[0]), int(bounds[-1])
+        if end < start:
+            raise ValueError(f'Invalid resource declaration %cpu={value!r}: descending processor range')
+        intervals.append((start, end))
+    intervals.sort()
+    for previous, current in zip(intervals, intervals[1:]):
+        if current[0] <= previous[1]:
+            raise ValueError(f'Invalid resource declaration %cpu={value!r}: duplicate or overlapping processors')
+    return sum(end - start + 1 for start, end in intervals)
+
+
+def _gaussian_resources(content: str) -> tuple[Optional[int], Optional[int]]:
+    sections: list[dict[str, int]] = [{}]
+    in_link0 = True
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.lower() == "--link1--":
+            sections.append({})
+            in_link0 = True
+        elif stripped.startswith("#"):
+            in_link0 = False
+        elif in_link0 and stripped.startswith("%"):
+            key, equals, value = stripped.partition("=")
+            key = key.strip().lower()
+            # Match whole Link 0 command names, never text in titles/geometry.
+            if key.split()[0] not in ("%nprocshared", "%nproc", "%cpu", "%mem"):
+                continue
+            if not equals or key not in ("%nprocshared", "%nproc", "%cpu", "%mem"):
+                raise ValueError(f"Invalid resource declaration {stripped!r}: expected command=value")
+            name = "memory_mb" if key == "%mem" else "cpus"
+            if key == '%mem':
+                amount = _gaussian_memory_mb(value)
+            elif key == '%cpu':
+                amount = _gaussian_cpu_count(value)
+            else:
+                amount = _resource_integer(value.strip(), key)
+            _record_resource(sections[-1], name, amount)
+    # Link1 jobs execute sequentially; reserve each resource's largest declaration.
+    cpus = max((section["cpus"] for section in sections if "cpus" in section), default=None)
+    memory_mb = max((section["memory_mb"] for section in sections if "memory_mb" in section), default=None)
+    return cpus, memory_mb
+
+
+def _gaussian_included_content(content: str, workdir: Path, active: tuple[Path, ...]) -> str:
+    """Expand native includes for inspection, using the engine's fixed workdir."""
+    from cloudra.infra.compute_utils import _gaussian_include_reference
+
+    expanded = []
+    for line in content.splitlines(keepends=True):
+        reference = _gaussian_include_reference(line)
+        if reference is None:
+            expanded.append(line)
+            continue
+        path, _start, _end = reference
+        try:
+            local = (workdir / path).resolve()
+            if local in active:
+                raise ValueError(f'Gaussian include cycle: {local}')
+            if not local.is_file():
+                raise ValueError(f'Gaussian include dependency is missing or not a regular file: {local}')
+            included = local.read_text(encoding='utf-8', errors='surrogateescape')
+        except OSError as exc:
+            raise ValueError(f'Cannot read Gaussian include {path!r}: {exc}') from exc
+        body = _gaussian_included_content(included, workdir, (*active, local))
+        expanded.append(body)
+        # Include EOF resumes at the next input line, even without a final EOL.
+        if body and not body.endswith(('\n', '\r')):
+            expanded.append('\n')
+    return ''.join(expanded)
+
+
 def _read_declared_requirements(
     job_type: str, input_file: str
 ) -> tuple[Optional[int], Optional[int]]:
-    """读输入文件自述的资源需求 ``(cpus, memory_mb)``；未声明的项返回 None（不猜）。"""
+    """Read native resource declarations; unknown items stay None, invalid ones raise ValueError."""
+    if job_type not in ("orca", "gaussian"):
+        return None, None
     try:
         with open(input_file, encoding="utf-8", errors="replace") as handle:
-            content = handle.read(200_000)
+            content = handle.read()
     except OSError:
         return None, None
-    required_cpus = required_mem_mb = None
-    if job_type == "orca":
-        pal = re.search(r"%pal\s+nprocs\s+(\d+)", content, re.I)
-        maxcore = re.search(r"%maxcore\s+(\d+)", content, re.I)
-        if pal:
-            required_cpus = int(pal.group(1))
-        if pal and maxcore:
-            required_mem_mb = int(pal.group(1)) * int(maxcore.group(1))
-    elif job_type == "gaussian":
-        nproc = re.search(r"%nprocshared=(\d+)|%nproc=(\d+)", content, re.I)
-        mem = re.search(r"%mem=(\d+(?:\.\d+)?)([GgMm][Bb]?)", content, re.I)
-        if nproc:
-            required_cpus = int(nproc.group(1) or nproc.group(2))
-        if mem:
-            amount = float(mem.group(1))
-            required_mem_mb = (
-                int(amount * 1024) if mem.group(2).lower().startswith("g") else int(amount)
-            )
-    return required_cpus, required_mem_mb
+    if job_type == 'gaussian':
+        source = Path(input_file)
+        content = _gaussian_included_content(content, source.parent.resolve(), (source.resolve(),))
+    from cloudra.runtime_v2.method_policy import _detect_input_engine
+
+    # Content alone must establish a conflict; a filename suffix cannot choose
+    # or replace the engine declared by the caller.
+    native_engine = _detect_input_engine('', content)
+    if native_engine is not None and native_engine != job_type:
+        raise ValueError(
+            f"Native input engine {native_engine!r} conflicts with job_type={job_type!r}; "
+            "declare the matching job_type or provide its native input. The file was not changed."
+        )
+    return _orca_resources(content) if job_type == "orca" else _gaussian_resources(content)
 
 
 def declared_memory_mb(input_file: str, job_type: str) -> Optional[int]:
@@ -88,7 +280,10 @@ def resource_underestimate(
     总需求 = nprocs * maxcore。外部程序的资源占用未知时不推断其内存。
     调用方未申请 memory_mb 时应先用 ``declared_memory_mb`` 派生申请值，
     再走到这里做低估比对。"""
-    required_cpus, required_mem_mb = _read_declared_requirements(job_type, input_file)
+    try:
+        required_cpus, required_mem_mb = _read_declared_requirements(job_type, input_file)
+    except ValueError as exc:
+        return f"Invalid resource declarations: {exc}"
     if required_cpus is not None and cpus < required_cpus:
         return (
             f"Resource under-provisioned: the input asks for {required_cpus} cores "

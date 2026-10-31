@@ -66,22 +66,87 @@ from cloudra.benchmark.accuracy import (
     score_accuracy,
     score_qualitative_selectivity,
 )
-from cloudra.benchmark.barrier_evidence import BarrierEvidence, collect_barrier_evidence
+from cloudra.benchmark.barrier_evidence import (
+    HARTREE_TO_KCAL_MOL,
+    BarrierEvidence,
+    collect_barrier_evidence,
+)
 from cloudra.benchmark.graph_similarity import (
     GedConfig,
     GedResult,
     mechanism_similarity,
-    species_substitution_cost,
 )
 from cloudra.benchmark.integrity import IntegrityReport, audit_integrity
-from cloudra.benchmark.schema import GoldMechanismGraph, MechanismEdge, NodeRole, TaskSpec
+from cloudra.benchmark.schema import NodeRole, TaskSpec
 from cloudra.benchmark.selfconsistency import SelfConsistencyReport, audit_self_consistency
+
 
 # composite 权重（2026-09-25 用户裁决）：final = 0.1·图 + 0.3·自洽 + 0.6·accuracy。
 # 机理不对时 accuracy 层也会惩罚，图份额不该高；自洽层保持全有或全无（布尔）。
 # accuracy 双来源核对 fail-loud 时自洽/accuracy 分量清零、只保留图分
 # （final = W_GRAPH·graph）；图不可解析或没有任何 accessible 物种节点绑到
 # 证据时倒扣 -rubric.integrity.no_evidence_penalty。
+def derived_barrier_graph(graph):
+    """Fill missing edge barriers from declared node energies (TS - source).
+
+    The delivery gate refuses edge barriers before their step passes, so an
+    otherwise complete graph can end up with barriers only on the TS nodes.
+    This is still the program's own declared energy difference; the accuracy
+    layer keeps requiring log support for the declared values.
+    """
+    if graph is None:
+        return graph
+    energies = {
+        node.id: (node.properties or {}).get("energy_hartree")
+        for node in graph.nodes
+    }
+    changed = False
+    edges = []
+    for edge in graph.edges:
+        if edge.barrier_kcal_mol is not None:
+            edges.append(edge)
+            continue
+        source = energies.get(edge.from_node)
+        transition = energies.get(edge.via) if edge.via else None
+        if not isinstance(source, (int, float)) or not isinstance(transition, (int, float)):
+            edges.append(edge)
+            continue
+        edges.append(edge.model_copy(
+            update={"barrier_kcal_mol": (transition - source) * HARTREE_TO_KCAL_MOL}))
+        changed = True
+    return graph.model_copy(update={"edges": edges}) if changed else graph
+
+
+def _apply_declared_barriers(barriers, graph):
+    """Carry derived edge barriers into the barrier evidence as declarations.
+
+    ``collect_barrier_evidence`` re-reads mechanism_graph.json from the sandbox,
+    so an edge whose barrier only exists as node energies (the delivery gate
+    refused the edge field) would look undeclared. The values are still the
+    program's own declared energy difference.
+    """
+    if graph is None or not getattr(barriers, "steps", None):
+        return barriers
+    declared = {edge.id: edge.barrier_kcal_mol for edge in graph.edges}
+
+    def with_declaration(step):
+        if step.declared_kcal_mol is not None:
+            return step
+        value = declared.get(step.edge_id)
+        if value is None:
+            return step
+        return replace(step, declared_kcal_mol=value)
+
+    return replace(
+        barriers,
+        steps=[with_declaration(step) for step in barriers.steps],
+        alternatives={
+            edge_id: [with_declaration(step) for step in steps]
+            for edge_id, steps in barriers.alternatives.items()
+        },
+    )
+
+
 W_GRAPH = 0.1
 W_SELFCONSISTENCY = 0.3
 W_ACCURACY = 0.6
@@ -92,12 +157,20 @@ W_ACCURACY = 0.6
 AgentBackend = Callable[[TaskSpec, Path], None]
 
 
+class BenchmarkStopped(RuntimeError):
+    """The batch requested a cooperative stop; this task must not be scored."""
+
+
 @dataclass
 class RunResult:
     task_id: str
     sandbox: str
     graph_score: float = 0.0
     selfconsistency_passed: bool = False
+    selfconsistency_score: float = 0.0
+    # D3 变体（只记录，当前 composite 仍用 selfconsistency_score）。
+    selfconsistency_gold_score: float = 0.0
+    undelivered: bool = False
     accuracy_score: float = 0.0
     final_score: float = 0.0
     notes: list[str] = field(default_factory=list)
@@ -112,6 +185,8 @@ class RunResult:
             self.sandbox,
             self.graph_score,
             int(self.selfconsistency_passed),
+            self.selfconsistency_score,
+            int(self.undelivered),
             self.accuracy_score,
             self.final_score,
             json.dumps(self.notes, ensure_ascii=False),
@@ -123,7 +198,8 @@ class RunResult:
 
 _RUNS_DDL = """CREATE TABLE IF NOT EXISTS runs (
     task_id TEXT, sandbox TEXT, graph_score REAL,
-    selfconsistency_passed INTEGER, accuracy_score REAL,
+    selfconsistency_passed INTEGER, selfconsistency_score REAL,
+    undelivered INTEGER, accuracy_score REAL,
     final_score REAL, notes TEXT, ts INTEGER,
     batch_id TEXT, orchestration_mode TEXT
 )"""
@@ -136,9 +212,20 @@ _BATCHES_DDL = """CREATE TABLE IF NOT EXISTS batches (
 # runs 表列序（与 RunResult.to_row 对齐）：迁移重建以它为准。
 _RUNS_COLS = (
     "task_id", "sandbox", "graph_score", "selfconsistency_passed",
-    "accuracy_score", "final_score", "notes", "ts",
+    "selfconsistency_score", "undelivered", "accuracy_score",
+    "final_score", "notes", "ts",
     "batch_id", "orchestration_mode",
 )
+
+
+def task_project_settings(task: TaskSpec) -> dict:
+    """CLI/Web task settings shared by every agent created in the project."""
+    return {
+        "benchmark_task_id": task.task_id,
+        "orchestration_mode": task.prompt.orchestration_mode.value,
+        "method_policy": task.method_policy.model_dump(mode="json"),
+        "defaults": {"yolo": True, "unattended": True, "clean_context": True},
+    }
 
 
 def provenance_config(backend: str, tasks: list[TaskSpec]) -> dict:
@@ -199,8 +286,10 @@ class BenchmarkDB:
         # append-only：benchmark 数据珍贵，历史行永不由框架删除；"每题最新"
         # 只是查询语义（按 ts 取），不落为破坏性写。
         with self._lock, closing(self._connect()) as c, c:
+            placeholders = ",".join("?" * len(_RUNS_COLS))
             c.execute(
-                "INSERT INTO runs VALUES (?,?,?,?,?,?,?,?,?,?)", result.to_row()
+                f"INSERT INTO runs ({', '.join(_RUNS_COLS)}) VALUES ({placeholders})",
+                result.to_row(),
             )
 
     def record_batch(self, batch_id: str, status: str, config: dict) -> None:
@@ -278,35 +367,6 @@ def _default_backend(task: TaskSpec, sandbox: Path) -> None:
     sandbox.mkdir(parents=True, exist_ok=True)
 
 
-def _covering_delivered_edge_ids(
-    gold_edge: MechanismEdge,
-    gold_graph: GoldMechanismGraph,
-    delivered_graph: GoldMechanismGraph,
-    cfg: GedConfig,
-    match_threshold: float,
-) -> list[str]:
-    """覆盖某 gold 边的交付边 id 列表——accuracy 层 gold↔delivered 匹配的
-    同口径（`_find_matching_step` 的端点物种判定：同向端点分别
-    species_substitution_cost ≤ match_threshold；edge id 不参与匹配）。"""
-    gold_nodes = {n.id: n for n in gold_graph.nodes}
-    delivered_nodes = {n.id: n for n in delivered_graph.nodes}
-    g_from, g_to = gold_nodes.get(gold_edge.from_node), gold_nodes.get(gold_edge.to_node)
-    if g_from is None or g_to is None:
-        return []
-    out = []
-    for e in delivered_graph.edges:
-        d_from = delivered_nodes.get(e.from_node)
-        d_to = delivered_nodes.get(e.to_node)
-        if d_from is None or d_to is None:
-            continue
-        if species_substitution_cost(g_from.smiles, d_from.smiles, cfg) > match_threshold:
-            continue
-        if species_substitution_cost(g_to.smiles, d_to.smiles, cfg) > match_threshold:
-            continue
-        out.append(e.id)
-    return out
-
-
 class BenchmarkRunner:
     def __init__(
         self,
@@ -314,6 +374,7 @@ class BenchmarkRunner:
         backend: Optional[AgentBackend] = None,
         ged_config: Optional[GedConfig] = None,
         batch_id: str = "",
+        stop_event: threading.Event | None = None,
     ):
         self.data_dir = Path(data_dir)
         self.sandboxes = self.data_dir / "sandboxes"
@@ -322,6 +383,7 @@ class BenchmarkRunner:
         self.backend = backend or _default_backend
         self.ged_config = ged_config or GedConfig()
         self.batch_id = batch_id
+        self.stop_event = stop_event if stop_event is not None else threading.Event()
 
     def sandbox_for(self, task_id: str, batch_id: str = "") -> Path:
         """题目沙箱：带批次 id 时按批分目录（``<task_id>/<batch_id>``）——
@@ -349,6 +411,7 @@ class BenchmarkRunner:
             orchestration_mode=task.prompt.orchestration_mode.value,
         )
         ged_config = self._ged_config_for(task)
+        res.undelivered = not (Path(sandbox) / ".cloudra" / "mechanism_evidence.json").is_file()
 
         integ: IntegrityReport = audit_integrity(sandbox, task.rubric.integrity, ged_config)
         res.notes.extend(integ.notes)
@@ -378,57 +441,24 @@ class BenchmarkRunner:
             charge=task.system.charge,
             integrity_rubric=task.rubric.integrity,
             ged_config=ged_config,
+            gold_graph=task.gold.mechanism_graph,
         )
         res.selfconsistency_passed = sc.passed
+        res.selfconsistency_score = sc.score
+        res.selfconsistency_gold_score = (
+            sc.gold_subgraph_score if sc.gold_subgraph_score is not None else 0.0
+        )
         res.notes.extend(sc.notes)
+        if (sc.gold_subgraph_score is not None
+                and abs(sc.gold_subgraph_score - sc.score) > 1e-9):
+            res.notes.append(
+                "self-consistency (gold-subgraph variant, extras not graded): "
+                f"{sc.gold_subgraph_score:.4f}; current rubric unchanged"
+            )
 
-        # 自洽回捞（2026-09-25 用户裁决）：gold 边被交付步覆盖、但覆盖它的
-        # 交付步全部自洽不合格 → 该 gold 边赢下的图分覆盖贡献倒扣（违规交付
-        # 边剔出交付图后重算 GED——同一 gold 边另有自洽合格的覆盖步时保留
-        # 覆盖；有效不可达/accessible=false 的交付边本就被自洽豁免，不会进
-        # 倒扣集）。不在 gold 子图里的额外交付边自洽不合格只落自洽层零分，
-        # 不倒扣图分——gold 边出错与其他边出错严重程度不同。
-        if integ.delivered_graph is not None and res.graph_score > 0.0:
-            failed_edges = {
-                c.element_id
-                for c in sc.checks
-                if c.kind == "edge" and not c.covered
-            }
-            if failed_edges:
-                remove: set[str] = set()
-                for g_edge in task.gold.mechanism_graph.edges:
-                    covering = _covering_delivered_edge_ids(
-                        g_edge,
-                        task.gold.mechanism_graph,
-                        integ.delivered_graph,
-                        ged_config,
-                        task.rubric.integrity.match_threshold,
-                    )
-                    failing = [e for e in covering if e in failed_edges]
-                    if covering and len(failing) == len(covering):
-                        remove.update(failing)
-                        for eid in sorted(failing):
-                            res.notes.append(
-                                f"edge {eid}: selfconsistency failed, graph "
-                                f"credit for gold edge {g_edge.id} clawed back"
-                            )
-                if remove:
-                    pruned = GoldMechanismGraph(
-                        nodes=list(integ.delivered_graph.nodes),
-                        edges=[
-                            e
-                            for e in integ.delivered_graph.edges
-                            if e.id not in remove
-                        ],
-                    )
-                    res.graph_score = mechanism_similarity(
-                        pruned,
-                        task.gold.mechanism_graph,
-                        ged_config,
-                        binding_quality=binding_quality,
-                    ).score
-
+        scoring_graph = derived_barrier_graph(integ.delivered_graph)
         barriers: BarrierEvidence = collect_barrier_evidence(sandbox)
+        barriers = _apply_declared_barriers(barriers, scoring_graph)
         res.notes.extend(barriers.notes)
         # hard 档定性选择性：gold.selectivity 带 favored_channel 时替代 accuracy
         # 槽位（composite 的 accuracy 权重给选择性分；barrier spread 数值不评分）
@@ -436,7 +466,11 @@ class BenchmarkRunner:
         selectivity = task.gold.selectivity
         if selectivity is not None and selectivity.favored_channel:
             sel_score, sel_note = score_qualitative_selectivity(
-                integ.delivered_graph, selectivity
+                integ.delivered_graph,
+                selectivity,
+                gold_graph=task.gold.mechanism_graph,
+                cfg=ged_config,
+                match_threshold=task.rubric.integrity.match_threshold,
             )
             res.accuracy_score = sel_score
             res.notes.append(sel_note)
@@ -445,7 +479,7 @@ class BenchmarkRunner:
                 evidence=barriers,
                 gold=task.gold,
                 rubric=task.rubric.accuracy,
-                delivered_graph=integ.delivered_graph,
+                delivered_graph=scoring_graph,
                 cfg=ged_config,
                 match_threshold=task.rubric.integrity.match_threshold,
             )
@@ -490,7 +524,7 @@ class BenchmarkRunner:
             return res
         res.final_score = round(
             W_GRAPH * res.graph_score
-            + W_SELFCONSISTENCY * (1.0 if res.selfconsistency_passed else 0.0)
+            + W_SELFCONSISTENCY * res.selfconsistency_score
             + W_ACCURACY * res.accuracy_score,
             4,
         )
@@ -499,10 +533,16 @@ class BenchmarkRunner:
     def run_task(self, task: TaskSpec) -> RunResult:
         # 沙箱按批次分目录：本批目录天然干净，不做任何删除——上一批的交付物
         # 与证据文件永久保留（benchmark 数据珍贵，清理永由用户显式执行）。
+        if self.stop_event.is_set():
+            raise BenchmarkStopped("benchmark batch stopped")
         sandbox = self.sandbox_for(task.task_id, self.batch_id)
         sandbox.mkdir(parents=True, exist_ok=True)
         self.backend(task, sandbox)
+        if self.stop_event.is_set():
+            raise BenchmarkStopped("benchmark batch stopped")
         result = self.score_sandbox(task, sandbox)
+        if self.stop_event.is_set():
+            raise BenchmarkStopped("benchmark batch stopped")
         result.batch_id = self.batch_id
         self.db.record(result)
         return result
@@ -513,14 +553,16 @@ class BenchmarkRunner:
         try:
             return self.run_task(task)
         except Exception as exc:
-            print(f"[benchmark] task {task.task_id} crashed: {exc!r}")
+            stopped = isinstance(exc, BenchmarkStopped)
+            if not stopped:
+                print(f"[benchmark] task {task.task_id} crashed: {exc!r}")
             res = RunResult(
                 task_id=task.task_id,
                 sandbox=str(self.sandbox_for(task.task_id, self.batch_id)),
                 batch_id=self.batch_id,
                 orchestration_mode=task.prompt.orchestration_mode.value,
             )
-            res.notes.append(f"task crashed: {exc!r}")
+            res.notes.append("cancelled by batch stop" if stopped else f"task crashed: {exc!r}")
             self.db.record(res)
             return res
 
@@ -534,10 +576,16 @@ class BenchmarkRunner:
 
         results: dict[str, RunResult] = {}
         with cf.ThreadPoolExecutor(max_workers=concurrency) as pool:
-            futures = {pool.submit(self._run_one_guarded, t): t for t in tasks}
-            for fut in cf.as_completed(futures):
-                res = fut.result()
-                results[res.task_id] = res
+            try:
+                futures = {pool.submit(self._run_one_guarded, t): t for t in tasks}
+                for fut in cf.as_completed(futures):
+                    res = fut.result()
+                    results[res.task_id] = res
+            except BaseException:
+                # Set this before the executor joins its workers: every private
+                # runtime loop can then finish its own asynchronous cleanup.
+                self.stop_event.set()
+                raise
         return [results[t.task_id] for t in tasks]
 
 

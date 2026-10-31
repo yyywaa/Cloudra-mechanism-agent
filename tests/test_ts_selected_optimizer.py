@@ -11,19 +11,46 @@ pytestmark = pytest.mark.usefixtures('ts_producer_authority')
 
 
 def catalog_seed(tmp_path, qualification=None):
+    from rdkit import Chem
+
     from cloudra.services.conformer_store import put_candidate, put_region_snapshot
     from cloudra.tools.core.conformer_catalog import CandidateRecord
     from cloudra.tools.core.conformer_regions import DescriptorSpec, RegionConfig, partition_candidates
     xyz = tmp_path/'water.xyz'
     xyz.write_text('3\nWater\nO 0 0 0\nH 0.96 0 0\nH -0.24 0.93 0\n')
+    mol = Chem.AddHs(Chem.MolFromSmiles('O'))
+    conf = Chem.Conformer(3)
+    for index, point in enumerate([[0, 0, 0], [.96, 0, 0], [-.24, .93, 0]]):
+        conf.SetAtomPosition(index, point)
+        mol.GetAtomWithIdx(index).SetProp('cloudra_atom_id', ['O1', 'H1', 'H2'][index])
+        mol.GetAtomWithIdx(index).SetProp('cloudra_fragment_id', 'f')
+    mol.AddConformer(conf)
     candidate = CandidateRecord(catalog_id='cat',project_id='project',owner_id='owner',species_key='water',
-        atom_ids=['O1','H1','H2'],fragment_ids=['f','f','f'],symbols=['O','H','H'],
-        positions=[[0,0,0],[0.96,0,0],[-0.24,0.93,0]],geometry_ref=str(xyz),generator='fixture',seed=42, **({'qualification':qualification} if qualification else {}))
+        mol=mol,geometry_ref=str(xyz),generator='fixture',seed=42, **({'qualification':qualification} if qualification else {}))
     db=ComputeDB().init()
     put_candidate(db,candidate)
     snapshot=partition_candidates([candidate],RegionConfig(descriptor_specs=[DescriptorSpec(kind='distance',stable_atom_ids=['O1','H1'])]))
     put_region_snapshot(db,snapshot,project_id='project',owner_id='owner')
-    return dict(kind='catalog',catalog_id='cat',partition_revision=snapshot.revision,candidate_id=candidate.candidate_id), xyz
+    (tmp_path / 'partition.json').write_text(snapshot.model_dump_json())
+    return dict(kind='catalog',catalog_id='cat',candidate_id=candidate.candidate_id), xyz
+
+
+@pytest.mark.usefixtures("rdkit_chemistry")
+def test_catalog_source_resolves_archive_partition_without_model_version(tmp_path):
+    from cloudra.tools.core.ts_candidate_pipeline import use_catalog_source
+    from cloudra.tools.core.ts_inputs import CatalogConformer
+    from tests.test_ts_stage_inputs import record_fixture
+
+    values, _ = catalog_seed(tmp_path)
+    expected = json.loads((tmp_path / 'partition.json').read_text())['revision']
+    source = CatalogConformer(**values, optimization={
+        'engine': 'xtb', 'method': 'GFN2-xTB', 'basis_set': '', 'keywords': ''})
+    record = record_fixture(tmp_path)
+    record.owner_conversation_id, record.owner_session_id = 'project', 'owner'
+    use_catalog_source(record, source, 'reactant')
+    assert record.blocked is None
+    assert record.partition_revision == expected
+    assert record.selected_candidate_id == source.candidate_id
 
 
 @pytest.mark.usefixtures("rdkit_chemistry")
@@ -32,7 +59,7 @@ def test_catalog_prepare_requires_explicit_member_optimizer_and_deduplicates(tmp
     from cloudra.tools.core.ts_inputs import CatalogConformer, FileConformer
     from tests.ts_fixtures import calculation_input
     source, xyz=catalog_seed(tmp_path)
-    inputs=calculation_input(reactant_smiles='O',product_smiles='O',method='b3lyp/def2svp',atom_map=[0,1,2])
+    inputs=calculation_input(reactant_smiles='O',product_smiles='O',method='b3lyp/def2svp')
     inputs.conformers.reactant=CatalogConformer(**source)
     inputs.conformers.product=FileConformer(kind='file',xyz_path=str(xyz))
     first=ts_process.start(ts_process.TsStartRequest(input=inputs,workspace_dir=str(tmp_path),owner_conversation_id='project',owner_session_id='owner',request_key='unqualified'))
@@ -58,7 +85,7 @@ def test_native_selected_seed_writes_and_submits_declared_input_once(tmp_path, m
     from tests.ts_fixtures import calculation_input
 
     source, xyz = catalog_seed(tmp_path)
-    inputs = calculation_input(reactant_smiles='O', product_smiles='O', method='b3lyp/def2svp', atom_map=[0, 1, 2])
+    inputs = calculation_input(reactant_smiles='O', product_smiles='O', method='b3lyp/def2svp')
     inputs.conformers.reactant = CatalogConformer(**source, optimization={
         'engine': engine, 'method': 'b3lyp', 'basis_set': 'def2svp', 'keywords': '',
     })
@@ -87,7 +114,7 @@ def test_completed_explicit_seed_opt_advances_other_seed_once(tmp_path,monkeypat
     from tests.ts_fixtures import calculation_input
     source, xyz=catalog_seed(tmp_path)
     calculation={'engine':'xtb','method':'GFN2-xTB','basis_set':'','keywords':''}
-    inputs=calculation_input(reactant_smiles='O',product_smiles='O',method='b3lyp/def2svp',atom_map=[0,1,2])
+    inputs=calculation_input(reactant_smiles='O',product_smiles='O',method='b3lyp/def2svp')
     inputs.conformers.reactant=CatalogConformer(**source,optimization=calculation)
     inputs.conformers.product=FileConformer(kind='file',xyz_path=str(xyz),optimization=calculation)
     monkeypatch.setattr('cloudra.services.compute_admission.admit_job',lambda **_: AdmissionOutcome(ok=True,node_id='fixture',scheduler='local'))

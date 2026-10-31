@@ -40,20 +40,13 @@ _WEB_SEARCH_GUIDANCE = (
     "task needs current/external facts, search first, then answer."
 )
 
-# 有 agent_hub 工具时统一注入：本地知识优先检索、主动共享、定向协作。
+# 有 agent_hub 工具时统一提供按需知识检索入口和协作指引。
 _AGENT_HUB_GUIDANCE = (
     "## AgentHub — primary local knowledge and team coordination channel\n"
     "Use `agent_hub` actively to reuse knowledge and advance shared work. It combines project posts "
     "with the connected local chemical knowledge library, even when no other agent is active.\n"
-    "- **Search before new work or retries**: after any required skill load, use "
-    "`agent_hub(action='search', keyword='<reaction, method, or concrete problem>', limit=5)` "
-    "before planning a new domain subtask, choosing unfamiliar calculation settings, or retrying a new failure. "
-    "Use supplied or already-read relevant results directly; repeat searches when the question or evidence changes.\n"
-    "- Inspect both `library` and `posts`. No forum hits does not mean no library hits. "
-    "`browse` lists project topics and `read` reads a topic; neither searches the knowledge library. "
-    "Check source, evidence level, refutation status and applicability before using a hit. "
-    "Use original files for numerical evidence and current official sources for version-sensitive facts. "
-    "If no useful hit or provider is available, continue with the SOP and other appropriate sources.\n"
+    "- When a knowledge gap calls for local retrieval, load "
+    "`get_skill(skill_name='knowledge-search')` for query guidance and source verification.\n"
     "- **Share as soon as it changes a decision**: use `post` with `kind='finding'`, `topic`, and "
     "self-contained `content`: conditions, finding, limitations, job/tool/file pointers, and next-action impact. "
     "Share reusable settings, validated results, failed approaches and contradictory evidence; "
@@ -70,28 +63,47 @@ _AGENT_HUB_GUIDANCE = (
     "the user's goal, method limits and your role permissions."
 )
 
-# 执行型角色（coordinator / 计算专家）注入完整版：强调落盘 handoff
+# 所有角色共用研究笔记指引；只读角色通过协作反馈，不扩张写权限。
+_PROCESS_NOTES_GUIDANCE = (
+    "## Shared research record\n"
+    "For research work, treat the project-root `PROCESS.md` as a shared asset for all project Agents. "
+    "Read the relevant parts before planning or reusing another Agent's results. Contribute within your role's "
+    "permissions; if your role cannot edit `PROCESS.md`, send corrections and source paths to the author or Supervisor.\n"
+    "Write concise, readable notes in the user's language around provisional hypotheses, their basis "
+    "(relevant skills, literature or user requirements), distinguishing tests, observations and next actions. "
+    "Separate hypotheses, direct observations and confirmed conclusions. Cite concrete project-relative Markdown "
+    "links to the input, structure, original log or analysis supporting a key claim; explain what each source shows. "
+    "Use actual paths, not invented paths or job IDs alone; do not copy full logs or append annotations "
+    "to completed native evidence files.\n"
+    "When a result, counterexample or change of direction affects your next research decision, promptly update "
+    "the shared PROCESS.md before handing off that decision; do not wait for final delivery or Supervisor approval. "
+    "Edit affected sections against the latest file instead of replacing colleagues' newer notes with an old summary. "
+    "Distinguish computed evidence from submission and review progress. "
+    "Revise the current hypothesis and briefly explain why, with source links. "
+    "Keep useful failed attempts without leaving contradictory conclusions presented as current. "
+    "Reuse useful handoff material without duplicating notes. These are soft writing guidelines, not required "
+    "fields or a fixed template; note maintenance must not block computation."
+)
+
+# 执行型角色（coordinator / 计算专家）注入完整版：上下文压缩后的恢复说明。
 _CONTEXT_HANDOFF_GUIDANCE = (
     "## Context and handoff notes (important)\n"
     "On long tasks the whole earlier conversation is compacted automatically into one structured summary — "
     "**user instructions, your own replies, tool calls and tool results are all replaced, and nothing stays verbatim**. "
     "Recoverable state must live in workspace files — do not rely on it remaining in context:\n"
-    "- After each meaningful stage, write/update a handoff note (prefer `HANDOFF.md` or `progress.md` in the task directory): "
-    "goal, completed steps, key absolute paths, job IDs, numeric conclusions, next steps and blockers;\n"
     "- Treat files and the latest tool returns as source of truth for numbers and paths; do not paraphrase from memory;\n"
-    "- After compact or a shift change, read the handoff note before acting; do not start from scratch."
+    "- After compact or a shift change, read `PROCESS.md` or the existing progress note before acting; do not start from scratch."
 )
 
-# 纯输出型角色（researcher / writer / explorer / experiment）注入精简版：
-# 它们不跨会话持久化中间状态，只需要知道不要凭记忆捏造数据
+# 纯输出型角色使用精简恢复说明，仍共享同一份研究笔记指引。
 _CONTEXT_HANDOFF_GUIDANCE_LIGHT = (
     "## Context notes (important)\n"
     "Treat files and the latest tool returns as the source of truth for numbers and paths. "
     "Do not paraphrase from memory or fabricate data — read the actual file if uncertain."
 )
 
-# 纯输出型角色名集合（不写 HANDOFF.md，不管理多阶段任务状态）
-_OUTPUT_ONLY_ROLES = frozenset({"researcher", "writer", "explorer", "experiment"})
+# 这些角色只需简短上下文指引；Supervisor 的笔记职责由自身 prompt 说明。
+_OUTPUT_ONLY_ROLES = frozenset({"researcher", "writer", "explorer", "experiment", "supervisor"})
 
 # 针对不同领域角色的专属核心技能推荐（不在 System Prompt 中全局广播所有技能，按需在 Hub 检索）
 _ROLE_RECOMMENDED_SKILLS: dict[str, tuple[str, ...]] = {
@@ -674,6 +686,7 @@ class PromptAssembler:
             if self.prompt_name in _OUTPUT_ONLY_ROLES
             else _CONTEXT_HANDOFF_GUIDANCE
         )
+        _handoff = _handoff + "\n\n" + _PROCESS_NOTES_GUIDANCE
         identity_sections.append(_handoff)
         sources.append(
             PromptSource(

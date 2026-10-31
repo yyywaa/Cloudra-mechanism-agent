@@ -27,6 +27,7 @@ H -0.08161812386697 -2.11204925365809 -0.08140067223057
 """
 
 
+@pytest.mark.usefixtures('rdkit_chemistry')
 @pytest.mark.parametrize('electronic_character,multiplicity', [('closed_shell', 1), ('open_shell', 3)])
 def test_standalone_native_scan_manifest_preserves_declared_electronic_character(
     tmp_path, electronic_character, multiplicity,
@@ -36,8 +37,8 @@ def test_standalone_native_scan_manifest_preserves_declared_electronic_character
 
     manifest = tmp_path / 'declared-state-scan.json'
     result = TsGuess()._xtb_scan_prepare(TsGuess_input_schema(basis_set='', mode='scan_prepare', engine='xtb',
-        method='GFN2-xTB', input_text=AMMONIA, output_path=str(manifest), nprocs=1,
-        charge=0, spin=multiplicity, electronic_character=electronic_character,
+        method='GFN2-xTB', input_text=AMMONIA, output_path=str(manifest), nproc=1,
+        charge=0, multiplicity=multiplicity, electronic_character=electronic_character,
         force_constant=.5, scans=[{'atoms': [1, 2], 'scan_start': 1., 'scan_end': 1.1, 'scan_steps': 2}]))
     assert result.is_success
     task = ChemTask.model_validate_json(manifest.read_text())
@@ -45,14 +46,15 @@ def test_standalone_native_scan_manifest_preserves_declared_electronic_character
     assert task.multiplicity == multiplicity
 
 
+@pytest.mark.usefixtures('rdkit_chemistry')
 def test_standalone_native_scan_refuses_explicit_open_shell_singlet_before_manifest(tmp_path):
     from cloudra.tools.Chemtool.ts_guess import TsGuess, TsGuess_input_schema
 
     manifest = tmp_path / 'unsupported-singlet.json'
     with pytest.raises(ValueError) as error:
         TsGuess()._xtb_scan_prepare(TsGuess_input_schema(basis_set='', mode='scan_prepare', engine='xtb',
-            method='GFN2-xTB', input_text=AMMONIA, output_path=str(manifest), nprocs=1,
-            charge=0, spin=1, electronic_character='open_shell', force_constant=.5,
+            method='GFN2-xTB', input_text=AMMONIA, output_path=str(manifest), nproc=1,
+            charge=0, multiplicity=1, electronic_character='open_shell', force_constant=.5,
             scans=[{'atoms': [1, 2], 'scan_start': 1., 'scan_end': 1.1, 'scan_steps': 2}]))
     assert 'open-shell singlet' in str(error.value)
     assert not manifest.exists()
@@ -69,7 +71,7 @@ async def test_standalone_scan_prepares_typed_manifest_submits_only_scan_and_par
     manifest = tmp_path / 'scan-task.json'
     guess = TsGuess()
     prepared = guess._scan_prepare(TsGuess_input_schema(basis_set='', mode='scan_prepare', engine='xtb',
-        method='GFN2-xTB', input_text=AMMONIA, output_path=str(manifest), nprocs=1, charge=0, spin=1,
+        method='GFN2-xTB', input_text=AMMONIA, output_path=str(manifest), nproc=1, charge=0, multiplicity=1,
         force_constant=0.5, scans=[{'atoms': [1, 2], 'scan_start': 1.0, 'scan_end': 1.1, 'scan_steps': 2}]))
     assert prepared.is_success and prepared.input_file_path == str(manifest)
     task = ChemTask.model_validate_json(manifest.read_text())
@@ -109,7 +111,7 @@ def test_native_xtb_scan_records_converged_points_and_unbiased_energy(tmp_path):
 
     task = ChemTask(task="xtb_scan", reactant_xyz=AMMONIA, cpus=1,
                     charge=0, multiplicity=1, scan={
-        "kind": "scan", "calculation": {"engine": "xtb", "method": "GFN2-xTB"},
+        "kind": "scan", "calculation": {"engine": "xtb", "method": "GFN2-xTB", "basis_set": ""},
         "scans": [{"coord_type": "bond", "atoms": [0, 1],
                    "scan_start": 1.0, "scan_end": 1.1, "scan_steps": 2}],
         "force_constant": 0.5,
@@ -142,7 +144,7 @@ def test_native_scan_never_promotes_missing_frame_or_point_convergence(tmp_path)
     from cloudra.tools.core.xtb_scan_runner import parse_xtb_scan
 
     task = ChemTask(task='xtb_scan', reactant_xyz=AMMONIA, cpus=1,
-        scan={'kind': 'scan', 'calculation': {'engine': 'xtb', 'method': 'GFN2-xTB'},
+        scan={'kind': 'scan', 'calculation': {'engine': 'xtb', 'method': 'GFN2-xTB', 'basis_set': ''},
               'scans': [{'atoms': [0, 1], 'scan_start': 1., 'scan_end': 1.1, 'scan_steps': 2}],
               'force_constant': .5})
     manifest = tmp_path / 'scan-task.json'
@@ -173,7 +175,7 @@ def test_native_two_coordinate_modes_keep_segment_targets(tmp_path, mode, expect
 
     task = ChemTask(task="xtb_scan", reactant_xyz=AMMONIA, cpus=1,
                     charge=0, multiplicity=1, scan={
-        "kind": "scan", "calculation": {"engine": "xtb", "method": "GFN2-xTB"},
+        "kind": "scan", "calculation": {"engine": "xtb", "method": "GFN2-xTB", "basis_set": ""},
         "scans": [
             {"coord_type": "bond", "atoms": [0, 1], "scan_start": 1.0,
              "scan_end": 1.1, "scan_steps": 2},
@@ -202,7 +204,7 @@ def test_native_dihedral_scan_can_hand_off_only_an_internal_peak(tmp_path):
     from cloudra.runtime.chem_task import ChemTask, read_task_result, run_task
 
     task = ChemTask(task='xtb_scan', reactant_xyz=ETHANE, cpus=1, charge=0, multiplicity=1,
-        scan={'kind': 'scan', 'calculation': {'engine': 'xtb', 'method': 'GFN2-xTB'},
+        scan={'kind': 'scan', 'calculation': {'engine': 'xtb', 'method': 'GFN2-xTB', 'basis_set': ''},
               'scans': [{'coord_type': 'dihedral', 'atoms': [7, 4, 0, 3],
                          'scan_start': 60.0, 'scan_end': 180.0, 'scan_steps': 3}],
               'force_constant': 0.05})

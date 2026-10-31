@@ -3,6 +3,7 @@
 import asyncio
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -29,10 +30,10 @@ def test_writer_requires_explicit_calculation_fields(missing):
 
 
 @pytest.mark.parametrize('method', ['B3LYP/def2-SVP', 'B3LYP D3BJ', 'B3LYP/def2SVP CPCM(DCM)'])
-def test_writer_refuses_combined_route_in_method_before_coordinate_work(method):
-    with pytest.raises(ValidationError, match='method'):
-        QmInputWriter_input_schema(engine='orca', method=method, basis_set='def2-SVP',
-            source_type='xyz_file', source_value='water.xyz', output_path='job.inp')
+def test_writer_schema_keeps_combined_native_method_for_tool_advice(method):
+    request = QmInputWriter_input_schema(engine='orca', method=method, basis_set='def2-SVP',
+        source_type='xyz_file', source_value='water.xyz', output_path='job.inp')
+    assert request.method == method
 
 
 @pytest.mark.asyncio
@@ -41,13 +42,15 @@ async def test_writer_reports_complete_written_calculation_without_method_substi
     source.write_text(_WATER_XYZ)
     target = tmp_path / 'explicit.inp'
     keywords = 'D3BJ RIJCOSX def2/J TightSCF CPCM(DCM)'
-    request = QmInputWriter_input_schema(engine='orca', method='B3LYP', basis_set='def2SVP',
-        keywords=keywords, source_type='xyz_file', source_value=str(source), output_path=str(target))
+    request = QmInputWriter_input_schema(charge=0, engine='orca', method='B3LYP', basis_set='def2SVP',
+        task_type=[{'opt': None}], keywords=keywords,
+        source_type='xyz_file', source_value=str(source), output_path=str(target))
     result = await QmInputWriter().tool_call(request, None)
     assert result.is_success, result.message
     assert result.calculation.method == 'B3LYP'
     assert result.calculation.basis_set == 'def2SVP'
-    assert result.calculation.keywords == keywords
+    assert result.calculation.keywords == 'Opt ' + keywords
+    assert request.keywords == keywords
     assert target.read_text().splitlines()[0] == '! Opt B3LYP def2-SVP ' + keywords
 
 
@@ -72,7 +75,7 @@ async def test_qm_input_writer_from_xyz_file_produces_valid_gjf(tmp_path):
     xyz.write_text(_WATER_XYZ, encoding="utf-8")
     out = tmp_path / "jobs" / "water_opt.gjf"
 
-    result = await QmInputWriter().tool_call(
+    result = await QmInputWriter(subagent=SimpleNamespace(working_directory=str(tmp_path))).tool_call(
         QmInputWriter_input_schema(engine='gaussian',
             source_type="xyz_file",
             source_value=str(xyz),
@@ -92,7 +95,7 @@ async def test_qm_input_writer_from_xyz_file_produces_valid_gjf(tmp_path):
     assert result.is_success is True, result.message
     assert result.input_path == str(out)
     content = out.read_text(encoding="utf-8")
-    assert "%chk=water.chk" in content
+    assert f"%chk={tmp_path / 'water.chk'}" in content
     assert "%nproc=8" in content
     assert "%mem=8GB" in content
     assert "#p opt freq b3lyp/6-31g(d)" in content
@@ -177,7 +180,7 @@ async def test_qm_input_writer_refuses_nonfinite_source_coordinates(tmp_path, co
     output = tmp_path / "nonfinite.inp"
 
     result = await QmInputWriter().tool_call(
-        QmInputWriter_input_schema(method='b3lyp', basis_set='6-31g(d)',
+        QmInputWriter_input_schema(charge=0, method='b3lyp', basis_set='6-31g(d)',
             engine="orca", source_type="xyz_file",
             source_value=str(source), output_path=str(output),
         ),
@@ -219,7 +222,7 @@ async def test_qm_input_writer_preserves_orca_memory_units(tmp_path, mem, nproc,
     output = tmp_path / "memory.inp"
 
     result = await QmInputWriter().tool_call(
-        QmInputWriter_input_schema(method='b3lyp', basis_set='6-31g(d)',
+        QmInputWriter_input_schema(charge=0, method='b3lyp', basis_set='6-31g(d)',
             engine="orca", source_type="xyz_file", source_value=str(source),
             mem=mem, nproc=nproc, output_path=str(output),
         ),
@@ -250,7 +253,7 @@ async def test_qm_input_writer_offloads_atomic_output_write(tmp_path, monkeypatc
     output = tmp_path / "water.inp"
 
     result = await QmInputWriter().tool_call(
-        QmInputWriter_input_schema(method='b3lyp', basis_set='6-31g(d)',
+        QmInputWriter_input_schema(charge=0, method='b3lyp', basis_set='6-31g(d)',
             engine="orca", source_type="xyz_file", source_value=str(source),
             output_path=str(output),
         ),
@@ -289,7 +292,7 @@ async def test_orca_external_program_writes_the_validated_path(tmp_path):
     output = tmp_path / "canonical_external.inp"
 
     result = await QmInputWriter().tool_call(
-        QmInputWriter_input_schema(method='ExtOpt', basis_set='',
+        QmInputWriter_input_schema(charge=0, method='ExtOpt', basis_set='',
             engine="orca", source_type="xyz_file", source_value=str(source),
             external_program=" /bin/../bin/sh ", output_path=str(output),
         ),
@@ -309,7 +312,7 @@ async def test_gaussian_external_program_writes_the_validated_token(tmp_path):
     output = tmp_path / "external.gjf"
 
     result = await QmInputWriter().tool_call(
-        QmInputWriter_input_schema(engine='gaussian', method='external', basis_set='',
+        QmInputWriter_input_schema(charge=0, engine='gaussian', method='external', basis_set='',
             source_type="xyz_file", source_value=str(source),
             external_program=" mace ", output_path=str(output),
         ),
@@ -333,7 +336,7 @@ async def test_qm_input_writer_preserves_extxyz_property_order(tmp_path):
     output = tmp_path / "reordered.inp"
 
     result = await QmInputWriter().tool_call(
-        QmInputWriter_input_schema(method='b3lyp', basis_set='6-31g(d)',
+        QmInputWriter_input_schema(charge=0, method='b3lyp', basis_set='6-31g(d)',
             engine="orca", source_type="xyz_file",
             source_value=str(source), output_path=str(output),
         ),
@@ -353,7 +356,7 @@ async def test_qm_input_writer_uses_final_frame_of_xyz_trajectory(tmp_path):
     output = tmp_path / "last.inp"
 
     result = await QmInputWriter().tool_call(
-        QmInputWriter_input_schema(method='b3lyp', basis_set='6-31g(d)',
+        QmInputWriter_input_schema(charge=0, method='b3lyp', basis_set='6-31g(d)',
             engine="orca", source_type="xyz_file",
             source_value=str(source), output_path=str(output),
         ),
@@ -414,6 +417,77 @@ async def test_qm_input_writer_reads_valid_mol_source(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("engine", ["orca", "gaussian"])
+@pytest.mark.parametrize("explicit_charge", [False, True])
+async def test_charged_mol_is_the_charge_source_without_mutating_input(tmp_path, engine, explicit_charge):
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+
+    mol = Chem.AddHs(Chem.MolFromSmiles("[13CH3:7]C(=O)[O-]"))
+    assert AllChem.EmbedMolecule(mol, randomSeed=1) == 0
+    source = tmp_path / "acetate.mol"
+    source_text = Chem.MolToMolBlock(mol)
+    source.write_text(source_text)
+    output = tmp_path / ("acetate.inp" if engine == "orca" else "acetate.gjf")
+    request = QmInputWriter_input_schema(
+        engine=engine, method="B3LYP", basis_set="def2-SVP",
+        source_type="mol_file", source_value=str(source), output_path=str(output),
+        **({"charge": -1} if explicit_charge else {}),
+    )
+
+    result = await QmInputWriter().tool_call(request, session=None)
+
+    assert result.is_success, result.message
+    content = output.read_text()
+    assert ("* xyz -1 1\n" if engine == "orca" else "\n-1 1\n") in content
+    assert result.interpreted_intent["charge"] == -1
+    assert result.interpreted_intent["multiplicity"] == 1
+    assert request.charge == (-1 if explicit_charge else None)
+    assert source.read_text() == source_text
+    assert Chem.GetFormalCharge(mol) == -1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("engine", ["orca", "gaussian"])
+async def test_explicit_charge_cannot_silently_replace_a_mol_charge(tmp_path, engine):
+    from rdkit import Chem
+
+    source = tmp_path / "acetate.mol"
+    source.write_text(Chem.MolToMolBlock(Chem.MolFromSmiles("CC(=O)[O-]")))
+    output = tmp_path / "mismatched.inp"
+    request = QmInputWriter_input_schema(
+        engine=engine, method="B3LYP", basis_set="def2-SVP",
+        source_type="mol_file", source_value=str(source), charge=0, output_path=str(output),
+    )
+
+    result = await QmInputWriter().tool_call(request, session=None)
+
+    assert not result.is_success
+    assert not output.exists()
+    assert "charge" in result.message.lower()
+    assert "-1" in result.message and "0" in result.message
+    assert "graph" in result.message.lower()
+
+
+@pytest.mark.asyncio
+async def test_xyz_without_a_declared_charge_is_refused_without_mutating_request(tmp_path):
+    source = tmp_path / "water.xyz"
+    source.write_text(_WATER_XYZ)
+    output = tmp_path / "water.inp"
+    request = QmInputWriter_input_schema(
+        engine="orca", method="B3LYP", basis_set="def2-SVP", source_type="xyz_file",
+        source_value=str(source), output_path=str(output),
+    )
+
+    result = await QmInputWriter().tool_call(request, session=None)
+
+    assert not result.is_success
+    assert "explicit total charge" in result.message
+    assert not output.exists()
+    assert request.charge is None
+
+
+@pytest.mark.asyncio
 async def test_qm_input_writer_invalid_smiles_fails(tmp_path):
     result = await QmInputWriter().tool_call(
         QmInputWriter_input_schema(engine='gaussian', method='b3lyp', basis_set='6-31g(d)',
@@ -463,14 +537,13 @@ async def test_qm_input_writer_orca_engine_produces_valid_inp(tmp_path):
 
 @pytest.mark.asyncio
 async def test_qm_input_writer_orca_single_point_key(tmp_path):
-    """task_type=[{"single_point": None}] 被接受并归一化：ORCA 单点的 ! 行
-    只留方法/基组（无任务关键字），回读意图为 single_point。"""
+    """Explicit SP distinguishes a declared single point from unclassified native tasks."""
     xyz = tmp_path / "water.xyz"
     xyz.write_text(_WATER_XYZ, encoding="utf-8")
     out = tmp_path / "water_sp.inp"
 
     result = await QmInputWriter().tool_call(
-        QmInputWriter_input_schema(
+        QmInputWriter_input_schema(charge=0,
             engine="orca",
             source_type="xyz_file",
             source_value=str(xyz),
@@ -484,7 +557,7 @@ async def test_qm_input_writer_orca_single_point_key(tmp_path):
 
     assert result.is_success is True, result.message
     content = out.read_text(encoding="utf-8")
-    assert content.startswith("! b3lyp def2-svp")
+    assert content.startswith("! SP b3lyp def2-svp")
     assert result.interpreted_intent["tasks"] == ["single_point"]
 
 
@@ -496,7 +569,7 @@ async def test_qm_input_writer_gaussian_single_point_key(tmp_path):
     out = tmp_path / "water_sp.gjf"
 
     result = await QmInputWriter().tool_call(
-        QmInputWriter_input_schema(
+        QmInputWriter_input_schema(charge=0,
             engine="gaussian",
             source_type="xyz_file",
             source_value=str(xyz),
@@ -521,7 +594,7 @@ async def test_qm_input_writer_orca_plain_opt_maps_keywords(tmp_path):
     out = tmp_path / "water_opt.inp"
 
     result = await QmInputWriter().tool_call(
-        QmInputWriter_input_schema(
+        QmInputWriter_input_schema(charge=0,
             engine="orca",
             source_type="xyz_file",
             source_value=str(xyz),
@@ -540,13 +613,13 @@ async def test_qm_input_writer_orca_plain_opt_maps_keywords(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_qm_input_writer_orca_relaxed_scan_writes_native_geom_scan(tmp_path):
+async def test_qm_input_writer_orca_native_scan_is_preserved_with_guidance(tmp_path):
     xyz = tmp_path / "water.xyz"
     xyz.write_text(_WATER_XYZ, encoding="utf-8")
     output = tmp_path / "water_scan.inp"
 
     result = await QmInputWriter().tool_call(
-        QmInputWriter_input_schema(method='b3lyp', basis_set='6-31g(d)',
+        QmInputWriter_input_schema(charge=0, method='b3lyp', basis_set='6-31g(d)',
             engine="orca",
             source_type="xyz_file",
             source_value=str(xyz),
@@ -558,8 +631,8 @@ async def test_qm_input_writer_orca_relaxed_scan_writes_native_geom_scan(tmp_pat
     )
 
     assert result.is_success, result.message
-    assert result.interpreted_intent["tasks"] == ["relaxed_scan"]
-    assert "! Opt " in output.read_text(encoding="utf-8")
+    assert any('scan_prepare' in entry['message'] for entry in result.warnings)
+    assert 'Scan B 0 1 = 0.95, 1.20, 4 end' in output.read_text()
 
 
 @pytest.mark.asyncio
@@ -578,7 +651,7 @@ async def test_qm_input_writer_orca_extopt_external_mlip(tmp_path):
     # TS 初始 Hessian 控制走原生 orca_blocks；Gaussian 子选项 calcfc/noeigen
     # 对 ORCA 是配置错误（见 test_orca_rejects_gaussian_opt_suboptions）。
     result = await QmInputWriter().tool_call(
-        QmInputWriter_input_schema(method='ExtOpt', basis_set='',
+        QmInputWriter_input_schema(charge=0, method='ExtOpt', basis_set='',
             engine="orca",
             source_type="xyz_file",
             source_value=str(xyz),
@@ -608,7 +681,7 @@ async def test_qm_input_writer_gaussian_external_route(tmp_path):
     out = tmp_path / "water_opt.gjf"
 
     result = await QmInputWriter().tool_call(
-        QmInputWriter_input_schema(method='external', basis_set='',
+        QmInputWriter_input_schema(charge=0, method='external', basis_set='',
             engine="gaussian",
             source_type="xyz_file",
             source_value=str(xyz),
@@ -644,7 +717,7 @@ async def test_qm_input_writer_relative_paths_use_agent_workspace(tmp_path, monk
     tool.subagent = _Bridge()
 
     result = await tool.tool_call(
-        QmInputWriter_input_schema(engine='gaussian', method='b3lyp', basis_set='6-31g(d)',
+        QmInputWriter_input_schema(charge=0, engine='gaussian', method='b3lyp', basis_set='6-31g(d)',
             source_type="xyz_file",
             source_value="water.xyz",
             output_path="calc/water.gjf",
@@ -762,6 +835,111 @@ async def test_smiles_source_single_molecule_uses_shared_builder(tmp_path):
     text = gjf.read_text(encoding="utf-8")
     assert "expected_smiles: CC(=O)O" in text
     assert (tmp_path / "structure_build" / "acetic" / "trajectories.json").is_file()
+
+
+@pytest.fixture
+def unfinished_force_field(monkeypatch):
+    """Keep the real embedding/builder/writer; replace only force-field work."""
+    from cloudra.tools.Chemtool import qm_input_writer as writer_mod
+    from cloudra.tools.core import structure_builder as builder_mod
+    from tests.test_structure_builder import _stuck_force_field
+
+    def install(failure):
+        if failure == "missing_parameters":
+            monkeypatch.setattr(builder_mod, "_select_engine", lambda _mol: None)
+        else:
+            monkeypatch.setattr(builder_mod, "_make_force_field", _stuck_force_field)
+            strategy_type = writer_mod.BuildStrategy
+            monkeypatch.setattr(writer_mod, "BuildStrategy", lambda **kwargs:
+                strategy_type(**kwargs, max_optimization_steps=2))
+    return install
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["missing_parameters", "not_converged"])
+@pytest.mark.parametrize("optimization", [None, "ts"])
+@pytest.mark.parametrize("engine", ["orca", "gaussian"])
+async def test_qm_optimization_accepts_embedded_seed_after_force_field_failure(
+    tmp_path, unfinished_force_field, failure, optimization, engine,
+):
+    """A QM optimization starts from coordinates, not an accepted FF minimum."""
+    import json
+
+    unfinished_force_field(failure)
+    target = tmp_path / "seed.inp"
+    result = await QmInputWriter().tool_call(QmInputWriter_input_schema(
+        engine=engine, method="B3LYP", basis_set="def2-SVP",
+        source_type="smiles", source_value="CCO", task_type=[{"opt": optimization}],
+        output_path=str(target)), session=None)
+
+    assert result.is_success, result.message
+    assert target.is_file()
+    assert result.interpreted_intent["tasks"] == ["ts_opt" if optimization == "ts" else "minimum_opt"]
+    prepared = json.loads((tmp_path / "structure_build/seed/prepared_structure.json").read_text())
+    assert prepared["status"] in {"missing_parameters", "optimization_failed"}
+    assert prepared["components"][0]["embed_status"] == "embedded"
+    assert prepared["components"][0]["optimization_status"] == failure
+    assert prepared["components"][0]["diagnostics"]
+    assert prepared["status"] in result.message
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["missing_parameters", "not_converged"])
+async def test_force_field_failure_does_not_loosen_single_point_seed_qualification(
+    tmp_path, unfinished_force_field, failure,
+):
+    unfinished_force_field(failure)
+    target = tmp_path / "single_point.inp"
+    result = await QmInputWriter().tool_call(QmInputWriter_input_schema(
+        engine="orca", method="B3LYP", basis_set="def2-SVP",
+        source_type="smiles", source_value="CCO", task_type=[{"sp": None}],
+        output_path=str(target)), session=None)
+    assert not result.is_success
+    assert not target.exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad_seed", ["embedding_failed", "zero", "nonfinite"])
+async def test_qm_optimization_still_refuses_invalid_embedded_coordinates(
+    tmp_path, monkeypatch, unfinished_force_field, bad_seed,
+):
+    from cloudra.tools.Chemtool import qm_input_writer as writer_mod
+    from cloudra.tools.core import structure_builder as builder_mod
+
+    unfinished_force_field("missing_parameters")
+    if bad_seed == "embedding_failed":
+        monkeypatch.setattr(builder_mod.AllChem, "EmbedMolecule", lambda *_args, **_kwargs: -1)
+    else:
+        prepare = writer_mod.prepare_structure
+        def bad_molecule(*args, **kwargs):
+            prepared = prepare(*args, **kwargs)
+            conf = prepared.components[0].mol.GetConformer()
+            number = float("nan") if bad_seed == "nonfinite" else 0.0
+            for index in range(conf.GetNumAtoms()):
+                conf.SetAtomPosition(index, (number, 0.0, 0.0))
+            return prepared
+        monkeypatch.setattr(writer_mod, "prepare_structure", bad_molecule)
+    target = tmp_path / "bad_seed.inp"
+    result = await QmInputWriter().tool_call(QmInputWriter_input_schema(
+        engine="orca", method="B3LYP", basis_set="def2-SVP",
+        source_type="smiles", source_value="CCO", task_type=[{"opt": None}],
+        output_path=str(target)), session=None)
+    assert not result.is_success
+    assert not target.exists()
+
+
+@pytest.mark.asyncio
+async def test_qm_optimization_does_not_bypass_multicomponent_assembly_failure(
+    tmp_path, unfinished_force_field,
+):
+    unfinished_force_field("missing_parameters")
+    target = tmp_path / "complex_seed.inp"
+    result = await QmInputWriter().tool_call(QmInputWriter_input_schema(
+        engine="orca", method="B3LYP", basis_set="def2-SVP",
+        source_type="smiles", source_value="CCO.O", task_type=[{"opt": None}],
+        output_path=str(target)), session=None)
+    assert not result.is_success
+    assert not target.exists()
 
 
 @pytest.mark.asyncio
@@ -930,11 +1108,11 @@ async def test_qm_input_writer_same_path_identical_content_reused(tmp_path):
         task_type=[{"opt": None}, {"freq": None}],
         output_path=str(out),
     )
-    first = await QmInputWriter().tool_call(QmInputWriter_input_schema(engine='gaussian', method='b3lyp', basis_set='6-31g(d)', **kwargs), session=None)
+    first = await QmInputWriter().tool_call(QmInputWriter_input_schema(charge=0, engine='gaussian', method='b3lyp', basis_set='6-31g(d)', **kwargs), session=None)
     assert first.is_success is True, first.message
     content_before = out.read_bytes()
 
-    second = await QmInputWriter().tool_call(QmInputWriter_input_schema(engine='gaussian', method='b3lyp', basis_set='6-31g(d)', **kwargs), session=None)
+    second = await QmInputWriter().tool_call(QmInputWriter_input_schema(charge=0, engine='gaussian', method='b3lyp', basis_set='6-31g(d)', **kwargs), session=None)
     assert second.is_success is True, second.message
     assert "identical" in second.message
     assert "reused" in second.message
@@ -952,7 +1130,7 @@ async def test_qm_input_writer_refuses_overwrite_with_different_content(tmp_path
     out.write_text("# unrelated pre-existing content\n", encoding="utf-8")
 
     result = await QmInputWriter().tool_call(
-        QmInputWriter_input_schema(engine='gaussian', method='b3lyp', basis_set='6-31g(d)',
+        QmInputWriter_input_schema(charge=0, engine='gaussian', method='b3lyp', basis_set='6-31g(d)',
             source_type="xyz_file",
             source_value=str(xyz),
             task_type=[{"opt": None}],
@@ -979,7 +1157,7 @@ async def test_qm_input_writer_output_path_blocked_by_file_fails_loud(tmp_path):
     blocker.write_text("i am a file, not a directory\n", encoding="utf-8")
 
     result = await QmInputWriter().tool_call(
-        QmInputWriter_input_schema(engine='gaussian', method='b3lyp', basis_set='6-31g(d)',
+        QmInputWriter_input_schema(charge=0, engine='gaussian', method='b3lyp', basis_set='6-31g(d)',
             source_type="xyz_file",
             source_value=str(xyz),
             task_type=[{"opt": None}],
@@ -1004,14 +1182,12 @@ def _water_xyz_file(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_gaussian_bare_scan_refused_with_semantics_recorded(tmp_path):
-    """同一 task_type 的 scan 在 Gaussian 是刚性扫描、ORCA 是松弛扫描且
-    inspect_input 检不出差异——裸 {'scan': None} 必须拒绝并在
-    unapplied_options 里显式记录 rigid/relaxed 语义冲突。"""
+async def test_gaussian_bare_scan_warns_with_semantics_recorded(tmp_path):
+    """Bare Gaussian scan is retained, with its native rigid-scan meaning visible."""
     xyz = _water_xyz_file(tmp_path)
     out = tmp_path / "scan.gjf"
     result = await QmInputWriter().tool_call(
-        QmInputWriter_input_schema(engine='gaussian', method='b3lyp', basis_set='6-31g(d)',
+        QmInputWriter_input_schema(charge=0, engine='gaussian', method='b3lyp', basis_set='6-31g(d)',
             source_type="xyz_file",
             source_value=str(xyz),
             task_type=[{"scan": None}],
@@ -1020,20 +1196,18 @@ async def test_gaussian_bare_scan_refused_with_semantics_recorded(tmp_path):
         ),
         session=None,
     )
-    assert result.is_success is False
-    assert "RIGID" in result.message and "RELAXED" in result.message
-    assert result.unapplied_options
-    assert "rigid" in result.unapplied_options[0]
-    assert not out.exists()
+    assert result.is_success, result.message
+    assert any('RIGID' in entry['message'] and 'RELAXED' in entry['message'] for entry in result.warnings)
+    assert not result.unapplied_options
+    assert out.exists()
 
 
 @pytest.mark.asyncio
-async def test_gaussian_scan_relaxed_declaration_refused_with_guidance(tmp_path):
-    """{'scan': 'relaxed'}：Gaussian 松弛扫描不是裸 scan 路由能表达的——
-    拒绝并指路 opt=modredundant / ORCA %geom Scan。"""
+async def test_gaussian_scan_relaxed_declaration_preserved_with_guidance(tmp_path):
+    """A questionable scan parameter is kept verbatim and receives advice."""
     xyz = _water_xyz_file(tmp_path)
     result = await QmInputWriter().tool_call(
-        QmInputWriter_input_schema(engine='gaussian', method='b3lyp', basis_set='6-31g(d)',
+        QmInputWriter_input_schema(charge=0, engine='gaussian', method='b3lyp', basis_set='6-31g(d)',
             source_type="xyz_file",
             source_value=str(xyz),
             task_type=[{"scan": "relaxed"}],
@@ -1041,9 +1215,9 @@ async def test_gaussian_scan_relaxed_declaration_refused_with_guidance(tmp_path)
         ),
         session=None,
     )
-    assert result.is_success is False
-    assert "modredundant" in result.message
-    assert result.unapplied_options
+    assert result.is_success, result.message
+    assert any('modredundant' in entry['message'] for entry in result.warnings)
+    assert 'scan=relaxed' in (tmp_path / 'scan.gjf').read_text()
 
 
 @pytest.mark.asyncio
@@ -1053,7 +1227,7 @@ async def test_gaussian_scan_rigid_declaration_writes_bare_scan_route(tmp_path):
     xyz = _water_xyz_file(tmp_path)
     out = tmp_path / "scan.gjf"
     result = await QmInputWriter().tool_call(
-        QmInputWriter_input_schema(engine='gaussian', method='b3lyp', basis_set='6-31g(d)',
+        QmInputWriter_input_schema(charge=0, engine='gaussian', method='b3lyp', basis_set='6-31g(d)',
             source_type="xyz_file",
             source_value=str(xyz),
             task_type=[{"scan": "rigid"}],

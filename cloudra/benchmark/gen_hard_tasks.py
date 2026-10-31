@@ -99,7 +99,7 @@ DEFAULT_OUT = REPO_ROOT / "ideapool" / "tasks" / "hard"
 
 # hard.md "定稿圈定"段的权威名单（v3 缩减：20 → 10；池子其余条目留档不生成）。
 # 2026-10-01：A8/H6PI 替换 E3，B10/HDA_CN 替换 G2；旧源与证据留档。
-# 正选：A1/A6/A8 电环化，B1/B10 DA，D2 环氧开环，F1 环氧化，H1 联萘，I1 aldol，L1 Beckmann。
+# 正选：A1/A6/A8 电环化，B1/B10 DA，D2 环氧开环，F1 环氧化，H1 联萘，I1 Cope 消除立体映射，L1 HCNO/降冰片烯两面环加成。
 TASK_IDS = (
     "A1 A6 B1 D2 A8 F1 B10 H1 I1 L1"
 ).split()
@@ -239,6 +239,8 @@ def _step_favored(step: dict, main: bool) -> bool | None:
 
 
 def _build_graph(pid: str, reactants: list[str], products: list[str], entry: dict) -> GoldMechanismGraph:
+    if "gold_graph" in entry:
+        return GoldMechanismGraph.model_validate(entry["gold_graph"])
     tid = f"H{pid}"
     nodes = [MechanismNode(id=f"{tid}_R", role=NodeRole.REACTANT, smiles=complex_smiles(reactants), label="reactant")]
     edges: list[MechanismEdge] = []
@@ -250,7 +252,7 @@ def _build_graph(pid: str, reactants: list[str], products: list[str], entry: dic
         node = MechanismNode(
             id=f"{tid}_P" if last else f"{tid}_I{k}",
             role=NodeRole.PRODUCT if last else NodeRole.INTERMEDIATE,
-            smiles=complex_smiles(products) if last else _unmap_canonical(step["out"]),
+            smiles=complex_smiles(products if last else _unmap_canonical(step["out"])),
             # 缺省 label 与历史逐字节一致；条目可选 node_label 覆盖（G2 主线为次通道）
             label=step.get("node_label", "product" if last else f"intermediate {k}"),
         )
@@ -285,7 +287,7 @@ def _build_graph(pid: str, reactants: list[str], products: list[str], entry: dic
         minor = None if same_endpoint else MechanismNode(
             id=f"{tid}_M{k}",
             role=NodeRole.PRODUCT if is_product else NodeRole.INTERMEDIATE,
-            smiles=_unmap_canonical(step["out"]),
+            smiles=complex_smiles(_unmap_canonical(step["out"])),
             # 缺省 label 与历史逐字节一致；条目可选 node_label 覆盖（G2 副通道为优势）
             label=step.get("node_label", default_label),
         )

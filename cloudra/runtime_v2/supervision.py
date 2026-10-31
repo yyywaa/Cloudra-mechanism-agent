@@ -1,40 +1,23 @@
-"""事件驱动 Supervisor 的运行时接入口（Task 3：持久信箱通知）。
+"""Route durable scientific work to process and independent final Supervisors.
 
-本模块实现 ``docs/superpowers/plans/2026-09-05-event-driven-supervisor.md``
-（2026-09-06 修订，§5 显式送审契约）的运行时半边：
-
-- ``notify_supervisor``：项目唯一 Supervisor 的身份确保 + 按状态表通知；
-- ``reconcile_supervision``：项目装载/恢复后的持久化待办扫描与补通知；
-- ``flush_review_notifications``：三类裁决通知（review_decision /
-  call_verdict / draft_verdict，共用同一张 durable 通知表）的非轮询投递；
-- ``_sync_terminal_supervisor_alert``：D2 督导终态（failed/cancelled）+
-  可消费待办时给 Coordinator 的一次性告警（pin 内容即指纹去重）；
-- ``find_project_supervisor`` / ``pending_supervision_summary`` /
-  ``reconcile_legacy_backlog_notice``：纯投影查询与持久化待办只读扫描。
-
-设计契约要点（计划 §1/§2/§4/§5）：
-
-- 待办的唯一事实来源是 DAG store（pending call reviews / open drafts / queued
-  review requests）；本模块只做身份确保与通知/调度，不持有旧待办快照，不引入
-  第二份内存队列。
-- Supervisor 是项目内唯一的普通 runtime_v2 agent（``role_id="supervisor"``），
-  由 AgentRunner / TurnPipeline / InvocationService 驱动，每轮自读持久信箱裁决，
-  空信箱则 stop。身份由 core.agents 的项目+角色投影确定。
-- 生产端（研究工具完成）只登记证据/事实后返回；显式送审经真实
-  dag_bind_evidence 工具入口持久化后，由 DAG policy 完成钩子按新建
-  review 回执调 notify_supervisor（送审方法本身不通知）。两条路径都不
-  等待督导 LLM 或裁决完成。
+One process Supervisor handles evidence, drafts and research notes. Each exit
+request gets a separate Supervisor session, bound by the runtime to that request.
+Neither identity nor work is kept in a parallel registry: sessions live in the
+runtime projection and pending requests in the DAG store. Notifications share
+one durable delivery/wake policy; restoring a project never starts an LLM.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
 from typing import TYPE_CHECKING
 
 from cloudra.runtime_v2.dispatcher import WakePolicy
+from cloudra.runtime_v2.notices import RESEARCH_OBSERVATION_PIN_KEY
 
 if TYPE_CHECKING:
     from cloudra.runtime_v2.core import RuntimeCore
@@ -56,7 +39,7 @@ TERMINAL_SUPERVISOR_PIN_KEY = "supervisor-terminal-backlog"
 def find_project_supervisor(
     core: RuntimeCore, project_id: str
 ) -> AgentSession | None:
-    """返回项目内唯一的 Supervisor AgentSession（纯投影查询），无则 None。
+    """返回项目的过程 Supervisor（排除独立终审会话），无则 None。
 
     身份的唯一事实来源是 core.agents 的 项目+角色 投影。多于一个匹配属于
     不变量破坏：记 warning；优先返回非 failed/cancelled 的那个（创建侧的
@@ -67,6 +50,7 @@ def find_project_supervisor(
         agent
         for agent in core.agents.values()
         if agent.project_id == project_id and agent.role_id == SUPERVISOR_ROLE_ID
+        and agent.final_review_request_id is None
     ]
     if not matches:
         return None
@@ -87,40 +71,90 @@ def find_project_supervisor(
     return chosen
 
 
-async def pending_supervision_summary(project_id: str) -> dict[str, int]:
+def find_final_review_supervisor(
+    core: RuntimeCore, project_id: str, request_id: str,
+) -> AgentSession | None:
+    """The persisted session binding is the sole final-review identity."""
+    return next((agent for agent in core.agents.values()
+                 if agent.project_id == project_id and agent.role_id == SUPERVISOR_ROLE_ID
+                 and agent.final_review_request_id == request_id), None)
+
+
+def _queued_review_requests(project_id: str):
+    from cloudra.dag.store import DagStore
+    from cloudra.persistence.database import ConversationDB
+
+    db = ConversationDB(project_id)
+    if not os.path.isfile(db.path):
+        return []
+    db.migrate_if_needed()
+    return DagStore(db).list_review_requests("queued")
+
+
+def pending_supervision_for_agent(project_id: str, agent: AgentSession) -> bool:
+    """Read only this reviewer's durable work; asynchronous callers offload it."""
+    counts = pending_supervision_counts(project_id, agent=agent)
+    return any(counts[kind] for kind in ("call_reviews", "open_drafts", "review_requests"))
+
+
+def _clear_inactive_final_alerts(core: RuntimeCore, project_id: str, requests) -> None:
+    """An old reviewer's failure is no longer work after its request closes."""
+    coordinator = next((agent for agent in core.agents.values()
+                        if agent.project_id == project_id and agent.role_id == "coordinator"), None)
+    if coordinator is None:
+        return
+    queued = {request.request_id for request in requests if request.kind == "exit"}
+    for agent in core.agents.values():
+        if (agent.project_id == project_id and agent.role_id == SUPERVISOR_ROLE_ID
+                and agent.final_review_request_id and agent.final_review_request_id not in queued):
+            core.notices.unpin(
+                coordinator.id, f"{TERMINAL_SUPERVISOR_PIN_KEY}-{agent.final_review_request_id}",
+            )
+
+
+def pending_supervision_counts(project_id: str, *, agent: AgentSession | None = None) -> dict[str, int]:
     """读取项目的持久化督导待办计数（只读，绝不建库）。
 
     信箱三类来源：pending call reviews、open 机理草稿、queued review
     requests。§5 起 call reviews 按来源拆分：``call_reviews`` 只数可消费的
     显式送审行（source="explicit"）；``legacy_call_reviews`` 数历史自动行
     （legacy_auto/auto，保留审计但不自动消费）。会话库不存在（项目从未进入
-    dag 模式）时返回全零。供 reconcile_supervision 与诊断面共用；同步
-    SQLite 读经 ``asyncio.to_thread`` 卸载。
+    dag 模式）时返回全零。异步调用者须经 ``asyncio.to_thread`` 卸载。
     """
     from cloudra.dag.store import DagStore
     from cloudra.persistence.database import ConversationDB
 
-    def _read() -> dict[str, int]:
-        db = ConversationDB(project_id)
-        if not os.path.isfile(db.path):
-            return {
-                "call_reviews": 0,
-                "legacy_call_reviews": 0,
-                "open_drafts": 0,
-                "review_requests": 0,
-            }
-        db.migrate_if_needed()
-        store = DagStore(db)
-        draft = store.latest_draft()
-        pending = store.list_call_reviews("pending")
+    db = ConversationDB(project_id)
+    if not os.path.isfile(db.path):
         return {
-            "call_reviews": sum(1 for row in pending if row.source == "explicit"),
-            "legacy_call_reviews": sum(1 for row in pending if row.source != "explicit"),
-            "open_drafts": 1 if (draft is not None and draft.get("state") == "open") else 0,
-            "review_requests": len(store.list_review_requests("queued")),
+            "call_reviews": 0,
+            "legacy_call_reviews": 0,
+            "open_drafts": 0,
+            "review_requests": 0,
         }
+    db.migrate_if_needed()
+    store = DagStore(db)
+    draft = store.latest_draft()
+    pending = store.list_call_reviews("pending")
+    requests = store.list_review_requests("queued")
+    if agent is not None and agent.final_review_request_id is not None:
+        return {
+            "call_reviews": 0, "legacy_call_reviews": 0, "open_drafts": 0,
+            "review_requests": sum(request.kind == "exit"
+                                   and request.request_id == agent.final_review_request_id
+                                   for request in requests),
+        }
+    return {
+        "call_reviews": sum(1 for row in pending if row.source == "explicit"),
+        "legacy_call_reviews": sum(1 for row in pending if row.source != "explicit"),
+        "open_drafts": 1 if (draft is not None and draft.get("state") == "open") else 0,
+        "review_requests": sum(agent is None or request.kind != "exit" for request in requests),
+    }
 
-    return await asyncio.to_thread(_read)
+
+async def pending_supervision_summary(project_id: str) -> dict[str, int]:
+    """Read durable scientific supervision counts without blocking the event loop."""
+    return await asyncio.to_thread(pending_supervision_counts, project_id)
 
 
 async def reconcile_legacy_backlog_notice(core: RuntimeCore, project_id: str) -> int:
@@ -162,28 +196,35 @@ async def reconcile_legacy_backlog_notice(core: RuntimeCore, project_id: str) ->
     return legacy
 
 
-# 并发首次通知的易失互斥（计划 §2）：只防同进程竞态，不是身份源——身份
-# 唯一事实来源始终是 core.agents 的 项目+角色 投影（find_project_supervisor）。
+# 并发通知的易失互斥：串行首次创建与同版本通知判重，不是身份或工作源；
+# 身份来自 core.agents，工作版本来自 DAG 与持久化通知。
 _SPAWN_LOCKS: dict[str, asyncio.Lock] = {}
 
 
 def _notification_text(reason: str) -> str:
     text = (
-        "[Supervision] Your persistent supervision mailbox changed"
+        "[Supervision] Project research notes or supervision work changed"
         + (f" ({reason})." if reason else ".")
         + " Read the DAG store for the current pending reviews, open drafts "
         "and queued review requests — the store is the source of truth and "
-        "this notification may be stale by the time you read it."
+        "this notification may be stale by the time you read it. "
+        "Read the named changed research note, the current pinned TS observation when present, "
+        "and the current project-root PROCESS.md. "
+        "Promptly merge evidence, counterevidence and changed hypotheses into the shared current account, "
+        "with concrete source links. Document maintenance does not require a scientific review request "
+        "or wait for one; finish pending scientific decisions first when there are any."
     )
     return text
 
 
-async def _spawn_supervisor(core: RuntimeCore, project_id: str) -> AgentSession | None:
-    """经 CommandBus 正常 spawn 项目唯一 Supervisor（parent=Coordinator）。
+async def _spawn_supervisor(
+    core: RuntimeCore, project_id: str, *, final_review_request_id: str | None = None,
+    requester: str | None = None,
+) -> AgentSession | None:
+    """Spawn through CommandBus, without inheriting any parent's context.
 
-    parent 必须指向 Coordinator（反馈走普通子 agent 完成回传），不是提交
-    证据的研究子 agent；没有 Coordinator 时 parent 留空。spawn 不带 query
-    （queued），随后由 notify 的同一状态表 deliver + wake 开跑。
+    Process review belongs to the Coordinator; a final reviewer belongs to its
+    submitting requester. The notification pins human scope before first wake.
     """
     from cloudra.runtime_v2.commands import CommandBus
     from cloudra.runtime_v2.schemas import Command
@@ -202,7 +243,9 @@ async def _spawn_supervisor(core: RuntimeCore, project_id: str) -> AgentSession 
             target={"project_id": project_id},
             payload={
                 "role_id": SUPERVISOR_ROLE_ID,
-                "parent_session_id": coordinator.id if coordinator else None,
+                "parent_session_id": requester or (coordinator.id if coordinator else None),
+                "final_review_request_id": final_review_request_id,
+                "display_name": "Final delivery reviewer" if final_review_request_id else None,
                 # 督导的 dag_* 裁决工具是 guided-only（dag_review_evidence 在
                 # dag_record 被拒）；桥接面的 orchestration_mode 取自 agent
                 # settings，spawn 时显式钉 guided。
@@ -221,89 +264,143 @@ async def _spawn_supervisor(core: RuntimeCore, project_id: str) -> AgentSession 
     return result.data
 
 
-async def notify_supervisor(
-    core: RuntimeCore, project_id: str, *, reason: str = "", auto_wake: bool = True
+async def _deliver_supervision_work(
+    core: RuntimeCore, agent: AgentSession, *, content: str, work: dict,
+    auto_wake: bool,
 ) -> None:
-    """确保项目唯一 Supervisor agent 身份并按状态表通知；不等待裁决。
+    """One durable delivery/wake policy for process and independent reviewers."""
+    from cloudra.runtime_v2.schemas import AgentState
+    from cloudra.runtime_v2.supervision_context import sync_supervisor_task_context
 
-    调用方必须先完成待办持久化（显式送审 review / open 草稿 / 结构化督导
-    请求），本函数只负责身份与调度，不携带待办快照——Supervisor 苏醒后自读
-    持久信箱取得最新状态。模式门禁在调用方（只有 dag_guided 的生产路径会
-    走到这里）；本函数自身不读模式，以便恢复/诊断路径直接复用。
+    await sync_supervisor_task_context(core, agent)
+    # Refresh human constraints without turning a status question into new
+    # scientific work. A new submission has its own persisted request/basis.
+    fingerprint = hashlib.sha256(json.dumps(work, sort_keys=True).encode()).hexdigest()
+    previous = await asyncio.to_thread(_latest_work_notice, core, agent.id)
+    previous_work = previous.data.get("manifest", {}) if previous is not None else {}
+    if agent.state in {AgentState.FAILED, AgentState.CANCELLED}:
+        await _sync_terminal_supervisor_alert(
+            core, agent.project_id, agent, auto_wake=auto_wake,
+        )
+    if previous_work.get("fingerprint") == fingerprint:
+        unread = previous is not None and any(
+            event.session_id == agent.id
+            and event.data.get("message_id") == previous.data.get("message_id")
+            for event in core.mailbox.unread()
+        )
+        if auto_wake and unread and agent.state in {AgentState.QUEUED, AgentState.SUCCEEDED}:
+            async with core.dispatcher.target_lock(agent.id):
+                inbox = core.mailbox.inbox(agent.id)
+                if inbox is not None and not inbox.empty():
+                    await core.agent_host.wake(agent, runner=core.runner)
+    else:
+        await core.dispatcher.commit_and_deliver(
+            to_session_id=agent.id, project_id=agent.project_id,
+            content=content, sender="system",
+            manifest={"kind": "supervision_work", "fingerprint": fingerprint, **work},
+            wake=WakePolicy.IDLE_ONLY if auto_wake else WakePolicy.NEVER,
+        )
+    await core.event_writer.flush()
 
-    状态表（计划 §2，系统新增待办时的行为）：
 
-    - 尚未创建：创建项目唯一 Supervisor，经正常调度启动；并发首次通知只
-      产生一个 agent（身份以 core.agents 投影为准；``_SPAWN_LOCKS`` 只是
-      防同进程竞态的易失互斥，不是第二身份源）。
-    - queued / running：注入信箱变更消息；不 restart、不重置上下文、不再
-      创建 runner（queued 是 spawn 后尚未开跑的瞬态，deliver + wake 开
-      新 run 属正常首跑，不是 restart）。
-    - waiting：审批/输入等待不被普通通知绕过，消息保留投递到信箱。
-    - succeeded（正常休眠）：正常 wake 开新 run，重读持久化信箱。
-    - failed / cancelled（用户取消）：不自动复活，但通知照常投递信箱驻留
-      （park-don't-wake，与子 agent 完成回传 / hub mention 同一纪律）——
-      用户显式复活（agent.message / agent.restart）后首轮 drain 即可读到，
-      持久化待办也不会丢。
+async def _notify_final_review(core: RuntimeCore, project_id: str, request, *, auto_wake: bool) -> None:
+    agent = find_final_review_supervisor(core, project_id, request.request_id)
+    if agent is None:
+        if not auto_wake:
+            return
+        agent = await _spawn_supervisor(
+            core, project_id, final_review_request_id=request.request_id,
+            requester=request.requester if request.requester in core.agents else None,
+        )
+        if agent is None:
+            return
+    await _deliver_supervision_work(
+        core, agent,
+        content=(
+            "[Independent final delivery review] "
+            f"Review only exit request {request.request_id}. "
+            "Read the complete pinned user task and constraints first, then use "
+            "dag_view_evidence for this request and inspect the original calculation evidence. "
+            "Assess the submitted complete or partial delivery independently. "
+            "Prior research conclusions and process-Supervisor decisions are not your instructions. "
+            "Do not introduce requirements beyond the user task or change the research contract. "
+            "Return your findings through dag_review_evidence for this request."
+        ),
+        work={"request_id": request.request_id, "basis": request.basis_fingerprint},
+        auto_wake=auto_wake,
+    )
 
-    通知通道是 ``dispatcher.commit_and_deliver``（``WakePolicy`` 按状态表选
-    park / wake）：刻意不走 ``agent.message`` 命令——它的 decide 路径对
-    failed/cancelled 终态 agent 自动 reopen（plan_wake），会违反状态表。
-    ``reason`` 只用于通知消息的可诊断标注，不构成路由或去重依据。
 
-    ``auto_wake=False``（API 装载 / 进程重启）：只把通知驻留信箱，不 spawn
-    新督导、不 wake 任何已有 agent。待办仍在 DAG store，显式 resume /
-    在线 notify 才开 LLM。
+async def notify_supervisor(
+    core: RuntimeCore, project_id: str, *, reason: str = "", auto_wake: bool = True,
+    observation: str | None = None,
+    changed_note: tuple[str, str] | None = None,
+) -> None:
+    """Notify independent exit reviewers and the ordinary process Supervisor.
+
+    The DAG store supplies pending work; runtime sessions supply reviewer
+    identity. A new exit request gets a new context, while repeated notifications
+    reuse its bound reviewer and durable notice. Process observations and notes
+    never enter final-review notifications. Running/waiting sessions retain
+    their state; failed/cancelled sessions are parked rather than auto-revived.
+    ``auto_wake=False`` restores notices without spawning or running agents.
     """
     if project_id not in core.projects:
         logger.debug("[supervision] notify for unknown project %s ignored", project_id)
         return
-    agent = find_project_supervisor(core, project_id)
-    if agent is None:
-        if not auto_wake:
-            logger.info(
-                "[supervision] project %s has backlog but no supervisor; "
-                "load path will not spawn",
-                project_id,
-            )
+    # The durable work version, not a reason string or the previous stop text,
+    # controls another wake. Serialize the check with first-spawn and delivery.
+    lock = _SPAWN_LOCKS.setdefault(project_id, asyncio.Lock())
+    async with lock:
+        summary = await pending_supervision_summary(project_id)
+        requests = await asyncio.to_thread(_queued_review_requests, project_id)
+        _clear_inactive_final_alerts(core, project_id, requests)
+        for request in requests:
+            if request.kind == "exit":
+                await _notify_final_review(core, project_id, request, auto_wake=auto_wake)
+        summary["review_requests"] = sum(request.kind != "exit" for request in requests)
+        consumable = any(summary[kind] for kind in ("call_reviews", "open_drafts", "review_requests"))
+        if not consumable and observation is None and changed_note is None:
             return
-        lock = _SPAWN_LOCKS.setdefault(project_id, asyncio.Lock())
-        async with lock:
-            agent = find_project_supervisor(core, project_id)
-            if agent is None:
-                agent = await _spawn_supervisor(core, project_id)
+        agent = find_project_supervisor(core, project_id)
         if agent is None:
-            return  # spawn 被拒：待办已持久化，reconcile 会补（已记 warning）
+            if not auto_wake:
+                return
+            agent = await _spawn_supervisor(core, project_id)
+            if agent is None:
+                return
 
-    from cloudra.runtime_v2.schemas import AgentState
+        previous = await asyncio.to_thread(_latest_work_notice, core, agent.id)
+        previous_work = previous.data.get("manifest", {}) if previous is not None else {}
+        notes = {**previous_work.get("notes", {})}
+        if changed_note is not None:
+            notes[changed_note[0]] = changed_note[1]
+        observed = (hashlib.sha256(observation.encode()).hexdigest() if observation is not None
+                    else previous_work.get("observation"))
+        work = {"state": await asyncio.to_thread(_supervision_state, project_id),
+                "notes": notes, "observation": observed}
+        if observation is not None and previous_work.get("observation") != observed:
+            core.notices.pin(agent.id, RESEARCH_OBSERVATION_PIN_KEY, observation)
+        await _deliver_supervision_work(
+            core, agent, content=_notification_text(reason), work=work,
+            auto_wake=auto_wake,
+        )
 
-    state = agent.state
-    # 统一不复活纪律（park-don't-wake）：所有状态都投递（通知是 durable 的
-    # agent.message_injected + 内存队列）；failed/cancelled 只驻留不唤醒——
-    # 用户显式复活后首轮 drain 即可读到。
-    # 督导通知的唤醒纪律：只有 QUEUED/SUCCEEDED 才唤醒（不打断运行态与
-    # 等待态）；auto_wake=False（装载）时任何状态都只驻留。
-    await core.dispatcher.commit_and_deliver(
-        to_session_id=agent.id,
-        project_id=project_id,
-        content=_notification_text(reason),
-        sender="system",
-        wake=WakePolicy.IDLE_ONLY if auto_wake else WakePolicy.NEVER,
-    )
-    if state in {AgentState.FAILED, AgentState.CANCELLED}:
-        logger.debug(
-            "[supervision] supervisor %s is %s; notification parked, no auto-revive",
-            agent.id,
-            state.value,
-        )
-        # D2：终态督导 + 可消费待办不再是隐形 wedge——给 Coordinator 发
-        # 一次性告警（指纹去重），点名不自动复活与真实恢复入口。
-        await _sync_terminal_supervisor_alert(
-            core, project_id, agent, auto_wake=auto_wake
-        )
-    # RUNNING：下一轮 drain 收件箱；WAITING_*：消息保留，不绕过等待语义。
-    # auto_wake=False：任何状态都只驻留，由显式 resume 开跑。
-    await core.event_writer.flush()
+
+def _supervision_state(project_id: str) -> str | None:
+    from cloudra.dag.store import DagStore
+    from cloudra.persistence.database import ConversationDB
+
+    db = ConversationDB(project_id)
+    return DagStore(db).delivery_state_fingerprint() if os.path.isfile(db.path) else None
+
+
+def _latest_work_notice(core: RuntimeCore, session_id: str):
+    if core.store is not None:
+        return core.store.latest_supervision_notice(session_id)
+    return next((event for event in reversed(core.event_log.query_session(
+        session_id, types={"agent.message_injected"}, limit=None,
+    )) if (event.data.get("manifest") or {}).get("kind") == "supervision_work"), None)
 
 
 async def reconcile_supervision(
@@ -332,12 +429,14 @@ async def reconcile_supervision(
     await flush_review_notifications(core, project_id, auto_wake=auto_wake)
     await reconcile_legacy_backlog_notice(core, project_id)
     summary = await pending_supervision_summary(project_id)
+    _clear_inactive_final_alerts(
+        core, project_id, await asyncio.to_thread(_queued_review_requests, project_id),
+    )
     # D2：恢复路径同样同步终态督导告警（含条件消失后的撤 pin）。
     await _sync_terminal_supervisor_alert(
         core,
         project_id,
         find_project_supervisor(core, project_id),
-        summary,
         auto_wake=auto_wake,
     )
     consumable = (
@@ -430,7 +529,6 @@ async def _sync_terminal_supervisor_alert(
     core: RuntimeCore,
     project_id: str,
     supervisor: AgentSession | None,
-    summary: dict[str, int] | None = None,
     *,
     auto_wake: bool = True,
 ) -> None:
@@ -459,14 +557,18 @@ async def _sync_terminal_supervisor_alert(
         AgentState.FAILED,
         AgentState.CANCELLED,
     }
-    if summary is None:
-        summary = await pending_supervision_summary(project_id)
+    summary = await asyncio.to_thread(pending_supervision_counts, project_id, agent=supervisor)
+    pin_key = (
+        f"{TERMINAL_SUPERVISOR_PIN_KEY}-{supervisor.final_review_request_id}"
+        if supervisor is not None and supervisor.final_review_request_id
+        else TERMINAL_SUPERVISOR_PIN_KEY
+    )
     consumable = (
         summary["call_reviews"] + summary["open_drafts"] + summary["review_requests"]
     )
     if not terminal or not consumable:
         # 条件不成立（含缺失但可建的督导）：撤下可能残留的旧告警。
-        core.notices.unpin(coordinator.id, TERMINAL_SUPERVISOR_PIN_KEY)
+        core.notices.unpin(coordinator.id, pin_key)
         return
     content = (
         f"[Supervision] ALERT: the Supervisor agent ({supervisor.id}) is in "
@@ -480,11 +582,11 @@ async def _sync_terminal_supervisor_alert(
         "its parked mailbox on the first turn of the new run."
     )
     if (
-        core.notices.pin_content(coordinator.id, TERMINAL_SUPERVISOR_PIN_KEY)
+        core.notices.pin_content(coordinator.id, pin_key)
         == content
     ):
         return  # 指纹未变：不重复投递
-    core.notices.pin(coordinator.id, TERMINAL_SUPERVISOR_PIN_KEY, content)
+    core.notices.pin(coordinator.id, pin_key, content)
     await core.dispatcher.commit_and_deliver(
         to_session_id=coordinator.id,
         project_id=project_id,
@@ -535,7 +637,13 @@ async def flush_review_notifications(
         subject_id = item["decision_id"]
         kind = item.get("kind") or "review_decision"
         try:
-            if kind == "call_verdict":
+            manifest = None
+            if kind == 'review_superseded':
+                payload = json.loads(item.get('payload') or '{}')
+                content = (f"[Review superseded] request_id={subject_id} "
+                           f"reason={payload['reason']} next_action={payload['next_action']}")
+                pin_key = f'review-superseded-{subject_id}'
+            elif kind == "call_verdict":
                 content = _call_verdict_text(
                     subject_id, json.loads(item.get("payload") or "{}")
                 )
@@ -549,6 +657,12 @@ async def flush_review_notifications(
                 decision = await asyncio.to_thread(
                     store.get_review_decision, subject_id
                 )
+                request = await asyncio.to_thread(store.get_review_request, item["request_id"])
+                if decision is not None and request is not None and request.kind == "exit":
+                    manifest = {
+                        "kind": "exit_review_decision", "request_id": request.request_id,
+                        "decision_id": decision.decision_id, "verdict": decision.verdict,
+                    }
                 content = (
                     f"[Supervisor review decision] decision_id={subject_id} "
                     f"request_id={item['request_id']} "
@@ -575,6 +689,7 @@ async def flush_review_notifications(
                     project_id=project_id,
                     content=content,
                     sender="supervisor",
+                    manifest=manifest,
                     wake=WakePolicy.PARK_WAITING if auto_wake else WakePolicy.NEVER,
                 )
                 await asyncio.to_thread(store.mark_review_notification_sent, subject_id)

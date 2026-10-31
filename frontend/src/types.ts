@@ -37,7 +37,7 @@ export interface CompletionSummary {
   run_id: string | null;
   run_outcome: 'succeeded' | 'failed' | 'cancelled' | null;
   completion_basis: string | null;
-  verification_label: 'verified' | 'supervisor_reviewed' | 'partial' | 'unverified';
+  verification_label: 'verified' | 'supervisor_reviewed' | 'partial' | 'scope_completed' | 'unverified';
 }
 
 export interface Agent {
@@ -127,6 +127,23 @@ export interface RuntimeConfig {
   config_file: string;
   coordinator: RuntimeConfigSlot;
   follower: RuntimeConfigSlot;
+  search_provider: 'deepseek' | 'auto' | 'tavily' | 'brave' | 'bing' | 'duckduckgo';
+  deepseek_api_key_set: boolean;
+  tool_document_loading: ToolDocumentLoadingConfig;
+}
+
+export interface SemanticConnection {
+  endpoint: string;
+  model: string;
+  key_set: boolean;
+  max_tools: number | null;
+}
+
+export interface ToolDocumentLoadingConfig {
+  strategy: 'llm' | 'semantic';
+  semantic_backend: 'jev' | 'reranker';
+  jev: SemanticConnection & { min_probability: number | null };
+  reranker: SemanticConnection & { min_score: number | null };
 }
 
 export interface CodexAuthStatus {
@@ -198,19 +215,15 @@ export interface KgSearchResponse {
 
 export interface KgHealthChannel {
   ok: boolean;
-  url?: string;
-  model?: string | null;
-  count?: number;
   entities?: number;
   relations?: number;
-  cards?: number;
+  sources?: number;
   error?: string;
 }
 
 export interface KgHealth {
-  semantic: KgHealthChannel;
   graph: KgHealthChannel;
-  fuzzy: KgHealthChannel;
+  content: KgHealthChannel;
 }
 
 export interface ComputeJob {

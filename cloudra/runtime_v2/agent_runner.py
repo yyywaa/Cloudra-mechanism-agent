@@ -29,7 +29,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import os
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -102,6 +104,16 @@ class AgentRunner:
     ) -> None:
         self.core = core
         self.pipeline = pipeline
+        from cloudra.runtime_v2.turn_pipeline import TurnPipeline
+
+        if isinstance(pipeline, TurnPipeline):
+            # An injected standalone pipeline joins this core's one durable
+            # event path, including when its store attaches after the runner.
+            pipeline.event_log = core.event_log
+            pipeline.event_hub = core.event_hub
+            pipeline.event_writer = core.event_writer
+            pipeline.invocations.event_writer = core.event_writer
+            pipeline.js_runtime.event_writer = core.event_writer
         self.max_turn_retries = max_turn_retries
         self.retry_backoff = retry_backoff
         self.max_exit_strikes = max_exit_strikes
@@ -276,12 +288,6 @@ class AgentRunner:
                     restored=contexts.prefix_state(agent.id),
                 )
             turns = 0
-            from cloudra.runtime_v2.compaction import (
-                context_over_budget,
-                estimate_messages_tokens,
-                usable_prompt_tokens,
-            )
-
             while agent.state is AgentState.RUNNING:
                 inbox_messages = self._drain_inbox(agent)
                 if turns == 0 and not inbox_messages:
@@ -289,6 +295,11 @@ class AgentRunner:
                     message = await inbox.get()
                     inbox_messages.append(message)
                 turns += 1
+                if await self._confirm_reviewed_exit(agent, run_id, inbox_messages):
+                    break
+                # The confirmation audit can await native evidence checks. New
+                # instructions received in that interval belong to this turn.
+                inbox_messages.extend(self._drain_inbox(agent))
                 inbox_messages = await asyncio.to_thread(
                     self._prepare_inbox_messages, agent, inbox_messages
                 )
@@ -297,38 +308,17 @@ class AgentRunner:
                         await self._consume_pending_compaction(
                             agent, run_id, context_prefix=context_prefix
                         )
-                # 预算触发：达到上下文预算即压缩——估算用现有 context_window
-                # 与输出预算并留余量。压缩被拒时保留原上下文，且要等投影再
-                # 长出 COMPACT_RETRY_GROWTH 才重试（同样的输入只会同样失败）。
-                # 容量判定用生效设置：spawn 快照里 context_window=0 表示未
-                # 设置，真实窗口由 provider 桥接从 config 槽位补全。
-                current = contexts.current_messages(agent.id)
-                if current:
-                    effective = self._effective_settings(agent)
-                    # tiktoken 计数是 CPU 工作，卸载出事件循环（同
-                    # llm_client.count_message_tokens）。
-                    if await asyncio.to_thread(
-                        context_over_budget,
-                        current,
-                        context_window=effective.context_window,
-                        max_output=effective.max_tokens,
-                    ):
-                        budget_tokens = usable_prompt_tokens(
-                            effective.context_window, effective.max_tokens
-                        )
-                        if self._compaction_retry_due(
-                            agent.id,
-                            await asyncio.to_thread(
-                                estimate_messages_tokens, current
-                            ),
-                            budget_tokens,
-                        ):
-                            await self._apply_compaction(
-                                agent,
-                                run_id,
-                                trigger="budget",
-                                context_prefix=context_prefix,
-                            )
+                # 在 pipeline 装好本轮输入、动态前缀和通知后再检查容量。
+                # inbox 已落入投影；压缩时仍保留当前指令原文。
+                preserve_ids = {
+                    str(item["message_id"]) for item in inbox_messages if item.get("message_id")
+                }
+
+                async def prepare_context(messages, estimated_tokens):
+                    return await self._prepare_context(
+                        agent, run_id, messages, estimated_tokens,
+                        context_prefix=context_prefix, preserve_message_ids=preserve_ids,
+                    )
                 attempt = 0
                 overflow_compacted = False
                 while True:
@@ -345,6 +335,7 @@ class AgentRunner:
                             context_prefix=context_prefix,
                             context_broker=contexts,
                             vision_enabled=self._vision_enabled(agent),
+                            prepare_context=prepare_context,
                         )
                         break
                     except asyncio.CancelledError:
@@ -359,6 +350,7 @@ class AgentRunner:
                                 run_id,
                                 trigger="context_overflow",
                                 context_prefix=context_prefix,
+                                preserve_message_ids=preserve_ids,
                             )
                             overflow_compacted = True
                             if stats.get("compacted"):
@@ -415,12 +407,10 @@ class AgentRunner:
                         run_id,
                         explicit_stop=explicit_stop,
                         stop_arguments=stop_arguments,
+                        candidate_answer=outcome.content,
                     )
                     if gate.action == "continue_work":
-                        # 被拦的最终回复可作中间说明展示，但状态与交付处置一致
-                        # （计划 §6 第 8 条）：不 finish、不登记交付处置。
-                        if outcome.content:
-                            self._emit_run_message(agent, run_id, outcome.content)
+                        # Keep the candidate private until the completion gate permits delivery.
                         strike, exhausted = self._track_exit_strike(agent, run_id, gate)
                         if exhausted:
                             notice = (
@@ -455,8 +445,6 @@ class AgentRunner:
                     if gate.action == "wait_review":
                         # 退出审批请求已在门禁内持久化（同 basis 去重复用）且
                         # Supervisor 已按状态表通知；挂起等裁决，不落终态。
-                        if outcome.content:
-                            self._emit_run_message(agent, run_id, outcome.content)
                         await core.agent_host.transition(
                             agent,
                             AgentState.WAITING_APPROVAL,
@@ -474,7 +462,7 @@ class AgentRunner:
                             )
                             continue
                         # 诚实回执（在收件箱复查之后投递，避免自己的反馈触发
-                        # 立刻唤醒空转）：工具的 "Task stopped." 只是回执，
+                        # 立刻唤醒空转）：stop 工具只确认收到请求，
                         # stop 实际在等 Supervisor 退出裁决——必须把审批回路
                         # 讲清楚，否则 agent 无法区分 接受/待审/被拒 三种结局。
                         await core.dispatcher.commit_and_deliver(
@@ -490,12 +478,6 @@ class AgentRunner:
                     # allow_final（审计通过/有效批准/agent 声明）才走到收尾。
                     # Task 5 起 schedule stop 不再无条件 compact——压缩触发只有
                     # 手动 compact / 达到上下文预算 / 真实 overflow 三种。
-                    if outcome.content:
-                        self._emit_run_message(agent, run_id, outcome.content)
-                    for stage in getattr(self.pipeline, "stages", ()):
-                        hook = getattr(stage, "on_run_end", None)
-                        if hook is not None:
-                            await hook(agent, explicit_stop=explicit_stop)
                     # The compute broker marks a terminal job notified only after
                     # its message is delivered. A notice arriving during the gate
                     # must be read before this run becomes a child's first final
@@ -503,15 +485,11 @@ class AgentRunner:
                     # boundary, which starts a fresh run for late user/child input.
                     # Share the target lock with MessageDispatcher so a delivery
                     # cannot slip between this check and finish_run.
-                    async with core.dispatcher.target_lock(agent.id):
-                        if agent.parent_session_id and self._inbox_has_pending(agent):
-                            continue
-                        await core.agent_host.finish_run(agent, outcome="succeeded")
-                        # CommandBus may enqueue outside MessageDispatcher; keep
-                        # the existing post-finish wake handshake for that path.
-                        if self._inbox_has_pending(agent):
-                            await core.agent_host.wake(agent, runner=core.runner)
-                    await self._deliver_completion(agent)
+                    if not await self._finish_gated_run(
+                        agent, run_id, gate, explicit_stop=explicit_stop,
+                        candidate_answer=outcome.content,
+                    ):
+                        continue
                     break
                 if outcome.decision in {"wait_input", "wait_approval"}:
                     await core.agent_host.transition(
@@ -578,6 +556,12 @@ class AgentRunner:
         from cloudra.runtime_v2.peer_completion import deliver_peer_completion
         from cloudra.runtime_v2.subagent_bridge import deliver_child_completion_to_parent
 
+        if agent.role_id == 'supervisor' and agent.state.value in {'failed', 'cancelled'}:
+            from cloudra.runtime_v2.supervision import reconcile_supervision
+
+            # Preserve the existing scientific-backlog failure alert, without
+            # reporting notebook maintenance as a completed research subtask.
+            await reconcile_supervision(self.core, agent.project_id)
         await deliver_child_completion_to_parent(self.core, agent)
         await deliver_peer_completion(self.core, agent)
         await self.maybe_wake_parked_delivery(agent.project_id)
@@ -649,6 +633,7 @@ class AgentRunner:
                 marker = await asyncio.to_thread(lambda: next((
                     event for event in core.event_log.iter_events(
                         session_id=coordinator.id, types={"agent.message_injected"},
+                        after_session_seq=gate[0].session_seq or 0,
                     )
                     if event.type == "agent.message_injected"
                     and event.session_id == coordinator.id
@@ -705,7 +690,99 @@ class AgentRunner:
             data={"sender": agent.role_id, "content": content},
         )
 
-    async def _evaluate_completion_gate(self, agent: AgentSession, run_id: str, *, explicit_stop: bool, stop_arguments: dict | None):
+    async def _confirm_reviewed_exit(self, agent: AgentSession, run_id: str, messages: list[dict]) -> bool:
+        """Confirm a frozen accepted submission before asking for another LLM turn."""
+        ids = {item.get("message_id") for item in messages}
+        events = [event for event in self.core.mailbox.unread()
+                  if event.session_id == agent.id and event.data.get("message_id") in ids]
+        receipts = []
+        for event in events:
+            manifest = event.data.get("manifest") or {}
+            if manifest.get("kind") == "exit_review_decision":
+                receipts.append(manifest)
+            elif event.data.get("sender") != "completion_gate":
+                return False
+        if not receipts or len(events) != len(messages):
+            return False
+
+        def accepted_submission():
+            from cloudra.dag.store import DagStore
+            from cloudra.persistence.database import ConversationDB
+
+            gates = self.core.event_log.query_session(agent.id, types={"agent.completion_gate"}, limit=1)
+            if not gates or gates[-1].run_id != run_id or gates[-1].data.get("action") != "wait_review":
+                return None
+            request_id = gates[-1].data.get("request_id")
+            receipt = next((item for item in reversed(receipts) if item.get("request_id") == request_id), None)
+            if receipt is None:
+                return None
+            store = DagStore(ConversationDB(agent.project_id))
+            request = store.get_review_request(request_id)
+            decision = store.get_review_decision(receipt.get("decision_id", ""))
+            if (request is None or request.kind != "exit" or request.state != "resolved"
+                    or request.requester != agent.id or decision is None
+                    or decision.request_id != request_id or decision.verdict != "accept"
+                    or decision.basis_fingerprint != store.review_basis(request)):
+                return None
+            return request, bool(gates[-1].data.get("explicit_stop"))
+
+        submission = await asyncio.to_thread(accepted_submission)
+        if submission is None:
+            return False
+        request, explicit_stop = submission
+        gate, _source = await self._evaluate_completion_gate(
+            agent, run_id, explicit_stop=explicit_stop,
+            stop_arguments={"delivery_disposition": request.proposal["disposition"]},
+        )
+        if gate.action != "allow_final" or gate.request_id != request.request_id:
+            return False
+        return await self._finish_gated_run(
+            agent, run_id, gate, explicit_stop=explicit_stop,
+            confirmation_messages=messages,
+        )
+
+    async def _finish_gated_run(
+        self, agent: AgentSession, run_id: str, gate, *, explicit_stop: bool,
+        candidate_answer: str = "", confirmation_messages: list[dict] | None = None,
+    ) -> bool:
+        """One commit/output boundary for model exits and accepted frozen exits."""
+        core = self.core
+        # CommandBus user messages do not take the dispatcher target lock.
+        # Serialize automatic confirmation with that existing command boundary.
+        async with core.command_lock if confirmation_messages is not None else nullcontext():
+            async with core.dispatcher.target_lock(agent.id):
+                if self._inbox_has_pending(agent) and (
+                    agent.parent_session_id or confirmation_messages is not None
+                ):
+                    return False
+                if confirmation_messages is not None:
+                    consumed = {item.get("message_id") for item in confirmation_messages}
+                    if any(event.session_id == agent.id and event.data.get("message_id") not in consumed
+                           for event in core.mailbox.unread()):
+                        return False
+                for stage in getattr(self.pipeline, "stages", ()):
+                    hook = getattr(stage, "on_run_end", None)
+                    if hook is not None:
+                        await hook(agent, explicit_stop=explicit_stop)
+                if confirmation_messages is not None:
+                    # Consume the durable receipt without fabricating an LLM
+                    # response or another stop tool call. Recovery uses these ids.
+                    await core.contexts.append_output(agent=agent, run_id=run_id, messages=[
+                        {"role": "user", "content": item.get("content", ""),
+                         "message_id": item["message_id"]} for item in confirmation_messages
+                    ])
+                final_answer = gate.final_answer if gate.final_answer is not None else candidate_answer
+                if gate.action == "allow_final" and final_answer:
+                    self._emit_run_message(agent, run_id, final_answer)
+                elif gate.action == "wait_background":
+                    self._emit_run_message(agent, run_id, gate.reason or "Run paused awaiting background work.")
+                await core.agent_host.finish_run(agent, outcome="succeeded")
+                if self._inbox_has_pending(agent):
+                    await core.agent_host.wake(agent, runner=core.runner)
+        await self._deliver_completion(agent)
+        return True
+
+    async def _evaluate_completion_gate(self, agent: AgentSession, run_id: str, *, explicit_stop: bool, stop_arguments: dict | None, candidate_answer: str = ""):
         """唯一的运行结束判定边界（Task 4A，计划 §6）。
 
         显式 stop 与无 tool_calls 的纯文本最终回复都流经这里：各 PolicyStage
@@ -740,7 +817,7 @@ class AgentRunner:
             if hook is None:
                 continue
             verdict = await hook(
-                ctx, explicit_stop=explicit_stop, stop_arguments=stop_arguments
+                ctx, explicit_stop=explicit_stop, stop_arguments=stop_arguments, candidate_answer=candidate_answer
             )
             if verdict is not None:
                 verdicts.append((verdict, getattr(stage, "name", "unknown")))
@@ -759,6 +836,12 @@ class AgentRunner:
                 basis="declared",
             )
             source = "declared"
+        # 基础交付不属于 DAG 科学审查：所有 Benchmark 模式在真正结束前共用。
+        # 已有等待/拒绝结论优先；真实用户终止也不要求补交成果。
+        if gate.action == "allow_final" and gate.basis != "user_terminated":
+            delivery_gate = await self._audit_benchmark_delivery(agent, workspace_dir)
+            if delivery_gate is not None:
+                gate, source = delivery_gate, "benchmark_delivery"
         core.event_log.append(
             "agent.completion_gate",
             stream="agent",
@@ -777,6 +860,45 @@ class AgentRunner:
             },
         )
         return gate, source
+
+    async def _audit_benchmark_delivery(self, agent: AgentSession, workspace_dir: str | None):
+        """只检查题目要求的图文件与格式，不提供科学结论或替 Agent 写图。"""
+        if agent.parent_session_id or agent.requested_by_session_id or agent.role_id == "supervisor":
+            return None
+        project = self.core.require_project(agent.project_id)
+        if not project.settings.benchmark_task_id:
+            return None
+        import json
+        from pathlib import Path
+
+        from cloudra.benchmark.integrity import parse_delivered_graph
+        from cloudra.dag.stop_audit import StopGate, has_pending_background
+        from cloudra.persistence.database import ConversationDB
+        from cloudra.persistence.paths import mechanism_graph_path
+
+        if await has_pending_background(self.core, project_id=agent.project_id,
+                session_id=agent.id, data_dir=ConversationDB(agent.project_id).data_dir):
+            # Standard 原有的 Benchmark watcher 仍负责等待后台，当前不是最终交付。
+            return None
+
+        def read_graph():
+            if workspace_dir is None:
+                raise ValueError("Benchmark delivery requires a project workspace.")
+            path = mechanism_graph_path(Path(workspace_dir))
+            return parse_delivered_graph(json.loads(path.read_text(encoding="utf-8")))
+
+        try:
+            await asyncio.to_thread(read_graph)
+        except FileNotFoundError:
+            return StopGate(action="continue_work", reason=(
+                "Missing required mechanism_graph.json at the workspace root. "
+                "Write the graph recording the work actually completed before ending this task."
+            ))
+        except (ValueError, OSError) as exc:
+            return StopGate(action="continue_work", reason=(
+                f"Repair mechanism_graph.json before ending this task: {exc}"
+            ))
+        return None
 
     def _track_exit_strike(self, agent: AgentSession, run_id: str, gate) -> tuple[int, bool]:
         """同状态重复无进展退出的有界计数（刻意易失 per-run shell 状态）。
@@ -803,14 +925,14 @@ class AgentRunner:
         """wait_review 挂起前的退出审批回路说明（模型可读的诚实回执）。"""
         return (
             "[Completion gate] Stop is pending Supervisor review, not accepted: "
-            f"an exit review for your partial delivery was submitted (request_id={gate.request_id}) "
-            "and this run is now suspended awaiting the decision — the stop tool's "
-            "'Task stopped.' was only the call receipt. What happens next:\n"
+            f"a final review for your proposed delivery was submitted (request_id={gate.request_id}) "
+            "and this run is now suspended awaiting the decision; "
+            "the stop tool only acknowledged the request. What happens next:\n"
             "- The Supervisor's decision arrives as a [Supervisor review decision] "
             "notice and wakes you.\n"
-            "- On accept: call stop again with delivery_disposition='partial' and "
-            "approval_id=<decision_id> from that notice to finish.\n"
-            "- On reject: the reason and next action arrive as feedback; resolve "
+            "- On accept: the runtime rechecks and commits the frozen submitted delivery directly; "
+            "no rewritten stop or final answer is needed.\n"
+            "- On reject or needs_evidence: the reason and next action arrive as feedback; resolve "
             "them (or close the gaps) and stop again."
         )
 
@@ -929,6 +1051,13 @@ class AgentRunner:
                     "role": "tool",
                     "tool_call_id": call.id,
                     "content": await asyncio.to_thread(self._tool_result_content, agent, result),
+                    **({'tool_document_compact_content':result.data['tool_document_compact_content']}
+                       if isinstance(result.data, dict) and result.data.get('tool_document_compact_content') else {}),
+                    **({'tool_documents':[{'name':doc['name'],'revision':doc['revision']} for doc in result.data.get('documents',[])]}
+                       if call.name=='get_tool_docs' and result.is_success else {}),
+                    **({'tool_documents': result.data['tool_documents']}
+                       if call.name == 'js_exec' and isinstance(result.data, dict)
+                       and result.data.get('tool_documents') else {}),
                 }
             )
         if outcome.blocked_call is not None:
@@ -940,6 +1069,65 @@ class AgentRunner:
                 }
             )
         await self.core.contexts.append_output(agent=agent, run_id=run_id, messages=entries)
+
+    async def _prompt_token_ratio(self, agent: AgentSession, model: str) -> float:
+        # Local tokenizers differ from the provider's. Reuse the last real
+        # request's ratio, including after a restart; summary calls are excluded.
+        before = None
+        while True:
+            completed = await asyncio.to_thread(
+                self.core.event_log.query_session, agent.id, types=("llm.completed",),
+                before_session_seq=before, limit=1,
+            )
+            if not completed:
+                return 1.0
+            sample = completed[-1].data
+            before = completed[-1].session_seq - 1
+            if sample.get("kind") == "summary":
+                continue
+            if sample.get("model") != model:
+                return 1.0
+            usage = sample.get("usage") or {}
+            actual = usage.get("prompt_tokens") or usage.get("input_tokens") or 0
+            previous = sample.get("estimated_prompt_tokens") or 0
+            if previous > 0 and actual > 0:
+                return max(1.0, actual / previous)
+
+    async def _prepare_context(
+        self, agent: AgentSession, run_id: str, messages: list[dict], estimated_tokens: int,
+        *, context_prefix=None, preserve_message_ids: set[str],
+    ) -> list[dict]:
+        """Apply the budget to the complete request, corrected by observed usage."""
+        from cloudra.runtime_v2.compaction import usable_prompt_tokens
+        from cloudra.runtime_v2.turn_pipeline import ContextBudgetError, resolve_media_references
+
+        settings = self._effective_settings(agent)
+        window = settings.context_window or 128_000
+        budget = usable_prompt_tokens(window, settings.max_tokens)
+        ratio = await self._prompt_token_ratio(agent, settings.model)
+        tokens = math.ceil(estimated_tokens * ratio)
+        if tokens > budget and self._compaction_retry_due(agent.id, tokens, budget):
+            stats = await self._apply_compaction(
+                agent, run_id, trigger="budget", context_prefix=context_prefix,
+                preserve_message_ids=preserve_message_ids,
+            )
+            if stats.get("compacted"):
+                messages = await resolve_media_references(
+                    self.core.contexts.current_messages(agent.id),
+                    vision_enabled=self._vision_enabled(agent),
+                )
+                estimated_tokens = await self.pipeline.estimate_prompt_tokens(agent, messages)
+                tokens = math.ceil(estimated_tokens * ratio)
+            else:
+                self._compact_refusals[agent.id] = tokens
+        if tokens + settings.max_tokens > window:
+            raise ContextBudgetError(
+                f"Configured token budget exceeded: input={tokens}, "
+                f"output reserve={settings.max_tokens}, window={window}. "
+                "Compaction could not make the request fit. Shorten the input "
+                "or adjust context_window / max_tokens."
+            )
+        return messages
 
     def _effective_settings(self, agent: AgentSession):
         """容量判定用的生效设置：spawn 快照里 context_window=0 表示未设置，
@@ -986,6 +1174,7 @@ class AgentRunner:
         trigger: str = "manual",
         *,
         context_prefix=None,
+        preserve_message_ids: set[str] | None = None,
     ) -> dict:
         from cloudra.runtime_v2.compaction import (
             SUMMARY_EVENT_CAP,
@@ -999,6 +1188,15 @@ class AgentRunner:
         # 记录投影版本，install_compacted 只在版本未变时原子安装——压缩
         # 期间到达的新消息绝不丢（版本不符即放弃候选，不覆盖新增纠正）。
         history = core.contexts.current_messages(agent.id)
+        preserve_message_ids = preserve_message_ids or set()
+        preserved = [
+            message for message in history
+            if str(message.get("message_id") or "") in preserve_message_ids
+        ]
+        compactable = [
+            message for message in history
+            if str(message.get("message_id") or "") not in preserve_message_ids
+        ] if preserved else history
         expected_version = len(history)
         ctx = core.session_contexts.get(agent.id)
         old_head_len = int((((ctx.prefix_meta if ctx else None) or {})).get("prefix_len") or 0)
@@ -1027,6 +1225,7 @@ class AgentRunner:
         head_meta = None
         if context_prefix is not None:
             head, head_meta = await context_prefix.current_prefix()
+            head_meta = {**((ctx.prefix_meta if ctx else None) or {}), **head_meta}
         notices_render = (
             core.notices.render_current(agent.id) if core.notices is not None else []
         )
@@ -1034,12 +1233,13 @@ class AgentRunner:
 
         try:
             new_context, stats = await compact_context(
-                history,
+                compactable,
                 head=head,
                 notices=notices_render,
                 summarize=summarizer,
                 context_window=settings.context_window,
                 max_output=settings.max_tokens,
+                token_ratio=await self._prompt_token_ratio(agent, settings.model),
                 trigger=trigger,
                 old_head_len=old_head_len,
                 # 摘要调用有界等待：provider 对超大摘要停滞时按 segment_failed
@@ -1058,6 +1258,8 @@ class AgentRunner:
             stats = {"compacted": False, "error": str(exc) or type(exc).__name__}
         else:
             if stats.get("compacted"):
+                new_context.extend(preserved)
+                stats["after_messages"] = len(new_context)
                 # 压缩摘要同时落工作区审计文件，供人与后续会话回读。
                 # Best-effort: a write failure only skips the file and the
                 # pointer note.

@@ -129,6 +129,7 @@ class ScheduleStage:
         *,
         explicit_stop: bool,
         stop_arguments: dict[str, Any] | None = None,
+        candidate_answer: str = "",
     ):
         """统一结束门禁的 schedule 判定（runner 收尾前；纯文本最终回复与显式
         stop 同边界，计划 §6）。
@@ -182,6 +183,10 @@ class ScheduleStage:
             has_running_siblings, core, project_id=ctx.agent.project_id, session_id=ctx.agent.id
         ):
             return True
+        if ctx.agent.role_id != 'coordinator':
+            # Owned jobs were checked above; another session's calculation
+            # cannot hold this agent's completed assignment open.
+            return False
         return await pending_compute_jobs_exist(
             data_dir=ConversationDB(ctx.agent.project_id).data_dir,
             project_id=ctx.agent.project_id,

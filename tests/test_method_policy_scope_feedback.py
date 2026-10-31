@@ -33,6 +33,7 @@ def test_empty_benchmark_whitelist_returns_rejection_without_choosing_a_method()
     assert 'current Benchmark task' in verdict.reason
 
 
+@pytest.mark.usefixtures('rdkit_chemistry')
 def test_scan_hint_keeps_user_method_without_reselecting_it(tmp_path):
     from cloudra.tools.Chemtool.ts_guess import TsGuess, TsGuess_input_schema
 
@@ -40,7 +41,7 @@ def test_scan_hint_keeps_user_method_without_reselecting_it(tmp_path):
     source.write_text('2\nH2\nH 0 0 0\nH 0 0 .74\n')
     target = tmp_path / 'scan.gjf'
     request = TsGuess_input_schema(basis_set='def2svp', mode='scan_prepare', engine='gaussian',
-        input_path=str(source), method='B3LYP', keywords='emp=gd3bj',
+        input_path=str(source), method='B3LYP', keywords='emp=gd3bj', charge=0,
         output_path=str(target), scans=[{'atoms': [1, 2], 'scan_end': 1.2, 'scan_steps': 5}])
     result = TsGuess()._scan_prepare(request)
     assert result.is_success

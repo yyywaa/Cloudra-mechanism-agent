@@ -1,3 +1,4 @@
+import asyncio
 import os
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -23,8 +24,10 @@ description = (
     "non-terminal job is diagnosing a broken submission. If you genuinely need an interim checkpoint, `schedule` a "
     "one-shot read-only check_command and stop. "
     "Note: the scheduler daemon reconciles crashed workers automatically (lock-based, it never kills processes), "
-    "so a dead worker's job is adopted and finalized deterministically; mark_compute_job_failed remains the manual "
-    "escape hatch when you have out-of-band proof a job is truly gone."
+    "so a dead worker's job is adopted and finalized deterministically. mark_compute_job_failed can reconcile "
+    "a dead local orphan; it cannot withdraw queued work or override execution locks. "
+    "Use cancel_compute_job(job_id, reason) to withdraw a queued job or request execution-owned cancellation. "
+    "Remote jobs are finalized by their execution poller."
 )
 
 
@@ -59,11 +62,15 @@ class ComputeJobRecord(TypedDict):
     task: NotRequired[str]
     solvent: NotRequired[str]
     cpus: NotRequired[int]
+    irc_end_a_path: NotRequired[str]
+    irc_end_b_path: NotRequired[str]
 
 
 class QueryComputeJob_output_schema(output_schema):
     is_success: bool = Field(description="Whether the query succeeded")
-    jobs: list[ComputeJobRecord] = Field(default_factory=list, description="Compute ledger records; a successful query does not imply job completion or scientific verification")
+    jobs: list[ComputeJobRecord] = Field(default_factory=list, description=(
+        "Compute ledger records; a successful query does not imply job completion or scientific verification. "
+        "Available IRC A/B paths are native outer frames for independent Opt/Freq, not reactant/product assignments."))
     message: str = Field(default="", description="Status or error message")
 
 
@@ -102,6 +109,10 @@ def _row_to_dict(row: Dict[str, Any]) -> ComputeJobRecord:
         "last_error": row["last_error"] or "",
         "attempt_count": row["attempt_count"] or 0,
     }
+    if row['state'] == 'done' and row['jobtype'] in {'gaussian', 'orca'} and log_path:
+        from cloudra.tools.core.irc_endpoint_artifacts import read_irc_endpoint_artifacts
+
+        out.update(read_irc_endpoint_artifacts(log_path))
     if row["jobtype"] == "xtb":
         # xtb 显式任务参数（--chrg/--uhf/multiplicity、运行级别、溶剂、并行核数）
         out["charge"] = row["charge"] if row["charge"] is not None else 0
@@ -126,7 +137,7 @@ class QueryComputeJob(Tool):
         conv_id = getattr(self.subagent, 'conversation_id', None) or 'default'
         # compute_jobs 住中央库（节点级共享）；按 conversation_id 过滤出本会话的作业
         db = ComputeDB()
-        if not os.path.exists(db.path):
+        if not await asyncio.to_thread(os.path.exists, db.path):
             return QueryComputeJob_output_schema(is_success=True, jobs=[], message="No compute jobs have been submitted in this conversation yet.")
 
         try:
@@ -147,7 +158,7 @@ class QueryComputeJob(Tool):
         except Exception as e:
             return QueryComputeJob_output_schema(is_success=False, jobs=[], message=f"Query failed: {e}")
 
-        jobs = [_row_to_dict(row) for row in rows]
+        jobs = await asyncio.to_thread(lambda: [_row_to_dict(row) for row in rows])
         message = f"{len(jobs)} job record(s)."
         if any(job["state"] not in TERMINAL_STATES for job in jobs):
             message += (

@@ -76,6 +76,43 @@ def _children(core, parent_id: str):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("name_arguments,expected_name", [
+    ({"display_name": "  lane_1  "}, "lane_1"),
+    ({}, "Explorer"),
+    ({"display_name": None}, "Explorer"),
+    ({"display_name": "  "}, "Explorer"),
+])
+async def test_launcher_display_name_reaches_api_and_survives_restore(tmp_path, name_arguments, expected_name):
+    from cloudra.runtime_v2.persistence import RuntimeStore, restore_core
+    from cloudra.services.api_v2.views import agent_dict
+
+    core = RuntimeCore(strict_events=True)
+    core.store = RuntimeStore(tmp_path / "runtime.db")
+    bus = CommandBus(core)
+    project = (await bus.execute(Command(type="project.create", payload={"name": "named-child"}))).data
+    parent = (await bus.execute(Command(
+        type="agent.spawn", target={"project_id": project.id}, payload={"role_id": "coordinator"},
+    ))).data
+
+    result = await handle_native_tool(core, parent, ToolCall(
+        id="named-child", name="subagent_launcher",
+        arguments={"role_id": "explorer", "query": "inspect files", "is_wait": False, **name_arguments},
+    ))
+
+    assert result.is_success, result.summary
+    child = core.require_agent(result.data["session_id"])
+    assert child.display_name == expected_name
+    assert child.role_id == "explorer"
+    assert (await asyncio.to_thread(agent_dict, core, child))["display_name"] == expected_name
+
+    await bus.flush_snapshot()
+    restored = RuntimeCore(strict_events=True)
+    await asyncio.to_thread(restore_core, restored, core.store)
+    restored_child = restored.require_agent(child.id)
+    assert (await asyncio.to_thread(agent_dict, restored, restored_child))["display_name"] == expected_name
+
+
+@pytest.mark.asyncio
 async def test_launcher_wait_spawns_v2_child_and_returns_result():
     llm = RoleRoutedLLM(
         [
@@ -208,6 +245,11 @@ async def test_async_child_completion_injects_parent_mailbox_and_wakes():
     assert len(children) == 1
     child = children[0]
     await _wait_state(child, "succeeded")
+    # The terminal state is committed before asynchronous completion delivery.
+    # Wait for this existing run to finish rather than assuming both are atomic.
+    child_task = core.runner.task_for(child.id)
+    if child_task is not None:
+        await asyncio.wait_for(child_task, timeout=10.0)
 
     reports = _completion_injections(core, coordinator.id, child.id)
     assert reports, "child completion must be delivered to the parent mailbox"
@@ -218,6 +260,9 @@ async def test_async_child_completion_injects_parent_mailbox_and_wakes():
     assert "explore X" in body
 
     await _wait_state(coordinator, "succeeded")
+    parent_task = core.runner.task_for(coordinator.id)
+    if parent_task is not None:
+        await asyncio.wait_for(parent_task, timeout=10.0)
     emitted = [
         e
         for e in core.event_log.query_session(coordinator.id, types={"agent.message_emitted"})
@@ -920,3 +965,66 @@ async def test_native_dispatch_obeys_updated_registry_spawn_roles(tool_name, tas
     assert not result.is_success
     assert _children(core, parent.id) == []
     assert not any(e.type.startswith("launch_group.") for e in core.event_log)
+
+
+@pytest.mark.asyncio
+async def test_new_assignment_reports_latest_child_result_once_after_restore(tmp_path):
+    from cloudra.runtime_v2.effects import EventDraft
+    from cloudra.runtime_v2.persistence import RuntimeStore, restore_core
+    from cloudra.runtime_v2.subagent_bridge import deliver_child_completion_to_parent
+
+    core = RuntimeCore(strict_events=True)
+    core.store = RuntimeStore(tmp_path / "reassigned.db")
+    bus = CommandBus(core)
+    project = (await bus.execute(Command(type="project.create", payload={"name": "reassigned"}))).data
+    parent = (await bus.execute(Command(
+        type="agent.spawn", target={"project_id": project.id}, payload={"role_id": "coordinator"},
+    ))).data
+    child = (await bus.execute(Command(
+        type="agent.spawn", target={"project_id": project.id},
+        payload={"role_id": "explorer", "parent_session_id": parent.id},
+    ))).data
+
+    async def finish(summary, action):
+        run_id = await core.agent_host.start_run(child)
+        await core.event_writer.commit(EventDraft(
+            "agent.message_emitted", stream="agent", project_id=project.id,
+            session_id=child.id, run_id=run_id, data={"content": summary, "sender": child.role_id},
+        ))
+        await core.event_writer.commit(EventDraft(
+            "agent.completion_gate", stream="agent", project_id=project.id,
+            session_id=child.id, run_id=run_id, data={"action": action},
+        ))
+        await core.agent_host.finish_run(child, outcome="succeeded")
+        await deliver_child_completion_to_parent(core, child, wake=False)
+        return run_id
+
+    def reports(kernel):
+        return [e for e in kernel.event_log.query_session(parent.id, types={"agent.message_injected"})
+                if (e.data.get("manifest") or {}).get("kind") == "child_completion"]
+
+    first_run = await finish("first result", "allow_final")
+    await core.dispatcher.commit_and_deliver(
+        to_session_id=child.id, project_id=project.id, sender=parent.role_id,
+        content="second task", wake=WakePolicy.NEVER,
+        manifest={"kind": "task_assignment", "session_id": child.id, "parent_session_id": parent.id},
+    )
+    await finish("waiting for calculation", "wait_background")
+    assert len(reports(core)) == 1
+    await core.dispatcher.commit_and_deliver(
+        to_session_id=child.id, project_id=project.id, sender="system",
+        content="calculation finished", wake=WakePolicy.NEVER,
+    )
+    second_run = await finish("second result", "allow_final")
+    assert len(reports(core)) == 2
+    assert [e.data["manifest"]["last_run"]["run_id"] for e in reports(core)] == [first_run, second_run]
+    assert reports(core)[-1].data["manifest"]["final_summary"] == "second result"
+    await deliver_child_completion_to_parent(core, child, wake=False)
+    await finish("unrelated reminder", "allow_final")
+    assert len(reports(core)) == 2
+
+    restored = RuntimeCore(strict_events=True)
+    restored.store = core.store
+    await asyncio.to_thread(restore_core, restored, core.store)
+    await deliver_child_completion_to_parent(restored, restored.agents[child.id], wake=False)
+    assert len(reports(restored)) == 2

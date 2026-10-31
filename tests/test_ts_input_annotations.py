@@ -7,8 +7,8 @@ import pytest
 from cloudra.benchmark.integrity import scan_evidence_files
 from cloudra.tools.core import ts_process
 from cloudra.tools.core.calculation_intent import inspect_input, native_input_geometry
-from cloudra.tools.core.gaussian_frames import FrameRecord
-from tests.ts_fixtures import calculation_input
+from cloudra.tools.core.molecule import read_molecule
+from tests.ts_fixtures import calculation_input, native_qm_log
 
 _REACTANT = "[F-].CCl"
 _PRODUCT = "CF.[Cl-]"
@@ -28,9 +28,11 @@ _XYZ = "6\nwriter geometry fixture\n" + "\n".join(
 def _record(tmp_path, engine):
     candidate = tmp_path / "candidate.xyz"
     candidate.write_text(_XYZ)
+    molecule = read_molecule(input_text=_XYZ, input_format="xyz", charge=-1)
     return ts_process.TsProcessRecord(
         run_id="ts_0001", run_dir=str(tmp_path), workspace_dir=str(tmp_path),
-        current_ts_guess_path=str(candidate), path_kind="provided",
+        structures={"candidate": molecule, "reactant": molecule, "product": molecule,
+                    "product_to_reactant": tuple(range(molecule.GetNumAtoms()))}, path_kind="provided",
         input=calculation_input(
             reactant_smiles=_REACTANT, product_smiles=_PRODUCT,
             charge=-1, method="HF/STO-3G", engine=engine,
@@ -44,10 +46,15 @@ def _upstream_step(record, tmp_path, purpose, engine):
     path = directory / ("input.inp" if engine == "orca" else "input.gjf")
     path.write_text("upstream input fixture")
     step = ts_process.TsJobStep(purpose=purpose, job_id=1, input_path=str(path), state="done")
+    if purpose in {'reactant_opt', 'product_opt'}:
+        import hashlib
+        step.endpoint_source = ts_process.EndpointSource(kind='species_reference', label=purpose.partition('_')[0],
+            source_path=str(Path(record.run_dir) / "candidate.xyz"), sha256=hashlib.sha256(Path(str(Path(record.run_dir) / "candidate.xyz")).read_bytes()).hexdigest())
     record.job_steps.append(step)
     log = Path(ts_process._refinement_log_path(record, step))
     log.parent.mkdir(parents=True, exist_ok=True)
-    log.write_text("upstream geometry is supplied by the parsed-frame fixture")
+    log.write_text(native_qm_log(engine, [symbol for symbol, _ in _ATOMS],
+        [point for _, point in _ATOMS]))
     (directory / "optimized.xyz").write_text(_XYZ)
 
 
@@ -81,10 +88,6 @@ def test_native_ts_input_and_echo_bind_declared_step_reactant(tmp_path, monkeypa
     directory.mkdir()
     if purpose == "frequency":
         _upstream_step(record, tmp_path, "ts_opt", engine)
-        monkeypatch.setattr(
-            f"cloudra.tools.core.{engine}_frames.extract_frames",
-            lambda _path: [FrameRecord(frame=0, xyz=_XYZ)],
-        )
     elif purpose == "irc":
         _upstream_step(record, tmp_path, "frequency", engine)
     writer = {
@@ -101,7 +104,7 @@ def test_native_ts_input_and_echo_bind_declared_step_reactant(tmp_path, monkeypa
 @pytest.mark.parametrize("engine", ["orca", "gaussian"])
 @pytest.mark.parametrize("role, expected_smiles", [("reactant", _REACTANT), ("product", _PRODUCT)])
 @pytest.mark.parametrize("task", ["opt", "frequency"])
-def test_native_endpoint_input_and_echo_bind_its_declared_role(
+def test_native_endpoint_input_records_declaration_without_observed_identity(
     tmp_path, monkeypatch, engine, role, expected_smiles, task
 ):
     record = _record(tmp_path, engine)
@@ -111,7 +114,7 @@ def test_native_endpoint_input_and_echo_bind_its_declared_role(
         _upstream_step(record, tmp_path, "irc", engine)
         monkeypatch.setattr(
             "cloudra.tools.Chemtool.ts_guess.TsGuess._extract_irc_endpoints",
-            lambda *_args, **_kwargs: {"path_a": record.current_ts_guess_path, "path_b": record.current_ts_guess_path},
+            lambda *_args, **_kwargs: {"path_a": str(Path(record.run_dir) / "candidate.xyz"), "path_b": str(Path(record.run_dir) / "candidate.xyz")},
         )
     else:
         _upstream_step(record, tmp_path, f"{role}_opt", engine)
@@ -119,4 +122,13 @@ def test_native_endpoint_input_and_echo_bind_its_declared_role(
     error, path = ts_process._write_endpoint_input(record, str(directory), role, task)
     assert error == ""
     expected_task = "minimum_opt" if task == "opt" else "frequency"
-    _assert_annotated_input(tmp_path, path, engine, expected_smiles, expected_task)
+    content = Path(path).read_text()
+    assert inspect_input(content, engine=engine).tasks == {expected_task}
+    assert native_input_geometry(content, engine=engine) == _ATOMS
+    assert f'declared_species: {expected_smiles}' in content
+    echo = '\n'.join(f'| {index}> {line}' for index, line in enumerate(content.splitlines(), 1))
+    echo_path = Path(path).with_suffix('.echo.log')
+    echo_path.write_text(echo)
+    files = {row.path: row for row in scan_evidence_files(tmp_path)}
+    assert files[str(Path(path).relative_to(tmp_path))].smiles_found == []
+    assert files[str(echo_path.relative_to(tmp_path))].smiles_found == []

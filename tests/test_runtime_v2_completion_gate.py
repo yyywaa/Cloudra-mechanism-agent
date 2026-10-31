@@ -37,6 +37,12 @@ from cloudra.runtime_v2.policies.base import PolicyResult, ToolCall, ToolResult
 from cloudra.runtime_v2.schemas import AgentState, Command
 from cloudra.runtime_v2.supervision import flush_review_notifications
 from cloudra.runtime_v2.turn_pipeline import LLMResponse, TurnPipeline
+from tests.agent_scenarios import (
+    ScenarioHarness,
+    ScriptedProvider,
+    Step,
+    frozen_exit_confirmation_steps,
+)
 
 
 class _OkTools:
@@ -194,9 +200,7 @@ async def _dispositions(project_id: str) -> list[str]:
 
 
 async def _seed_complete_delivery(project_id: str) -> None:
-    """交付图种子：r/p 节点（structure_supported）+ step1 边（endpoint_supported，
-    无阶段契约）——默认 mechanism 契约下 coverage 通过（判据同
-    test_dag_completion.py::test_endpoint_supported_path_satisfies_default_contract）。"""
+    """Seed completed TS stages for final-review protocol tests without requiring IRC."""
 
     def _write() -> None:
         from cloudra.dag.engine import DagEngine
@@ -207,6 +211,7 @@ async def _seed_complete_delivery(project_id: str) -> None:
             GraphActor,
             MutationBatch,
             OccurrenceNode,
+            StageState,
         )
 
         db = ConversationDB(project_id).init()
@@ -252,7 +257,8 @@ async def _seed_complete_delivery(project_id: str) -> None:
                             source_node_id="r",
                             target_node_id="p",
                             label="step 1",
-                            evidence_level="endpoint_supported",
+                            stages=[StageState(kind=kind, status="supported")
+                                    for kind in ("ts_opt", "frequency")],
                         ),
                     )
                 ],
@@ -324,7 +330,7 @@ async def test_plain_text_and_explicit_stop_face_the_same_gate(tmp_path, script)
 async def test_wait_review_parks_with_exit_review_feedback(tmp_path):
     """guided partial stop 进入 wait_review 时必须给 agent 一条讲清退出审批回路
     的反馈（诚实回执）：退出审查已提交 Supervisor（带 request_id）、run 挂起
-    等裁决、批准后需带 approval_id=<decision_id> 重新调用 stop。批准到达后
+    等裁决、批准后仅声明 partial 再调用 stop，由程序关联批准。批准到达后
     同一交付版本复用裁决放行，partial 处置落库一次。"""
     llm = _RoutingLLM([_stop_call(delivery_disposition="partial", reason="partial")])
     core, bus, project = await _new_core(llm, workspace_dir=tmp_path)
@@ -343,7 +349,7 @@ async def test_wait_review_parks_with_exit_review_feedback(tmp_path):
         content = str(injected[-1].data["content"])
         assert requests[0].request_id in content
         assert "suspended" in content
-        assert "approval_id" in content
+        assert "approval_id" not in content
         # 批准到达：挂起期间没有空转，裁决唤醒后复用同一请求放行。
         await _resolve_exit_request(
             project.id, requests[0].request_id, verdict="accept", reason="scoped partial is acceptable"
@@ -356,28 +362,37 @@ async def test_wait_review_parks_with_exit_review_feedback(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_complete_delivery_plain_text_finishes(tmp_path):
-    """完整 DAG delivery 的纯文本最终回复正常结束：隐式 disposition 由覆盖率
-    推导为 complete，审计通过后明确记录，不需要督导退出裁决。"""
+async def test_complete_delivery_plain_text_requires_final_supervisor_review(tmp_path):
+    """完整覆盖只允许提交最终审查，接受后同一 complete 声明才落库。"""
     llm = _RoutingLLM([LLMResponse(content="mechanism fully supported")])
     core, bus, project = await _new_core(llm, workspace_dir=tmp_path)
     await _seed_complete_delivery(project.id)
+    process = (await bus.execute(Command(type="agent.spawn", actor="system",
+        target={"project_id": project.id}, payload={"role_id": "supervisor"}))).data
     coordinator = await _spawn_coordinator(bus, project, mode="dag_guided")
     try:
+        await _wait_parked(coordinator, llm)
+        requests = await _review_requests(project.id)
+        assert len(requests) == 1 and requests[0].proposal["disposition"] == "complete"
+        from cloudra.runtime_v2.supervision import find_final_review_supervisor, find_project_supervisor
+
+        final = find_final_review_supervisor(core, project.id, requests[0].request_id)
+        assert final is not None and final.id != process.id
+        assert final.parent_session_id == coordinator.id
+        assert find_project_supervisor(core, project.id).id == process.id
+        assert await _dispositions(project.id) == []
+        injected = [e for e in core.event_log.query_session(coordinator.id)
+                    if e.type == "agent.message_injected" and e.data.get("sender") == "completion_gate"]
+        assert injected and requests[0].request_id in injected[-1].data["content"]
+        await _resolve_exit_request(project.id, requests[0].request_id,
+                                   verdict="accept", reason="the proposed full delivery is supported")
+        await flush_review_notifications(core, project.id)
         await _wait_state(coordinator, "succeeded")
         assert await _dispositions(project.id) == ["complete"]
         gates = _gate_events(core, coordinator.id)
-        assert len(gates) == 1 and gates[0].data["action"] == "allow_final"
-        # 交付覆盖审计通过 = 唯一够格标「已验证完成」的收尾依据。
-        assert gates[0].data["basis"] == "dag_verified"
-        # 完整交付不触发退出审查：不创建 Supervisor、无退出请求。
-        assert llm.supervisor_calls == 0
-        assert not [
-            a
-            for a in core.agents.values()
-            if a.project_id == project.id and a.role_id == "supervisor"
-        ]
-        assert await _review_requests(project.id, state=None) == []
+        assert [gate.data["action"] for gate in gates] == ["wait_review", "allow_final"]
+        assert gates[-1].data["basis"] == "supervisor_supported"
+        assert len(await _review_requests(project.id, state=None)) == 1
     finally:
         await _teardown(core)
 
@@ -410,6 +425,139 @@ async def test_valid_exit_approval_allows_finish(tmp_path):
         assert any("verdict=accept" in m["content"] for m in pinned)
     finally:
         await _teardown(core)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("disposition", ["partial", "complete"])
+async def test_matching_exit_accept_finishes_frozen_submission_without_a_second_llm_turn(tmp_path, disposition):
+    """真实裁决工具接受已提交答复后，运行时结题，不让模型重写退出提案。"""
+    frozen_answer = "frozen-reviewed-delivery-marker"
+    unreviewed_answer = "unreviewed-accept-acknowledgement-marker"
+    review_ready = asyncio.Event()
+    review = Step(wait_for=review_ready)
+    continuation = Step(text=unreviewed_answer, tools=[("stop", {
+        "delivery_disposition": disposition, "reason": "The Supervisor accepted; finalize the result.",
+        "final_answer": unreviewed_answer,
+    })])
+    provider = ScriptedProvider(by_role=frozen_exit_confirmation_steps(
+        review, continuation, answer=frozen_answer, disposition=disposition))
+    harness = await ScenarioHarness.start(tmp_path, provider=provider, workspace_dir=tmp_path)
+    try:
+        await harness.bus.execute(Command(type="role.update", target={"role_id": "supervisor"},
+            payload={"default_settings": {
+                "orchestration_mode": "dag_guided", "invocation_protocol": "traditional",
+            }}))
+        if disposition == "complete":
+            await _seed_complete_delivery(harness.project.id)
+        coordinator = await harness.spawn("coordinator", "Report the observed evidence honestly.",
+            protocol="traditional", orchestration_mode="dag_guided")
+        await harness.wait_for(lambda: coordinator.state is AgentState.WAITING_APPROVAL,
+                               "partial submission waiting for independent review")
+        requests = await _review_requests(harness.project.id)
+        assert len(requests) == 1
+        request = requests[0]
+        assert request.proposal["final_answer"] == frozen_answer
+        review.tools = [
+            ("dag_view_evidence", {"review_id": request.request_id}),
+            ("dag_review_evidence", {"request_id": request.request_id, "verdict": "accept",
+                "reason": "The frozen partial delivery accurately states its evidence limits."}),
+        ]
+        review_ready.set()
+        await harness.wait_for(lambda: coordinator.state is AgentState.SUCCEEDED
+            or provider.call_count("coordinator") > 1, "programmatic confirmation of accepted delivery")
+        assert provider.call_count("coordinator") == 1, "accepted delivery must not re-enter the model"
+        await harness.wait_terminal(coordinator)
+        assert coordinator.state is AgentState.SUCCEEDED
+        all_requests = await _review_requests(harness.project.id, state=None)
+        assert [item.request_id for item in all_requests] == [request.request_id]
+        finals = [agent for agent in harness.core.agents.values() if agent.final_review_request_id]
+        assert len(finals) == 1
+        assert finals[0].final_review_request_id == request.request_id
+        verdict = next(tool for tool in harness.tool_events(finals[0])
+                       if tool["tool_name"] == "dag_review_evidence")
+        assert verdict["is_success"]
+        assert _gate_events(harness.core, coordinator.id)[-1].data["action"] == "allow_final"
+        assert await _dispositions(harness.project.id) == [disposition]
+        emitted = [event.data.get("content") for event in harness.events(coordinator)
+                   if event.type == "agent.message_emitted"]
+        assert frozen_answer in emitted
+        assert unreviewed_answer not in emitted
+        assert len([tool for tool in harness.tool_events(coordinator) if tool["tool_name"] == "stop"]) == 1
+    finally:
+        review_ready.set()
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("arrival", ["same_inbox", "during_confirmation_audit"])
+async def test_new_user_instruction_prevents_automatic_exit_confirmation(tmp_path, monkeypatch, arrival):
+    """接受回执不能吞掉同批或门禁等待期间到达的新用户要求。"""
+    frozen_answer = "accepted-before-new-instruction-marker"
+    user_instruction = "New user constraint: inspect the original endpoint before final delivery."
+    review_ready, continue_release, audit_entered, audit_release = [asyncio.Event() for _ in range(4)]
+    review = Step(wait_for=review_ready)
+    provider = ScriptedProvider(by_role=frozen_exit_confirmation_steps(
+        review, Step(wait_for=continue_release), answer=frozen_answer))
+    harness = await ScenarioHarness.start(tmp_path, provider=provider, workspace_dir=tmp_path)
+    try:
+        await harness.bus.execute(Command(type="role.update", target={"role_id": "supervisor"},
+            payload={"default_settings": {
+                "orchestration_mode": "dag_guided", "invocation_protocol": "traditional",
+            }}))
+        coordinator = await harness.spawn("coordinator", "Report the observed evidence honestly.",
+            protocol="traditional", orchestration_mode="dag_guided")
+        await harness.wait_for(lambda: coordinator.state is AgentState.WAITING_APPROVAL,
+                               "initial submission waiting for review")
+        request = (await _review_requests(harness.project.id))[0]
+
+        async def send_user_instruction():
+            await harness.bus.execute(Command(type="agent.message", actor="user",
+                target={"session_id": coordinator.id}, payload={"content": user_instruction}))
+
+        if arrival == "same_inbox":
+            original_deliver = harness.core.dispatcher.commit_and_deliver
+
+            async def deliver_with_user(*args, **kwargs):
+                manifest = kwargs.get("manifest") or {}
+                if (kwargs.get("to_session_id") == coordinator.id
+                        and manifest.get("kind") == "exit_review_decision"):
+                    receipt = await original_deliver(*args, **{**kwargs, "wake": WakePolicy.NEVER})
+                    await send_user_instruction()
+                    return receipt
+                return await original_deliver(*args, **kwargs)
+
+            monkeypatch.setattr(harness.core.dispatcher, "commit_and_deliver", deliver_with_user)
+        else:
+            original_audit = harness.runner._evaluate_completion_gate
+
+            async def paused_audit(agent, run_id, **kwargs):
+                if agent.id == coordinator.id and not audit_entered.is_set():
+                    audit_entered.set()
+                    await audit_release.wait()
+                return await original_audit(agent, run_id, **kwargs)
+
+            monkeypatch.setattr(harness.runner, "_evaluate_completion_gate", paused_audit)
+
+        review.tools = [("dag_review_evidence", {"request_id": request.request_id, "verdict": "accept",
+            "reason": "The original frozen partial delivery states the observed evidence."})]
+        review_ready.set()
+        if arrival == "during_confirmation_audit":
+            await asyncio.wait_for(audit_entered.wait(), timeout=5)
+            await send_user_instruction()
+            audit_release.set()
+        await harness.wait_for(lambda: provider.call_count("coordinator") == 2,
+                               "model receives the newer user instruction")
+        messages = [messages for role, messages in provider.calls if role == "coordinator"][-1]
+        assert any(user_instruction in str(message.get("content")) for message in messages)
+        assert coordinator.state is AgentState.RUNNING
+        assert await _dispositions(harness.project.id) == []
+        assert not any(event.type == "agent.message_emitted"
+            and event.data.get("content") == frozen_answer for event in harness.events(coordinator))
+        assert len(await _review_requests(harness.project.id, state=None)) == 1
+    finally:
+        for release in (review_ready, continue_release, audit_release):
+            release.set()
+        await harness.aclose()
 
 
 @pytest.mark.asyncio
@@ -462,25 +610,6 @@ async def test_rejected_exit_review_feeds_reason_and_next_action(tmp_path):
         ]
         assert any("Completion gate" in str(e.data["content"]) for e in emitted)
         # 拒绝不登记交付处置。
-        assert await _dispositions(project.id) == []
-    finally:
-        await _teardown(core)
-
-
-@pytest.mark.asyncio
-async def test_bogus_approval_id_does_not_bypass_review(tmp_path):
-    """不存在/异范围的 approval_id 不能换到放行：照样进入 wait_review。"""
-    llm = _RoutingLLM(
-        [_stop_call(delivery_disposition="partial", reason="partial", approval_id="dec_bogus")]
-    )
-    core, bus, project = await _new_core(llm, workspace_dir=tmp_path)
-    coordinator = await _spawn_coordinator(bus, project, mode="dag_guided")
-    try:
-        await _wait_parked(coordinator, llm)
-        gates = _gate_events(core, coordinator.id)
-        assert gates[0].data["action"] == "wait_review"
-        assert "stale, out of scope" in gates[0].data["reason"]
-        assert len(await _review_requests(project.id)) == 1
         assert await _dispositions(project.id) == []
     finally:
         await _teardown(core)
@@ -976,4 +1105,48 @@ async def test_cancel_during_gate_evaluation_wins_and_late_approval_does_not_rev
         assert len(runs) == 1
     finally:
         release.set()
+        await _teardown(core)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("source,candidate", [
+    ("plain_text", "initial-reviewed-candidate-marker"),
+    ("stop_omitted", "initial-reviewed-candidate-marker"),
+    ("stop_empty", "initial-reviewed-candidate-marker"),
+    ("stop_empty", ""),
+])
+async def test_review_binds_actual_candidate_when_stop_final_answer_is_omitted(tmp_path, source, candidate):
+    arguments = {"delivery_disposition": "partial", "reason": "Scope exhausted"}
+    if source == "stop_empty":
+        arguments["final_answer"] = ""
+    request = LLMResponse(content=candidate, tool_calls=[ToolCall(
+        id="first-stop", name="stop", arguments=arguments
+    )] if source != "plain_text" else [])
+    llm = _RoutingLLM([request])
+    core, bus, project = await _new_core(llm, workspace_dir=tmp_path)
+    coordinator = await _spawn_coordinator(bus, project, mode="dag_guided")
+    try:
+        await _wait_parked(coordinator, llm)
+        requests = await _review_requests(project.id)
+        assert len(requests) == 1
+        assert requests[0].proposal["final_answer"] == candidate
+        assert not any(event.type == "agent.message_emitted" and event.data.get("content") == candidate
+            for event in core.event_log.query_session(coordinator.id))
+        confirmation = LLMResponse(content="unreviewed-confirmation-marker", tool_calls=[ToolCall(
+            id="confirm-stop", name="stop", arguments={"delivery_disposition": "partial", "reason": "", "final_answer": ""}
+        )])
+        llm._script = [confirmation]
+        llm._fallback = confirmation
+        await _resolve_exit_request(project.id, requests[0].request_id,
+            verdict="accept", reason="Approved the stored candidate")
+        await flush_review_notifications(core, project.id)
+        await _wait_state(coordinator, "succeeded")
+        emitted = [event.data.get("content") for event in core.event_log.query_session(coordinator.id)
+            if event.type == "agent.message_emitted"]
+        if candidate:
+            assert candidate in emitted
+        assert "unreviewed-confirmation-marker" not in emitted
+        saved = await asyncio.to_thread(lambda: DagStore(ConversationDB(project.id)).list_review_requests(None))
+        assert [item.request_id for item in saved] == [requests[0].request_id]
+    finally:
         await _teardown(core)

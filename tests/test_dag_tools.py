@@ -1,3 +1,4 @@
+import asyncio
 import gzip
 from pathlib import Path
 
@@ -32,6 +33,43 @@ def _agent(conversation_id, mode):
 
 async def _call(cls, agent, session, **kwargs):
     return await call_dag_tool(cls, agent, session, **kwargs)
+
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('kind', ['exit', 'exception'])
+async def test_supervisor_can_follow_inbox_link_to_submitted_diagnostic_material(tmp_path, kind):
+    from cloudra.dag.controller import DagController
+    from cloudra.tools.Plantool.dag_tools.dag_view_evidence import DagViewEvidence
+
+    conversation_id = 'review-material-' + kind
+    session = make_session(conversation_id, 'coordinator')
+    reason = 'The concrete product representation differs; see ts/ts_0033/process.json'
+    answer = 'The current search has no accepted transition state'
+    if kind == 'exit':
+        db = await asyncio.to_thread(lambda: ConversationDB(conversation_id).init())
+        controller = DagController(db, session.id, 'dag_guided', working_directory=tmp_path)
+        gate = await controller.audit_stop('partial', reason=reason, final_answer=answer)
+        request_id = gate.request_id
+    else:
+        submitted = await _call(DagMessageSupervisor, _agent(conversation_id, 'dag_guided'), session,
+            kind='exception', question='Review this input blocker', proposal={'reason': reason, 'final_answer': answer})
+        assert submitted.is_success
+        request_id = submitted.result['request_id']
+    supervisor = make_supervisor(conversation_id, workspace_dir=str(tmp_path))
+    if kind == 'exit':
+        supervisor._runtime_agent.final_review_request_id = request_id
+    supervisor_session = make_session(conversation_id, 'supervisor')
+    inbox = await _call(DagView, supervisor, supervisor_session)
+    item = next(item for item in inbox.result['queued_requests'] if item['request_id'] == request_id)
+    assert item['evidence_view'] == f'dag_view_evidence(review_id={request_id!r})'
+
+    viewed = await _call(DagViewEvidence, supervisor, supervisor_session, review_id=request_id)
+
+    assert viewed.is_success, viewed.error
+    assert viewed.result['proposal']['reason'] == reason
+    assert viewed.result['proposal']['final_answer'] == answer
 
 
 _DAG_TOOL_NAMES = {
@@ -850,6 +888,7 @@ async def test_set_coverage_contract_is_supervisor_only(tmp_path):
 # ---------------------------------------------------------------------------
 
 _TS_FREQ_RESULT = {
+    "opt_converged": True,
     "is_success": True,
     "normal_termination": True,
     "imaginary_frequencies": [-518.3],
@@ -1498,12 +1537,22 @@ async def test_ts_opt_bind_requires_normal_termination(tmp_path):
     assert not rejected.accepted
     assert rejected.rejection_code == "ts_opt_check_failed"
 
+    for converged in (False, None):
+        ref = await asyncio.to_thread(store.register_evidence, 's1', 'log_parser', {
+            'tool_call_id': f'tc-opt-unconverged-{converged}',
+            'result': {'is_success': True, 'normal_termination': True, 'opt_converged': converged},
+        })
+        rejected = await controller.apply_stage_bind(element_id='step1', stage_kind='ts_opt',
+            ref=ref, verdict='agree', tool_succeeded=True)
+        assert not rejected.accepted
+        assert rejected.rejection_code == 'ts_opt_check_failed'
+
     ok_ref = store.register_evidence(
         "s1",
         "log_parser",
         {
             "tool_call_id": "tc-opt-ok",
-            "result": {"is_success": True, "normal_termination": True},
+            "result": {"is_success": True, "normal_termination": True, "opt_converged": True},
         },
     )
     accepted = await controller.apply_stage_bind(
@@ -1517,9 +1566,10 @@ async def test_ts_opt_bind_requires_normal_termination(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_short_irc_bind_requires_path_evidence(tmp_path, monkeypatch):
-    """short_irc 绑定走几何方向区间证明（ts_guess verify strict / benchmark
-    自洽性同一判据），收敛与否、双向点数不再是闸门：
+@pytest.mark.parametrize('batch', [False, True])
+async def test_short_irc_bind_requires_path_evidence(tmp_path, monkeypatch, batch):
+    """short_irc 绑定要求同一 TS 的双向外帧经原生 Opt/Freq 到正确极小值。
+    区间诊断只给警告，接受后必须保留警告；IRC 收敛与否、点数不是闸门：
 
     - 证据不带 arguments.log_path → 拒（引导绑 IRC 作业的 parser 输出）；
     - 材料齐全但方向证明不成立 → 拒（理由带证明失败的细节）；
@@ -1530,6 +1580,7 @@ async def test_short_irc_bind_requires_path_evidence(tmp_path, monkeypatch):
     同边 ts_opt/frequency 与 endpoint_a/b 阶段已绑证据的 arguments.log_path）。"""
     from cloudra.dag.controller import DagController
     from cloudra.dag.store import DagStore
+    from tests.test_irc_endpoint_optimization import write_lineage_bundle
 
     agent, _session, db = await _seed_staged_step(
         tmp_path,
@@ -1544,10 +1595,16 @@ async def test_short_irc_bind_requires_path_evidence(tmp_path, monkeypatch):
         working_directory=str(tmp_path),
     )
     await controller.initialize()
+    native = await asyncio.to_thread(write_lineage_bundle, tmp_path / 'native')
+    native_logs = {'ts-opt': native['ts'], 'freq': native['ts'],
+                   'endpoint-a': native['product_freq'], 'endpoint-b': native['reactant_freq']}
 
     def _register(tag: str, log_name: str, result: dict):
         path = tmp_path / log_name
-        path.write_text("placeholder log\n", encoding="utf-8")
+        if tag in native_logs:
+            path.write_bytes(native_logs[tag].read_bytes())
+        else:
+            path.write_text("placeholder log\n", encoding="utf-8")
         return store.register_evidence(
             "s1",
             "log_parser",
@@ -1558,16 +1615,16 @@ async def test_short_irc_bind_requires_path_evidence(tmp_path, monkeypatch):
             },
         )
 
-    async def _bind(stage_kind: str, ref):
+    async def _bind(stage_kind: str, ref, reason=''):
         return await controller.apply_stage_bind(
             element_id="step1", stage_kind=stage_kind, ref=ref,
-            verdict="agree", tool_succeeded=True,
+            verdict="agree", tool_succeeded=True, reason=reason,
         )
 
     # 先按序绑齐同边的材料阶段（short_irc 的 TS/端点几何来源）
     ts_ref = _register(
         "ts-opt", "ts_opt.log",
-        {"is_success": True, "normal_termination": True},
+        {"is_success": True, "normal_termination": True, "opt_converged": True},
     )
     assert (await _bind("ts_opt", ts_ref)).accepted is True
     freq_ref = _register(
@@ -1609,8 +1666,7 @@ async def test_short_irc_bind_requires_path_evidence(tmp_path, monkeypatch):
     def fake_verify(irc_log, ts_logs, endpoint_a_logs, endpoint_b_logs, **_kwargs):
         calls.append((irc_log, list(ts_logs), list(endpoint_a_logs), list(endpoint_b_logs)))
         return False, [
-            "the IRC endpoints do not lie between the TS and the verified "
-            "endpoint minima (the geometric direction proof failed)"
+            "the native optimization logs do not start at the actual IRC outer frames"
         ]
 
     monkeypatch.setattr(
@@ -1619,7 +1675,7 @@ async def test_short_irc_bind_requires_path_evidence(tmp_path, monkeypatch):
     rejected = await _bind("short_irc", irc_ref)
     assert not rejected.accepted
     assert rejected.rejection_code == "short_irc_check_failed"
-    assert "do not lie between" in rejected.rejection_reason
+    assert "do not start at" in rejected.rejection_reason
     assert calls == [(
         str(tmp_path / "irc.log"),
         [str(tmp_path / "ts_opt.log"), str(tmp_path / "ts_freq.log")],
@@ -1630,16 +1686,25 @@ async def test_short_irc_bind_requires_path_evidence(tmp_path, monkeypatch):
     # 方向证明成立 → 收（未收敛但方向对的情形由 verifier 的 strict 口径覆盖，
     # 闸门自身只认 (passed, details)）
     def fake_verify_ok(irc_log, ts_logs, endpoint_a_logs, endpoint_b_logs, **_kwargs):
-        return True, ["direction proof holds (direct pairing)"]
+        return True, ["Native endpoint optimization proves direction.",
+            "[warning] The geometric interval check failed; inspect suspicious geometry."]
 
     monkeypatch.setattr(
         "cloudra.dag.evidence_inbox.verify_short_irc_direction", fake_verify_ok
     )
-    accepted = await _bind("short_irc", irc_ref)
-    assert accepted.accepted is True
+    if batch:
+        accepted = await controller.bind_stage_attachments([
+            {'tool_call_id': 'tc-irc', 'bind_target': 'step1', 'stage_kind': 'short_irc'}])
+        assert accepted['accepted'] is True
+    else:
+        accepted = await _bind("short_irc", irc_ref, reason='Accept the native endpoint evidence.')
+        assert accepted.accepted is True
     edge = _delivery_edge(db)
     stage = next(s for s in edge.stages if s.kind.value == "short_irc")
     assert stage.status.value == "supported"
+    assert '[warning]' in stage.reason
+    if not batch:
+        assert 'Accept the native endpoint evidence.' in stage.reason
 
 
 @pytest.mark.asyncio
@@ -1810,7 +1875,7 @@ async def test_stage_bind_recomputes_stages_after_stale_revision(tmp_path):
         "log_parser",
         {
             "tool_call_id": "tc-opt-conc",
-            "result": {"is_success": True, "normal_termination": True},
+            "result": {"is_success": True, "normal_termination": True, "opt_converged": True},
         },
     )
     original = controller._apply_with_revisions
@@ -1905,7 +1970,7 @@ async def test_batch_bind_recomputes_stages_after_stale_revision(tmp_path):
         "tc-opt-batch",
         "log_parser",
         {"log_path": "opt.log"},
-        {"is_success": True, "normal_termination": True},
+        {"is_success": True, "normal_termination": True, "opt_converged": True},
     )
     original = controller._apply_with_revisions
     calls: list[list[dict]] = []
@@ -2189,3 +2254,73 @@ async def test_dag_view_lists_queued_structured_requests(tmp_path):
     assert queued[0]["kind"] == "exception"
     assert "not_applicable" in queued[0]["question"]
     assert queued[0]["request_id"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('batch', [False, True])
+async def test_separate_frequency_binding_requires_optimized_geometry(tmp_path, batch):
+    from cloudra.dag.controller import DagController
+    from cloudra.dag.store import DagStore
+
+    _agent_, _, db = await _seed_staged_step(tmp_path, 'bind-frequency-geometry', _TS_FREQ_RESULT)
+    store = DagStore(db)
+    c = DagController(db, 's1', 'dag_record', working_directory=tmp_path)
+    await c.initialize()
+    def register_logs():
+        template = ('* O   R   C   A *\nTHE OPTIMIZATION HAS CONVERGED\n'
+                    'FINAL SINGLE POINT ENERGY -100.0\nCARTESIAN COORDINATES (ANGSTROEM)\n'
+                    '-----------------------------\nC 0 0 0\nN 0 0 2\nH 0 0 {z}\n\n'
+                    'VIBRATIONAL FREQUENCIES\n0: -300.0 cm**-1\n1: 200.0 cm**-1\nORCA TERMINATED NORMALLY\n')
+        refs = []
+        for name, z in [('opt', 1.0), ('freq', 1.2)]:
+            path = tmp_path / f'{name}.out'
+            path.write_text(template.format(z=z))
+            refs.append(store.register_evidence('s1', 'log_parser', {'tool_call_id': name,
+                'arguments': {'log_path': str(path)}, 'result': _TS_FREQ_RESULT}))
+        return refs
+    opt_ref, freq_ref = await asyncio.to_thread(register_logs)
+    assert (await c.apply_stage_bind(element_id='step1', stage_kind='ts_opt', ref=opt_ref,
+        verdict='agree', tool_succeeded=True)).accepted
+    if batch:
+        result = await c.bind_stage_attachments([{'tool_call_id': 'freq', 'bind_target': 'step1', 'stage_kind': 'frequency'}])
+        accepted, code = result['accepted'], result['rejection_code']
+    else:
+        result = await c.apply_stage_bind(element_id='step1', stage_kind='frequency', ref=freq_ref,
+            verdict='agree', tool_succeeded=True)
+        accepted, code = result.accepted, result.rejection_code
+    assert not accepted and code == 'frequency_geometry_mismatch'
+
+
+@pytest.mark.asyncio
+async def test_exit_review_material_is_readable_by_supervisor(tmp_path):
+    from cloudra.dag.review_requests import ReviewDecision, ReviewRequest
+    from cloudra.dag.store import DagStore
+    from cloudra.tools.Plantool.dag_tools.dag_view_evidence import DagViewEvidence
+
+    get_config().data_dir = tmp_path
+    db = await asyncio.to_thread(lambda: ConversationDB("exit-material-readable").init())
+    store = DagStore(db)
+    await asyncio.to_thread(store.ensure_bundle, "s1")
+    proposal = {"disposition": "complete", "scope": ["r", "p", "step1"], "remaining_gaps": [],
+        "method_limits": [], "delivery_artifact": {"path": str(tmp_path / "mechanism_graph.json"), "sha256": "abc"}}
+    request = ReviewRequest(kind="exit", requester="s1", target_ids=proposal["scope"],
+        question="Review the whole proposed final delivery", proposal=proposal, basis_fingerprint="basis1")
+    request_id = await asyncio.to_thread(store.enqueue_review, request)
+    supervisor = make_supervisor(db.conversation_id, workspace_dir=str(tmp_path))
+    supervisor._runtime_agent.final_review_request_id = request_id
+    session = Session("s1", str(tmp_path / "session.json"))
+    queued = await _call(DagViewEvidence, supervisor, session, review_id=request_id)
+    assert queued.is_success
+    assert queued.result["kind"] == "exit"
+    assert queued.result["proposal"] == proposal
+    assert queued.result["decision"] is None
+    assert (await asyncio.to_thread(store.resolve_review, ReviewDecision(
+        request_id=request_id, basis_fingerprint="basis1", verdict="reject",
+        reason="direction evidence does not support the submitted step", next_action="Inspect the original IRC"),
+        expected_basis="basis1"))["accepted"]
+    resolved = await _call(DagViewEvidence, supervisor, session, review_id=request_id)
+    assert resolved.is_success
+    assert resolved.result["state"] == "resolved"
+    assert resolved.result["proposal"] == proposal
+    assert resolved.result["decision"]["verdict"] == "reject"
+    assert resolved.result["decision"]["next_action"] == "Inspect the original IRC"

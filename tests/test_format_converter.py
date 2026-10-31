@@ -92,6 +92,20 @@ H  -0.239000   0.927000   0.000000
 
 
 @pytest.mark.asyncio
+async def test_xyz_to_mol_keeps_coordinates_without_inventing_chemistry(tmp_path):
+    result, mol_path = await _convert(tmp_path, "xyz", "mol", _WATER_XYZ)
+    assert result.is_success, result.message
+
+    mol = Chem.MolFromMolFile(str(mol_path), removeHs=False)
+    assert mol.GetNumAtoms() == 3
+    assert mol.GetNumBonds() == 0
+    assert Chem.GetFormalCharge(mol) == 0
+    assert mol.GetConformer().GetAtomPosition(1).x == pytest.approx(0.957)
+    assert mol.GetConformer().GetAtomPosition(2).y == pytest.approx(0.927)
+    assert "atoms+coordinates only" in result.message
+
+
+@pytest.mark.asyncio
 async def test_xyz_to_sdf_to_xyz_preserves_coordinates(tmp_path):
     """F1 回归：纯坐标格式链 xyz→sdf→xyz 坐标保持不变（sdf 侧为原子+坐标）。"""
     result1, sdf_path = await _convert(tmp_path, "xyz", "sdf", _WATER_XYZ)
@@ -176,12 +190,13 @@ async def test_multimolecule_sdf_reports_first_in_message(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_charged_input_to_gjf_warns_charge_not_written(tmp_path):
-    """F5：带电烯醇盐 mol→gjf 成功，但 message 必须警告电荷不落坐标格式。"""
+async def test_charged_input_to_gjf_preserves_charge_and_discloses_missing_spin(tmp_path):
+    """Native geometry skeletons retain known charge without guessing a spin state."""
     result, out_path = await _convert(tmp_path, "mol", "gjf", _enolate_molfile())
     assert result.is_success, result.message
-    assert "charge" in result.message.lower()
-    assert "coordinate" in result.message.lower() or "coordinates" in result.message.lower()
+    assert '-1 1' in out_path.read_text()
+    assert 'charge -1 is retained' in result.message
+    assert 'Multiplicity was unspecified' in result.message
 
 
 @pytest.mark.asyncio

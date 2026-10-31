@@ -1,0 +1,63 @@
+{
+  "date": "2026-11-01",
+  "pages": 31,
+  "source_files": 26,
+  "sections": 7,
+  "task_definitions": 50,
+  "task_runs": 200,
+  "score_values": 800,
+  "literature_systems": 85,
+  "authors": [
+    {
+      "name": "Chengyi Yang",
+      "affiliation": 1,
+      "position": "first author"
+    },
+    {
+      "name": "Qianxin Zhou",
+      "affiliation": 2,
+      "position": "co-second author, first-listed"
+    },
+    {
+      "name": "Yang Li",
+      "affiliation": 1,
+      "position": "co-second author"
+    }
+  ],
+  "unknown_references": 0,
+  "out_of_page_text_blocks": 0,
+  "source_zip_matches_editable_sources": true,
+  "overleaf_project": "https://www.overleaf.com/project/6ae5e126e8645869834e129f",
+  "files": {
+    "Cloudra_SI_EN_Draft.pdf": {
+      "bytes": 316627,
+      "sha256": "c1ca4e233e89f5b8e5e47f9d6aa728e65fdb9c3bf9996ca2f170865bfbaa6db1"
+    },
+    "Cloudra_SI_Overleaf.zip": {
+      "bytes": 156556,
+      "sha256": "347466c1cbc5408aa708a7d5b1f074e38aac91f3a3870ae0e596982e91f0afbd"
+    },
+    "Cloudra_SI_Data.zip": {
+      "bytes": 16818721,
+      "sha256": "361d6577bceac73d0e291bfec04905a2a7d74c90d030ab0fa57e6ca624d9d3ec"
+    }
+  },
+  "standalone_reproduction": {
+    "runs": 200,
+    "score_values": 800,
+    "mismatches": 0,
+    "new_model_or_qm_calculations": 0
+  },
+  "pdf_sha256": "c1ca4e233e89f5b8e5e47f9d6aa728e65fdb9c3bf9996ca2f170865bfbaa6db1",
+  "source_zip_sha256": "347466c1cbc5408aa708a7d5b1f074e38aac91f3a3870ae0e596982e91f0afbd",
+  "bibliography_entries": 38,
+  "authorship_verified": true,
+  "deployment": "DeepSeek-v4.1-flash (1017)",
+  "archived_api_alias": "deepseek-v4-flash",
+  "title": "Cloudra: Geometric Reasoning and Scientific Validation for Autonomous Reaction Mechanism Exploration",
+  "conditional_sensitivity_separate_from_formal_scores": true,
+  "minor_revision": "Astra-authorized Mean S header, relative-displacement wording, and distinct B_axis total; numbered formulas, thresholds, scores, and data archive unchanged.",
+  "public_data_link_present": true,
+  "public_data_directory": "https://drive.google.com/drive/folders/1yZo3eJuCUuAgedQztgCtLyJcc8MZipf7",
+  "complete_behavioral_source_link_present": true
+}

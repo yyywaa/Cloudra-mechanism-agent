@@ -33,6 +33,9 @@ from collections import OrderedDict, defaultdict
 from typing import Callable
 
 from cloudra.runtime_v2.events import EventLog
+from cloudra.runtime_v2.schemas import EventEnvelope
+
+RESEARCH_OBSERVATION_PIN_KEY = "supervisor-research-observation"
 
 
 class NoticeManager:
@@ -91,70 +94,84 @@ class NoticeManager:
         self._local_seqs[session_id] = seq
         self._changes[session_id].append({**change, "seq": seq})
 
-    def restore_from(self, event_log: EventLog) -> None:
-        """Rebuild pins, the change log and the consumption cursor from events.
+    def snapshot(self) -> dict:
+        """Current pins and unconsumed notices, never the full notice history."""
+        return {
+            "pins": {sid: dict(pins) for sid, pins in self._pins.items()},
+            "changes": {sid: [dict(change) for change in changes]
+                        for sid, changes in self._changes.items() if changes},
+            "cursors": dict(self._consumed),
+        }
 
-        游标之后的变更保持 pending（跨重启不丢）；已消费变更裁剪掉（与
-        ``apply_consumed`` 的裁剪一致），pin 重建为当前状态。
-        """
-        self._pins.clear()
-        self._changes.clear()
-        self._consumed.clear()
+    def restore(self, payload: dict) -> None:
+        self._pins = defaultdict(OrderedDict, {
+            sid: OrderedDict(pins) for sid, pins in payload.get("pins", {}).items()
+        })
+        self._changes = defaultdict(list, {
+            sid: [dict(change) for change in changes]
+            for sid, changes in payload.get("changes", {}).items()
+        })
+        self._consumed = dict(payload.get("cursors", {}))
         self._pending_batches.clear()
-        self._local_seqs.clear()
-        self._local_seqs.update(event_log.high_session_watermarks)
+        self._local_seqs = defaultdict(int, self._consumed)
+        for sid, changes in self._changes.items():
+            self._local_seqs[sid] = max(self._local_seqs[sid], max(
+                (change["seq"] for change in changes), default=0,
+            ))
+
+    def apply(self, event: EventEnvelope) -> None:
+        """Apply one notice fact; live pin/push methods already apply their own."""
+        session_id = event.session_id
+        if session_id is None:
+            return
+        if event.type == "context.appended":
+            if event.data.get("notices_through") is not None:
+                self.apply_consumed(session_id, int(event.data["notices_through"]))
+            return
+        if event.type not in {"context.pin_set", "context.pin_cleared", "context.injected"}:
+            return
+        seq = event.session_seq or 0
+        if seq <= self._local_seqs[session_id]:
+            return
+        self._local_seqs[session_id] = seq
+        if event.type == "context.pin_set":
+            key = str(event.data.get("key") or "")
+            if not key:
+                return
+            content = str(event.data.get("content") or "")
+            pins = self._pins[session_id]
+            self._changes[session_id].append({
+                "seq": seq, "kind": "pin_set", "key": key,
+                "content": content, "is_update": key in pins,
+            })
+            pins[key] = content
+        elif event.type == "context.pin_cleared":
+            key = str(event.data.get("key") or "")
+            pins = self._pins.get(session_id)
+            if pins is None or key not in pins:
+                return
+            pins.pop(key)
+            if not pins:
+                self._pins.pop(session_id)
+            self._changes[session_id].append({
+                "seq": seq, "kind": "pin_cleared", "key": key, "content": "",
+            })
+        elif event.type == "context.injected":
+            content = str(event.data.get("content") or "")
+            if content:
+                self._changes[session_id].append({
+                    "seq": seq, "kind": "push", "key": "", "content": content,
+                })
+
+    def restore_from(self, event_log: EventLog) -> None:
+        """Rebuild on a snapshot cache miss using the same event fold."""
+        self.restore({})
         for event in event_log.iter_events(types={
             "context.pin_set", "context.pin_cleared", "context.injected", "context.appended",
         }):
-            if event.session_id is None:
-                continue
-            session_id = event.session_id
-            seq = event.session_seq or 0
-            if seq:
-                self._local_seqs[session_id] = max(self._local_seqs[session_id], seq)
-            if event.type == "context.pin_set":
-                key = str(event.data.get("key") or "")
-                if not key:
-                    continue
-                content = str(event.data.get("content") or "")
-                pins = self._pins[session_id]
-                self._changes[session_id].append(
-                    {
-                        "seq": seq,
-                        "kind": "pin_set",
-                        "key": key,
-                        "content": content,
-                        "is_update": key in pins,
-                    }
-                )
-                pins[key] = content
-            elif event.type == "context.pin_cleared":
-                key = str(event.data.get("key") or "")
-                pins = self._pins.get(session_id)
-                if pins is None or key not in pins:
-                    continue
-                pins.pop(key, None)
-                if not pins:
-                    self._pins.pop(session_id, None)
-                self._changes[session_id].append(
-                    {"seq": seq, "kind": "pin_cleared", "key": key, "content": ""}
-                )
-            elif event.type == "context.injected":
-                content = str(event.data.get("content") or "")
-                if content:
-                    self._changes[session_id].append(
-                        {"seq": seq, "kind": "push", "key": "", "content": content}
-                    )
-            elif event.type == "context.appended":
-                through = int(event.data.get("notices_through") or 0)
-                if through > self._consumed.get(session_id, 0):
-                    self._consumed[session_id] = through
-        for session_id, cursor in self._consumed.items():
-            self._changes[session_id] = [
-                change
-                for change in self._changes.get(session_id, [])
-                if change["seq"] > cursor
-            ]
+            self.apply(event)
+        for session_id, seq in event_log.high_session_watermarks.items():
+            self._local_seqs[session_id] = max(self._local_seqs[session_id], seq)
 
     def pin(self, session_id: str, key: str, content: str) -> None:
         text = content if content is not None else ""
@@ -183,6 +200,14 @@ class NoticeManager:
         就不应重复投递配套的一次性消息。
         """
         return self._pins.get(session_id, {}).get(key)
+
+    def pin_is_consumed(self, session_id: str, key: str) -> bool:
+        """Whether the current pin has entered context, using the existing consumption cursor."""
+        cursor = self._consumed.get(session_id, 0)
+        return self.pin_content(session_id, key) is not None and not any(
+            change["key"] == key and change["seq"] > cursor
+            for change in self._changes.get(session_id, [])
+        )
 
     def unpin(self, session_id: str, key: str) -> None:
         pins = self._pins.get(session_id)
@@ -271,11 +296,52 @@ class NoticeManager:
             through = max((change["seq"] for change in changes), default=cursor)
         else:
             pending_changes = [change for change in changes if change["seq"] > cursor]
-            messages = [
-                message
-                for message in (self._render_change(change) for change in pending_changes)
-                if message["content"]
-            ]
+            reflection_prefix = "guidance-scientific-reflection:"
+            groups = (
+                [change for change in pending_changes if change["key"].startswith(reflection_prefix)],
+                [change for change in pending_changes if change["key"] == RESEARCH_OBSERVATION_PIN_KEY],
+            )
+            pins = self._pins.get(session_id, {})
+            latest_messages = {}
+            for updates in groups:
+                if not updates:
+                    continue
+                first_by_key = {}
+                for change in updates:
+                    first_by_key.setdefault(change["key"], change)
+                was_delivered = any(change["kind"] == "pin_cleared" or change.get("is_update")
+                                    for change in first_by_key.values())
+                current = next((change for change in reversed(updates)
+                                if change["kind"] == "pin_set" and change["key"] in pins
+                                and change["content"] == pins[change["key"]]), None)
+                is_reflection = updates[-1]["key"].startswith(reflection_prefix)
+                if current is not None:
+                    if is_reflection:
+                        content = current["content"]
+                        if was_delivered:
+                            content = "This replaces the earlier scientific reflection:\n\n" + content
+                        message = {"role": "system", "content": content}
+                    else:
+                        message = self._render_change({**current, "is_update": was_delivered})
+                elif was_delivered:
+                    if is_reflection:
+                        message = {"role": "system", "content": "[Scientific reflection retracted] The earlier scientific guidance is no longer current."}
+                    else:
+                        message = self._render_change(updates[-1])
+                else:
+                    continue
+                latest_messages[updates[-1]["seq"]] = message
+            messages = []
+            for change in pending_changes:
+                if (change["key"].startswith(reflection_prefix)
+                        or change["key"] == RESEARCH_OBSERVATION_PIN_KEY):
+                    message = latest_messages.get(change["seq"])
+                    if message is None:
+                        continue
+                else:
+                    message = self._render_change(change)
+                if message["content"]:
+                    messages.append(message)
             through = max((change["seq"] for change in pending_changes), default=cursor)
         self._pending_batches[session_id] = (messages, through)
         return [dict(message) for message in messages]

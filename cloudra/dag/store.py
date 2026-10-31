@@ -217,15 +217,38 @@ class DagStore:
             return CoverageContract.mechanism_default()
         return CoverageContract.model_validate_json(row[0])
 
+    @staticmethod
+    def _delivery_state_fingerprint(con) -> str:
+        """Read audit inputs on one SQLite transaction, preserving latest-row order."""
+        state = {}
+        for table in ('dag_graphs', 'dag_nodes', 'dag_edges', 'dag_coverage'):
+            state[table] = [tuple(row) for row in con.execute(
+                f'SELECT rowid, * FROM {table} WHERE graph_id = ? ORDER BY rowid',
+                ('dag_delivery',)).fetchall()]
+        for table in ('dag_evidence_bindings', 'dag_evidence', 'dag_evidence_facts',
+                      'dag_drafts', 'dag_review_requests', 'dag_review_decisions', 'dag_call_reviews'):
+            state[table] = [tuple(row) for row in con.execute(
+                f'SELECT rowid, * FROM {table} ORDER BY rowid').fetchall()]
+        state['call_verdicts'] = [tuple(row) for row in con.execute(
+            "SELECT rowid, decision_id, payload FROM dag_review_notifications "
+            "WHERE kind = 'call_verdict' ORDER BY rowid").fetchall()]
+        return hashlib.sha256(_canonical_json(state).encode()).hexdigest()
+
+    def delivery_state_fingerprint(self) -> str:
+        with self.db.connect() as con:
+            con.execute('BEGIN')
+            return self._delivery_state_fingerprint(con)
+
     def record_delivery_disposition(
         self,
         session_id: str,
         disposition: str,
         report: Any,
+        *,
+        expected_state: str | None = None,
     ) -> str:
         if disposition not in {"complete", "partial", "user_terminated"}:
             raise ValueError("invalid delivery disposition")
-        bundle = self.load_bundle()
         encoded = _canonical_json(
             report.model_dump(mode="json") if hasattr(report, "model_dump") else report
         )
@@ -233,6 +256,11 @@ class DagStore:
 
         def operation() -> None:
             with self.db.connect() as con:
+                con.execute('BEGIN IMMEDIATE')
+                if expected_state is not None and self._delivery_state_fingerprint(con) != expected_state:
+                    raise RuntimeError('DAG evidence or review state changed after audit; re-audit the delivery.')
+                revision = con.execute(
+                    "SELECT revision FROM dag_graphs WHERE graph_kind = 'delivery'").fetchone()[0]
                 con.execute(
                     """
                     INSERT INTO dag_delivery_dispositions(
@@ -244,7 +272,7 @@ class DagStore:
                         disposition_id,
                         session_id,
                         disposition,
-                        bundle.revisions["delivery"],
+                        revision,
                         encoded,
                     ),
                 )
@@ -554,6 +582,7 @@ class DagStore:
         request_json.pop("updated_at", None)
         def operation() -> tuple[str, bool]:
             with self.db.connect() as con:
+                con.execute('BEGIN IMMEDIATE')
                 # All evidence refs are project-local: they must resolve in this
                 # conversation's evidence store. Cross-project ids are rejected.
                 for ref in [*request.supporting_refs, *request.counterevidence_refs]:
@@ -571,16 +600,29 @@ class DagStore:
                             f"evidence reference {ref.ref_id!r} does not resolve "
                             "in this conversation's evidence store"
                         )
-                row = con.execute(
-                    """
-                    SELECT request_id FROM dag_review_requests
-                    WHERE kind = ? AND target_ids = ? AND basis_fingerprint = ?
-                      AND state != 'superseded' ORDER BY rowid LIMIT 1
-                    """,
-                    (kind, _canonical_json(list(targets)), request.basis_fingerprint),
-                ).fetchone()
-                if row is not None:
-                    return row[0], False
+                if kind == 'exit':
+                    rows = con.execute('''SELECT request_id, basis_fingerprint, state, target_ids, proposal
+                        FROM dag_review_requests WHERE kind='exit' AND requester=? ORDER BY rowid DESC''',
+                        (request.requester,)).fetchall()
+                    previous = [row for row in rows if tuple(sorted(json.loads(row[3]))) == targets
+                        and json.loads(row[4]).get('disposition') == request.proposal.get('disposition')]
+                    if previous and previous[0][2] != 'superseded' and previous[0][1] == request.basis_fingerprint:
+                        return previous[0][0], False
+                    # New exit material replaces earlier submissions. Keep their
+                    # verdicts for audit, but never revive a superseded approval.
+                    con.executemany("UPDATE dag_review_requests SET state='superseded', updated_at=datetime('now') WHERE request_id=?",
+                        [(row[0],) for row in previous if row[2] != 'superseded'])
+                else:
+                    row = con.execute(
+                        """
+                        SELECT request_id FROM dag_review_requests
+                        WHERE kind = ? AND target_ids = ? AND basis_fingerprint = ?
+                          AND state != 'superseded' ORDER BY rowid LIMIT 1
+                        """,
+                        (kind, _canonical_json(list(targets)), request.basis_fingerprint),
+                    ).fetchone()
+                    if row is not None:
+                        return row[0], False
                 con.execute(
                     """
                     INSERT INTO dag_review_requests(
@@ -710,8 +752,14 @@ class DagStore:
             "accepted_claim_spec": (
                 accepted_claim.model_dump(mode="json") if accepted_claim is not None else None
             ),
-            "exceptions": self.collect_review_exceptions(sorted(target_ids)) if target_ids else [],
+            "exceptions": [item for item in self.collect_review_exceptions(sorted(target_ids))
+                           if item.get('target_id') in target_ids] if target_ids else [],
         }
+        if request.kind == 'exit':
+            artifact = request.proposal.get('delivery_artifact')
+            if isinstance(artifact, dict) and isinstance(artifact.get('path'), str):
+                from cloudra.dag.delivery_artifact import current_artifact_digest
+                payload['current_delivery_artifact_sha256'] = current_artifact_digest(artifact['path'])
         encoded = _canonical_json(payload)
         return "sha256:" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
@@ -723,7 +771,7 @@ class DagStore:
         if state is not None:
             query += " WHERE state = ?"
             params = (state,)
-        query += " ORDER BY created_at, rowid"
+        query += " ORDER BY rowid"
         with self.db.connect() as con:
             rows = con.execute(query, params).fetchall()
         return [self._review_request_from_row(row) for row in rows]
@@ -765,6 +813,7 @@ class DagStore:
         subject_id: str,
         recipient_session_id: str,
         payload: dict[str, Any],
+        request_id: str = '',
     ) -> None:
         """在同一事务内落一条 pending 裁决通知（调用方持有连接/事务）。
 
@@ -776,11 +825,12 @@ class DagStore:
             "INSERT INTO dag_review_notifications("
             "notification_id, kind, decision_id, request_id, "
             "recipient_session_id, payload, state, created_at"
-            ") VALUES (?, ?, ?, '', ?, ?, 'pending', datetime('now'))",
+            ") VALUES (?, ?, ?, ?, ?, ?, 'pending', datetime('now'))",
             (
                 "notif_" + uuid.uuid4().hex,
                 kind,
                 subject_id,
+                request_id,
                 recipient_session_id,
                 _canonical_json(payload),
             ),
@@ -808,8 +858,8 @@ class DagStore:
 
         The request's stored basis must equal ``expected_basis``; a stale basis
         means the decision cannot be applied (superseded request).  Consumer
-        uniqueness comes from the runtime: the project's single Supervisor
-        agent resolves queued requests through the serialized
+        scope comes from the runtime: a process Supervisor or a reviewer bound
+        to this final request resolves it through the serialized
         InvocationService path, and the duplicate_decision guard rejects a
         second resolve of the same request+basis (idempotency).
         """
@@ -824,6 +874,10 @@ class DagStore:
 
         def operation() -> dict[str, Any]:
             with self.db.connect() as con:
+                # Re-check the scoped basis under the writer lock before applying
+                # a verdict. Other DAG writers cannot change it between the read
+                # and the state/notification writes in this transaction.
+                con.execute('BEGIN IMMEDIATE')
                 row = con.execute(
                     f"SELECT {self._REVIEW_REQUEST_COLUMNS} FROM dag_review_requests "
                     "WHERE request_id = ?",
@@ -837,6 +891,10 @@ class DagStore:
                         "request_id": decision.request_id,
                     }
                 request = self._review_request_from_row(row)
+                if request.state == 'superseded':
+                    return {'accepted': False, 'rejection_code': 'stale_basis',
+                            'rejection_reason': 'This request was superseded; submit current material for a new review.',
+                            'request_id': request.request_id, 'request_state': request.state}
                 if request.basis_fingerprint != expected_basis:
                     return {
                         "accepted": False,
@@ -847,11 +905,20 @@ class DagStore:
                         ),
                         "request_id": decision.request_id,
                     }
-                if current_basis is not None and request.basis_fingerprint != current_basis:
+                if request.state == 'queued' and current_basis is not None and request.basis_fingerprint != self.review_basis(request):
+                    next_action = 'Read the current target and diagnostics; resubmit actual evidence through the original submission tool for a new review.'
+                    con.execute("UPDATE dag_review_requests SET state='superseded', updated_at=datetime('now') WHERE request_id=?",
+                                (request.request_id,))
+                    self._insert_notification(con, kind='review_superseded',
+                        subject_id=request.request_id, request_id=request.request_id, recipient_session_id=request.requester,
+                        payload={'request_id': request.request_id, 'reason': 'The scoped graph, contract, or evidence changed.',
+                                 'next_action': next_action})
                     return {
                         "accepted": False,
                         "rejection_code": "stale_basis",
                         "rejection_reason": "the scoped graph, contract, or evidence changed",
+                        "request_state": "superseded",
+                        "next_action": next_action,
                         "request_id": decision.request_id,
                     }
                 if decision.basis_fingerprint != request.basis_fingerprint:
@@ -1005,7 +1072,7 @@ class DagStore:
                     continue
                 fact_targets = {ref.ref_id for ref in fact.source_refs} & bound_ids
                 hint = fact.subject.target_hint
-                if target_id in fact_targets or hint == target_id:
+                if fact_targets or hint == target_id:
                     key = f"{target_id}:contradiction:{fact.check}:{fact.fact_id}"
                     if not any(item.get("exception_key") == key for item in exceptions):
                         exceptions.append({
@@ -1045,6 +1112,8 @@ class DagStore:
                     "target_id": None,
                     "fact_id": fact.fact_id,
                     "check": fact.check,
+                    "outcome": fact.outcome,
+                    "source_refs": [ref.model_dump(mode='json') for ref in fact.source_refs],
                     "detail": "key evidence has no target binding or target hint",
                 })
         return exceptions

@@ -10,12 +10,14 @@ from pydantic import Field
 from cloudra.base.session_class import Session
 from cloudra.base.tool_actor import ToolActorContext
 from cloudra.base.tools_class import input_schema
-from cloudra.dag.completion import evaluate_delivery
-from cloudra.dag.models import GraphKind, OrchestrationMode
+from cloudra.dag.controller import DagController
+from cloudra.dag.models import GraphActor, GraphKind, OrchestrationMode
 from cloudra.tools.Plantool.dag_tools._common import (
     DagToolBase,
     DagToolOutput,
+    final_review_request_id,
     render_subgraph_view,
+    review_scope_allows,
 )
 
 
@@ -32,7 +34,7 @@ class DagViewInput(input_schema):
     offset: int = Field(
         default=0,
         ge=0,
-        description="For the delivery subgraph: skip this many nodes.",
+        description="Delivery view: skip this many nodes. Compact view: skip this many unassigned evidence summaries.",
     )
     node_ids: list[str] | None = Field(
         default=None,
@@ -67,7 +69,15 @@ class DagView(DagToolBase):
         ctx = await self._prepare(session)
         snapshot = await asyncio.to_thread(ctx.engine.snapshot)
         if user_input.graph_kind == "both":
+            final_review = ctx.actor is GraphActor.SUPERVISOR and final_review_request_id(self.subagent) is not None
             delivery = snapshot.delivery
+            controller = DagController(ctx.db, session.id, ctx.mode,
+                conversation_id=ctx.conversation_id,
+                working_directory=getattr(self.subagent, "working_directory", None))
+            report = await asyncio.to_thread(controller.delivery_report)
+            unresolved_ids = {gate.target_id for gate in [*report.unresolved, *report.inconclusive]}
+            reviewed_ids = {gate.target_id for gate in report.satisfied
+                            if gate.code == "supervisor_evidence_accepted"} - unresolved_ids
             node_map: dict[str, str] = {}
             species_list: list[dict[str, Any]] = []
             for node in delivery.nodes:
@@ -75,7 +85,7 @@ class DagView(DagToolBase):
                 node_map[node.node_id] = name
                 item: dict[str, Any] = {
                     "name": name,
-                    "status": getattr(node, "status", "pending") or "pending",
+                    "status": "supported" if node.node_id in reviewed_ids else getattr(node, "status", "pending") or "pending",
                 }
                 if getattr(node, "reason", ""):
                     item["reason"] = node.reason
@@ -90,13 +100,12 @@ class DagView(DagToolBase):
                     "name": name,
                     "from": node_map.get(edge.source_node_id, edge.source_node_id),
                     "to": node_map.get(edge.target_node_id, edge.target_node_id),
-                    "status": getattr(edge, "status", "pending") or "pending",
+                    "status": "supported" if edge.edge_id in reviewed_ids else getattr(edge, "status", "pending") or "pending",
                 }
                 if getattr(edge, "reason", ""):
                     item["reason"] = edge.reason
                 step_list.append(item)
 
-            report = evaluate_delivery(delivery, ctx.contract)
             unresolved_gaps = [
                 {
                     "target": name_map.get(gate.target_id, gate.target_id),
@@ -114,7 +123,7 @@ class DagView(DagToolBase):
                         "step_count": len([op for op in draft.operations if getattr(op, "op", "") == "add_edge"]),
                         "status": draft.state,
                     }
-                    for draft_id, draft in ctx.store.list_open_drafts()
+                    for draft_id, draft in ([] if final_review else ctx.store.list_open_drafts())
                 ]
             )
 
@@ -129,7 +138,7 @@ class DagView(DagToolBase):
                         "claim": review.claim,
                         "status": getattr(review, "state", getattr(review, "status", "pending")),
                     }
-                    for review in ctx.store.list_call_reviews("pending", source="explicit")
+                    for review in ([] if final_review else ctx.store.list_call_reviews("pending", source="explicit"))
                 ]
             )
 
@@ -149,8 +158,19 @@ class DagView(DagToolBase):
                         "created_at": req.created_at,
                     }
                     for req in ctx.store.list_review_requests("queued")
+                    if review_scope_allows(self.subagent, req.kind, req.request_id)
                 ]
             )
+
+            unassigned = await asyncio.to_thread(ctx.store.collect_review_exceptions, [])
+            start = user_input.offset
+            evidence_page = []
+            for item in unassigned[start:start + 20]:
+                summary = {key: item.get(key) for key in
+                           ("category", "target_id", "fact_id", "check", "outcome")}
+                summary["source_refs"] = [{"ref_type": ref.get("ref_type"), "ref_id": ref.get("ref_id")}
+                                          for ref in item.get("source_refs", [])]
+                evidence_page.append(summary)
 
             result: dict[str, Any] = {
                 "species": species_list,
@@ -159,6 +179,9 @@ class DagView(DagToolBase):
                 "open_drafts": open_drafts,
                 "pending_reviews": pending_reviews,
                 "queued_requests": queued_requests,
+                "unassigned_evidence": evidence_page,
+                "unassigned_evidence_count": len(unassigned),
+                "unassigned_evidence_next_offset": start + 20 if start + 20 < len(unassigned) else None,
                 "revisions": dict(snapshot.bundle.revisions),
             }
             return DagToolOutput(is_success=True, action="dag_view", result=result)

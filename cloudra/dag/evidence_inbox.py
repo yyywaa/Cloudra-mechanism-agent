@@ -21,6 +21,7 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -436,10 +437,10 @@ class EvidenceInboxMixin:
             return False
         freqs, imag = self._frequency_fields(payload)
         res = validate_species_minimum(freqs, imaginary_freqs=imag)
-        return res.verified and res.is_valid
+        return res.frequency_data_present and res.frequency_count_valid
 
     def _passes_ts_opt_check(self, ref: GraphRef | None) -> bool:
-        """ts_opt 必须来自正常结束的引擎日志；若带频率则须是一阶鞍点。"""
+        """ts_opt requires native optimization convergence; frequency is separate."""
         if ref is None:
             return False
         try:
@@ -449,6 +450,8 @@ class EvidenceInboxMixin:
         if source_name == "submit_compute_job" or not isinstance(payload, dict):
             return False
         if not self._normal_termination(payload):
+            return False
+        if (payload.get('result') or {}).get('opt_converged') is not True:
             return False
         freqs, imag = self._frequency_fields(payload)
         if freqs is None and imag is None:
@@ -469,6 +472,33 @@ class EvidenceInboxMixin:
             )
         )
         return resolve_existing_tool_path(context, raw)
+
+    def _validate_optimization_frequency_pair(self, stages) -> None:
+        """A separately bound frequency must describe the optimized geometry."""
+        from cloudra.dag.evidence_ingest import FileEvidenceSnapshot
+        from cloudra.dag.file_science import validate_frequency_geometry
+
+        refs = [next((s.ref for s in stages if s.kind is kind and s.status.value == 'supported'), None)
+                for kind in (StageKind.TS_OPT, StageKind.FREQUENCY)]
+        if any(ref is None for ref in refs) or refs[0] == refs[1]:
+            return
+        snapshots = []
+        for ref in refs:
+            payload = self.store.resolve_evidence(ref)
+            if 'snapshot_path' in payload:
+                snapshot = FileEvidenceSnapshot.model_validate(payload)
+                if hashlib.sha256(Path(snapshot.snapshot_path).read_bytes()).hexdigest() != snapshot.sha256:
+                    raise ValueError('Bound optimization/frequency snapshot was changed.')
+            else:
+                raw = (payload.get('arguments') or {}).get('log_path')
+                if not isinstance(raw, str) or not raw:
+                    raise ValueError('Separate optimization/frequency evidence requires both native log paths.')
+                path = Path(self._resolve_evidence_path(raw))
+                content = path.read_bytes()
+                snapshot = FileEvidenceSnapshot(original_path=str(path), snapshot_path=str(path),
+                    sha256=hashlib.sha256(content).hexdigest(), file_size=len(content))
+            snapshots.append(snapshot)
+        validate_frequency_geometry(*snapshots)
 
     def _bound_stage_logs(
         self, stages, kinds: set[StageKind]
@@ -511,20 +541,12 @@ class EvidenceInboxMixin:
                 )
         return logs, problems
 
-    def _species_geometry_logs(self, graph, node_id: str) -> list[str]:
-        """端点阶段的回退材料：物种节点的 geometry 阶段（验证极小值）日志。"""
-        node = next((n for n in graph.nodes if n.node_id == node_id), None)
-        if node is None:
-            return []
-        logs, _problems = self._bound_stage_logs(node.stages, {StageKind.GEOMETRY})
-        return logs
-
     def _passes_short_irc_check(
         self, ref: GraphRef | None, edge, stages, graph
     ) -> tuple[bool, str]:
-        """short_irc 的几何方向区间证明（与 ts_guess verify strict / benchmark
-        自洽性同一判据）：双侧 IRC 端点几何须各自位于 TS 与对应端点验证极小值
-        之间；IRC 收敛与否不做闸门，点数不再构成判据。
+        """复用工具与 Benchmark 的 IRC 判据：同一 TS 的双向 IRC 外帧经
+        原生 Opt/Freq 日志到达正确极小值，区间检查仅作诊断。分离产物沿用
+        独立产物图与各物种极小值判据。IRC 本身不要求全程收敛。
 
         材料全部来自同一条边已 supported 阶段的证据 payload
         （arguments.log_path 指向的日志文件）：TS 几何 ← ts_opt/frequency
@@ -534,10 +556,10 @@ class EvidenceInboxMixin:
         绝不静默降级为收敛/点数判据。
         """
         prefix = (
-            "short_irc requires a geometric direction proof (the ts_guess "
-            "verify strict / benchmark criterion): both IRC endpoint geometries "
-            "must lie between the TS and the corresponding verified endpoint "
-            "minima. "
+            "short_irc requires real bidirectional IRC from the bound TS and native Opt/Freq logs "
+            "connecting its outer frames to the declared verified minima; geometric intervals are advisory. "
+            "Separated products need the complete "
+            "declared product graph and a verified independent minimum for each species. "
         )
         if ref is None:
             return False, prefix + "no evidence ref was bound."
@@ -559,27 +581,45 @@ class EvidenceInboxMixin:
         ts_logs, problems = self._bound_stage_logs(
             stages, {StageKind.TS_OPT, StageKind.FREQUENCY}
         )
-        endpoint_a_logs, ea_problems = self._bound_stage_logs(
-            stages, {StageKind.ENDPOINT_A}
-        )
-        endpoint_b_logs, eb_problems = self._bound_stage_logs(
-            stages, {StageKind.ENDPOINT_B}
-        )
-        problems += ea_problems + eb_problems
-        if not endpoint_a_logs:
-            endpoint_a_logs = self._species_geometry_logs(graph, edge.target_node_id)
-        if not endpoint_b_logs:
-            endpoint_b_logs = self._species_geometry_logs(graph, edge.source_node_id)
+        target = next((node for node in graph.nodes if node.node_id == edge.target_node_id), None)
+        source = next((node for node in graph.nodes if node.node_id == edge.source_node_id), None)
         try:
+            from cloudra.dag.file_science import _step_endpoint_logs
+            from cloudra.services.ts_pipeline_context import pipeline_database
+            from cloudra.services.ts_pipeline_store import atom_binding_for_log
+
+            endpoints = _step_endpoint_logs(self.store, graph, edge.model_copy(update={'stages': stages}),
+                self.working_directory, problems=problems)
+            endpoint_a_logs, endpoint_b_logs = endpoints['target'], endpoints['source']
+            workspace = self.working_directory or Path.cwd()
+            atom_bindings = {str(path): binding for path in [irc_log, *ts_logs]
+                if (binding := atom_binding_for_log(pipeline_database(), path, workspace)) is not None}
+            charge = next((binding['charge'] for binding in atom_bindings.values() if 'charge' in binding), 0)
+            if source and source.smiles:
+                from rdkit import Chem
+
+                from cloudra.tools.core.species_identity import chemical_smiles
+                molecule = Chem.MolFromSmiles(chemical_smiles(source.smiles))
+                if molecule is not None:
+                    charge = Chem.GetFormalCharge(molecule)
             passed, details = verify_short_irc_direction(
-                irc_log, ts_logs, endpoint_a_logs, endpoint_b_logs
+                irc_log, ts_logs, endpoint_a_logs, endpoint_b_logs, charge=charge, atom_bindings=atom_bindings,
+                product_smiles=target.smiles if target else None,
+                reactant_smiles=source.smiles if source else None,
             )
         except Exception as exc:  # 解析依赖缺失等：拒绑并写明，绝不静默通过
             logger.warning("short_irc direction proof evaluation failed", exc_info=True)
             return False, prefix + f"the direction proof could not be evaluated: {exc}"
         if passed:
-            return True, ""
-        return False, prefix + " ".join(details + problems)
+            return True, ' '.join(details)
+        from cloudra.tools.core.irc_evidence import diagnose_short_irc_materials
+
+        hints = diagnose_short_irc_materials(
+            irc_log, ts_logs, workspace=self.working_directory)
+        reason = prefix + " ".join(details + problems)
+        if hints:
+            reason += " Did you mean: " + " ".join(hints)
+        return False, reason
 
     def _passes_thermochemistry_check(self, ref: GraphRef | None) -> bool:
         """thermochemistry 只认 thermo_analysis 的 complete 结果。"""
@@ -614,10 +654,10 @@ class EvidenceInboxMixin:
         （disagree/skip/not_applicable 必填）、工具成败；TS frequency
         另有 n_imag==1 检查（D7，不过 ⇒ saddle_check_failed，阶段保持
         pending）；物种 geometry 和边的 endpoint_a/b 另有 n_imag==0 检查（不过 ⇒
-        minimum_check_failed）；short_irc 另有几何方向区间证明（与 ts_guess
-        verify strict / benchmark 自洽性同一判据：双侧 IRC 端点几何各自位于
-        TS 与对应端点验证极小值之间，材料取自同边 ts_opt/frequency 与
-        endpoint_a/b 或物种 geometry 阶段的已绑证据；缺材料或证明不成立 ⇒
+        minimum_check_failed）；short_irc 与工具/Benchmark 共用判据：同一 TS
+        的双向外帧经原生 Opt/Freq 到正确极小值，区间只作诊断；分离产物沿用
+        独立产物图和各物种极小值判据。材料取自同边 ts_opt/frequency 与 endpoint_a/b 或物种已绑
+        日志；缺材料或证明不成立 ⇒
         short_irc_check_failed，理由写明缺哪份材料）。守卫拒绝不落地；
         通过后 attach ref + 更新 stages，并由阶段重派生 evidence_level（D7）。
         """
@@ -700,9 +740,14 @@ class EvidenceInboxMixin:
             ):
                 raise _Rejected(
                     "ts_opt_check_failed",
-                    "ts_opt evidence must be a normally terminated engine log "
+                    "ts_opt evidence must show native optimization convergence in a normally terminated engine log "
                     "(and a first-order saddle if frequencies are present)",
                 )
+            if verdict == 'agree' and target_type == 'edge' and kind in {StageKind.TS_OPT, StageKind.FREQUENCY}:
+                try:
+                    self._validate_optimization_frequency_pair(new_stages)
+                except (ValueError, OSError) as exc:
+                    raise _Rejected('frequency_geometry_mismatch', str(exc)) from exc
             if (
                 verdict == "agree"
                 and (
@@ -726,6 +771,12 @@ class EvidenceInboxMixin:
                 )
                 if not irc_ok:
                     raise _Rejected("short_irc_check_failed", irc_reason)
+                if irc_reason:
+                    prior_reason = reason or next((stage.reason for stage in element.stages
+                                                  if stage.kind is StageKind.SHORT_IRC), '')
+                    new_stages = [stage.model_copy(update={
+                        'reason': ' '.join(filter(None, (prior_reason, irc_reason)))})
+                        if stage.kind is StageKind.SHORT_IRC else stage for stage in new_stages]
             if (
                 verdict == "agree"
                 and target_type == "edge"
@@ -985,6 +1036,7 @@ class EvidenceInboxMixin:
                 current_stages = list(
                     final_stages.get(target_id, element.stages)
                 )
+                stage_reason = next((stage.reason for stage in current_stages if stage.kind is kind), '')
                 # A repeated stage inside one batch should not silently replace
                 # an earlier successful binding with a second, unrelated one.
                 if any(stage.kind == kind for stage in current_stages):
@@ -1032,7 +1084,7 @@ class EvidenceInboxMixin:
                 ):
                     raise _Rejected(
                         "ts_opt_check_failed",
-                        "ts_opt evidence must be a normally terminated engine log "
+                        "ts_opt evidence must show native optimization convergence in a normally terminated engine log "
                         "(and a first-order saddle if frequencies are present)",
                     )
                 if (
@@ -1058,6 +1110,7 @@ class EvidenceInboxMixin:
                     )
                     if not irc_ok:
                         raise _Rejected("short_irc_check_failed", irc_reason)
+                    stage_reason = ' '.join(filter(None, (stage_reason, irc_reason)))
                 if (
                     target_type == "edge"
                     and kind is StageKind.THERMOCHEMISTRY
@@ -1076,6 +1129,14 @@ class EvidenceInboxMixin:
                     tool_succeeded=True,
                     allow_out_of_order=allow_out_of_order,
                 )
+                if kind is StageKind.SHORT_IRC and stage_reason:
+                    updated_stages = [stage.model_copy(update={'reason': stage_reason})
+                        if stage.kind is kind else stage for stage in updated_stages]
+                if target_type == 'edge' and kind in {StageKind.TS_OPT, StageKind.FREQUENCY}:
+                    try:
+                        self._validate_optimization_frequency_pair(updated_stages)
+                    except (ValueError, OSError) as exc:
+                        raise _Rejected('frequency_geometry_mismatch', str(exc)) from exc
                 final_stages[target_id] = updated_stages
                 seen = queued_refs.setdefault(target_id, set())
                 if ref.ref_id not in seen:

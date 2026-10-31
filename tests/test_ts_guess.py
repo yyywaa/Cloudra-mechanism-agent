@@ -43,12 +43,16 @@ def _make_tool() -> TsGuess:
     return TsGuess()
 
 
-@pytest.mark.parametrize('unused', ['freq_log', 'strict', 'n_images'])
+@pytest.mark.parametrize('unused', ['freq_log', 'strict', 'reactant_logs', 'product_logs', 'n_images', 'spin', 'nprocs', 'memory_mb', 'job_name'])
 def test_scan_schema_refuses_other_operation_fields(unused):
     arguments = dict(mode='scan_prepare', engine='orca', method='B3LYP', basis_set='def2SVP',
         input_text='2\nH2\nH 0 0 0\nH 0 0 .74\n',
         scans=[{'atoms': [0, 1], 'scan_end': 1.2, 'scan_steps': 5}], output_path='scan.inp')
-    arguments[unused] = {'freq_log': 'freq.log', 'strict': True, 'n_images': 1000}[unused]
+    arguments[unused] = {
+        'freq_log': 'freq.log', 'strict': True, 'n_images': 1000,
+        'reactant_logs': ['reactant.log'], 'product_logs': ['product.log'],
+        'spin': 1, 'nprocs': 8, 'memory_mb': 8192, 'job_name': 'old-scan',
+    }[unused]
     with pytest.raises(ValidationError, match=unused):
         TsGuess_input_schema(**arguments)
 
@@ -82,33 +86,37 @@ def test_scan_schema_requires_explicit_calculation_fields(missing):
         TsGuess_input_schema(**arguments)
 
 
+@pytest.mark.usefixtures("rdkit_chemistry")
 def test_scan_preparation_reports_written_method_without_reselection_hint(tmp_path):
     keywords = 'D3BJ RIJCOSX def2/J TightSCF CPCM(DCM)'
     target = tmp_path / 'scan.inp'
-    request = TsGuess_input_schema(mode='scan_prepare', engine='orca', method='B3LYP',
+    request = TsGuess_input_schema(charge=0, mode='scan_prepare', engine='orca', method='B3LYP',
         basis_set='def2SVP', keywords=keywords, input_text='2\nH2\nH 0 0 0\nH 0 0 .74\n',
         scans=[{'atoms': [0, 1], 'scan_end': 1.2, 'scan_steps': 5}], output_path=str(target))
     result = TsGuess()._scan_prepare(request)
     assert result.is_success
-    assert target.read_text().splitlines()[0] == '! OPT B3LYP def2-SVP ' + keywords
+    assert target.read_text().splitlines()[0] == '! B3LYP def2-SVP ' + keywords
     assert result.calculation.method == 'B3LYP' and result.calculation.keywords == keywords
     assert 'PM7' not in result.run_hint and 'GFN2' not in result.run_hint
     assert 'submit_compute_job' in result.run_hint and 'B3LYP' in result.message
 
 
+@pytest.mark.usefixtures("rdkit_chemistry")
 def test_scan_and_writer_preserve_native_method_slash_and_auxiliary_basis(tmp_path):
     from cloudra.tools.Chemtool.qm_input_writer import QmInputWriter, QmInputWriter_input_schema
+    from cloudra.tools.core.molecule import read_molecule
 
     settings = dict(engine='orca', method='B3LYP/G', basis_set='def2-SVP',
                     keywords='D3BJ RIJCOSX def2/J TightSCF CPCM(DCM)')
     written = QmInputWriter._build_orca_input(QmInputWriter_input_schema(**settings,
-        source_type='xyz_file', source_value='unused.xyz', output_path='unused.inp'), 'H 0 0 0\nH 0 0 .74')
+        task_type=[], source_type='xyz_file', source_value='unused.xyz', output_path='unused.inp'),
+        read_molecule(input_text='2\n\nH 0 0 0\nH 0 0 .74\n'))
     target = tmp_path / 'scan.inp'
-    result = TsGuess()._scan_prepare(TsGuess_input_schema(**settings, mode='scan_prepare',
+    result = TsGuess()._scan_prepare(TsGuess_input_schema(charge=0, **settings, mode='scan_prepare',
         input_text='2\nH2\nH 0 0 0\nH 0 0 .74\n', output_path=str(target),
         scans=[{'atoms': [0, 1], 'scan_end': 1.2, 'scan_steps': 5}]))
     assert result.is_success
-    assert written.splitlines()[0].split()[2:] == target.read_text().splitlines()[0].split()[2:]
+    assert written.splitlines()[0] == target.read_text().splitlines()[0]
     assert result.calculation.method == 'B3LYP/G'
 
 
@@ -327,7 +335,7 @@ def test_idpp_relax_broadcasts_when_pair_count_is_not_three():
     """C6H10 一类体系 npair=n(n-1)/2 ≠ 3 时，旧实现 (npair,)*(npair,3) 广播崩溃。"""
     rng = np.random.default_rng(0)
     images = rng.normal(size=(5, 4, 3))
-    out = _idpp_relax(images, max_iter=8)
+    out, _ = _idpp_relax(images, mode="light", max_iter=8)
     assert out.shape == (5, 4, 3)
     assert np.allclose(out[0], images[0])
     assert np.allclose(out[-1], images[-1])
@@ -346,6 +354,20 @@ H  0.0  0.0  0.0
 H  1.0  0.0  0.0
 H  1.8  0.0  0.0
 """
+
+
+
+def _path_mol(xyz_text: str) -> str:
+    """Explicit mapped graph for the geometric path fixtures."""
+    Chem = pytest.importorskip("rdkit.Chem")
+    mol = Chem.MolFromSmiles("[H:1][O:2][F:3]", sanitize=False)
+    Chem.SanitizeMol(mol)
+    atoms = ase.io.read(__import__("io").StringIO(xyz_text), format="xyz")
+    conf = Chem.Conformer(3)
+    for index, position in enumerate(atoms.get_positions()):
+        conf.SetAtomPosition(index, position)
+    mol.AddConformer(conf)
+    return Chem.MolToMolBlock(mol)
 
 
 def _rotated_translated(xyz_text: str) -> str:
@@ -377,8 +399,8 @@ async def test_interpolate_frames_and_endpoints(tmp_path, mock_session, method):
     out_dir = tmp_path / "imgs"
     result = await tool.safe_call(TsGuess_input_schema(**{
         "mode": "interpolate",
-        "reactant_text": _R_XYZ,
-        "product_text": _P_XYZ,
+        "reactant_text": _path_mol(_R_XYZ),
+        "product_text": _path_mol(_P_XYZ),
         "n_images": 6,
         "interp_method": method,
         "watch_pairs": [[1, 2]],
@@ -416,16 +438,16 @@ async def test_interpolate_rotation_translation_invariant(tmp_path, mock_session
     tool = _make_tool()
     base = await tool.safe_call(TsGuess_input_schema(**{
         "mode": "interpolate",
-        "reactant_text": _R_XYZ,
-        "product_text": _P_XYZ,
+        "reactant_text": _path_mol(_R_XYZ),
+        "product_text": _path_mol(_P_XYZ),
         "n_images": 6,
         "interp_method": "linear",
         "output_dir": str(tmp_path / "a"),
     }), mock_session)
     moved = await tool.safe_call(TsGuess_input_schema(**{
         "mode": "interpolate",
-        "reactant_text": _R_XYZ,
-        "product_text": _rotated_translated(_P_XYZ),
+        "reactant_text": _path_mol(_R_XYZ),
+        "product_text": _path_mol(_rotated_translated(_P_XYZ)),
         "n_images": 6,
         "interp_method": "linear",
         "output_dir": str(tmp_path / "b"),
@@ -434,74 +456,6 @@ async def test_interpolate_rotation_translation_invariant(tmp_path, mock_session
     assert base.is_success and moved.is_success
     assert base.distance_table == moved.distance_table
     assert base.ts_candidate_index == moved.ts_candidate_index
-
-
-@pytest.mark.asyncio
-async def test_interpolate_atom_map_equivalence(tmp_path, mock_session):
-    """产物原子序打乱 + atom_map：结果与恒等映射等价；非法映射报错。"""
-    r_xyz = """3
-reactant
-C  0.0  0.0  0.0
-H  1.1  0.0  0.0
-H  3.0  0.0  0.0
-"""
-    p_ordered = """3
-product
-C  0.0  0.0  0.0
-H  1.1  0.0  0.0
-H  2.0  0.0  0.0
-"""
-    # 打乱：产物第 1 个原子（H@2.0）对应反应物第 3 个原子，第 2（C）→1，第 3（H@1.1）→2
-    p_shuffled = """3
-product shuffled
-H  2.0  0.0  0.0
-C  0.0  0.0  0.0
-H  1.1  0.0  0.0
-"""
-    tool = _make_tool()
-    ref = await tool.safe_call(TsGuess_input_schema(**{
-        "mode": "interpolate",
-        "reactant_text": r_xyz,
-        "product_text": p_ordered,
-        "n_images": 5,
-        "interp_method": "linear",
-        "output_dir": str(tmp_path / "ref"),
-    }), mock_session)
-    mapped = await tool.safe_call(TsGuess_input_schema(**{
-        "mode": "interpolate",
-        "reactant_text": r_xyz,
-        "product_text": p_shuffled,
-        "atom_map": [3, 1, 2],
-        "n_images": 5,
-        "interp_method": "linear",
-        "output_dir": str(tmp_path / "mapped"),
-    }), mock_session)
-
-    assert ref.is_success and mapped.is_success
-    assert ref.distance_table == mapped.distance_table
-    assert ref.ts_candidate_index == mapped.ts_candidate_index
-
-    # 非法排列
-    bad_perm = await tool.safe_call(TsGuess_input_schema(**{
-        "mode": "interpolate",
-        "reactant_text": r_xyz,
-        "product_text": p_shuffled,
-        "atom_map": [1, 1, 2],
-        "output_dir": str(tmp_path / "bad1"),
-    }), mock_session)
-    assert not bad_perm.is_success
-    assert "permutation" in bad_perm.message
-
-    # 元素不匹配（C 映射到 H）
-    bad_elem = await tool.safe_call(TsGuess_input_schema(**{
-        "mode": "interpolate",
-        "reactant_text": r_xyz,
-        "product_text": p_shuffled,
-        "atom_map": [1, 2, 3],
-        "output_dir": str(tmp_path / "bad2"),
-    }), mock_session)
-    assert not bad_elem.is_success
-    assert "element mismatch" in bad_elem.message
 
 
 # ---------------------------------------------------------------------------
@@ -517,8 +471,8 @@ H  0.000000  -0.757200  -0.469200
 
 
 @pytest.mark.asyncio
-async def test_scan_prepare_rejects_mol_path_with_xyz_guidance(tmp_path, mock_session):
-    """A MOL input passed as scan geometry should fail with a format instruction."""
+async def test_scan_prepare_accepts_declared_mol_geometry(tmp_path, mock_session):
+    """The input boundary reads MOL directly instead of requesting a lossy XYZ conversion."""
     pytest.importorskip("rdkit", reason="requires RDKit (chem extra)")
     from rdkit import Chem
     from rdkit.Chem import AllChem
@@ -538,19 +492,18 @@ async def test_scan_prepare_rejects_mol_path_with_xyz_guidance(tmp_path, mock_se
         output_path=str(output),
     ), mock_session)
 
-    assert not result.is_success
-    assert "XYZ" in result.message
-    assert "MOL" in result.message
-    assert "invalid literal" not in result.message
-    assert not output.exists()
+    assert result.is_success, result.message
+    assert output.is_file()
+    assert "* xyz 0 1" in output.read_text()
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("rdkit_chemistry")
 async def test_scan_prepare_gaussian(tmp_path, mock_session):
     """Gaussian gjf：modredundant 扫描块、路由、电荷自旋、步长符号正确，无 QST。"""
     tool = _make_tool()
     out = tmp_path / "scan.gjf"
-    result = await tool.safe_call(TsGuess_input_schema(**{'basis_set': 'def2svp',
+    result = await tool.safe_call(TsGuess_input_schema(charge=0, **{'basis_set': 'def2svp',
         "mode": "scan_prepare",
         "method": 'b3lyp',
         "input_text": _WATER_XYZ,
@@ -562,7 +515,6 @@ async def test_scan_prepare_gaussian(tmp_path, mock_session):
             "scan_steps": 10,
         }],
         "output_path": str(out),
-        "job_name": "h2o_scan",
     }), mock_session)
 
     assert result.is_success, result.message
@@ -572,8 +524,8 @@ async def test_scan_prepare_gaussian(tmp_path, mock_session):
     assert 'PM7' not in result.run_hint and 'GFN2-xTB' not in result.run_hint
     content = out.read_text()
     assert "qst" not in content.lower()
-    assert "%chk=h2o_scan.chk" in content
-    assert "opt=(modredundant,maxstep=10)" in content
+    assert f"%chk={out.with_suffix('.chk')}\n" in content
+    assert "opt=modredundant" in content
     assert "b3lyp/def2svp" in content
     assert "\n0 1\n" in content
     # 当前 O-H 键长 ≈ 0.9589 Å，步长 = (2.0 - 0.9589)/10 ≈ +0.104
@@ -584,11 +536,12 @@ async def test_scan_prepare_gaussian(tmp_path, mock_session):
 
 
 @pytest.mark.asyncio
-async def test_scan_prepare_gaussian_two_coupled_coordinates(tmp_path, mock_session):
+@pytest.mark.usefixtures("rdkit_chemistry")
+async def test_scan_prepare_gaussian_two_grid_coordinates(tmp_path, mock_session):
     """Gaussian 双坐标耦合扫描：两个 S 行（2D 网格），各自步长独立。"""
     tool = _make_tool()
     out = tmp_path / "scan2d.gjf"
-    result = await tool.safe_call(TsGuess_input_schema(**{'basis_set': 'def2svp',
+    result = await tool.safe_call(TsGuess_input_schema(charge=0, **{'basis_set': 'def2svp',
         "mode": "scan_prepare",
         "method": 'b3lyp',
         "input_text": _WATER_XYZ,
@@ -606,15 +559,16 @@ async def test_scan_prepare_gaussian_two_coupled_coordinates(tmp_path, mock_sess
     assert len(lines) == 2, content
     assert lines[0].startswith("B 1 2 S 10")
     assert lines[1].startswith("B 1 3 S 8")
-    assert "2D coupled" in result.run_hint
+    assert "2D" in result.run_hint and "grid" in result.run_hint
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("rdkit_chemistry")
 async def test_scan_prepare_orca(tmp_path, mock_session):
     """ORCA inp：%geom Scan 块、原子序号 0-based、%pal，无 QST。"""
     tool = _make_tool()
     out = tmp_path / "scan.inp"
-    result = await tool.safe_call(TsGuess_input_schema(**{'basis_set': 'def2svp',
+    result = await tool.safe_call(TsGuess_input_schema(charge=0, **{'basis_set': 'def2svp',
         "mode": "scan_prepare",
         "method": 'b3lyp',
         "input_text": _WATER_XYZ,
@@ -626,7 +580,7 @@ async def test_scan_prepare_orca(tmp_path, mock_session):
             "scan_end": 120.0,
             "scan_steps": 6,
         }],
-        "nprocs": 8,
+        "nproc": 8,
         "output_path": str(out),
     }), mock_session)
 
@@ -637,13 +591,14 @@ async def test_scan_prepare_orca(tmp_path, mock_session):
     assert "%pal nprocs 8 end" in content
     assert "%geom" in content
     # 原子序号 0-based：输入 [2,1,3] → 输出 1 0 2
-    assert "Scan A 1 0 2 = 90.000000, 120.000000, 6 end" in content
+    assert "Scan\n        A 1 0 2 = 90.000000, 120.000000, 6\n    end" in content
     # 组合条目拼写 b3lyp/def2svp 必须落成 ORCA 原生基组拼写 def2-SVP
-    assert content.startswith("! OPT b3lyp def2-SVP")
+    assert content.startswith("! Opt b3lyp def2-SVP")
     assert "* xyz 0 1" in content
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("rdkit_chemistry")
 async def test_scan_prepare_orca_extopt_mlip_blocks(tmp_path, mock_session):
     """ORCA external/MLIP 势通道：method='ExtOpt' + orca_blocks 注入 %method ProgExt 块。"""
     tool = _make_tool()
@@ -654,7 +609,7 @@ async def test_scan_prepare_orca_extopt_mlip_blocks(tmp_path, mock_session):
         '  Ext_Params "--model /Users/x/mace.model --device cpu --dtype float64"\n'
         "end"
     )
-    result = await tool.safe_call(TsGuess_input_schema(**{'basis_set': '',
+    result = await tool.safe_call(TsGuess_input_schema(charge=0, **{'basis_set': '',
         "mode": "scan_prepare",
         "input_text": _WATER_XYZ,
         "engine": "orca",
@@ -666,37 +621,37 @@ async def test_scan_prepare_orca_extopt_mlip_blocks(tmp_path, mock_session):
 
     assert result.is_success, result.message
     content = out.read_text()
-    assert content.startswith("! OPT ExtOpt")
-    assert "Scan B 0 1 = " in content
+    assert content.startswith("! ExtOpt\n")
+    assert "Scan\n        B 0 1 = " in content
     assert "ProgExt" in content and "--model" in content
     # %method 块位于坐标块之前
     assert content.index("%method") < content.index("* xyz")
 
 
 @pytest.mark.asyncio
-async def test_scan_prepare_rejects_multi_coord_on_orca(tmp_path, mock_session):
-    """ORCA relaxed scan 是 1D：两个扫描坐标报错并提示用 Gaussian。"""
+async def test_scan_prepare_rejects_independent_multi_coord_on_orca(tmp_path, mock_session):
+    """ORCA双坐标需要显式grid或concerted意图；省略不得偷偷转换。"""
     tool = _make_tool()
-    result = await tool.safe_call(TsGuess_input_schema(**{'basis_set': 'def2svp',
+    result = await tool.safe_call(TsGuess_input_schema(charge=0, **{'basis_set': 'def2svp',
         "mode": "scan_prepare",
         "method": 'b3lyp',
         "input_text": _WATER_XYZ,
         "engine": "orca",
         "scans": [
             {"coord_type": "bond", "atoms": [0, 1], "scan_end": 2.0, "scan_steps": 10},
-            {"coord_type": "bond", "atoms": [1, 3], "scan_end": 1.2, "scan_steps": 8},
+            {"coord_type": "bond", "atoms": [0, 2], "scan_end": 1.2, "scan_steps": 10},
         ],
         "output_path": str(tmp_path / "x.inp"),
     }), mock_session)
     assert not result.is_success
-    assert "1D" in result.message
+    assert "concerted" in result.message
 
 
 @pytest.mark.asyncio
 async def test_scan_prepare_atoms_validation(tmp_path, mock_session):
     """原子个数/序号校验：dihedral 需要 4 个原子。"""
     with pytest.raises(ValueError, match="4 distinct"):
-        TsGuess_input_schema(**{'engine': 'gaussian', 'basis_set': 'def2svp',
+        TsGuess_input_schema(charge=0, **{'engine': 'gaussian', 'basis_set': 'def2svp',
         "mode": "scan_prepare",
         "method": 'b3lyp',
         "input_text": _WATER_XYZ,
@@ -734,7 +689,7 @@ async def test_scan_prepare_requires_explicit_method(tmp_path, mock_session, mod
 @pytest.mark.asyncio
 async def test_scan_prepare_explicit_null_method_rejected(tmp_path, mock_session):
     with pytest.raises(ValidationError, match="explicit method"):
-        TsGuess_input_schema(**{'engine': 'gaussian', 'basis_set': '',
+        TsGuess_input_schema(charge=0, **{'engine': 'gaussian', 'basis_set': '',
             "mode": "scan_prepare", "method": None, "input_text": _WATER_XYZ,
             "scans": [{"atoms": [1, 2], "scan_end": 2.0, "scan_steps": 5}],
             "output_path": str(tmp_path / "scan.gjf"),
@@ -790,7 +745,7 @@ async def test_scan_parse_h2_fixture(tmp_path, mock_session):
     assert result.ts_candidate_index is None
     assert result.ts_candidate_path == ""
     assert not ts_path.exists()
-    assert any("no internal energy peak" in v for v in result.verdicts)
+    assert result.scan_has_internal_peak is False
     assert "NOT a TS candidate" in result.message
     # profile 表不标 TS guess
     assert "TS guess" not in result.profile_table
@@ -917,7 +872,48 @@ H  0.0  0.0  -1.07
 """
 
 
+def _gaussian_orientation(xyz):
+    rows = xyz.strip().splitlines()[2:]
+    atomic_numbers = {"C": 6, "N": 7, "H": 1}
+    coordinates = []
+    for index, row in enumerate(rows, 1):
+        symbol, x, y, z = row.split()
+        coordinates.append(f"{index:7d} {atomic_numbers[symbol]:10d} 0 {float(x):15.8f} {float(y):15.8f} {float(z):15.8f}")
+    return "\n".join([
+        " Standard orientation:",
+        " ---------------------------------------------------------------------",
+        " Center     Atomic      Atomic             Coordinates (Angstroms)",
+        " Number     Number       Type             X           Y           Z",
+        " ---------------------------------------------------------------------",
+        *coordinates,
+        " ---------------------------------------------------------------------",
+    ]) + "\n"
+
+
+def _endpoint_optimization_logs(tmp_path, *, combined=True, reactant_xyz=_HCN_XYZ, product_xyz=_HNC_XYZ):
+    """Native Opt first frames are the actual HCN IRC terminal frames, in both directions."""
+    starts = {
+        "reactant": "3\nforward outer frame\nC .410015 -.464572 0\nN -.320837 .486161 0\nH -.423925 -1.223669 0\n",
+        "product": "3\nbackward outer frame\nC .480862 -.459245 0\nN -.349123 .435401 0\nH -.874843 -.581264 0\n",
+    }
+    logs = {}
+    for role, minimum in (("reactant", reactant_xyz), ("product", product_xyz)):
+        optimization = " # B3LYP/6-31G(d) Opt\n" + _gaussian_orientation(starts[role])
+        optimization += _gaussian_orientation(minimum) + " Optimization completed.\n"
+        frequency = _gaussian_orientation(minimum) + " Harmonic frequencies (cm**-1)\n Frequencies -- 300.0 1200.0 1300.0\n"
+        normal = " Normal termination of Gaussian 16.\n"
+        opt_path = tmp_path / f"{role}_opt.log"
+        opt_path.write_text(optimization + (frequency if combined else "") + normal)
+        logs[role] = [str(opt_path)]
+        if not combined:
+            freq_path = tmp_path / f"{role}_freq.log"
+            freq_path.write_text(" # B3LYP/6-31G(d) Freq\n" + frequency + normal)
+            logs[role].append(str(freq_path))
+    return logs
+
+
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("rdkit_chemistry")
 async def test_verify_ts_positive(tmp_path, mock_session):
     """默认 verify 只提供方向建议，即使频率与端点相符也只返回 candidate。"""
     tool = _make_tool()
@@ -966,6 +962,65 @@ async def test_verify_minimum_negative(tmp_path, mock_session):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("strict", [False, True])
+@pytest.mark.parametrize("frequency_text,status,n_imag", [
+    (_TS_FREQ_SNIPPET.replace("-915.3388", "915.3388"), "fail", 0),
+    (_TS_FREQ_SNIPPET, "inconclusive", 1),
+    (_TS_FREQ_SNIPPET.replace("Normal termination of Gaussian 16", "Error termination of Gaussian 16"),
+     "inconclusive", 1),
+], ids=["minimum", "first_order_saddle", "unfinished_frequency"])
+async def test_verify_bad_reference_preserves_structured_frequency_result(
+    tmp_path, mock_session, strict, frequency_text, status, n_imag,
+):
+    freq_log = tmp_path / "frequency.log"
+    freq_log.write_text(frequency_text)
+    result = await _make_tool().safe_call(TsGuess_input_schema(
+        mode="verify", strict=strict, freq_log=str(freq_log), irc_log=str(IRC_LOG),
+        reactant_text="not xyz", product_text=_HNC_XYZ,
+    ), mock_session)
+
+    assert result.is_success, result.message
+    assert result.verification_status == status
+    assert result.n_imag == n_imag
+    if n_imag == 0 or "Error termination" in frequency_text:
+        assert not any("not xyz" in check for check in result.checks)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("strict", [False, True])
+@pytest.mark.usefixtures("rdkit_chemistry")
+async def test_verify_without_irc_uses_declared_molecule_charge(
+    tmp_path, mock_session, monkeypatch, strict,
+):
+    from rdkit import Chem
+
+    import cloudra.tools.Chemtool.ts_guess as ts_module
+
+    mol = Chem.MolFromSmiles("[O-]C")
+    conf = Chem.Conformer(2)
+    conf.SetAtomPosition(0, (0, 0, 0))
+    conf.SetAtomPosition(1, (1.43, 0, 0))
+    mol.AddConformer(conf)
+    freq_log = tmp_path / "frequency.log"
+    freq_log.write_text(_TS_FREQ_WITH_GEOMETRY)
+    assessed_charges = []
+    assess = ts_module._assess_imag_mode_alignment
+
+    def record_assessment(*args, **kwargs):
+        assessed_charges.append(kwargs["charge"])
+        return assess(*args, **kwargs)
+
+    monkeypatch.setattr(ts_module, "_assess_imag_mode_alignment", record_assessment)
+    result = await _make_tool().safe_call(TsGuess_input_schema(
+        mode="verify", strict=strict, freq_log=str(freq_log), reactant_text=Chem.MolToMolBlock(mol),
+    ), mock_session)
+
+    assert result.is_success, result.message
+    assert result.n_imag == 1
+    assert assessed_charges == [-1]
+
+
+@pytest.mark.asyncio
 async def test_verify_high_order_saddle(tmp_path, mock_session):
     """默认 verify 是建议模式：2 个虚频时报告 unlikely。"""
     tool = _make_tool()
@@ -1008,8 +1063,9 @@ async def test_verify_irc_endpoints_without_expected(tmp_path, mock_session):
 
 
 @pytest.mark.asyncio
-async def test_verify_strict_accepts_partial_irc_between_ts_and_intermediates(tmp_path, mock_session):
-    """IRC 两侧均因 maxsteps 未走到底，但处于 TS 与优化中间体之间时 strict 应通过。"""
+@pytest.mark.usefixtures("rdkit_chemistry")
+async def test_verify_strict_geometry_interval_without_optimization_logs_is_inconclusive(tmp_path, mock_session):
+    """几何区间相符不能代替真实端点优化和零虚频证据。"""
     tool = _make_tool()
     freq_log = tmp_path / "ts_freq_with_geometry.log"
     freq_log.write_text(_TS_FREQ_WITH_GEOMETRY)
@@ -1026,15 +1082,93 @@ async def test_verify_strict_accepts_partial_irc_between_ts_and_intermediates(tm
     }), mock_session)
 
     assert result.is_success, result.message
-    assert result.verdict.startswith("pass")
-    assert result.verification_status == "pass"
-    assert any("intermediate" in check for check in result.checks)
+    assert result.verdict.startswith("inconclusive")
+    assert result.verification_status == "inconclusive"
     assert result.irc_end_a_path and result.irc_end_b_path
 
 
 @pytest.mark.asyncio
-async def test_verify_strict_without_optimized_intermediates_is_inconclusive(tmp_path, mock_session):
+@pytest.mark.parametrize("combined", [True, False], ids=["optfreq", "separate_opt_freq"])
+@pytest.mark.usefixtures("rdkit_chemistry")
+async def test_verify_strict_accepts_irc_outer_frames_optimized_to_verified_minima(
+    tmp_path, mock_session, combined,
+):
+    from types import SimpleNamespace
+
+    freq_log = tmp_path / "ts_freq.log"
+    freq_log.write_text(_TS_FREQ_WITH_GEOMETRY)
+    logs = _endpoint_optimization_logs(tmp_path, combined=combined)
+    if not combined:
+        logs = {role: [Path(path).name for path in paths] for role, paths in logs.items()}
+    tool = TsGuess(subagent=SimpleNamespace(working_directory=str(tmp_path)))
+    result = await tool.tool_call(TsGuess_input_schema(
+        mode="verify", strict=True, freq_log=freq_log.name, irc_log=str(IRC_LOG),
+        reactant_text=_HCN_XYZ, product_text=_HNC_XYZ,
+        reactant_logs=logs["reactant"], product_logs=logs["product"],
+        watch_pairs=[[1, 3], [2, 3]], output_dir=str(tmp_path / "verified"),
+    ), mock_session)
+    assert result.is_success, result.message
+    assert result.verification_status == "pass", result.checks
+    assert result.verdict.startswith("pass")
+    assert result.irc_end_a_path and result.irc_end_b_path
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("rdkit_chemistry")
+async def test_verify_strict_rejects_optimized_endpoint_with_wrong_identity(tmp_path, mock_session):
+    freq_log = tmp_path / "ts_freq.log"
+    freq_log.write_text(_TS_FREQ_WITH_GEOMETRY)
+    logs = _endpoint_optimization_logs(tmp_path, product_xyz=_HCN_XYZ)
+    result = await _make_tool().safe_call(TsGuess_input_schema(
+        mode="verify", strict=True, freq_log=str(freq_log), irc_log=str(IRC_LOG),
+        reactant_text=_HCN_XYZ, product_text=_HNC_XYZ,
+        reactant_logs=logs["reactant"], product_logs=logs["product"],
+        watch_pairs=[[1, 3], [2, 3]], output_dir=str(tmp_path / "wrong_identity"),
+    ), mock_session)
+    assert result.is_success, result.message
+    assert result.verification_status == "fail", result.checks
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("rdkit_chemistry")
+async def test_verify_strict_accepts_optimized_minima_but_warns_about_failed_interval(tmp_path, mock_session):
+    freq_log = tmp_path / "ts_freq.log"
+    freq_log.write_text(_TS_FREQ_WITH_GEOMETRY)
+    logs = _endpoint_optimization_logs(tmp_path, reactant_xyz=_HCN_XYZ.replace("-1.07", "-1.36"))
+    result = await _make_tool().safe_call(TsGuess_input_schema(
+        mode="verify", strict=True, freq_log=str(freq_log), irc_log=str(IRC_LOG),
+        reactant_text=_HCN_XYZ, product_text=_HNC_XYZ,
+        reactant_logs=logs["reactant"], product_logs=logs["product"],
+        watch_pairs=[[1, 3], [2, 3]], output_dir=str(tmp_path / "interval_warning"),
+    ), mock_session)
+    assert result.is_success, result.message
+    assert result.verification_status == "pass", result.checks
+    assert any("[warning]" in check and "interval" in check for check in result.checks)
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("rdkit_chemistry")
+async def test_verify_strict_unresolved_xyz_identity_is_inconclusive(tmp_path, mock_session):
+    freq_log = tmp_path / "ts_freq.log"
+    freq_log.write_text(_TS_FREQ_WITH_GEOMETRY)
+    logs = _endpoint_optimization_logs(tmp_path)
+    result = await _make_tool().safe_call(TsGuess_input_schema(
+        mode="verify", strict=True, freq_log=str(freq_log), irc_log=str(IRC_LOG),
+        reactant_text="3\nno resolvable graph\nC 0 0 0\nN 0 0 100\nH 0 0 200\n",
+        product_text=_HNC_XYZ, reactant_logs=logs["reactant"], product_logs=logs["product"],
+        watch_pairs=[[1, 3], [2, 3]], output_dir=str(tmp_path / "unknown_identity"),
+    ), mock_session)
+    assert result.is_success, result.message
+    assert result.verification_status == "inconclusive", result.checks
+    assert any("MOL/SDF" in check for check in result.checks)
+
+
+@pytest.mark.asyncio
+async def test_verify_strict_without_optimized_intermediates_is_inconclusive(tmp_path, mock_session, monkeypatch):
     """strict 缺少优化中间体时证据不足，不能沿用默认模式的候选结论。"""
+    import sys
+
+    monkeypatch.setitem(sys.modules, "rdkit", None)
     tool = _make_tool()
     freq_log = tmp_path / "ts_freq_with_geometry.log"
     freq_log.write_text(_TS_FREQ_WITH_GEOMETRY)
@@ -1053,8 +1187,8 @@ async def test_verify_strict_without_optimized_intermediates_is_inconclusive(tmp
 
 
 @pytest.mark.asyncio
-async def test_verify_strict_rejects_wrong_intermediate_pair(tmp_path, mock_session):
-    """材料完整但两个预期结构都在同一侧时，另一侧 IRC 明确朝错方向，应 fail。"""
+async def test_verify_strict_wrong_reference_geometry_without_logs_is_inconclusive(tmp_path, mock_session):
+    """预期几何不相符仍不能代替缺失的实际端点优化证据。"""
     tool = _make_tool()
     freq_log = tmp_path / "ts_freq_with_geometry.log"
     freq_log.write_text(_TS_FREQ_WITH_GEOMETRY)
@@ -1071,8 +1205,8 @@ async def test_verify_strict_rejects_wrong_intermediate_pair(tmp_path, mock_sess
     }), mock_session)
 
     assert result.is_success, result.message
-    assert result.verdict.startswith("fail")
-    assert result.verification_status == "fail"
+    assert result.verdict.startswith("inconclusive")
+    assert result.verification_status == "inconclusive"
 
 
 @pytest.mark.asyncio
@@ -1103,12 +1237,14 @@ async def test_verify_strict_rejects_non_first_order_stationary_points(
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("rdkit_chemistry")
 async def test_verify_strict_reordered_intermediate_is_aligned(tmp_path, mock_session):
     """原子序重排但组成相同的中间体：距离指纹 + Hungarian 对齐后照常判定
     （对应层就是为此存在的，重排不再是 inconclusive 的理由）。"""
     tool = _make_tool()
     freq_log = tmp_path / "ts_freq_with_geometry.log"
     freq_log.write_text(_TS_FREQ_WITH_GEOMETRY)
+    logs = _endpoint_optimization_logs(tmp_path)
 
     result = await tool.safe_call(TsGuess_input_schema(**{
         "mode": "verify",
@@ -1117,12 +1253,13 @@ async def test_verify_strict_reordered_intermediate_is_aligned(tmp_path, mock_se
         "irc_log": str(IRC_LOG),
         "reactant_text": _HCN_REORDERED_XYZ,
         "product_text": _HNC_XYZ,
+        "reactant_logs": logs["reactant"],
+        "product_logs": logs["product"],
         "output_dir": str(tmp_path / "strict_order_mismatch"),
     }), mock_session)
 
     assert result.is_success, result.message
     assert result.verdict.startswith("pass"), result.verdict
-    assert any("aligned to TS atom order" in check for check in result.checks)
 
 
 @pytest.mark.asyncio
@@ -1144,7 +1281,6 @@ async def test_verify_strict_element_mismatch_is_inconclusive(tmp_path, mock_ses
 
     assert result.is_success, result.message
     assert result.verdict.startswith("inconclusive")
-    assert any("elements or atom counts" in check for check in result.checks)
 
 
 @pytest.mark.asyncio
@@ -1169,11 +1305,13 @@ async def test_verify_strict_no_informative_pair_is_inconclusive(tmp_path, mock_
 
 
 @pytest.mark.asyncio
-async def test_verify_strict_rejects_imag_mode_misaligned_with_watch_pairs(tmp_path, mock_session):
-    """strict：虚频模式主要不在声明的反应中心原子对上时，应 fail。"""
+@pytest.mark.usefixtures("rdkit_chemistry")
+async def test_verify_strict_endpoint_proof_overrides_misaligned_mode_warning(tmp_path, mock_session):
+    """模式比例可疑时仍核验真实端点，不让启发式否决已成立的方向证明。"""
     tool = _make_tool()
     freq_log = tmp_path / "ts_freq_wrong_mode.log"
     freq_log.write_text(_TS_FREQ_WRONG_MODE)
+    logs = _endpoint_optimization_logs(tmp_path)
 
     result = await tool.safe_call(TsGuess_input_schema(**{
         "mode": "verify",
@@ -1182,22 +1320,27 @@ async def test_verify_strict_rejects_imag_mode_misaligned_with_watch_pairs(tmp_p
         "irc_log": str(IRC_LOG),
         "reactant_text": _HCN_XYZ,
         "product_text": _HNC_XYZ,
+        "reactant_logs": logs["reactant"],
+        "product_logs": logs["product"],
         "watch_pairs": [[1, 3], [2, 3]],
         "output_dir": str(tmp_path / "strict_bad_mode"),
     }), mock_session)
 
     assert result.is_success, result.message
-    assert result.verdict.startswith("fail")
-    assert any("imaginary mode" in check or "reaction coordinate" in check for check in result.checks)
+    assert result.verification_status == "pass", result.checks
+    assert any("[warning]" in check and "mode" in check for check in result.checks)
     assert result.imag_mode_aligned is False
+    assert result.irc_end_a_path and result.irc_end_b_path
 
 
 @pytest.mark.asyncio
-async def test_verify_strict_missing_vibdisps_is_inconclusive(tmp_path, mock_session):
-    """strict：频率日志无简正模式位移时无法核对虚频方向，应 inconclusive。"""
+@pytest.mark.usefixtures("rdkit_chemistry")
+async def test_verify_strict_endpoint_proof_overrides_missing_mode_warning(tmp_path, mock_session):
+    """缺模式位移不等于缺端点证据；真实端点方向证明仍可通过。"""
     tool = _make_tool()
     freq_log = tmp_path / "ts_freq_no_disps.log"
     freq_log.write_text(_TS_FREQ_NO_DISPS)
+    logs = _endpoint_optimization_logs(tmp_path)
 
     result = await tool.safe_call(TsGuess_input_schema(**{
         "mode": "verify",
@@ -1206,15 +1349,17 @@ async def test_verify_strict_missing_vibdisps_is_inconclusive(tmp_path, mock_ses
         "irc_log": str(IRC_LOG),
         "reactant_text": _HCN_XYZ,
         "product_text": _HNC_XYZ,
+        "reactant_logs": logs["reactant"],
+        "product_logs": logs["product"],
         "watch_pairs": [[1, 3], [2, 3]],
         "output_dir": str(tmp_path / "strict_no_disps"),
     }), mock_session)
 
     assert result.is_success, result.message
-    assert result.verdict.startswith("inconclusive")
-    assert result.verification_status == "inconclusive"
-    assert any("normal-mode displacements" in check for check in result.checks)
+    assert result.verification_status == "pass", result.checks
+    assert any("[warning]" in check and "normal-mode displacements" in check for check in result.checks)
     assert result.imag_mode_aligned is None
+    assert result.irc_end_a_path and result.irc_end_b_path
 
 
 @pytest.mark.asyncio
@@ -1345,7 +1490,7 @@ async def test_scan_parse_orca_sidecar_monotonic_profile_max_at_last_frame(tmp_p
     # 单调剖面（无论升/降）无内部峰：不产出 TS-guess，端点帧不得当候选
     assert result.ts_candidate_index is None
     assert result.ts_candidate_path == ""
-    assert any("no internal energy peak" in v for v in result.verdicts)
+    assert result.scan_has_internal_peak is False
     assert "NOT a TS candidate" in result.message
     assert "TS guess" not in result.profile_table
     # G4：无内部峰时 barrier_kcal 置 None，且不得声称 "TS-guess geometry is ..."
@@ -1643,12 +1788,13 @@ async def test_scan_parse_misaligned_frame_preserves_only_trustworthy_peak(
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("rdkit_chemistry")
 async def test_scan_prepare_gaussian_scan_start_mismatch_rejected(tmp_path, mock_session):
     """Gaussian：scan_start 与当前几何值不同 → start_geometry_mismatch，
     而不是静默只调增量扫错区间。"""
     tool = _make_tool()
     out = tmp_path / "scan.gjf"
-    result = await tool.safe_call(TsGuess_input_schema(**{'basis_set': 'def2svp',
+    result = await tool.safe_call(TsGuess_input_schema(charge=0, **{'basis_set': 'def2svp',
         "mode": "scan_prepare",
         "method": 'b3lyp',
         "input_text": _WATER_XYZ,
@@ -1669,6 +1815,7 @@ async def test_scan_prepare_gaussian_scan_start_mismatch_rejected(tmp_path, mock
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("rdkit_chemistry")
 async def test_scan_prepare_gaussian_scan_start_matching_current_accepted(tmp_path, mock_session):
     """scan_start 与当前几何值一致（容差内）时不误伤。"""
     import math as _math
@@ -1676,7 +1823,7 @@ async def test_scan_prepare_gaussian_scan_start_matching_current_accepted(tmp_pa
     tool = _make_tool()
     out = tmp_path / "scan.gjf"
     current = _math.dist((0.0, 0.0, 0.1173), (0.0, 0.7572, -0.4692))
-    result = await tool.safe_call(TsGuess_input_schema(**{'basis_set': 'def2svp',
+    result = await tool.safe_call(TsGuess_input_schema(charge=0, **{'basis_set': 'def2svp',
         "mode": "scan_prepare",
         "method": 'b3lyp',
         "input_text": _WATER_XYZ,
@@ -1762,7 +1909,8 @@ async def test_verify_orca_engine_dispatches_native_irc_endpoints(tmp_path, mock
     monkeypatch.setattr(ts_mod, "_parse_freq_log", lambda path, engine: {
         "vibfreqs": [-512.3, 100.0, 200.0],
         "vibdisps": None,
-        "converged": True,
+        "normal_termination": True,
+        "opt_converged": None,
         "symbols": None,
         "positions": None,
     })
@@ -1842,7 +1990,7 @@ async def test_scan_parse_orca_real_log_no_sidecar_refuses_endpoint_max(tmp_path
     assert result.ts_candidate_path == ""
     assert result.candidate is None
     assert result.barrier_kcal is None  # G4：无内部峰不填 barrier
-    assert any("no internal energy peak" in v for v in result.verdicts)
+    assert result.scan_has_internal_peak is False
     # G4：拒发候选时不得再声称 "TS-guess geometry is ..."
     assert not any("TS-guess geometry" in v for v in result.verdicts)
     assert not list(tmp_path.glob("*_ts_guess.xyz"))
@@ -1909,7 +2057,7 @@ async def test_scan_parse_orca_text_groups_by_step_with_variable_cycles(tmp_path
     assert rows[0] == pytest.approx([2.1, 0.0, 0.0], abs=1e-6)
     assert rows[1] == pytest.approx([3.1, 0.0, 0.0], abs=1e-6)
     assert rows[2] == pytest.approx([0.0, 1.5, 0.0], abs=1e-6)
-    assert any("TS-guess geometry is the energy-maximum frame 1" in v for v in result.verdicts)
+    assert result.candidate["source"] == "orca_log_text"
 
 
 @pytest.mark.skipif(not _HAS_TOOLFIX_LOGS, reason="toolfix_verify 真实 ORCA 日志缺失")
@@ -1923,7 +2071,8 @@ def test_parse_freq_log_orca_real_logs_frequencies_and_convergence(tmp_path):
         assert parsed["vibfreqs"] is not None
         assert len(parsed["vibfreqs"]) == n_modes
         assert all(f >= 0 for f in parsed["vibfreqs"])  # 极小值：0 虚频
-        assert parsed["converged"] is True  # G3：ORCA 标记（非 Gaussian "Normal termination"）
+        assert parsed["normal_termination"] is True
+        assert parsed["opt_converged"] is True
 
 
 @pytest.mark.skipif(not _HAS_TOOLFIX_LOGS, reason="toolfix_verify 真实 ORCA 日志缺失")
@@ -1956,23 +2105,26 @@ def test_parse_freq_log_orca_convergence_dispatched_by_engine_markers(tmp_path):
     )
     converged_log = tmp_path / "conv.out"
     converged_log.write_text(
-        "THE OPTIMIZATION HAS CONVERGED\n" + freq_block + "****ORCA TERMINATED NORMALLY****\n",
+        "O   R   C   A\nTHE OPTIMIZATION HAS CONVERGED\n" + freq_block + "****ORCA TERMINATED NORMALLY****\n",
         encoding="utf-8",
     )
     parsed = ts_mod._parse_freq_log(str(converged_log), "orca")
-    assert parsed["converged"] is True
+    assert parsed["normal_termination"] is True
+    assert parsed["opt_converged"] is True
 
     # 跑满最大步数未收敛的优化仍可能正常终止——收敛判定必须为 False
     unconv_log = tmp_path / "unconv.out"
     unconv_log.write_text(
-        "The optimization did not converge\n" + freq_block + "****ORCA TERMINATED NORMALLY****\n",
+        "O   R   C   A\nThe optimization did not converge\n" + freq_block + "****ORCA TERMINATED NORMALLY****\n",
         encoding="utf-8",
     )
     parsed = ts_mod._parse_freq_log(str(unconv_log), "orca")
-    assert parsed["converged"] is False
+    assert parsed["normal_termination"] is True
+    assert parsed["opt_converged"] is False
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("rdkit_chemistry")
 async def test_ts_guess_mode_aliases(tmp_path, mock_session):
     """测试 scan 别名映射至 scan_parse / scan_prepare。
 
@@ -1992,7 +2144,7 @@ async def test_ts_guess_mode_aliases(tmp_path, mock_session):
 
     # scan 别名无 log_path 映射到 scan_prepare
     out_gjf = tmp_path / "scan.gjf"
-    res_prep = await tool.safe_call(TsGuess_input_schema(**{'engine': 'gaussian', 'basis_set': 'def2svp',
+    res_prep = await tool.safe_call(TsGuess_input_schema(charge=0, **{'engine': 'gaussian', 'basis_set': 'def2svp',
         "mode": "scan",
         "method": 'b3lyp',
         "input_text": _R_XYZ,
@@ -2080,8 +2232,8 @@ async def test_explicit_xtb_path_reports_path_kind(fake_xtb_for_ts, tmp_path, mo
     out_dir = tmp_path / "guess_default"
     res = await _make_tool().safe_call(TsGuess_input_schema(**{
         "mode": "xtb_path",
-        "reactant_text": _R_XYZ,
-        "product_text": _P_XYZ,
+        "reactant_text": _path_mol(_R_XYZ),
+        "product_text": _path_mol(_P_XYZ),
         "output_dir": str(out_dir),
     }), mock_session)
     assert res.is_success, res.message
@@ -2098,7 +2250,8 @@ async def test_explicit_xtb_path_reports_path_kind(fake_xtb_for_ts, tmp_path, mo
 
 
 @pytest.mark.asyncio
-async def test_xtb_missing_falls_back_to_idpp_and_says_so(tmp_path, monkeypatch, mock_session):
+@pytest.mark.parametrize("idpp_mode", ["standard", "light"])
+async def test_xtb_missing_falls_back_to_idpp_and_says_so(tmp_path, monkeypatch, mock_session, idpp_mode):
     """xTB 缺失时退回 IDPP 插值，但**必须显式标注**走了兜底，不许静默降级。"""
     empty = tmp_path / "empty-path"
     empty.mkdir()
@@ -2106,15 +2259,19 @@ async def test_xtb_missing_falls_back_to_idpp_and_says_so(tmp_path, monkeypatch,
     out_dir = tmp_path / "guess_fallback"
     res = await _make_tool().safe_call(TsGuess_input_schema(**{
         "mode": "xtb_path",
-        "reactant_text": _R_XYZ,
-        "product_text": _P_XYZ,
+        "reactant_text": _path_mol(_R_XYZ),
+        "product_text": _path_mol(_P_XYZ),
         "n_images": 4,
+        "idpp_mode": idpp_mode,
         "output_dir": str(out_dir),
     }), mock_session)
     assert res.is_success, res.message
     assert res.path_kind == "idpp_fallback"
     assert "fallback" in res.message.lower() or "idpp" in res.message.lower()
     assert res.ts_candidate_path and Path(res.ts_candidate_path).is_file()
+
+    assert res.interpolation["idpp_mode"] == idpp_mode
+    assert "convergence=" in res.message
 
 
 @pytest.mark.asyncio
@@ -2131,8 +2288,8 @@ async def test_truncated_path_refinement_is_reported_with_the_remedy(
     out_dir = tmp_path / "guess_truncated"
     res = await _make_tool().safe_call(TsGuess_input_schema(**{
         "mode": "xtb_path",
-        "reactant_text": _R_XYZ,
-        "product_text": _P_XYZ,
+        "reactant_text": _path_mol(_R_XYZ),
+        "product_text": _path_mol(_P_XYZ),
         "output_dir": str(out_dir),
     }), mock_session)
     assert not res.is_success
@@ -2152,8 +2309,8 @@ async def test_xtb_failure_is_reported_not_silently_replaced(fake_xtb_for_ts, tm
     fake_xtb_for_ts("fail")
     res = await _make_tool().safe_call(TsGuess_input_schema(**{
         "mode": "xtb_path",
-        "reactant_text": _R_XYZ,
-        "product_text": _P_XYZ,
+        "reactant_text": _path_mol(_R_XYZ),
+        "product_text": _path_mol(_P_XYZ),
         "output_dir": str(tmp_path / "guess_fail"),
     }), mock_session)
     assert res.is_success is False
@@ -2168,7 +2325,7 @@ async def test_xtb_cycles_marker_with_failed_process_is_not_path_nonconvergence(
 ):
     fake_xtb_for_ts("fail_with_cycles")
     res = await _make_tool().safe_call(TsGuess_input_schema(**{
-        "mode": "xtb_path", "reactant_text": _R_XYZ, "product_text": _P_XYZ,
+        "mode": "xtb_path", "reactant_text": _path_mol(_R_XYZ), "product_text": _path_mol(_P_XYZ),
         "output_dir": str(tmp_path / "guess_failed_with_marker"),
     }), mock_session)
     assert not res.is_success
@@ -2184,8 +2341,8 @@ def test_legacy_xtb_neb_alias_is_gone():
     with _pytest.raises(Exception):
         TsGuess_input_schema(**{
             "mode": "xtb_neb",
-            "reactant_text": _R_XYZ,
-            "product_text": _P_XYZ,
+            "reactant_text": _path_mol(_R_XYZ),
+            "product_text": _path_mol(_P_XYZ),
         })
 
 
@@ -2324,11 +2481,13 @@ def test_imag_mode_alignment_nonbonded_dominant_is_undecidable():
 
 
 @pytest.mark.asyncio
-async def test_verify_strict_nonbonded_dominant_mode_is_inconclusive(tmp_path, mock_session):
-    """strict：虚频模式由非键对（扭转/角）主导时从 fail 降级为 inconclusive。"""
+@pytest.mark.usefixtures("rdkit_chemistry")
+async def test_verify_strict_endpoint_proof_overrides_undecidable_mode_warning(tmp_path, mock_session):
+    """模式比例不能判断扭转/角方向时，实际端点优化证据仍决定验收。"""
     tool = _make_tool()
     freq_log = tmp_path / "ts_freq_nonbonded_mode.log"
     freq_log.write_text(_TS_FREQ_NONBONDED_MODE)
+    logs = _endpoint_optimization_logs(tmp_path)
 
     result = await tool.safe_call(TsGuess_input_schema(**{
         "mode": "verify",
@@ -2337,17 +2496,56 @@ async def test_verify_strict_nonbonded_dominant_mode_is_inconclusive(tmp_path, m
         "irc_log": str(IRC_LOG),
         "reactant_text": _HCN_XYZ,
         "product_text": _HNC_XYZ,
+        "reactant_logs": logs["reactant"],
+        "product_logs": logs["product"],
         "watch_pairs": [[1, 2]],
         "output_dir": str(tmp_path / "strict_nonbonded"),
     }), mock_session)
 
     assert result.is_success, result.message
-    assert result.verdict.startswith("inconclusive")
+    assert result.verification_status == "pass", result.checks
     assert result.imag_mode_aligned is None
-    assert any("NON-BONDED" in c for c in result.checks)
+    assert any("[warning]" in check and "NON-BONDED" in check for check in result.checks)
+    assert result.irc_end_a_path and result.irc_end_b_path
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("frequency_text,watch_pairs", [
+    (_TS_FREQ_WRONG_MODE, [[1, 3], [2, 3]]),
+    (_TS_FREQ_NO_DISPS, [[1, 3], [2, 3]]),
+    (_TS_FREQ_NONBONDED_MODE, [[1, 2]]),
+], ids=["misaligned", "missing_mode", "undecidable"])
+@pytest.mark.parametrize("endpoint_problem,expected_status", [
+    ("missing_logs", "inconclusive"),
+    ("wrong_outer_frame", "fail"),
+])
+@pytest.mark.usefixtures("rdkit_chemistry")
+async def test_verify_strict_mode_advisory_cannot_replace_endpoint_proof(
+    tmp_path, mock_session, frequency_text, watch_pairs, endpoint_problem, expected_status,
+):
+    freq_log = tmp_path / "ts_freq.log"
+    freq_log.write_text(frequency_text)
+    logs = _endpoint_optimization_logs(tmp_path)
+    if endpoint_problem == "missing_logs":
+        logs["reactant"] = []
+    else:
+        opt_log = Path(logs["reactant"][0])
+        opt_log.write_text(opt_log.read_text().replace("-1.22366900", "-1.52366900", 1))
+    result = await _make_tool().safe_call(TsGuess_input_schema(
+        mode="verify", strict=True, freq_log=str(freq_log), irc_log=str(IRC_LOG),
+        reactant_text=_HCN_XYZ, product_text=_HNC_XYZ,
+        reactant_logs=logs["reactant"], product_logs=logs["product"], watch_pairs=watch_pairs,
+        output_dir=str(tmp_path / "invalid_endpoint"),
+    ), mock_session)
+
+    assert result.is_success, result.message
+    assert result.verification_status == expected_status, result.checks
+    assert result.irc_end_a_path and result.irc_end_b_path
+    assert any("[warning]" in check and "mode" in check for check in result.checks)
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("rdkit_chemistry")
 async def test_verify_non_strict_nonbonded_dominant_mode_is_undecidable(tmp_path, mock_session):
     """默认档：非键对主导的虚频模式不再回 imag_mode_aligned=False（不再暗示方向不符），
     只把 undecidable 记进 checks；建议语义仍是 candidate。"""
@@ -2428,10 +2626,68 @@ def _frame(xyz):
     return SimpleNamespace(xyz=xyz)
 
 
+def _connectivity_verdict(request, end_a, end_b, checks):
+    from cloudra.tools.Chemtool.ts_guess import _reference_molecules
+
+    return TsGuess._check_irc_connectivity(request, end_a, end_b, checks, _reference_molecules(request))
+
+
+@pytest.mark.usefixtures("rdkit_chemistry")
+def test_reference_mol_graph_is_not_reperceived(monkeypatch):
+    from rdkit import Chem
+
+    import cloudra.tools.Chemtool.ts_guess as ts_module
+
+    mol = Chem.MolFromSmiles("[Na+].[O-][13CH3:7]")
+    conf = Chem.Conformer(3)
+    for i, position in enumerate([(0.7, 1, 0), (0, 0, 0), (1.43, 0, 0)]):
+        conf.SetAtomPosition(i, position)
+    mol.AddConformer(conf)
+    block = Chem.MolToMolBlock(mol)
+    request = TsGuess_input_schema(mode="verify", freq_log="unused.log", reactant_text=block, product_text=block)
+    calls = []
+
+    def perceive(*args):
+        calls.append(args)
+        return {(1, 2): 1.0}, "rdDetermineBonds"
+
+    monkeypatch.setattr(ts_module, "_perceive_bonds", perceive)
+    references = ts_module._reference_molecules(request)
+    frame = _frame("3\nendpoint\nNa .7 1 0\nO 0 0 0\nC 1.43 0 0\n")
+    checks = []
+    assert TsGuess._check_irc_connectivity(request, frame, frame, checks, references) is True
+    assert len(calls) == 2
+    assert references["reactant"].GetAtomWithIdx(2).GetIsotope() == 13
+    assert references["reactant"].GetAtomWithIdx(2).GetAtomMapNum() == 7
+
+
+@pytest.mark.parametrize("engine,base", [("gaussian", 1), ("orca", 0)])
+@pytest.mark.usefixtures("rdkit_chemistry")
+def test_scan_reads_mol_and_uses_molecule_charge(tmp_path, engine, base):
+    from rdkit import Chem
+
+    mol = Chem.MolFromSmiles("[O-]C")
+    conf = Chem.Conformer(2)
+    conf.SetAtomPosition(0, (0, 0, 0))
+    conf.SetAtomPosition(1, (1.43, 0, 0))
+    mol.AddConformer(conf)
+    path = tmp_path / "source.mol"
+    path.write_text(Chem.MolToMolBlock(mol))
+    output = tmp_path / ("scan.inp" if engine == "orca" else "scan.gjf")
+    result = TsGuess()._scan_prepare(TsGuess_input_schema(
+        mode="scan_prepare", engine=engine, method="B3LYP", basis_set="def2-SVP",
+        input_path=str(path), output_path=str(output),
+        scans=[{"atoms": [base, base + 1], "scan_end": 2.0, "scan_steps": 5}],
+    ))
+    assert result.is_success, result.message
+    assert ("* xyz -1 1" if engine == "orca" else "\n-1 1\n") in output.read_text()
+
+
+@pytest.mark.usefixtures("rdkit_chemistry")
 def test_check_irc_connectivity_weak_contact_is_warning_not_failure():
     """键集差异在预期结构侧是弱接触（>1.25×共价半径和）时只记 warning、不判负。"""
     checks: list[str] = []
-    verdict = TsGuess._check_irc_connectivity(
+    verdict = _connectivity_verdict(
         _connectivity_input(_WATER_A, _WATER_P_WEAK),
         _frame(_WATER_A), _frame(_WATER_B_STRETCHED), checks,
     )
@@ -2440,10 +2696,11 @@ def test_check_irc_connectivity_weak_contact_is_warning_not_failure():
     assert any("connectivity is consistent" in c for c in checks)
 
 
+@pytest.mark.usefixtures("rdkit_chemistry")
 def test_check_irc_connectivity_covalent_difference_still_fails():
     """预期结构侧仍是共价键的键集差异：照旧判负（不降级）。"""
     checks: list[str] = []
-    verdict = TsGuess._check_irc_connectivity(
+    verdict = _connectivity_verdict(
         _connectivity_input(_WATER_A, _WATER_P_COVALENT),
         _frame(_WATER_A), _frame(_WATER_B_DISSOCIATED), checks,
     )
@@ -2451,10 +2708,11 @@ def test_check_irc_connectivity_covalent_difference_still_fails():
     assert any("covalent" in c and "inconsistent" in c for c in checks)
 
 
+@pytest.mark.usefixtures("rdkit_chemistry")
 def test_check_irc_connectivity_endpoint_order_mismatch_is_inconclusive():
     """两端点帧的原子序/元素不一致：连通性不可判（不拿 A 的元素配 B 的坐标硬算键）。"""
     checks: list[str] = []
-    verdict = TsGuess._check_irc_connectivity(
+    verdict = _connectivity_verdict(
         _connectivity_input(_WATER_A, _WATER_A),
         _frame(_WATER_A),
         _frame("3\nendpoint B\nH  0.96  0.00  0.00\nO  0.00  0.00  0.00\nH -0.24  0.93  0.00\n"),
@@ -2464,6 +2722,7 @@ def test_check_irc_connectivity_endpoint_order_mismatch_is_inconclusive():
     assert any("undecidable" in c for c in checks)
 
 
+@pytest.mark.usefixtures("rdkit_chemistry")
 def test_check_irc_connectivity_uses_perceive_bonds_channel(monkeypatch):
     """端点/预期结构的键图来自 perceive_bonds（rdDetermineBonds 主通道），不是共价半径距离判据。
 
@@ -2475,7 +2734,7 @@ def test_check_irc_connectivity_uses_perceive_bonds_channel(monkeypatch):
 
     monkeypatch.setattr(irc_path, "_rdkit_bonds", lambda *a: {(0, 1): 1.0, (0, 2): 1.0})
     checks: list[str] = []
-    verdict = TsGuess._check_irc_connectivity(
+    verdict = _connectivity_verdict(
         _connectivity_input(_WATER_A, _WATER_A),
         _frame(_WATER_B_DISSOCIATED), _frame(_WATER_B_DISSOCIATED), checks,
     )
@@ -2483,7 +2742,7 @@ def test_check_irc_connectivity_uses_perceive_bonds_channel(monkeypatch):
 
     monkeypatch.setattr(irc_path, "_rdkit_bonds", lambda *a: None)
     checks = []
-    verdict = TsGuess._check_irc_connectivity(
+    verdict = _connectivity_verdict(
         _connectivity_input(_WATER_A, _WATER_A),
         _frame(_WATER_B_DISSOCIATED), _frame(_WATER_B_DISSOCIATED), checks,
     )
@@ -2491,6 +2750,7 @@ def test_check_irc_connectivity_uses_perceive_bonds_channel(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("rdkit_chemistry")
 async def test_verify_atom_order_mismatch_is_inconclusive_not_candidate(tmp_path, mock_session):
     """预期结构原子序与 IRC 作业不符：连通性不可判 → inconclusive，
     不再静默跳过成 candidate。"""
@@ -2760,7 +3020,7 @@ def test_parse_freq_log_orca_text_vibdisps_and_orientation(tmp_path, monkeypatch
 
     monkeypatch.setattr(cclib.io, "ccread", _boom)
     log = tmp_path / "calc-10.out.log"
-    log.write_text(_ORCA_FREQ_LOG, encoding="utf-8")
+    log.write_text('O   R   C   A\n' + _ORCA_FREQ_LOG, encoding="utf-8")
 
     freq = _parse_freq_log(str(log), "orca")
     assert len(freq["vibfreqs"]) == 9
@@ -2798,34 +3058,35 @@ def _renamed_orca_irc_log(tmp_path, name):
 _IRC_ENDPOINT_XYZ = "3\nsidecar\nC 0.0 0.0 0.0\nN 0.0 0.0 1.2\nH 0.0 0.0 2.2\n"
 
 
-def test_orca_irc_endpoints_glob_finds_sidecars_for_renamed_log(tmp_path):
-    """改动 1b：stdout 日志被重命名为 calc-<id>.out.log 且无 NAME 回显时，
-    仍能在日志目录按 *_IRC_F.xyz / *_IRC_B.xyz 兜底定位端点侧车。"""
+def test_orca_irc_endpoints_use_native_name_for_renamed_log(tmp_path):
+    """A renamed stdout log must declare the native job name to bind sidecars."""
     from cloudra.tools.core import orca_frames
 
     job_dir = tmp_path / "job"
     job_dir.mkdir()
     log = _renamed_orca_irc_log(job_dir, "calc-99.out.log")
+    log.write_text('NAME = realjob.inp\n' + log.read_text(), encoding='utf-8')
     (job_dir / "realjob_IRC_F.xyz").write_text(_IRC_ENDPOINT_XYZ, encoding="utf-8")
     (job_dir / "realjob_IRC_B.xyz").write_text(_IRC_ENDPOINT_XYZ, encoding="utf-8")
 
     endpoints = orca_frames.extract_irc_endpoints(str(log))
     assert endpoints["forward"]["availability"] == "available"
     assert endpoints["backward"]["availability"] == "available"
-    assert endpoints["forward"]["origin"].endswith("_glob")
-    assert endpoints["backward"]["origin"].endswith("_glob")
+    assert endpoints["forward"]["origin"] == "final_endpoint_file"
+    assert endpoints["backward"]["origin"] == "final_endpoint_file"
     assert orca_frames.read_endpoint_geometry(endpoints["forward"]) is not None
     assert orca_frames.read_endpoint_geometry(endpoints["backward"]) is not None
 
 
-def test_orca_irc_endpoints_glob_refuses_ambiguous_match(tmp_path):
-    """兜底匹配只接受唯一命中：多个候选且无法按作业名去歧义时拒绝猜测。"""
+@pytest.mark.parametrize('prefixes', [('aaa',), ('aaa', 'bbb')])
+def test_orca_irc_endpoints_refuse_unbound_sidecars(tmp_path, prefixes):
+    """Even a unique unrelated sidecar is not evidence of this renamed job."""
     from cloudra.tools.core import orca_frames
 
     job_dir = tmp_path / "job"
     job_dir.mkdir()
     log = _renamed_orca_irc_log(job_dir, "calc-99.out.log")
-    for prefix in ("aaa", "bbb"):
+    for prefix in prefixes:
         (job_dir / f"{prefix}_IRC_F.xyz").write_text(_IRC_ENDPOINT_XYZ, encoding="utf-8")
         (job_dir / f"{prefix}_IRC_B.xyz").write_text(_IRC_ENDPOINT_XYZ, encoding="utf-8")
 
@@ -2835,6 +3096,7 @@ def test_orca_irc_endpoints_glob_refuses_ambiguous_match(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("rdkit_chemistry")
 async def test_verify_strict_non_pass_appends_endpoint_optimization_remedy(tmp_path, mock_session):
     """不通过（材料不足 / 方向不符）时 checks 必须带「补做端点优化」的可操作提示，
     且 verdict 语义（fail / inconclusive 前缀）不变（只加文本，不改判据/阈值）。"""
@@ -2857,7 +3119,8 @@ async def test_verify_strict_non_pass_appends_endpoint_optimization_remedy(tmp_p
     assert any(_IRC_TRUNCATION_REMEDY in c for c in res_missing.checks)
     assert _IRC_TRUNCATION_REMEDY in res_missing.verdict
 
-    # 分支 B：几何区间证明失败（两个预期结构都在同一侧）
+    # 分支 B：实际优化结果与声明的端点身份不符。
+    logs = _endpoint_optimization_logs(tmp_path)
     res_fail = await tool.safe_call(TsGuess_input_schema(**{
         "mode": "verify",
         "strict": True,
@@ -2865,6 +3128,8 @@ async def test_verify_strict_non_pass_appends_endpoint_optimization_remedy(tmp_p
         "irc_log": str(IRC_LOG),
         "reactant_text": _HCN_XYZ,
         "product_text": _HCN_XYZ,
+        "reactant_logs": logs["reactant"],
+        "product_logs": logs["product"],
         "watch_pairs": [[1, 3], [2, 3]],
         "output_dir": str(tmp_path / "remedy_fail"),
     }), mock_session)
@@ -2881,3 +3146,4 @@ async def test_ts_guess_unknown_mode_fuzzy_suggestion(mock_session):
     assert res.is_success is False
     assert "Did you mean 'interpolate'?" in res.message
     assert "Allowed modes:" in res.message
+

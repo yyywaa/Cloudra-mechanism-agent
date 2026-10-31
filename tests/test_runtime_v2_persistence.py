@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
+import threading
 
 import pytest
 
@@ -76,9 +77,63 @@ async def test_snapshot_and_event_durability_roundtrip(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_snapshot_watermarks_exclude_unpersisted_tail(tmp_path):
-    """快照水位必须是已落盘前缀。并发 append 抬高 live high_watermarks
-    之后，若快照仍按 live 水位切开，重启会跳过后来才落库的事件。"""
+async def test_private_cores_share_store_without_rewinding_resumed_project_sequences(tmp_path):
+    """A later private core's snapshot cannot hide an earlier project's counters."""
+    store = RuntimeStore(tmp_path / "runtime.db")
+    private_runs = []
+    for name in ("first", "second"):
+        core = RuntimeCore(strict_events=True)
+        core.store = store
+        bus = CommandBus(core)
+        project = (await bus.execute(Command(type="project.create", payload={"name": name}))).data
+        parent = (await bus.execute(Command(
+            type="agent.spawn", target={"project_id": project.id},
+            payload={"role_id": "coordinator"},
+        ))).data
+        await core.agent_host.start_run(parent)
+        await core.agent_host.finish_run(parent, outcome="succeeded")
+        await bus.flush_snapshot()
+        private_runs.append((core, project, parent))
+
+    first, project, parent = private_runs[0]
+    old_project_seq = first.event_log.high_watermarks[project.id]
+    old_session_seq = first.event_log.high_session_watermarks[parent.id]
+    restored = RuntimeCore(strict_events=True)
+    await asyncio.to_thread(restore_core, restored, store)
+    bus = CommandBus(restored)
+    await bus.execute(Command(
+        type="agent.message", target={"session_id": parent.id}, payload={"content": "continue"},
+    ))
+    message = restored.event_log.query_session(parent.id, types={"agent.message_injected"})[-1]
+    assert message.seq > old_project_seq
+    assert message.session_seq > old_session_seq
+
+    child = (await bus.execute(Command(
+        type="agent.spawn", target={"project_id": project.id},
+        payload={"role_id": "explorer", "parent_session_id": parent.id},
+    ))).data
+    await restored.agent_host.start_run(child)
+    await restored.agent_host.finish_run(child, outcome="succeeded")
+    terminal = restored.child_completions.terminal_by_session[child.id]
+    assert terminal.data["to"] == "succeeded"
+    assert terminal.seq > old_project_seq
+    count, projects, sessions = await asyncio.to_thread(store.event_metadata)
+
+    def durable_count():
+        with store._connect() as con:
+            return con.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+
+    assert count == await asyncio.to_thread(durable_count)
+    assert projects[project.id] == restored.event_log.high_watermarks[project.id]
+    assert sessions[parent.id] == restored.event_log.high_session_watermarks[parent.id]
+    second, other_project, other_parent = private_runs[1]
+    assert projects[other_project.id] == second.event_log.high_watermarks[other_project.id]
+    assert sessions[other_parent.id] == second.event_log.high_session_watermarks[other_parent.id]
+
+
+@pytest.mark.asyncio
+async def test_snapshot_watermarks_exclude_unpersisted_tail(tmp_path, monkeypatch):
+    """Appending during snapshot serialization must not advance its frozen cursor."""
     store = RuntimeStore(tmp_path / "runtime.db")
     core = RuntimeCore(strict_events=True)
     core.store = store
@@ -87,30 +142,33 @@ async def test_snapshot_watermarks_exclude_unpersisted_tail(tmp_path):
     project = next(iter(core.projects.values()))
     await bus.flush_snapshot()
     persisted = dict(core.event_writer.persisted_watermarks())
+    frozen = asyncio.Event()
+    release = threading.Event()
+    loop = asyncio.get_running_loop()
+    save = store.save_snapshot
 
+    def serialize_frozen(**kwargs):
+        loop.call_soon_threadsafe(frozen.set)
+        assert release.wait(5)
+        save(**kwargs)
+
+    monkeypatch.setattr(store, "save_snapshot", serialize_frozen)
+    saving = asyncio.create_task(bus.flush_snapshot())
+    await asyncio.wait_for(frozen.wait(), 5)
     tail = core.event_log.append(
-        "agent.warning",
-        stream="agent",
-        project_id=project.id,
+        "agent.warning", stream="agent", project_id=project.id,
         data={"message": "unpersisted tail"},
     )
     assert core.event_log.high_watermarks[project.id] == tail.seq
     assert core.event_writer.persisted_watermarks() == persisted
-
-    original_flush = core.event_writer.flush
-
-    async def _flush_without_tail() -> None:
-        return None
-
-    core.event_writer.flush = _flush_without_tail  # type: ignore[method-assign]
-    await bus.flush_snapshot()
-    core.event_writer.flush = original_flush
+    release.set()
+    await saving
+    monkeypatch.setattr(store, "save_snapshot", save)
 
     _, last_seqs = store.load_snapshot()
     assert last_seqs == persisted
     assert last_seqs[project.id] < tail.seq
-
-    await original_flush()
+    await core.event_writer.flush()
     core2 = RuntimeCore(strict_events=True)
     restore_core(core2, store)
     assert any(envelope.type == "agent.warning" for envelope in core2.event_log)
@@ -639,6 +697,8 @@ async def test_snapshot_is_throttled_cache_not_per_command(tmp_path, monkeypatch
     core2 = RuntimeCore(strict_events=True)
     restore_core(core2, store)
     assert core2.projects[project.id].name == "throttle"
+    # Restore seeds the derived cache once; command throttling starts here.
+    saves = 0
 
     # 事件阈值触发：把阈值压到 2，下一条命令（1 条事件 + 之前 1 条）越阈
     monkeypatch.setattr(commands_mod, "_SNAPSHOT_EVENT_INTERVAL", 2)
@@ -841,8 +901,8 @@ def _replay_all_events(store: RuntimeStore):
 @pytest.mark.asyncio
 async def test_cancelled_supervisor_not_revived_by_reconcile_after_restart(tmp_path):
     """恢复矩阵·用户取消后重启进程：cancelled 不是僵尸 running——restore
-    原样保留取消终态，reconcile 不复活（park-don't-wake：通知驻留信箱、
-    零状态/run 事件），持久化待办留在信箱等显式恢复。"""
+    原样保留取消终态，reconcile 不复活，也不重投取消时遗留的普通通知。
+    科学待办留在 DAG 存储，Coordinator 收到一次性显式恢复告警。"""
     from cloudra.runtime_v2.schemas import AgentState
     from cloudra.runtime_v2.supervision import (
         find_project_supervisor,
@@ -891,18 +951,19 @@ async def test_cancelled_supervisor_not_revived_by_reconcile_after_restart(tmp_p
 
     events_before = len(core2.event_log)
     await reconcile_supervision(core2, project.id, auto_wake=False)
-    # park-don't-wake：通知照常投递信箱驻留（用户显式恢复后首轮即可见），
-    # 但不复活——督导自身只有一条投递事件，零状态/run 事件，状态保持
-    # cancelled。D2：cancelled 督导 + 可消费待办同时给 Coordinator 发
+    # Recovery discards ordinary unread messages for cancelled sessions. The
+    # durable work fingerprint still prevents duplicate notification/revival.
+    # D2：cancelled 督导 + 可消费待办同时给 Coordinator 发
     # 一次性告警（pin + mailbox；告警不复活督导，点名显式恢复入口）。
     from cloudra.runtime_v2.supervision import TERMINAL_SUPERVISOR_PIN_KEY
 
     new_events = list(core2.event_log)[events_before:]
     supervisor_events = [e for e in new_events if e.session_id == supervisor2.id]
-    assert [e.type for e in supervisor_events] == ["agent.message_injected"]
+    assert supervisor_events == []
     assert supervisor2.state is AgentState.CANCELLED
     inbox = core2.mailbox.inbox(supervisor2.id)
-    assert inbox is not None and inbox.qsize() == 1
+    assert inbox is not None and inbox.empty()
+    assert not any(event.session_id == supervisor2.id for event in core2.mailbox.unread())
     assert any(
         e.type == "context.pin_set"
         and e.session_id == coordinator.id
@@ -929,8 +990,8 @@ async def test_cancelled_supervisor_not_revived_by_reconcile_after_restart(tmp_p
 @pytest.mark.asyncio
 async def test_replay_and_restore_have_no_supervision_side_effects(tmp_path):
     """恢复矩阵·重放零副作用：事件重放绝不产生任何副作用；restore 只做
-    确定性的中断收尾——僵尸落 failed 并把子终态回传父信箱（唯一新增的事
-    件族：完成通知 + 父唤醒生命周期事件），不 spawn（记录之外的）agent、
+    确定性的中断收尾——僵尸落 failed；Supervisor 不发普通子任务回报，
+    科学待办由 reconcile 的专用持久通知显式告警。不 spawn（记录之外的）agent、
     不跑 LLM/工具。reconcile 是 restore 之后的显式步骤，对僵尸收尾落
     failed 的 supervisor 只 parked 投递、不唤醒。"""
     from cloudra.runtime_v2.schemas import AgentState
@@ -973,8 +1034,8 @@ async def test_replay_and_restore_have_no_supervision_side_effects(tmp_path):
         a.id for a in core1.agents.values()
     }  # 重放不新增 agent
 
-    # restore：僵尸 running → failed（中断收尾），并把子的终态回传给父
-    # （coordinator 是 queued：投递驻留、不唤醒）。restore 新落盘的事件只许
+    # restore：僵尸 running → failed（中断收尾），Supervisor 不发普通子回报。
+    # coordinator 是 queued，restore 不唤醒。新落盘的事件只许
     # 是这一族，绝无任何执行痕迹。
     persisted_before = {row["event_id"] for row in store.query_project_events(project.id)}
     core2 = RuntimeCore(strict_events=True)
@@ -1000,8 +1061,7 @@ async def test_replay_and_restore_have_no_supervision_side_effects(tmp_path):
         for e in core2.event_log.query_session(coordinator.id, types={"agent.message_injected"})
         if supervisor1.id in str(e.data.get("content", ""))
     ]
-    assert reports, "zombie supervisor's failure must reach its parent coordinator"
-    assert "interrupted by process restart" in reports[-1].data["content"]
+    assert reports == []
     assert core2.agents[coordinator.id].state is AgentState.QUEUED  # 恢复不 wake
 
     # 收尾+回传事件已回写 store：纯重放与 restored 逐字段全等。
@@ -1017,6 +1077,14 @@ async def test_replay_and_restore_have_no_supervision_side_effects(tmp_path):
     await reconcile_supervision(core2, project.id, auto_wake=False)
     assert supervisor2.state is AgentState.FAILED
     assert core2.agents[coordinator.id].state is AgentState.QUEUED
+    alerts = [
+        event for event in core2.event_log.query_session(coordinator.id, types={"agent.message_injected"})
+        if str(event.data.get("content", "")).startswith("[Supervision] ALERT")
+    ]
+    assert len(alerts) == 1
+    assert alerts[0].data["sender"] == "system"
+    assert not [event for event in core2.event_log.query_session(coordinator.id, types={"agent.message_injected"})
+                if event.data.get("manifest", {}).get("kind") == "child_completion"]
     executed = [
         e
         for e in core2.event_log

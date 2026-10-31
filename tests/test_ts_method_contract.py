@@ -1,8 +1,10 @@
 import pytest
 
 from cloudra.tools.core import calculation_intent as intent
+from cloudra.tools.core.molecule import read_molecule
 
 
+@pytest.mark.usefixtures("rdkit_chemistry")
 @pytest.mark.parametrize('solvent', ['DCM', 'Water', 'DMSO'])
 def test_cpcm_ts_submission_keeps_native_settings_and_bound_job(tmp_path, monkeypatch, solvent):
     """Synthetic coordinates exercise submission contracts, without running an engine."""
@@ -30,10 +32,12 @@ def test_cpcm_ts_submission_keeps_native_settings_and_bound_job(tmp_path, monkey
     request = QmInputWriter_input_schema(engine='orca', source_type='xyz_file', source_value='unused.xyz',
         method='B3LYP', basis_set='def2svp', task_type=[{'opt': 'ts'}], keywords=keywords,
         nproc=record.compute_cpus, mem=f'{record.compute_memory_mb}MB', output_path=str(source))
-    native = QmInputWriter._build_orca_input(request, 'O 0 0 0')
+    record.input.ts_optimization = QmInputWriter._written_calculation(request)
+    native = QmInputWriter._build_orca_input(request, read_molecule(input_text='1\n\nO 0 0 0\n'))
     source.write_text(native)
     policy = MethodPolicy(allowed_methods=['b3lyp/def2svp'],
-        calculation_contracts={'ts_opt': calculation.model_dump(mode='json')})
+        calculation_contracts={'ts_opt': {**calculation.model_dump(mode='json'),
+            'task_type': [{'opt': 'ts'}]}})
     admissions = []
 
     def admit(**parameters):
@@ -56,7 +60,8 @@ def test_cpcm_ts_submission_keeps_native_settings_and_bound_job(tmp_path, monkey
     assert set(tokens) >= set(keywords.lower().split())
     assert blocks['pal'] == ['nprocs', '2', 'end']
     assert blocks['maxcore'] == ['1024']
-    assert intent.compare_calculation_input(native, calculation.model_dump(), charge=0, multiplicity=1) == []
+    assert intent.compare_calculation_input(native,
+        QmInputWriter._written_calculation(request).model_dump(), charge=0, multiplicity=1) == []
     assert verify_stage_input(db, job_id) is not None
     assert record.method_checks[str(source)]['matched'] is True
 
@@ -105,8 +110,7 @@ def test_runtime_method_authority_is_benchmark_only(tmp_path):
             require_pipeline_authority(project.id, agent.id)
 
 
-def test_ordinary_ts_still_checks_accepted_input(tmp_path):
-    import pytest
+def test_ordinary_ts_records_native_declaration_differences(tmp_path):
 
     from cloudra.services.ts_pipeline_context import use_pipeline_authority
     from cloudra.tools.core.ts_process import _check_calculation_submission
@@ -114,13 +118,15 @@ def test_ordinary_ts_still_checks_accepted_input(tmp_path):
 
     source = tmp_path / "ts.inp"
     source.write_text("! OptTS PBE0 def2-TZVP\n* xyz 0 1\nO 0 0 0\n*\n")
+    record = record_fixture(tmp_path)
     with use_pipeline_authority(lambda project, owner: (True, None)):
-        with pytest.raises(ValueError, match="method"):
-            _check_calculation_submission(record_fixture(tmp_path), "ts_opt", str(source), "orca")
+        _check_calculation_submission(record, "ts_opt", str(source), "orca")
+    assert not record.method_checks[str(source)]['matched']
+    assert any(item['field'] == 'method' for item in record.warnings)
 
 
 def expected(engine='orca', **changes):
-    return dict(basis_set='def2-SVP', engine=engine, method='B3LYP', keywords='D3BJ CPCM(water)', frequency_mode='auto', orca_blocks=None, end_setting='', **changes)
+    return dict(basis_set='def2-SVP', engine=engine, method='B3LYP', keywords='OptTS D3BJ CPCM(water)', frequency_mode='auto', orca_blocks=None, end_setting='', **changes)
 
 
 def test_missing_required_keywords_and_actual_charge_spin_are_differences():
@@ -132,7 +138,7 @@ def test_equivalent_basis_spelling_and_multiline_native_input():
     text = '! OptTS B3LYP\n! def2SVP D3BJ CPCM(water)\n%pal nprocs 2 end\n* xyz 0 1\nO 0 0 0\n*\n'
     assert intent.compare_calculation_input(text, expected(), charge=0, multiplicity=1) == []
     gaussian = '#p opt=(ts, calcfc) B3LYP/def2svp\n emp=gd3bj scrf=(solvent=water)\n\ntitle\n\n0 1\nO 0 0 0\n\n'
-    declaration = dict(basis_set='def2-SVP', engine='gaussian', method='B3LYP', keywords='emp=gd3bj scrf=(solvent=water)', frequency_mode='auto', orca_blocks=None, end_setting='')
+    declaration = dict(basis_set='def2-SVP', engine='gaussian', method='B3LYP', keywords='opt=(ts,calcfc) emp=gd3bj scrf=(solvent=water)', frequency_mode='auto', orca_blocks=None, end_setting='')
     assert intent.compare_calculation_input(gaussian, declaration, charge=0, multiplicity=1) == []
 
 
@@ -150,10 +156,10 @@ def test_native_blocks_and_gaussian_links_are_all_checked():
     assert any(d.field == 'method' for d in intent.compare_calculation_input(gaussian, declaration, charge=0, multiplicity=1))
 
 
-def test_unauthorized_method_and_missing_keyword_block_before_ready(tmp_path, monkeypatch):
+def test_trusted_method_is_enforced_while_declared_keyword_differences_warn(tmp_path, monkeypatch):
     from cloudra.runtime_v2.schemas import MethodPolicy
     from cloudra.services.ts_pipeline_context import use_pipeline_authority
-    from cloudra.tools.core.ts_process import _submit_step
+    from cloudra.tools.core.ts_process import _check_calculation_submission, _submit_step
     from tests.test_ts_stage_inputs import record_fixture
 
     record = record_fixture(tmp_path)
@@ -161,8 +167,8 @@ def test_unauthorized_method_and_missing_keyword_block_before_ready(tmp_path, mo
     source.write_text('! OptTS B3LYP def2SVP\n* xyz 0 1\nO 0 0 0\n*\n')
     monkeypatch.setattr('cloudra.services.compute_admission.admit_job', lambda **_: (_ for _ in ()).throw(AssertionError('must reject before admission')))
     with use_pipeline_authority(lambda project, owner: (True, MethodPolicy(allowed_methods=['b3lyp/def2svp']))):
-        error, job_id = _submit_step(record, 'ts_opt', str(source), 'orca')
-    assert job_id == -1 and 'keywords' in error
+        _check_calculation_submission(record, 'ts_opt', str(source), 'orca')
+    assert any(item['field'] == 'keywords' for item in record.warnings)
     source.write_text('! OptTS B3LYP def2SVP D3BJ\n* xyz 0 1\nO 0 0 0\n*\n')
     with use_pipeline_authority(lambda project, owner: (True, MethodPolicy(allowed_methods=['xtb']))):
         error, job_id = _submit_step(record, 'ts_opt', str(source), 'orca')
@@ -206,10 +212,11 @@ def test_undeclared_frequency_block_and_gaussian_trailing_settings_are_differenc
     assert intent.compare_calculation_input(text,declaration,charge=0,multiplicity=1)
 
 
-def test_explicit_geometry_block_can_coexist_with_writer_hessian():
+def test_unrequested_hessian_setting_is_a_real_native_difference():
     declaration=dict(basis_set='STO-3G', engine='orca',method='HF',keywords='',orca_blocks='%geom MaxIter 200 end',end_setting='')
     text='! HF STO-3G OptTS\n%geom Calc_Hess true end\n%geom MaxIter 200 end\n* xyz 0 1\nO 0 0 0\n*\n'
-    assert intent.compare_calculation_input(text,declaration,charge=0,multiplicity=1)==[]
+    assert any(item.field == 'orca_blocks' for item in
+        intent.compare_calculation_input(text,declaration,charge=0,multiplicity=1))
 
 
 def test_whitelist_checks_complete_native_method_and_explicit_basis(tmp_path):
@@ -220,7 +227,7 @@ def test_whitelist_checks_complete_native_method_and_explicit_basis(tmp_path):
     from tests.test_ts_stage_inputs import record_fixture
 
     record = record_fixture(tmp_path)
-    record.input.ts_optimization = QmCalculation(basis_set='def2-SVP', engine="orca", method="B3LYP", keywords="D3BJ")
+    record.input.ts_optimization = QmCalculation(basis_set='def2-SVP', engine="orca", method="B3LYP", keywords="OptTS D3BJ")
     source = tmp_path / "ts.inp"
     source.write_text("! OptTS B3LYP def2-SVP D3BJ\n* xyz 0 1\nO 0 0 0\n*\n")
     policy = MethodPolicy(allowed_methods=["b3lyp/def2svp"])

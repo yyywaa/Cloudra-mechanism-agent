@@ -1,4 +1,4 @@
-"""R 族 + U 族登记：R1 pinacol、
+"""R 族 + U 族登记：R1 甲酰胺气相脱水、
 U3 磷叶立德+甲醛、U5 Passerini、U6 Staudinger。
 
 v3（2026-09-09）收窄为四条多步/中间体网络；R2/R3/U1/U7 剔出定稿名单留档池
@@ -9,36 +9,39 @@ v3（2026-09-09）收窄为四条多步/中间体网络；R2/R3/U1/U7 剔出定�
 """
 
 TASKS = {
-    # [OH3+].CC(C)(O)C(C)(C)O>>[OH3+].CC(=O)C(C)(C)C.O  (+1/1)  频哪醇重排
-    # 映射：1=H3O+ 的 O，2=酸性 H；3/5=离去侧甲基，4=离去侧 C，6=离去 OH；
-    # 7=羰基侧 C，8=迁移甲基，9=保留甲基，10=羰基 O，11=羰基侧 OH 的 H。
+    # 2026-10-18：NR1 槽正式换为甲酰胺脱水，旧频哪醇 Gold 不再用于此题。
+    # Gaussian16 B3LYP-D3(BJ)/def2-SVP 气相纯电子能；反应垒相对稳定中间体。
+    # 来源：gold_compute/queue_20261018/results/NR1/{REPORT.txt,mechanism_graph.json}。
+    # 统一映射：1=N、2=C、3=O、4=保留于 N 的 H、5=首步迁到 O 的 H、6=C 上的 H。
+    # 两个构象边连接式相同；不是断键步。E4 的工作流 candidate_only 原因和
+    # IRC/端点证据限制保留在报告，不把入库描述成工作流 strict pass。
     "R1": {
-        "name_en": "pinacol rearrangement: pinacol -> pinacolone (acid-catalyzed)",
-        "conditions_en": "concentrated H2SO4, heated",
-        "mapped_reactants": "[OH2+:1]([H:2]).[CH3:3][C:4]([CH3:5])([OH:6])[C:7]([CH3:8])([CH3:9])[O:10][H:11]",
+        "name_en": "formamide dehydration: formamide -> hydrogen cyanide + water",
+        "conditions_en": "gas phase, isolated neutral formamide, closed-shell thermal dehydration; no added water, acid or catalyst; investigate formimidic-acid intermediates and conformational transitions; source DOI 10.1021/jp109143j",
+        "mapped_reactants": "[N:1]([H:4])([H:5])[C:2]([H:6])=[O:3]",
         "steps": [
             {
-                # PT：H3O+ 质子化 4 号碳上的 OH
-                "out": "[OH2:1].[CH3:3][C:4]([CH3:5])([OH+:6][H:2])[C:7]([CH3:8])([CH3:9])[O:10][H:11]",
-                "type": "proton transfer from H3O+ to one pinacol OH (leaving-group activation)",
+                "out": "[N:1]([H:4])=[C:2]([H:6])[O:3][H:5]",
+                "type": "formamide to formimidic acid conformer INT-1a by intramolecular N-H to O proton transfer with C=O to C=N bond-order change",
+                "barrier": 46.32,
             },
             {
-                # 脱水形成碳正离子/水离子对；未找到独立鞍点，参考垒缺测。
-                "out": "[OH2:1].[OH:6][H:2].[CH3:3][C+:4]([CH3:5])[C:7]([CH3:8])([CH3:9])[O:10][H:11]",
-                "type": "water departure from protonated pinacol -> tertiary carbocation/water ion pair",
+                "out": "[N:1]([H:4])=[C:2]([H:6])[O:3][H:5]",
+                "type": "formimidic acid conformational transition INT-1a to INT-1b",
+                "conformational": True,
+                "barrier": 22.80,
             },
             {
-                # 1,2-甲基迁移：断 C7-C8，成 C4-C8 与 C7=O10 π。
-                "out": "[OH2:1].[OH:6][H:2].[CH3:3][C:4]([CH3:5])([CH3:8])[C:7](=[O+:10][H:11])[CH3:9]",
-                "type": "1,2-methyl migration from the carbocation/water ion pair with C=O pi formation -> protonated pinacolone",
-                "barrier": 5.16,
-                "weight": 0.5,
+                "out": "[N:1]([H:4])=[C:2]([H:6])[O:3][H:5]",
+                "type": "formimidic acid conformational transition INT-1b to INT-1c",
+                "conformational": True,
+                "barrier": 7.25,
             },
             {
-                # PT：质子化羰基把质子还给水，再生 H3O+
-                "out": "[OH2+:1][H:11].[OH:6][H:2].[CH3:3][C:4]([CH3:5])([CH3:8])[C:7](=[O:10])[CH3:9]",
-                "type": "proton transfer from protonated pinacolone to water, regenerating H3O+",
-                "barrier": 5.74,
+                "out": "[N:1]#[C:2][H:6].[O:3]([H:4])[H:5]",
+                "type": "formimidic acid INT-1c dehydration by N-H to O proton transfer and C-O cleavage with C-N triple-bond formation -> hydrogen cyanide and water; barrier referenced to stable INT-1a",
+                # TS4 - 稳定 INT-1a；64.93 是相对直接连接构象 INT-1c 的值。
+                "barrier": 68.85,
             },
         ],
     },
@@ -66,6 +69,8 @@ TASKS = {
                 # 甲酸根 O 捕获 nitrilium C：成 O5-C9，断一根 C≡N π → 亚氨酸酯
                 "out": "[CH2:1]([O:2][H:6])[C:9](=[N:8][CH3:7])[O:5][CH:3]=[O:4]",
                 "type": "formate oxygen capture of the nitrilium carbon -> imidate (acyloxyimine) intermediate",
+                # 2026-10-05 Mac 同法 TS/IRC/两端 Opt-Freq：相对本步腈鎓/甲酸根接触离子对。
+                "barrier": 1.5440,
             },
             {
                 # Mumm 重排：断 C3-O5，成 O2-C3，断 N=C π，成 C9=O5 π，O2-H 迁到 N8

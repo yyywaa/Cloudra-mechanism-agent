@@ -66,25 +66,21 @@ def resolve_calculation(value: CalculationValue | dict | None,
 
 class TsReaction(InputModel):
     reactant_smiles: str = Field(min_length=1)
-    product_smiles: str = Field(min_length=1)
+    product_smiles: str | list[str] = Field(min_length=1,
+        description='A dot-joined SMILES declares a bound complex; a list declares separated products, displayed with +.')
     charge: StrictInt
     multiplicity: StrictInt = Field(ge=1)
     electronic_character: Literal['closed_shell', 'open_shell'] | None = Field(default=None,
         description="Optional declared electronic character, including open-shell singlets. This describes the requested seed state; it does not choose a ground state, wavefunction method or spin initialization.")
-    atom_map: list[StrictInt] = Field(default_factory=list, description="Full concrete atom mapping in product-coordinate order; each value is a 1-based reactant-coordinate atom index, including explicit hydrogens. Use reaction_mapping.atom_map bound to these structures, not heavy_atom_map or SMILES positions.")
-    reaction_center: list[tuple[StrictInt, StrictInt]] = Field(default_factory=list, description="Forming/breaking atom pairs in the bound reactant's full coordinate order, 1-based and including explicit hydrogens. Use reaction_mapping.concrete_watch_pairs for the same concrete structure.")
+    selected_candidate: StrictInt | None = Field(default=None, ge=0, description="Optional 0-based override of the existing algorithm's ranked complete mapping candidates. Omitted/null adopts its first candidate automatically and reports the choice.")
+    reaction_center: list[tuple[StrictInt, StrictInt]] = Field(default_factory=list, description="Optional forming/breaking atom pairs in the bound reactant's full coordinate order, 1-based and including explicit hydrogens. Omitted/empty derives the pairs from the bound reaction mapping.")
 
 
 class GeneratedConformer(InputModel):
     kind: Literal["generate"]
-    generation: Literal["ETKDGv3"]
-    seed: StrictInt
+    generation: Literal["ETKDGv3"] = 'ETKDGv3'
+    seed: StrictInt = 42
     optimization: CalculationValue | None = None
-
-
-class HeavyAtomBinding(InputModel):
-    structure_digest: str = Field(min_length=1, description="Matching reaction_mapping.structure_digests value for this concrete endpoint. Binds its atom order, graph and coordinates; a stale or mismatched digest is rejected.")
-    indices: list[StrictInt] = Field(min_length=1, description="1-based indices in this file's full coordinate atom order, listed in declared SMILES heavy-atom order. Explicit hydrogen rows count toward indices; the selected atoms must be heavy atoms.")
 
 
 class FileConformer(InputModel):
@@ -92,15 +88,17 @@ class FileConformer(InputModel):
     xyz_path: str = Field(min_length=1)
     mol_path: str | None = None
     evidence_refs: list[str] = Field(default_factory=list)
-    optimization: CalculationValue | None = None
-    heavy_atom_binding: HeavyAtomBinding | None = None
+    optimization: CalculationValue | None = Field(default=None, description=(
+        'Optional additional build-stage pre-optimization. Omit or set null to use the supplied file geometry as-is. '
+        'This does not certify a minimum or replace later TS/IRC and endpoint verification. '
+        'With ts_resume, patch optimization to null to clear a previous request; omitted source fields retain their values.'
+    ))
 
 
 class CatalogConformer(InputModel):
     kind: Literal["catalog"]
     catalog_id: str = Field(min_length=1)
     candidate_id: str = Field(min_length=1)
-    partition_revision: str = Field(min_length=1)
     optimization: CalculationValue | None = None
 
 
@@ -122,8 +120,10 @@ class ConformerGuidance(InputModel):
 
 
 class TsConformers(InputModel):
-    reactant: ConformerSource | None = None
-    product: ConformerSource | None = None
+    reactant: ConformerSource | None = Field(default=None,
+        description='Optional explicit reactant source. Omit or set null to generate the starting geometry from reaction.reactant_smiles with the program defaults.')
+    product: ConformerSource | None = Field(default=None,
+        description='Optional explicit product source. Omit or set null to generate the starting geometry from reaction.product_smiles with the program defaults.')
     guidance: ConformerGuidance = Field(default_factory=ConformerGuidance)
 
 
@@ -145,7 +145,7 @@ class ScanGuess(InputModel):
     scans: list[ScanCoordinateInput] = Field(min_length=1, max_length=2, description="Coordinates in the concrete scan-input atom order. ORCA references are 0-based; Gaussian/xTB references are 1-based. Convert concrete coordinate indices, not SMILES positions.")
     freeze: list[FrozenCoordinateInput] = Field(default_factory=list, description="Frozen coordinates in the same concrete input atom order and engine-specific numbering as scans.")
     force_constant: float | None = Field(default=None, gt=0, description="xTB restraint force constant in atomic units; explicitly declared")
-    mode: Literal["concerted", "sequential"] | None = None
+    mode: Literal["concerted", "sequential", "grid"] | None = Field(default=None, description="Two ORCA coordinates require grid (independent surface) or concerted (simultaneous path, equal steps). xTB supports concerted/sequential. Omit for one coordinate or Gaussian grids.")
     solvation: PathSolvation | None = None
 
     @model_validator(mode="after")
@@ -157,11 +157,21 @@ class ScanGuess(InputModel):
     def validate_calculation(self, calculation: QmCalculation):
         engine = calculation.engine
         if engine != "xtb":
-            if any(value is not None for value in (self.force_constant, self.mode, self.solvation)):
-                raise ValueError("force_constant, mode and solvation are native xTB scan fields")
-            if engine == "orca" and len(self.scans) != 1:
-                raise ValueError("ORCA relaxed scan accepts exactly one coordinate")
+            if self.force_constant is not None or self.solvation is not None:
+                raise ValueError("force_constant and solvation are native xTB scan fields")
+            if engine == "orca":
+                if len(self.scans) == 2:
+                    if self.mode not in {"concerted", "grid"}:
+                        raise ValueError("Two-coordinate ORCA scans require explicit mode='concerted' (path) or 'grid' (independent surface)")
+                    if self.mode == "concerted" and self.scans[0].scan_steps != self.scans[1].scan_steps:
+                        raise ValueError("concerted ORCA scans require equal scan_steps")
+                elif self.mode is not None:
+                    raise ValueError("ORCA scan mode applies only to two scanned coordinates")
+            elif self.mode is not None:
+                raise ValueError("mode is supported only for native xTB or two-coordinate ORCA scans")
             return self
+        if self.mode == "grid":
+            raise ValueError("native xTB scans support concerted or sequential, not grid")
         if calculation.method != "GFN2-xTB":
             raise ValueError("native xTB scan currently supports explicitly declared GFN2-xTB")
         if calculation.keywords or calculation.orca_blocks or calculation.end_setting:
@@ -188,7 +198,7 @@ class ScanGuess(InputModel):
 
 class ProvidedGuess(InputModel):
     kind: Literal["provided"]
-    xyz_path: str = Field(min_length=1)
+    xyz_path: str = Field(min_length=1, description="Candidate XYZ in the current bound reactant's full atom order. Coordinates and element labels must refer to the same source atoms; do not combine product-order coordinates with reactant-order labels.")
     evidence_refs: list[str] = Field(min_length=1)
 
 
@@ -197,8 +207,8 @@ TsGuess = Annotated[XtbPathGuess | ScanGuess | ProvidedGuess, Field(discriminato
 
 class EndpointSeed(InputModel):
     kind: Literal['file']
-    xyz_path: str = Field(min_length=1)
-    mol_path: str | None = None
+    xyz_path: str = Field(min_length=1, description='XYZ in the bound endpoint species atom order. The program applies the existing reaction atom map; accepted native IRC endpoint files already use TS working order.')
+    mol_path: str | None = Field(default=None, description='MOL defining the XYZ atom order. Use the existing bound species MOL; a MOL already in TS working order is also recognized.')
     evidence_refs: list[str] = Field(min_length=1)
 
 
@@ -208,19 +218,25 @@ class EndpointVerification(InputModel):
     frequency: CalculationValue | None = None
 
 
+class ProductEndpointVerification(EndpointVerification):
+    component_logs: list[str] = Field(default_factory=list,
+        description='Native frequency logs for the independently optimized separated products. The program snapshots the files and matches each real geometry to its declared component; every component must have zero imaginary frequencies. This does not verify a bound complex minimum.')
+
+
 class TsVerification(InputModel):
     frequency: CalculationValue | None = None
     irc: CalculationValue | None = None
     irc_log: str | None = None
-    reactant_endpoint: EndpointVerification = Field(default_factory=EndpointVerification)
-    product_endpoint: EndpointVerification = Field(default_factory=EndpointVerification)
+    reactant_endpoint: EndpointVerification = Field(default_factory=EndpointVerification,
+        description='The declared reaction.reactant_smiles species, never a fixed IRC A/B direction. An explicit seed uses this species atom order; default IRC sources are provisional until optimization, frequency and direction checks pass.')
+    product_endpoint: ProductEndpointVerification = Field(default_factory=ProductEndpointVerification,
+        description='The declared reaction.product_smiles species, never a fixed IRC A/B direction. An explicit seed uses this species atom order (or an accepted native IRC working order); the runtime applies the bound atom map.')
 
 
 class TsExecutionLimits(InputModel):
     source: str = Field(min_length=1)
     max_compute_actions: StrictInt | None = Field(default=None, ge=0)
     max_model_calls: StrictInt | None = Field(default=None, ge=0)
-    max_interventions: StrictInt | None = Field(default=None, ge=0)
 
 
 class TsExecution(InputModel):
@@ -262,17 +278,26 @@ class CalculationReplacement(InputModel):
     replace: CalculationValue
 
 
-# Scientific operations and sources are immutable units. All other nested
-# groups derive their patch fields from the same definition as prepare.
+# Scientific operations are immutable units; source patches use the current kind.
 _ATOMIC = {
-    GeneratedConformer, HeavyAtomBinding, FileConformer, CatalogConformer,
-    RotatedConformer, PathSolvation, XtbPathGuess, ProvidedGuess,
+    PathSolvation, XtbPathGuess, ProvidedGuess,
     DistanceWindowInput, FrozenCoordinateInput, ScanCoordinateInput,
 }
 _PARTIAL: dict[type[BaseModel], type[BaseModel]] = {}
+_SOURCE_MODELS = {model.model_fields['kind'].annotation.__args__[0]: model for model in (
+    GeneratedConformer, FileConformer, CatalogConformer, RotatedConformer)}
+
+
+def _is_source_annotation(annotation):
+    if get_origin(annotation) is Annotated:
+        annotation = get_args(annotation)[0]
+    return get_origin(annotation) in (Union, UnionType) and any(
+        part in _SOURCE_MODELS.values() for part in get_args(annotation))
 
 
 def _patch_annotation(annotation):
+    if _is_source_annotation(annotation):
+        return ConformerSourceChanges
     if annotation is QmCalculation:
         return _partial_model(QmCalculation) | CalculationReplacement
     if annotation is CalculationRef:
@@ -296,11 +321,26 @@ def _partial_model(model):
             info = deepcopy(field)
             info.default = None
             info.default_factory = None
+            if _is_source_annotation(field.annotation):
+                info.discriminator = None
             fields[name] = (_patch_annotation(field.annotation) | None, info)
         _PARTIAL[model] = create_model(f"{model.__name__}Changes", __base__=InputModel, **fields)
     return _PARTIAL[model]
 
 
+_source_fields = {}
+for _source_model in _SOURCE_MODELS.values():
+    for _name, _field in _source_model.model_fields.items():
+        if _name == 'kind':
+            continue
+        _info = deepcopy(_field)
+        _info.default = None
+        _info.default_factory = None
+        if _name in _source_fields and not _info.description:
+            _info.description = _source_fields[_name][1].description
+        _source_fields[_name] = (_patch_annotation(_field.annotation) | None, _info)
+ConformerSourceChanges = create_model('ConformerSourceChanges', __base__=InputModel,
+    kind=(Literal['generate', 'file', 'catalog', 'rotate_about_bond'] | None, None), **_source_fields)
 TsInputChanges = _partial_model(TsInput)
 
 
@@ -339,6 +379,15 @@ def apply_input_changes(current: TsInput, changes: TsInputChanges) -> TsInput:
                 result[name] = definitions
             elif isinstance(value, (CalculationReplacement, _PARTIAL[QmCalculation])):
                 result[name] = calculation_patch(result.get(name), value)
+            elif isinstance(value, ConformerSourceChanges):
+                previous = result.get(name) or {}
+                kind = value.kind if 'kind' in value.model_fields_set else previous.get('kind')
+                if kind not in _SOURCE_MODELS:
+                    raise ValueError('a new conformer source requires its kind and complete source fields')
+                if kind != previous.get('kind'):
+                    previous = {}
+                typed = _partial_model(_SOURCE_MODELS[kind]).model_validate(value.model_dump(exclude_unset=True))
+                result[name] = merge(previous, typed)
             elif isinstance(value, BaseModel) and type(value) in _PARTIAL.values():
                 previous = result.get(name) or {}
                 if isinstance(value, _PARTIAL[ScanGuess]) and 'kind' in value.model_fields_set and previous.get('kind') != value.kind:
@@ -347,39 +396,15 @@ def apply_input_changes(current: TsInput, changes: TsInputChanges) -> TsInput:
             else:
                 result[name] = value.model_dump(mode="json") if isinstance(value, BaseModel) else value
         return result
-    return TsInput.model_validate(merge(current.model_dump(mode="json"), changes))
-
-
-class ScanRecoveryArtifact(InputModel):
-    path: str = Field(min_length=1, description="Changed declared conformer file, or a JSON repair receipt with failed_attempt_id, failure_input_sha256 and a nonblank repair description. The failed input/log itself is not repair evidence.")
-    sha256: str = Field(min_length=64, max_length=64)
-
-    @field_validator('sha256')
-    @classmethod
-    def hexadecimal_digest(cls, value):
-        if any(character not in '0123456789abcdefABCDEF' for character in value):
-            raise ValueError('SHA256 must be a hexadecimal artifact digest')
-        return value.lower()
-
-
-class ScanRepairReceipt(InputModel):
-    failed_attempt_id: str = Field(min_length=1)
-    failure_input_sha256: str | None
-    repair: str = Field(min_length=1)
-
-    @field_validator('repair')
-    @classmethod
-    def nonblank_repair(cls, value):
-        if not value.strip():
-            raise ValueError('scan repair receipt requires a nonblank repair description')
-        return value
-
-
-class ScanRecoveryEvidence(InputModel):
-    failed_attempt_id: str = Field(min_length=1)
-    failure_input_sha256: str | None = None
-    failure_log_sha256: str | None = None
-    evidence_refs: list[ScanRecoveryArtifact] = Field(min_length=1, description="Independently bound repair artifacts; their scientific adequacy remains the declarer's responsibility within existing task authority.")
+    merged = merge(current.model_dump(mode="json"), changes)
+    guess = merged.get('guess')
+    if isinstance(current.guess, ScanGuess) and guess and guess.get('kind') == 'scan':
+        before = resolve_calculation(current.guess.calculation, current.calculations)
+        after = resolve_calculation(guess['calculation'], merged.get('calculations') or {})
+        explicit = changes.guess.model_fields_set if changes.guess is not None else set()
+        if before.engine == 'xtb' and after.engine != 'xtb' and 'force_constant' not in explicit:
+            guess['force_constant'] = None
+    return TsInput.model_validate(merged)
 
 
 class TsResumeRequest(InputModel):
@@ -387,7 +412,6 @@ class TsResumeRequest(InputModel):
     reason: str = Field(min_length=1)
     request_key: str = Field(min_length=1)
     expected_revision: StrictInt = Field(ge=0)
-    scan_recovery: ScanRecoveryEvidence | None = Field(default=None, description="Required to restart a failed scan. Binds repair evidence to its failed attempt and native input/log fingerprints; reason alone cannot authorize a retry.")
 
     @field_validator("reason", "request_key")
     @classmethod
@@ -409,8 +433,6 @@ def normalize_ts_input_atoms(value: TsInput | TsInputChanges, *, atom_tables: di
         return [atom - base for atom in values]
 
     reaction = data.get("reaction") or {}
-    if reaction.get("atom_map") is not None:
-        reaction["atom_map"] = indices(reaction["atom_map"], 1)
     if reaction.get("reaction_center") is not None:
         reaction["reaction_center"] = [indices(pair, 1) for pair in reaction["reaction_center"]]
     conformers = data.get("conformers") or {}
@@ -421,8 +443,11 @@ def normalize_ts_input_atoms(value: TsInput | TsInputChanges, *, atom_tables: di
         window["atoms"] = indices(window["atoms"], 1)
     for side in ("reactant", "product"):
         endpoint = (data.get("verification") or {}).get(f"{side}_endpoint") or {}
-        for source in (conformers.get(side), endpoint.get("seed")):
-            if source and source["kind"] == "rotate_about_bond":
+        current_endpoint = getattr(current_input.verification, f'{side}_endpoint') if current_input else None
+        current_sources = (getattr(current_input.conformers, side), current_endpoint.seed if current_endpoint else None) if current_input else (None, None)
+        for source, current_source in zip((conformers.get(side), endpoint.get("seed")), current_sources):
+            kind = source.get('kind', current_source.kind if current_source else None) if source else None
+            if source and kind == "rotate_about_bond" and source.get('atoms') is not None:
                 source["atoms"] = indices(source["atoms"], 1, side)
     guess = data.get("guess")
     if guess and (guess.get('scans') is not None or guess.get('freeze') is not None):

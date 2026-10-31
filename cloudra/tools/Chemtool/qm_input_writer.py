@@ -8,11 +8,9 @@ from pydantic import Field, model_validator
 
 try:
     from rdkit import Chem
-    from rdkit.Chem import AllChem
     _RDKIT_AVAILABLE = True
 except Exception:
     Chem = None
-    AllChem = None
     _RDKIT_AVAILABLE = False
 
 from cloudra.base.session_class import Session
@@ -20,13 +18,15 @@ from cloudra.base.tools_class import Tool, input_schema, output_schema
 from cloudra.persistence.fs_utils import atomic_write_text
 from cloudra.persistence.workspace import resolve_tool_path
 from cloudra.tools.core.calculation_intent import (
+    compare_calculation_input,
     inspect_input,
     intent_from_writer,
+    native_tokens,
     validate_writer_request,
 )
-from cloudra.tools.core.qm_calculation import QmCalculation
-from cloudra.tools.core.qm_keywords import orca_basis_keyword
-from cloudra.tools.core.structure_artifacts import read_xyz_atoms
+from cloudra.tools.core.molecule import read_molecule, to_xyz, total_charge
+from cloudra.tools.core.qm_calculation import QmCalculation, QmInputSettings
+from cloudra.tools.core.qm_keywords import gaussian_basis_keyword, orca_basis_keyword
 from cloudra.tools.core.structure_builder import (
     BuildStrategy,
     PreparationRequest,
@@ -52,17 +52,19 @@ description = (
     "coordinates are generated from a file or SMILES and never appear in the return value. "
     "External MLIP potentials (e.g. MACE) are supported via external_program/external_params "
     "(ORCA '! ExtOpt' + %method ProgExt block; Gaussian external=\"...\" route). "
-    "Use for: preparing Gaussian/ORCA inputs (opt, freq, TS search, etc.) to submit with submit_compute_job "
-    "(job_type='gaussian' or 'orca', matching `engine`). "
+    "Use for: preparing ordinary Gaussian/ORCA inputs (opt, freq, single point) and exploratory TS/IRC trials "
+    "or capability probes for submit_compute_job (job_type='gaussian' or 'orca', matching `engine`). "
+    "Use ts_prepare/ts_resume for formal TS solving and complete verification. "
     "Do not use for: parsing results (use log_parser) or converting an existing structure file (use format_converter)."
 )
 
 
-class QmInputWriter_input_schema(QmCalculation, input_schema):
+class QmInputWriter_input_schema(QmCalculation, QmInputSettings, input_schema):
     engine: Literal["gaussian", "orca"] = Field(
         description="Target QM program. 'gaussian': write a .gjf (submit with job_type='gaussian'); "
                     "'orca': write a .inp (submit with job_type='orca'). "
-                    "method/basis/task_type map onto each program's input syntax automatically.",
+                    "task_type and known basis aliases map onto each program's input syntax; "
+                    "method and additional keywords must use that program's native spelling.",
     )
     source_type: Literal["smiles", "xyz_file", "mol_file"] = Field(
         description="Molecular-structure source type. "
@@ -95,52 +97,32 @@ class QmInputWriter_input_schema(QmCalculation, input_schema):
     task_type: list[dict] = Field(
         default=[{"opt": None}],
         description='''List of dicts whose keys are job types and values are their parameters.
-                    Keys: opt/freq/irc/scan/single_point ('sp' accepted as the same single-point task).
-                    Gaussian example: [{"opt":"TS,calcfc,noeigen"},{"freq":None}];
-                    the same dict works for ORCA (mapped to `! OptTS Freq` etc.).
-                    scan: ORCA emits a RELAXED scan (Opt + %geom Scan declared in orca_blocks);
-                    Gaussian only accepts the explicit {"scan":"rigid"} declaration (bare `scan`
-                    route = RIGID scan, coordinate via end_setting) — a bare {"scan":None} is refused.'''
+                    Common aliases: opt/freq/irc/single_point ('sp' is equivalent); other native task keys are preserved.
+                    Omit task_type with native keywords/orca_blocks/end_setting to use only those declarations.
+                    The Opt default applies only when all native fields are empty; [] explicitly adds no task.
+                    Omission defaults to opt only when keywords, orca_blocks and end_setting are all blank;
+                    otherwise only the native declaration is written. Fill task_type explicitly to add a task.
+                    Gaussian example: [{"opt":"TS,readfc"},{"freq":None}]. ORCA opt='ts' maps to OptTS;
+                    Gaussian-specific suboptions are preserved with warnings, not silently translated.
+                    Use native keywords and orca_blocks for ORCA controls. Gaussian scan is rigid;
+                    relaxed scans use opt=modredundant and end_setting, or ts_guess scan_prepare.'''
     )
     frequency_mode: Literal["auto", "analytic", "numeric"] = Field(
         default="auto",
         description="Frequency evaluation mode. ORCA: 'numeric' with task_type=[{'freq':None}] "
                     "emits NumFreq (required for external potentials); 'analytic'/'auto' emit Freq. "
-                    "Rejected when no frequency task is requested.",
+                    "Warns when no frequency task is requested; explicit native evaluation options take precedence.",
     )
 
-    charge: int = Field(
-        default=0,
-        description="Molecular charge."
-    )
-    multiplicity: int = Field(
-        default=1,
-        description="Spin multiplicity. Singlet=1, doublet=2, triplet=3."
-    )
-    electronic_character: Literal["closed_shell", "open_shell"] | None = Field(
-        default=None, description="Optional explicit electronic character for SMILES seed generation; "
-        "open_shell singlets skip closed-shell force fields. Does not choose a QM method or initial spin.",
-    )
-    mem: str = Field(
-        default="4GB",
-        description="TOTAL memory for the whole job, e.g. '4GB', '8GB'. Gaussian writes %mem "
-                    "verbatim (a total); ORCA writes %maxcore = mem/nproc because ORCA maxcore "
-                    "is a PER-CORE value. Request memory_mb equal to this total when submitting."
-    )
-    nproc: int = Field(
-        default=4,
-        ge=1,
-        description="Number of CPU cores for parallel compute (Gaussian %nprocshared / ORCA %pal)."
-    )
     orca_blocks: Optional[str] = Field(
         default=None,
         description="ORCA-only: raw % block lines inserted between the `!` line and the coordinate "
-                    "block, e.g. '%geom MaxIter 200 end'. For raw %geom Scan, ORCA atom indices "
-                    "are 0-based: convert each 1-based atom-map/internal_coordinates index i to i-1 "
-                    "(bond 1-6 -> 'Scan B 0 5') and verify the coordinate against the XYZ order "
-                    "including explicit H before submission. For a SMILES source, use the generated build's "
+                    "block, e.g. '%geom MaxIter 200 end'. Scans use ts_guess mode='scan_prepare'. "
+                    "Native CPU/memory settings suppress duplicate defaults; explicit nproc/mem must agree. "
+                    "Native atom indices are 0-based and refer to the exact XYZ order including explicit H. "
+                    "For a SMILES source, use the generated build's "
                     "prepared_structure.json atom_identities, not SMILES heavy-atom positions. "
-                    "Rejected for engine='gaussian'."
+                    "For Gaussian this text is preserved in the trailing section with a warning."
     )
     title: str = Field(
         default="Gaussian job generated by Cloudra",
@@ -164,18 +146,19 @@ class QmInputWriter_input_schema(QmCalculation, input_schema):
     )
     chk_name: Optional[str] = Field(
         default=None,
-        description="chk filename, e.g. H2O.chk. By convention point it into the same directory "
-                    "as output_path (absolute path preferred): the per-task Gaussian scratch is "
-                    "deleted after the run, so a checkpoint outside the .gjf directory is lost."
+        description="Gaussian checkpoint path. Omit to generate an absolute '<output stem>.chk' "
+                    "next to output_path. Explicit paths are absolute as-is or relative to the Agent "
+                    "working directory, like output_path; their parent directories are created before writing."
     )
     rwf_name: Optional[str] = Field(
         default=None,
-        description="rwf filename; Gaussian scratch file, often large."
+        description="Gaussian scratch file path, often large. Absolute as-is or relative to the Agent "
+                    "working directory; its parent directory is created before writing the input."
     )
     fchk_name: Optional[str] = Field(
         default=None,
-        description="fchk filename. Same placement convention as chk_name: same directory as "
-                    "output_path, absolute path preferred."
+        description="Gaussian formatted-checkpoint path. Absolute as-is or relative to the Agent "
+                    "working directory; its parent directory is created before writing the input."
     )
 
     @model_validator(mode='after')
@@ -200,22 +183,15 @@ class QmInputWriter_output_schema(output_schema):
     )
     unapplied_options: list[str] = Field(
         default_factory=list,
-        description="Requested options that could NOT be realized in the file. Empty on success; "
+        description="Options missing from, or unexpectedly added to, the generated file. Empty on success; "
                     "a successful write never silently drops an option.",
     )
     generation_path: str = Field(
         default="",
         description="How the file was produced, e.g. 'orca:simple+orca_blocks' or 'gaussian:route'.",
     )
-
-
-# Gaussian 风格 task key -> ORCA simple-input 关键字（参数太 Gaussian 化时保守降级）
-_ORCA_TASK_KEYWORDS = {
-    "opt": "Opt",
-    "freq": "Freq",
-    "irc": "IRC",
-    "scan": "Opt",
-}
+    warnings: list[dict] = Field(default_factory=list,
+        description="Calculation-option advice visible to the calling model; native settings are preserved.")
 
 
 class QmInputWriter(Tool):
@@ -285,89 +261,81 @@ class QmInputWriter(Tool):
         return None
 
     @staticmethod
-    def _gaussian_style_lines(atoms) -> str:
-        """把 ``(元素, [x, y, z])`` 列表渲染成 Gaussian/ORCA 坐标块。"""
-        lines = []
-        for symbol, position in atoms:
-            x, y, z = position
-            if not all(math.isfinite(value) for value in (x, y, z)):
-                raise ValueError(f"Coordinates for {symbol} must be finite numbers")
-            lines.append(f"{symbol:<4} {x:>14.8f} {y:>14.8f} {z:>14.8f}")
-        return "\n".join(lines)
+    def _coordinate_lines(mol, *, units: str = 'angstrom') -> str:
+        """Render coordinates only at the native input-writing boundary."""
+        if not all(math.isfinite(value) for position in mol.GetConformer().GetPositions() for value in position):
+            raise ValueError("Source coordinates must be finite numbers")
+        if units == 'unknown':
+            raise ValueError('Native coordinate units are unknown or conflicting; cannot serialize the source geometry')
+        if units == 'bohr':
+            from ase.units import Bohr
+
+            return '\n'.join(f'{atom.GetSymbol():<4} {point[0] / Bohr:14.8f} {point[1] / Bohr:14.8f} {point[2] / Bohr:14.8f}'
+                for atom, point in zip(mol.GetAtoms(), mol.GetConformer().GetPositions(), strict=True))
+        return "\n".join(to_xyz(mol).splitlines()[2:])
 
     @staticmethod
-    def _smiles_coordinates(user_input: QmInputWriter_input_schema, artifact_dir: str) -> str:
-        """SMILES 源：坐标由共享结构构建器产生（本工具不再自带 Embed/MMFF 快捷路径）。
+    def _smiles_molecule(user_input: QmInputWriter_input_schema, artifact_dir: str):
+        """SMILES 源：保留共享构建器返回的分子，不从导出文件重建。
 
-        构建器拒绝时抛 ``StructureBuildRefused``：既不是"路径不存在"，也不是"参数非法"，
-        而是结构层面的事实（多组分待组装、电荷不符、力场缺参数、未收敛……），必须原样报出。
+        单组分量化优化可接收成功嵌入的粗种子，力场资格仍如实保留为失败态。
+        其他任务与多组分继续要求共享构建器的候选资格。
         """
+        source_mol = Chem.MolFromSmiles(user_input.source_value)
+        if source_mol is None:
+            raise ValueError(f"Invalid SMILES string: {user_input.source_value}")
         prepared = prepare_structure(PreparationRequest(
-            structure=StructureInput(kind="smiles", value=user_input.source_value),
+            structure=StructureInput(kind="molecule", value=source_mol),
             output_dir=artifact_dir,
-            total_charge=user_input.charge,
+            total_charge=total_charge(source_mol) if user_input.charge is None else user_input.charge,
             multiplicity=user_input.multiplicity,
             electronic_character=user_input.electronic_character,
             strategy=BuildStrategy(name="per_component", embed=True, optimize=True),
         ))
-        if prepared.status != "ok" or not prepared.has_coordinates:
+        if prepared.status == "ok" and prepared.has_coordinates:
+            mol = prepared.mol
+        elif (
+            prepared.status in {"missing_parameters", "optimization_failed"}
+            and len(prepared.components) == 1
+            and prepared.components[0].embed_status == "embedded"
+            and prepared.components[0].optimization_status in {"missing_parameters", "not_converged", "failed"}
+            and intent_from_writer(user_input.model_dump()).tasks & {"minimum_opt", "ts_opt"}
+        ):
+            mol = prepared.components[0].mol
+        else:
             raise StructureBuildRefused(
                 prepared.status, prepared.message, list(prepared.diagnostics),
                 prepared.artifact_path,
             )
-        return QmInputWriter._gaussian_style_lines(
-            read_xyz_atoms(prepared.candidate_path(".xyz"))
-        )
+        positions = mol.GetConformer().GetPositions()
+        if mol.GetNumAtoms() > 1 and not positions.any():
+            raise ValueError("Embedded coordinates are all-zero placeholders")
+        seed_note = ""
+        if prepared.status != "ok":
+            seed_note = (
+                f" Unoptimized seed (build status: {prepared.status}): {prepared.message} "
+                f"Build artifacts: {prepared.artifact_path}"
+            )
+        return mol, seed_note
 
     @staticmethod
-    def _get_coordinates(user_input: QmInputWriter_input_schema, artifact_dir: str) -> str:
-        """根据来源类型返回 Gaussian 格式的坐标文本。"""
+    def _get_molecule(user_input: QmInputWriter_input_schema, artifact_dir: str):
+        """Read or build a molecule; coordinate files remain an output boundary."""
         if user_input.source_type == "smiles":
-            return QmInputWriter._smiles_coordinates(user_input, artifact_dir)
+            return QmInputWriter._smiles_molecule(user_input, artifact_dir)
 
-        if user_input.source_type == "xyz_file":
-            import ase.io
-
-            try:
-                with open(user_input.source_value, encoding="utf-8") as source:
-                    first_line = source.readline().strip()
-                try:
-                    atom_count = int(first_line)
-                except ValueError as exc:
-                    raise ValueError("the first line must be a positive atom count") from exc
-                if atom_count <= 0:
-                    raise ValueError("the first line must be a positive atom count")
-                # ASE preserves extended XYZ property order and reads the final
-                # frame, as this tool did before. Pin the declared format so a
-                # misleading extension cannot select a different parser.
-                atoms = ase.io.read(user_input.source_value, format="extxyz")
-            except FileNotFoundError:
-                raise
-            except Exception as exc:
-                raise ValueError(
-                    f"XYZ source is malformed: {exc}. If it contains an MDL MOL block, "
-                    "use source_type='mol_file'."
-                ) from exc
-            return QmInputWriter._gaussian_style_lines(
-                zip(atoms.symbols, (list(p) for p in atoms.positions))
-            )
-
-        # MOL needs ASE's format reader; pin the format to the declared source
-        # type so a misleading extension never silently changes the parser.
-        import ase.io
-
+        fmt = "xyz" if user_input.source_type == "xyz_file" else "mol"
         try:
-            atoms = ase.io.read(user_input.source_value, format="mol")
+            mol = read_molecule(input_path=user_input.source_value, input_format=fmt, charge=user_input.charge)
         except FileNotFoundError:
             raise
         except Exception as exc:
+            hint = ("If it contains an MDL MOL block, use source_type='mol_file'." if fmt == "xyz" else
+                    "Provide an MDL MOL file or use source_type='xyz_file' for XYZ coordinates.")
             raise ValueError(
-                f"MOL source is malformed: {user_input.source_value}: {exc}. "
-                "Provide an MDL MOL file or use source_type='xyz_file' for XYZ coordinates."
+                f"{fmt.upper()} source could not be read: {exc}. {hint}"
             ) from exc
-        return QmInputWriter._gaussian_style_lines(
-            zip(atoms.symbols, (list(p) for p in atoms.positions))
-        )
+        return mol, ""
 
     @staticmethod
     def _build_link0(user_input: QmInputWriter_input_schema) -> str:
@@ -386,75 +354,44 @@ class QmInputWriter(Tool):
         return "\n".join(parts)
 
     @staticmethod
-    def _gaussian_scan_refusal(task_type: list[dict]) -> Optional[dict]:
-        """Gaussian scan 语义门禁：裸 scan 是刚性扫描，ORCA 的 scan 是松弛扫描
-        （Opt + %geom Scan），同一 task_type 在两引擎语义不同。只接受显式
-        {'scan': 'rigid'} 声明；其余取值拒绝并给出可执行的替代声明路径。
-        拒绝时返回 {"message", "unapplied_options"}，放行返回 None。
-        """
-        for task in task_type:
-            for key, value in task.items():
-                if str(key).lower() != "scan":
-                    continue
-                declared = str(value).strip().lower() if value is not None else ""
-                if declared == "rigid":
-                    continue
-                return {
-                    "message": (
-                        "a Gaussian 'scan' task writes the bare `scan` route, which is a RIGID "
-                        "potential-surface scan, while the same task_type on the ORCA engine is a "
-                        "RELAXED scan (Opt + %geom Scan) — the bare key cannot keep the two engines' "
-                        "semantics apart and inspect_input cannot tell which was meant. Declare the "
-                        "intent explicitly: use {'scan': 'rigid'} for a Gaussian rigid scan (scan "
-                        "coordinate via end_setting, e.g. 'B 1 2 S 10 0.02'); for a relaxed scan use "
-                        "engine='orca' with a %geom Scan block in orca_blocks, or a Gaussian "
-                        "opt=modredundant route via {'opt': 'modredundant'} + end_setting."
-                    ),
-                    "unapplied_options": [
-                        f"scan: bare Gaussian scan is rigid (ORCA scan is relaxed); value {value!r} "
-                        "is not an explicit 'rigid' declaration"
-                    ],
-                }
-        return None
-
-    @staticmethod
-    def _build_route(user_input: QmInputWriter_input_schema) -> str:
-        """拼装 Route 段。"""
-        keywords = ["#p"]
-
+    def _gaussian_task_keywords(user_input: QmInputWriter_input_schema) -> list[str]:
+        """Render task aliases while retaining every explicit native suboption."""
+        keywords = []
         for task in user_input.task_type:
             for key, value in task.items():
                 key_l = key.lower()
-                if key_l == "single_point":
-                    # 规范词汇映射到 Gaussian 原生 sp 关键字（validate 已放行两种拼写）
-                    key_l = "sp"
-                if key_l == "scan" and str(value).strip().lower() == "rigid":
-                    # 显式刚性扫描声明：写裸 scan 路由（扫描坐标在 end_setting 给出），
-                    # 'rigid' 是语义声明而不是 Gaussian 路由参数，不能写成 scan=rigid
-                    keywords.append("scan")
-                elif key_l == "freq" and user_input.frequency_mode != "auto":
-                    mode = "numer" if user_input.frequency_mode == "numeric" else "analytic"
-                    keywords.append(f"freq={mode}")
+                if key_l == 'single_point':
+                    key_l = 'sp'
+                if key_l == 'scan' and str(value).strip().lower() == 'rigid':
+                    keywords.append('scan')
+                elif key_l == 'freq' and user_input.frequency_mode != 'auto':
+                    mode = 'numer' if user_input.frequency_mode == 'numeric' else 'analytic'
+                    options = str(value) if value is not None else ''
+                    declared_modes = {'num', 'numer', 'numeric', 'numfreq', 'analytic'}
+                    if not declared_modes & {option.strip().lower() for option in options.split(',')}:
+                        options = ','.join(filter(None, [mode, options]))
+                    keywords.append(f'freq=({options})' if ',' in options else f'freq={options}')
                 elif value is None:
                     keywords.append(key_l)
-                elif "," in str(value):
-                    keywords.append(f"{key_l}=({value})")
+                elif ',' in str(value):
+                    keywords.append(f'{key_l}=({value})')
                 else:
-                    keywords.append(f"{key_l}={value}")
+                    keywords.append(f'{key_l}={value}')
+        return keywords
 
+    @staticmethod
+    def _build_route(user_input: QmInputWriter_input_schema) -> str:
+        """Build a native Gaussian route without replacing explicit parameters."""
+        keywords = ['#p', *QmInputWriter._task_keywords(user_input)]
         if user_input.external_program:
-            # Gaussian 外部 MLIP 路由：external="engine"，无 method/basis
             keywords.append(f'external="{user_input.external_program}"')
         elif user_input.basis_set:
-            keywords.append(f"{user_input.method}/{user_input.basis_set}")
+            keywords.append(f'{user_input.method}/{gaussian_basis_keyword(user_input.basis_set)}')
         else:
-            # 半经验方法（pm6/am1/pm7 等）无基组：空 basis 不能再拼出 "pm6/" 尾斜杠。
             keywords.append(user_input.method)
-
         if user_input.keywords:
             keywords.append(user_input.keywords)
-
-        return " ".join(keywords)
+        return ' '.join(keywords)
 
     # ------------------------------------------------------------------
     # ORCA 输入生成
@@ -485,33 +422,114 @@ class QmInputWriter(Tool):
         )
 
     @staticmethod
-    def _orca_task_keywords(task_type: list[dict], frequency_mode: str = "auto") -> list[str]:
-        """严格任务归一化：只翻译已支持的键；无法实现的选项在
-        validate_writer_request 阶段已经报错，这里不会静默丢弃。"""
-        keywords: list[str] = []
+    def _orca_resource_lines(mem: str, nproc: int) -> list[str]:
+        """ORCA uses MB per process; keep the existing total-budget division."""
+        mb = QmInputWriter._orca_memory_mb(mem)
+        per_core = int(mb / nproc)
+        if per_core < 1:
+            raise ValueError(f'ORCA mem={mem!r} / nproc={nproc} cannot represent a positive %maxcore; at least 1 MB per process is required')
+        return [f"%pal nprocs {nproc} end", f"%maxcore {per_core}"]
+
+    @staticmethod
+    def _orca_resource_settings(user_input: QmInputWriter_input_schema) -> tuple[list[str], list[dict]]:
+        """Keep explicit native resources and reject contradictory explicit fields."""
+        from cloudra.services.compute_admission import _orca_resources
+
+        native = '\n'.join(filter(None, [
+            '! ' + user_input.keywords if user_input.keywords else '',
+            user_input.orca_blocks, user_input.end_setting,
+        ]))
+        native_cpus, native_memory = _orca_resources(native)
+        nproc = native_cpus or user_input.nproc
+        if native_cpus is not None and 'nproc' in user_input.model_fields_set and native_cpus != user_input.nproc:
+            raise ValueError(f'Conflicting ORCA resources: native nprocs={native_cpus}, explicit nproc={user_input.nproc}')
+        mb = QmInputWriter._orca_memory_mb(user_input.mem)
+        if native_memory is not None and native_cpus is None:
+            native_memory *= nproc  # A lone %maxcore is MB per process.
+        if native_memory is not None and 'mem' in user_input.model_fields_set:
+            generated = QmInputWriter._orca_resource_lines(user_input.mem, nproc)
+            expected_memory = int(mb / nproc) * nproc
+            if native_memory != expected_memory:
+                raise ValueError(f'Conflicting ORCA resources: native total memory={native_memory} MB, explicit mem={user_input.mem!r} renders {expected_memory} MB')
+        else:
+            generated = (QmInputWriter._orca_resource_lines(user_input.mem, nproc)
+                         if native_memory is None else [f'%pal nprocs {nproc} end'])
+        lines = [line for line in generated
+                 if not (native_cpus is not None and line.startswith('%pal'))
+                 and not (native_memory is not None and line.startswith('%maxcore'))]
+        advice = []
+        if native_cpus is not None or native_memory is not None:
+            advice.append(dict(code='native_resource_settings', field='orca_blocks' if user_input.orca_blocks else 'keywords', severity='warning',
+                message=f'Explicit native resources are preserved (nprocs={nproc}, total memory={native_memory if native_memory is not None else int(mb / nproc) * nproc} MB); no duplicate resource defaults were added. Explicit nproc/mem fields must agree.'))
+        per_core = mb / nproc
+        if native_memory is None and per_core != int(per_core):
+            advice.append(dict(code='resource_memory_precision', field='mem', severity='warning',
+                message=f'ORCA maxcore uses integer MB per process; {per_core:g} MB per process is rendered as {int(per_core)} MB without increasing the requested total memory.'))
+        return lines, advice
+
+    @staticmethod
+    def _orca_task_keywords(task_type: list[dict], frequency_mode: str = 'auto') -> list[str]:
+        """Translate task aliases; preserve other explicitly declared text."""
+        keywords = []
         for task in task_type:
             for key, value in task.items():
                 key_l = key.lower()
-                params = str(value).lower() if value is not None else ""
-                if key_l == "opt":
-                    keyword = "OptTS" if "ts" in {p.strip() for p in params.split(",")} else "Opt"
-                elif key_l == "freq":
-                    numeric = frequency_mode == "numeric" or params.strip() in {
-                        "num", "numer", "numeric", "numfreq",
-                    }
-                    keyword = "NumFreq" if numeric else "Freq"
-                elif key_l == "irc":
-                    keyword = "IRC"
-                elif key_l == "scan":
-                    # 松弛扫描由 orca_blocks 的 %geom Scan 定义驱动，仍需 Opt 关键字
-                    keyword = "Opt"
-                elif key_l in ("sp", "single_point"):
-                    continue  # 单点：! 行只留方法/基组
+                params = str(value) if value is not None else ''
+                options = [part.strip() for part in params.split(',') if part.strip()]
+                if key_l == 'opt':
+                    keyword = 'OptTS' if 'ts' in {part.lower() for part in options} else 'Opt'
+                    remainder = ','.join(part for part in options if part.lower() != 'ts')
+                elif key_l == 'freq':
+                    numeric_aliases = {'num', 'numer', 'numeric', 'numfreq'}
+                    native_modes = {part.lower() for part in options} & (numeric_aliases | {'analytic'})
+                    numeric = bool(native_modes & numeric_aliases) if native_modes else frequency_mode == 'numeric'
+                    keyword = 'NumFreq' if numeric else 'Freq'
+                    remainder = ','.join(part for part in options if part.lower() not in numeric_aliases | {'analytic'})
+                elif key_l == 'irc':
+                    keyword, remainder = 'IRC', params
+                elif key_l in ('sp', 'single_point'):
+                    keyword, remainder = 'SP', params
                 else:
-                    continue  # 前置校验已拒绝未知键，这里只是防御
-                if keyword not in keywords:
-                    keywords.append(keyword)
+                    keyword = key if value is None else f'{key}=({params})' if ',' in params else f'{key}={params}'
+                    remainder = ''
+                keywords.append(keyword)
+                if remainder:
+                    keywords.append(remainder)
         return keywords
+
+    @staticmethod
+    def _task_keywords(user_input: QmInputWriter_input_schema) -> list[str]:
+        """Do not serialize an identical task token already present in native text."""
+        from cloudra.tools.core.calculation_intent import _orca_code
+        from cloudra.tools.core.native_input_sections import gaussian_code
+
+        if user_input.engine == 'orca':
+            groups = [QmInputWriter._orca_task_keywords([{key: value}], user_input.frequency_mode)
+                      for task in user_input.task_type for key, value in task.items()]
+        else:
+            groups = [[token] for token in QmInputWriter._gaussian_task_keywords(user_input)]
+        try:
+            code = gaussian_code(user_input.keywords) if user_input.engine == 'gaussian' else _orca_code(user_input.keywords)
+            present = set(native_tokens(code))
+        except ValueError:
+            return [token for group in groups for token in group]
+        result = []
+        for group in groups:
+            if len(group) != 1:
+                result.extend(group)  # Do not remove half of a parameterized task.
+                continue
+            task = group[0]
+            try:
+                tokens = native_tokens(task)
+            except ValueError:
+                result.append(task)
+                continue
+            if len(tokens) == 1:
+                if tokens[0] in present:
+                    continue
+                present.add(tokens[0])
+            result.append(task)
+        return result
 
     @staticmethod
     def _external_method_block(user_input: QmInputWriter_input_schema) -> str:
@@ -525,19 +543,60 @@ class QmInputWriter(Tool):
     @staticmethod
     def _written_calculation(user_input: QmInputWriter_input_schema) -> QmCalculation:
         values = user_input.model_dump(include=set(QmCalculation.model_fields))
+        tasks = QmInputWriter._task_keywords(user_input)
+        values['keywords'] = ' '.join([*tasks, *filter(None, [user_input.keywords])])
         if user_input.external_program:
             if user_input.engine == 'orca':
                 values['orca_blocks'] = '\n'.join(filter(None, [
                     QmInputWriter._external_method_block(user_input), user_input.orca_blocks]))
             else:
                 values['keywords'] = ' '.join(filter(None, [
-                    f'external="{user_input.external_program}"', user_input.keywords]))
+                    f'external="{user_input.external_program}"', values['keywords']]))
+        native_mode = intent_from_writer({**values, 'task_type': [], 'frequency_mode': 'auto'}).frequency_mode
+        if native_mode != 'auto':
+            values['frequency_mode'] = native_mode
         return QmCalculation.model_validate(values)
 
     @staticmethod
-    def _build_orca_input(user_input: QmInputWriter_input_schema, coords: str) -> str:
+    def validate_rendered_input(user_input: QmInputWriter_input_schema, content: str, *, charge: int) -> list[str]:
+        """Detect renderer data loss independently of native option advice."""
+        advice = validate_writer_request(user_input.model_dump())
+        indeterminate = any(entry['code'].startswith('malformed_native') for entry in advice)
+        inspected = inspect_input(content, engine=user_input.engine)
+        requested = intent_from_writer(user_input.model_dump())
+        details = []
+        if inspected.tasks != requested.tasks and not indeterminate:
+            details.append(f'the generated file encodes tasks {sorted(inspected.tasks)} but {sorted(requested.tasks)} were requested')
+        calculation = QmInputWriter._written_calculation(user_input)
+        differences = compare_calculation_input(content, calculation.model_dump(),
+            charge=charge, multiplicity=user_input.multiplicity)
+        native_layout = any(entry['code'] in {'native_method_layout', 'native_basis_layout'} for entry in advice)
+        for difference in differences:
+            if difference.field == 'parse' and indeterminate:
+                continue
+            if difference.field in {'method', 'keywords'} and native_layout:
+                continue
+            details.append(difference.message)
+        for field in ('keywords', 'orca_blocks', 'end_setting', 'method'):
+            value = getattr(user_input, field)
+            if value and value.strip() not in content:
+                details.append(f'{field} was lost during rendering')
+        basis = (orca_basis_keyword(user_input.basis_set) if user_input.engine == 'orca'
+                 else gaussian_basis_keyword(user_input.basis_set))
+        if basis and basis not in content:
+            details.append('basis_set was lost during rendering')
+        task_tokens = QmInputWriter._task_keywords(user_input)
+        for token in task_tokens:
+            if token.lower() not in content.lower():
+                details.append(f'task_type token {token!r} was lost during rendering')
+        return details
+
+    @staticmethod
+    def _build_orca_input(user_input: QmInputWriter_input_schema, mol) -> str:
         """拼装 ORCA .inp：! 行 + %pal/%maxcore（+%method 外部势块）+ 坐标块。"""
-        simple = QmInputWriter._orca_task_keywords(user_input.task_type, user_input.frequency_mode)
+        from cloudra.tools.core.native_input_sections import orca_coordinate_units
+
+        simple = QmInputWriter._task_keywords(user_input)
         method_block = ""
         if user_input.external_program:
             # 外部 MLIP 路由：ExtOpt 把能量/梯度交给外部程序，输入不含
@@ -562,25 +621,23 @@ class QmInputWriter(Tool):
                 "(user-declared expectation; NOT an evidence-verified identity)"
             )
         lines.append("! " + " ".join(simple))
-        lines.append(f"%pal nprocs {user_input.nproc} end")
-
-        # %maxcore 按核均分（ORCA 语义是每核 MB）。
-        mb = QmInputWriter._orca_memory_mb(user_input.mem)
-        per_core = max(256, int(mb / user_input.nproc))
-        lines.append(f"%maxcore {per_core}")
+        lines.extend(QmInputWriter._orca_resource_settings(user_input)[0])
         if method_block:
             lines.append(method_block)
         if user_input.orca_blocks:
             lines.append(user_input.orca_blocks.strip())
 
-        lines.append(f"* xyz {user_input.charge} {user_input.multiplicity}")
-        lines.append(coords)
+        units = orca_coordinate_units('\n'.join([*lines, user_input.end_setting]))
+        lines.append(f"* xyz {total_charge(mol)} {user_input.multiplicity}")
+        lines.append(QmInputWriter._coordinate_lines(mol, units=units))
         lines.append("*")
+        if user_input.end_setting:
+            lines.append(user_input.end_setting)
         lines.append("")
         return "\n".join(lines)
 
     @staticmethod
-    def _build_gjf(user_input: QmInputWriter_input_schema, coords: str) -> str:
+    def _build_gjf(user_input: QmInputWriter_input_schema, mol) -> str:
         """拼装完整的 .gjf 文本。
 
         Gaussian 要求坐标块后有一个空行作为输入结束标记，
@@ -588,6 +645,10 @@ class QmInputWriter(Tool):
         """
         link0 = QmInputWriter._build_link0(user_input)
         route = QmInputWriter._build_route(user_input)
+        from cloudra.tools.core.native_input_sections import gaussian_coordinate_units, gaussian_sections
+
+        units = gaussian_coordinate_units(gaussian_sections(route)[0].route)
+        coordinates = QmInputWriter._coordinate_lines(mol, units=units)
         title = user_input.title
         if user_input.source_type == "smiles":
             # provenance：声明的期望身份，不是证据验证过的身份（GH 协议：
@@ -603,17 +664,74 @@ class QmInputWriter(Tool):
             "",                    # Route 后空行
             title,
             "",                    # Title 后空行
-            f"{user_input.charge} {user_input.multiplicity}",
-            coords,
+            f"{total_charge(mol)} {user_input.multiplicity}",
+            coordinates,
             "",                    # 坐标后空行（Gaussian 输入结束标记）
         ]
 
         if user_input.end_setting:
-            # 在结束空行之前插入自定义设置及其后的空行
-            sections.insert(-1, user_input.end_setting)
-            sections.insert(-1, "")
+            # 坐标块先以空行结束，再写扫描坐标或其他尾部设置。
+            sections.extend([user_input.end_setting, ""])
+        if user_input.orca_blocks:
+            sections.extend([user_input.orca_blocks, ""])
 
         return "\n".join(sections) + "\n"
+
+    @staticmethod
+    def render_input(user_input: QmInputWriter_input_schema, mol) -> str:
+        """Render native input from the owned molecule and declared input settings."""
+        if (user_input.charge is None and mol.HasProp('cloudra_graph_status')
+                and mol.GetProp('cloudra_graph_status') == 'unresolved'):
+            raise ValueError('XYZ calculation input requires an explicit total charge; declare charge=0 for neutral')
+        if user_input.engine == 'orca':
+            return QmInputWriter._build_orca_input(user_input, mol)
+        if user_input.chk_name is None:
+            user_input = user_input.model_copy(update={
+                'chk_name': str(Path(user_input.output_path).resolve().with_suffix('.chk')),
+            })
+        QmInputWriter._validate_gaussian_file_paths(user_input)
+        return QmInputWriter._build_gjf(user_input, mol)
+
+    @staticmethod
+    def _validate_gaussian_file_paths(user_input: QmInputWriter_input_schema) -> None:
+        """A native scratch/checkpoint destination must never overwrite its input."""
+        input_path = Path(user_input.output_path).resolve()
+        for field in ('chk_name', 'rwf_name', 'fchk_name'):
+            value = getattr(user_input, field)
+            if field == 'chk_name' and value is None:
+                value = str(input_path.with_suffix('.chk'))
+            if value is None:
+                continue
+            artifact_path = Path(value)
+            if (artifact_path.resolve() == input_path
+                    or (artifact_path.exists() and input_path.exists() and artifact_path.samefile(input_path))):
+                raise ValueError(f'{field} aliases the input destination {input_path}; choose distinct file paths')
+
+    @staticmethod
+    def _prepare_gaussian_file_parents(user_input: QmInputWriter_input_schema) -> None:
+        """Prepare file destinations without opening or replacing existing QM artifacts."""
+        QmInputWriter._validate_gaussian_file_paths(user_input)
+        paths = {
+            'chk_name': user_input.chk_name if user_input.chk_name is not None else str(Path(user_input.output_path).with_suffix('.chk')),
+            'rwf_name': user_input.rwf_name,
+            'fchk_name': user_input.fchk_name,
+        }
+        for field, value in paths.items():
+            if value is None:
+                continue
+            if not value.strip():
+                raise ValueError(f'{field} must be a non-empty file path, or omitted')
+            path = Path(value)
+            try:
+                if path.exists() and not path.is_file():
+                    raise ValueError(f'{field} {path} is not a regular file destination')
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if not os.access(path.parent, os.W_OK | os.X_OK):
+                    raise ValueError(f'{field} {path}: parent directory {path.parent} is not writable')
+                if path.exists() and not os.access(path, os.W_OK):
+                    raise ValueError(f'{field} {path} is not writable')
+            except OSError as exc:
+                raise ValueError(f'{field} {path}: cannot prepare its parent directory: {exc}') from exc
 
     async def tool_call(self, user_input: QmInputWriter_input_schema, session: Session) -> QmInputWriter_output_schema:
         if not _RDKIT_AVAILABLE:
@@ -625,7 +743,7 @@ class QmInputWriter(Tool):
             )
         if user_input.engine == "orca":
             try:
-                self._orca_memory_mb(user_input.mem)
+                _, resource_advice = self._orca_resource_settings(user_input)
             except ValueError as exc:
                 return QmInputWriter_output_schema(
                     is_success=False,
@@ -657,29 +775,30 @@ class QmInputWriter(Tool):
                     input_path="",
                     message=f"qm_input_writer refused: {ext_error}",
                 )
-        # Gaussian scan 语义门禁：裸 scan 是刚性扫描，ORCA 侧是松弛扫描
-        # （Opt + %geom Scan），同一 task_type 两引擎不同义且 inspect_input
-        # 检不出差异——必须显式 {'scan': 'rigid'} 声明。
-        if user_input.engine == "gaussian":
-            scan_refusal = self._gaussian_scan_refusal(user_input.task_type)
-            if scan_refusal:
-                return QmInputWriter_output_schema(
-                    is_success=False,
-                    input_path="",
-                    message=f"qm_input_writer refused: {scan_refusal['message']}",
-                    unapplied_options=scan_refusal["unapplied_options"],
-                )
+        if ('task_type' not in user_input.model_fields_set
+                and any(str(value or '').strip() for value in (
+                    user_input.keywords, user_input.orca_blocks, user_input.end_setting))):
+            user_input = user_input.model_copy(update={'task_type': []})
         # Validate request semantics before SMILES embedding or coordinate
         # optimization, both of which can take minutes for an invalid job.
-        conflicts = validate_writer_request(user_input.model_dump())
+        advice = validate_writer_request(user_input.model_dump())
+        conflicts = [entry for entry in advice if entry['severity'] == 'error']
+        option_warnings = [entry for entry in advice if entry['severity'] == 'warning']
+        if user_input.engine == 'orca':
+            option_warnings.extend(resource_advice)
+            for field in ('chk_name', 'rwf_name', 'fchk_name'):
+                if getattr(user_input, field) is not None:
+                    option_warnings.append(dict(code='gaussian_only_field', field=field, severity='warning',
+                        message=f'{field} is Gaussian-only and does not apply to ORCA; no ORCA file setting was inferred.'))
         if conflicts:
             return QmInputWriter_output_schema(
                 is_success=False,
                 input_path="",
                 message="qm_input_writer refused: " + " | ".join(
-                    f"[{c['code']}] {c['message']}" for c in conflicts
+                    f"[{c['code']}] {c['field']}: {c['message']}" for c in conflicts
                 ),
                 unapplied_options=[c["message"] for c in conflicts],
+                warnings=option_warnings,
             )
         # 成功写出时在 interpreted_intent 里显式记录 scan 的刚性/松弛语义
         scan_semantics = None
@@ -692,6 +811,11 @@ class QmInputWriter(Tool):
         if user_input.source_type in ("xyz_file", "mol_file"):
             user_input.source_value = await asyncio.to_thread(resolve_tool_path, self, user_input.source_value)
         user_input.output_path = await asyncio.to_thread(resolve_tool_path, self, user_input.output_path)
+        if user_input.engine == 'gaussian':
+            for field in ('chk_name', 'rwf_name', 'fchk_name'):
+                value = getattr(user_input, field)
+                if value is not None:
+                    setattr(user_input, field, await asyncio.to_thread(resolve_tool_path, self, value))
         if user_input.artifact_dir:
             user_input.artifact_dir = await asyncio.to_thread(resolve_tool_path, self, user_input.artifact_dir)
         else:
@@ -701,15 +825,14 @@ class QmInputWriter(Tool):
             user_input.artifact_dir = build_artifact_dir(base or ".", stem)
         try:
             # 结构构建是重活（Embed/优化），离开事件循环线程
-            coords = await asyncio.to_thread(
-                self._get_coordinates, user_input, user_input.artifact_dir
+            mol, seed_note = await asyncio.to_thread(
+                self._get_molecule, user_input, user_input.artifact_dir
             )
+            content = await asyncio.to_thread(self.render_input, user_input, mol)
             if user_input.engine == "orca":
-                content = self._build_orca_input(user_input, coords)
                 engine_label = "ORCA"
                 generation_path = "orca:simple+orca_blocks"
             else:
-                content = self._build_gjf(user_input, coords)
                 engine_label = "Gaussian"
                 generation_path = "gaussian:route"
 
@@ -718,23 +841,20 @@ class QmInputWriter(Tool):
             interpreted = inspected.model_dump(mode="json")
             if scan_semantics is not None:
                 interpreted["scan_semantics"] = scan_semantics
-            requested = intent_from_writer(user_input.model_dump())
-            if inspected.tasks != requested.tasks:
-                return QmInputWriter_output_schema(
-                    is_success=False,
-                    input_path="",
-                    message=(
-                        "qm_input_writer internal mismatch: the generated file encodes "
-                        f"tasks {sorted(inspected.tasks)} but {sorted(requested.tasks)} "
-                        "were requested; no file was written."
-                    ),
-                    interpreted_intent=interpreted,
-                    unapplied_options=sorted(requested.tasks - inspected.tasks),
-                )
+            if inspected.certainty == 'unknown':
+                option_warnings.append(dict(code='unclassified_native_intent', field='keywords', severity='warning',
+                    message='The native task could not be classified; the original declaration is preserved. Inspect the engine input before interpreting results.'))
+            written_calculation = self._written_calculation(user_input)
+            render_errors = self.validate_rendered_input(user_input, content, charge=total_charge(mol))
+            if render_errors:
+                task_differences = sorted(inspected.tasks ^ intent_from_writer(user_input.model_dump()).tasks)
+                return QmInputWriter_output_schema(is_success=False,
+                    message='qm_input_writer internal mismatch: ' + ' | '.join(render_errors),
+                    interpreted_intent=interpreted, unapplied_options=[*task_differences, *render_errors], warnings=option_warnings)
 
-            limitation = ""
+            limitation = seed_note
             if "ts_opt" in inspected.tasks and inspected.constraints:
-                limitation = (
+                limitation += (
                     " NOTE: this input keeps constraints during a TS optimization; "
                     "the result may only be claimed as a CONSTRAINED saddle point, "
                     "not a full-space transition state."
@@ -757,6 +877,8 @@ class QmInputWriter(Tool):
                         ),
                     )
             input_path = user_input.output_path
+            if user_input.engine == 'gaussian':
+                await asyncio.to_thread(self._prepare_gaussian_file_parents, user_input)
 
             # 同路径重复生成：内容逐字节相同 → 幂等复用；不同 → fail-loud 给指引，
             # 绝不静默覆盖一份来源不明的既有文件。
@@ -771,7 +893,8 @@ class QmInputWriter(Tool):
                             f"reused it as-is.{limitation}"
                         ),
                         interpreted_intent=interpreted,
-                        calculation=self._written_calculation(user_input),
+                        calculation=written_calculation,
+                        warnings=option_warnings,
                         unapplied_options=[],
                         generation_path=generation_path,
                     )
@@ -792,7 +915,8 @@ class QmInputWriter(Tool):
                 input_path=input_path,
                 message=f"{engine_label} input file generated successfully.{limitation}",
                 interpreted_intent=interpreted,
-                calculation=self._written_calculation(user_input),
+                calculation=written_calculation,
+                warnings=option_warnings,
                 unapplied_options=[],
                 generation_path=generation_path,
             )
@@ -829,7 +953,7 @@ class QmInputWriter(Tool):
                 is_success=False,
                 input_path="",
                 message=f"Invalid input for qm_input_writer: {str(e)}. "
-                        "Check that the SMILES is valid or that the source file matches source_type, then retry."
+                        "Correct the reported field or coordinate source, then retry."
             )
         except Exception as e:
             return QmInputWriter_output_schema(

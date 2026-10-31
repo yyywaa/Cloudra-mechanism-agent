@@ -17,8 +17,10 @@ scheduling slept forever.  This broker is intercepted by
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
+from copy import deepcopy
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -60,15 +62,20 @@ def _iso(ts: float) -> str:
 
 
 def _ok(summary: str, **data: Any) -> ToolResult:
-    payload = {"is_success": True, "message": summary, **data}
-    return ToolResult(is_success=True, summary=summary, data=payload)
+    from cloudra.tools.Managetool.schedule import ScheduleOutput
+
+    payload = ScheduleOutput(is_success=True, message=summary, **data).model_dump(mode="json")
+    return ToolResult(is_success=True, summary=json.dumps(payload, ensure_ascii=False, allow_nan=False), data=payload)
 
 
 def _err(message: str) -> ToolResult:
+    from cloudra.tools.Managetool.schedule import ScheduleOutput
+
+    payload = ScheduleOutput(is_success=False, message=message).model_dump(mode="json")
     return ToolResult(
         is_success=False,
-        summary=message,
-        data={"is_success": False, "message": message},
+        summary=json.dumps(payload, ensure_ascii=False, allow_nan=False),
+        data=payload,
     )
 
 
@@ -105,9 +112,32 @@ class ReminderBroker:
         self._timers: dict[tuple[str, int], list[asyncio.Task]] = {}
         self._last_check: dict[tuple[str, int], tuple[int, str]] = {}
         self._fire_lock = asyncio.Lock()
+        self._pending: dict[str, dict[int, dict[str, Any]]] = {}
+        self._through: dict[str, int] = {}
+
+    def apply(self, event) -> None:
+        if event.type not in _REMINDER_TYPES or event.seq <= self._through.get(event.project_id, 0):
+            return
+        self._through[event.project_id] = event.seq
+        rows = self._pending.setdefault(event.project_id, {})
+        if event.type == "reminder.scheduled":
+            rows[event.seq] = _row_from_event(event)
+        elif event.data.get("schedule_id") is not None:
+            rows.pop(int(event.data["schedule_id"]), None)
+
+    def snapshot(self) -> dict[str, Any]:
+        return deepcopy({"pending": self._pending, "through": self._through})
+
+    def restore(self, payload: dict[str, Any]) -> None:
+        self._pending = {pid: {int(key): deepcopy(row) for key, row in rows.items()}
+                         for pid, rows in payload.get("pending", {}).items()}
+        self._through = dict(payload.get("through", {}))
 
     def prune_projects(self, project_ids: set[str]) -> None:
         """Cancel only local reminder timers belonging to deleted projects."""
+        for mapping in (self._pending, self._through):
+            for project_id in mapping.keys() - project_ids:
+                mapping.pop(project_id)
         for project_id, schedule_id in list(self._timers):
             if project_id not in project_ids:
                 self._cancel_timer(project_id, schedule_id)
@@ -136,21 +166,20 @@ class ReminderBroker:
     def pending_in_project(
         self, project_id: str, *, session_id: str | None = None, through_seq: int | None = None
     ) -> list[dict[str, Any]]:
-        live: dict[int, dict[str, Any]] = {}
-        for env in self.core.event_log.query_project(
-            project_id, types=_REMINDER_TYPES, limit=None
-        ):
-            if through_seq is not None and env.seq > through_seq:
-                continue
-            if env.type == "reminder.scheduled":
-                if session_id is not None and env.session_id != session_id:
-                    continue
-                live[env.seq] = _row_from_event(env)
-            else:
-                sid = env.data.get("schedule_id")
-                if sid is not None:
-                    live.pop(int(sid), None)
-        return sorted(live.values(), key=lambda row: row["wake_ts"])
+        if through_seq is not None and through_seq < self._through.get(project_id, 0):
+            # An explicitly captured historical view may predate a new reminder
+            # mutation. Ordinary current-state requests never read history.
+            live = {}
+            for event in self.core.event_log.iter_project(project_id, before_seq=through_seq, types=_REMINDER_TYPES):
+                if event.type == "reminder.scheduled":
+                    live[event.seq] = _row_from_event(event)
+                elif event.data.get("schedule_id") is not None:
+                    live.pop(int(event.data["schedule_id"]), None)
+            rows = live.values()
+        else:
+            rows = list(self._pending.get(project_id, {}).values())
+        return sorted((deepcopy(row) for row in rows if session_id is None or row["session_id"] == session_id),
+                      key=lambda row: row["wake_ts"])
 
     def _all_pending(self) -> list[dict[str, Any]]:
         seen: set[str] = set()
@@ -185,7 +214,6 @@ class ReminderBroker:
             data=data,
         )
         await self.core.event_writer.flush()
-        await self.core.event_hub.publish(envelope)
         return envelope
 
     # ------------------------------------------------------------------ arm / fire
@@ -355,10 +383,52 @@ class ReminderBroker:
     async def rearm_all(self) -> None:
         """Rebuild timers from the event projection; overdue reminders fire now."""
         await self.close()
-        for row in await asyncio.to_thread(self._all_pending):
+        await self.core.event_writer.flush()
+        for row in self._all_pending():
             self._arm(row)
 
     # ------------------------------------------------------------------ tool
+
+    def _terminal_status(self, agent: AgentSession, schedule_id: int) -> str | None:
+        """Verify ownership from durable history, including after snapshot restore."""
+        owned = False
+        status = None
+        for event in self.core.event_log.iter_events(
+            project_id=agent.project_id, session_id=agent.id, types=_REMINDER_TYPES,
+            after_seq=max(0, schedule_id - 1),
+        ):
+            if event.type == "reminder.scheduled" and event.seq == schedule_id:
+                owned = True
+            elif owned and event.data.get("schedule_id") == schedule_id:
+                if event.type == "reminder.fired":
+                    return "fired"
+                status = event.type.removeprefix("reminder.")
+        return status if owned else None
+
+    async def _cancel(self, agent: AgentSession, schedule_id: int) -> ToolResult:
+        # The pending check and terminal write share the timeout/check fire
+        # lock. A cancellation must never claim it withdrew a fired message.
+        async with self._fire_lock:
+            row = next(
+                (item for item in await asyncio.to_thread(self.pending, agent.id) if item["schedule_id"] == schedule_id),
+                None,
+            )
+            if row is None:
+                status = await asyncio.to_thread(self._terminal_status, agent, schedule_id)
+                if status == "cancelled":
+                    return _ok("Reminder already cancelled; no action was needed.", schedule_id=schedule_id)
+                if status == "fired":
+                    return _ok(
+                        "Reminder already fired; this is a no-op. Any queued or delivered reminder message is not withdrawn.",
+                        schedule_id=schedule_id,
+                    )
+                return _err(f"No reminder owned by this Agent was found for schedule_id={schedule_id}.")
+            self._cancel_timer(agent.project_id, schedule_id)
+            await self._emit(
+                "reminder.cancelled", project_id=agent.project_id,
+                session_id=agent.id, data={"schedule_id": schedule_id},
+            )
+            return _ok("Reminder cancelled.", schedule_id=schedule_id)
 
     async def handle(self, agent: AgentSession, call: ToolCall) -> ToolResult:
         from cloudra.tools.Managetool.schedule import ScheduleInput
@@ -366,7 +436,7 @@ class ReminderBroker:
         try:
             args = ScheduleInput.model_validate(call.arguments).model_dump()
         except ValidationError as exc:
-            return _err(validation_feedback(exc))
+            return _err(validation_feedback(exc, schema=ScheduleInput))
         action = str(args.get("action") or "create")
         if action == "list":
             schedules = [
@@ -389,21 +459,7 @@ class ReminderBroker:
             raw_id = args.get("schedule_id")
             if raw_id is None:
                 return _err("cancel requires schedule_id.")
-            schedule_id = int(raw_id)
-            row = next(
-                (item for item in await asyncio.to_thread(self.pending, agent.id) if item["schedule_id"] == schedule_id),
-                None,
-            )
-            if row is None:
-                return _err("No pending reminder found to cancel.")
-            self._cancel_timer(agent.project_id, schedule_id)
-            await self._emit(
-                "reminder.cancelled",
-                project_id=agent.project_id,
-                session_id=agent.id,
-                data={"schedule_id": schedule_id},
-            )
-            return _ok("Reminder cancelled.", schedule_id=schedule_id, schedules=[])
+            return await self._cancel(agent, int(raw_id))
         if action != "create":
             return _err(f"Unknown action: {action}")
         return await self._create(agent, args)

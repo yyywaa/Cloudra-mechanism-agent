@@ -5,6 +5,7 @@ handling and reloads remain real. benchmark_synthetic fixtures are CONTRACT DATA
 not actual transition states. No engine or scheduler is started by these tests.
 """
 
+import hashlib
 import shutil
 from pathlib import Path
 
@@ -20,7 +21,7 @@ from cloudra.tools.core import ts_process as process
 from cloudra.tools.core.ts_pipeline_driver import advance_process, handle_process_job_terminal
 from tests.ts_fixtures import calculation_input
 
-pytestmark = pytest.mark.usefixtures("ts_producer_authority")
+pytestmark = pytest.mark.usefixtures("ts_producer_authority", "rdkit_chemistry")
 
 FIXTURES = Path(__file__).parent / "fixtures"
 CO2_XYZ = "3\nfixture CO2 final frame\nO 0 0 -1.252682\nC 0 0 0\nO 0 0 1.252682\n"
@@ -37,13 +38,16 @@ def admission(monkeypatch):
 
 
 def waiting_fixture_stage(tmp_path, *, purpose="frequency", engine="orca", seed=CO2_XYZ,
-                          project_id="project", owner_id="owner"):
+                          project_id="project", owner_id="owner", smiles="O=C=O", limits=None):
     """Prepare one real immutable binding as a calculator's queued input boundary."""
     db = ComputeDB().init()
     declaration = calculation_input(
-        reactant_smiles="O=C=O", product_smiles="O=C=O", engine=engine,
-        method="b3lyp/def2svp", atom_map=[0, 1, 2],
+        reactant_smiles=smiles, product_smiles=smiles, engine=engine,
+        method="b3lyp/def2svp",
     )
+    if limits is not None:
+        from cloudra.tools.core.ts_inputs import TsExecutionLimits
+        declaration.execution.limits = TsExecutionLimits.model_validate(limits)
     if purpose == "scan":
         from cloudra.tools.core.ts_inputs import ScanGuess
         declaration.guess = ScanGuess(kind="scan",calculation={"engine":engine,"method":"b3lyp","basis_set":"def2svp","keywords":""},
@@ -54,6 +58,13 @@ def waiting_fixture_stage(tmp_path, *, purpose="frequency", engine="orca", seed=
         project_id=project_id, owner_id=owner_id, workspace_dir=str(tmp_path),
         input=declaration.model_dump(mode="json"),
     ))
+    if limits is not None:
+        from cloudra.services.exploration_budget_store import ExplorationBudget, configure_budget
+        configure_budget(db, process_id=state['process_id'], project_id=project_id,
+            owner_id=owner_id, budget=ExplorationBudget(
+                source=declaration.execution.limits.source,
+                max_compute_actions=declaration.execution.limits.max_compute_actions,
+                max_model_calls=declaration.execution.limits.max_model_calls))
     record = process.TsProcessRecord(
         run_id="ts_0001", pipeline_id=state["process_id"], workspace_dir=str(tmp_path),
         run_dir=str(tmp_path / "ts" / "ts_0001"), input=declaration,
@@ -64,7 +75,12 @@ def waiting_fixture_stage(tmp_path, *, purpose="frequency", engine="orca", seed=
     folder.mkdir(parents=True)
     geometry = folder / "optimized.xyz"
     geometry.write_text(seed)
-    record.current_seed_xyz_path = str(geometry)
+    from cloudra.tools.core.molecule import read_molecule
+    from cloudra.tools.core.reaction_state import ReactionStructures
+    molecule = read_molecule(input_path=str(geometry), input_format='xyz')
+    record.structures = ReactionStructures(reactant=molecule, product=molecule,
+        candidate=None if purpose == 'scan' else molecule,
+        product_to_reactant=tuple(range(molecule.GetNumAtoms())))
     source = folder / (purpose + (".inp" if engine == "orca" else ".gjf"))
     from cloudra.tools.Chemtool.qm_input_writer import QmInputWriter, QmInputWriter_input_schema
     from cloudra.tools.Chemtool.ts_guess import TsGuess, TsGuess_input_schema
@@ -72,6 +88,8 @@ def waiting_fixture_stage(tmp_path, *, purpose="frequency", engine="orca", seed=
     if purpose == "scan":
         TsGuess()._scan_prepare(TsGuess_input_schema(
             mode="scan_prepare", input_path=str(geometry), output_path=str(source),
+            charge=declaration.reaction.charge, multiplicity=declaration.reaction.multiplicity,
+            electronic_character=declaration.reaction.electronic_character,
             **declaration.guess.calculation.model_dump(mode='json'),
             scans=[dict(atoms=[0, 1], scan_start=1.0, scan_end=2.0, scan_steps=5)],
             freeze=[dict(coord_type="bond", atoms=[0, 2])],
@@ -82,13 +100,27 @@ def waiting_fixture_stage(tmp_path, *, purpose="frequency", engine="orca", seed=
             engine=engine, method="b3lyp", basis_set="def2svp", task_type=[task],
             source_type="xyz_file", source_value=str(geometry), output_path=str(source),
         )
-        coords = process._xyz_coords(str(geometry))
-        source.write_text(QmInputWriter._build_orca_input(request, coords) if engine == "orca"
-                          else QmInputWriter._build_gjf(request, coords))
+        from cloudra.tools.core.molecule import read_molecule
+        mol = read_molecule(str(geometry))
+        source.write_text(QmInputWriter._build_orca_input(request, mol) if engine == "orca"
+                          else QmInputWriter._build_gjf(request, mol))
     with use_pipeline_database(db):
         error, job = process._submit_step(record, purpose, str(source), engine)
     assert error == ""
     step = process.TsJobStep(purpose=purpose, job_id=job, input_path=str(source), state="ready", actual_calculation=process.stage_calculation(record,purpose),source_input_revision=record.declaration_revision)
+    if purpose in {"reactant_opt", "product_opt"}:
+        # This replay starts at the queued Opt boundary. Preserve its real seed
+        # exactly as the endpoint writer does, without claiming an IRC origin.
+        role = purpose.partition("_")[0]
+        endpoint_source = folder / f"{role}_source.xyz"
+        process._write_immutable_input(str(endpoint_source), geometry.read_text())
+        origin = process.EndpointSource(
+            kind="species_reference", label=role, source_path=str(endpoint_source),
+            sha256=hashlib.sha256(endpoint_source.read_bytes()).hexdigest(),
+        )
+        provenance = folder / "endpoint_source.json"
+        process._write_immutable_input(str(provenance), origin.model_dump_json())
+        step.endpoint_source = process.EndpointSource.model_validate_json(provenance.read_text())
     if purpose == "scan":
         record.scan_step = step
     else:
@@ -145,7 +177,8 @@ def test_contract_single_mode_admits_one_irc_and_preserves_same_geometry(
     install_log(record, step, "benchmark_synthetic/ts_freq.out")
     stale_guess = Path(record.run_dir) / "stale_guess.xyz"
     stale_guess.write_text("3\nstale preoptimization guess\nO 0 0 -5\nC 0 0 0\nO 0 0 5\n")
-    record.current_ts_guess_path = str(stale_guess)
+    from cloudra.tools.core.molecule import read_molecule
+    record.structures.candidate = read_molecule(input_path=str(stale_guess), input_format='xyz')
     process.save_record(record)
     hess = Path(step.input_path).with_suffix(".hess")
     if hessian:
@@ -156,7 +189,8 @@ def test_contract_single_mode_admits_one_irc_and_preserves_same_geometry(
     assert [s.purpose for s in persisted.job_steps] == ["frequency", "irc"]
     irc = persisted.job_steps[-1]
     text = Path(irc.input_path).read_text()
-    assert "Direction both" in text
+    assert "%irc" not in text
+    assert "Direction" not in text
     lines = text.splitlines()
     coordinate_start = next(i + 1 for i, line in enumerate(lines) if line.split() == ["*", "xyz", "0", "1"])
     atoms = [line.split() for line in lines[coordinate_start:coordinate_start + 3]]
@@ -164,10 +198,11 @@ def test_contract_single_mode_admits_one_irc_and_preserves_same_geometry(
     for atom, expected in zip(atoms, [[0, 0, -1.252682], [0, 0, 0], [0, 0, 1.252682]], strict=True):
         assert [float(value) for value in atom[1:]] == pytest.approx(expected)
     assert "def2-SVP" in text and "def2svp" not in text
-    assert ("InitHess read" in text) == hessian
-    assert ("InitHess calc_numfreq" in text) == (not hessian)
+    assert "InitHess" not in text
+    assert "Hess_Filename" not in text
+    assert persisted.input.verification.irc == record.input.verification.irc
     if hessian:
-        assert f'Hess_Filename "{hess}"' in text
+        assert hess.read_text() == "contract Hessian placeholder; engine is never executed\n"
     from cloudra.tools.core.calculation_intent import inspect_input
     assert inspect_input(text, engine="orca").tasks == {"irc"}
     assert handle_process_job_terminal(db, step.job_id) == result
@@ -225,34 +260,37 @@ def test_fixture_scan_terminal_event_preserves_peak_gate_and_no_duplicate_jobs(
         assert saved.job_steps[-1].purpose == "ts_opt"
         text = Path(saved.job_steps[-1].input_path).read_text()
         assert "OptTS" in text and "Constraints" not in text
-        from cloudra.tools.core.structure_artifacts import read_xyz_atoms
-        atoms = read_xyz_atoms(saved.current_ts_guess_path)
+        candidate = saved.structures.candidate
+        atoms = list(zip([atom.GetSymbol() for atom in candidate.GetAtoms()],
+            candidate.GetConformer().GetPositions().tolist(), strict=True))
         assert [s for s, _ in atoms] == ["C", "H", "N"]
         assert atoms[0][1] == pytest.approx([2.1, 0.0, 0.0])
         assert job_count(db) == 2
     else:
         assert saved.blocked.failure_class == "scan_no_candidate"
-        assert saved.current_ts_guess_path == "" and saved.terminal is None
+        assert saved.structures.candidate is None and saved.terminal is None
         assert job_count(db) == 1
     assert handle_process_job_terminal(db, step.job_id) == result
 
 
 @pytest.mark.parametrize("state", ["failed", "cancelled"])
-def test_failed_scan_keeps_fixture_artifacts_and_unchanged_resume_budget(tmp_path, admission, state):
+def test_failed_scan_retry_keeps_fixture_artifacts_and_charges_the_new_attempt(tmp_path, admission, state):
     db, record, step = waiting_fixture_stage(tmp_path, purpose="scan")
     log = install_log(record, step, "orca/segfault_mid_opt/dvb_opt_truncated_no_termination.out")
     before = log.read_bytes()
     result = finish(db, step.job_id, state)["record"]
     assert result["blocked"]["failure_class"] == "scan_job_failed"
     assert result["blocked"]["needs"] == ["compute_artifacts"]
-    assert result["current_ts_guess_path"] == ""
+    assert result["structures"]["candidate"] is None
     saved = process.load_record(str(tmp_path), record.run_id)
     from cloudra.tools.core.ts_inputs import TsResumeRequest
     resumed = process.resume(saved, TsResumeRequest(changes={'guess':saved.input.guess.model_dump()},reason='keep unchanged scan',request_key='unchanged',expected_revision=saved.revision))
-    assert resumed.intervention_count == 0
-    assert resumed.declaration_revision == 1
-    assert resumed.blocked.model_dump() == result["blocked"]
-    assert log.read_bytes() == before and job_count(db) == 1
+    assert resumed.intervention_count == 1
+    assert resumed.declaration_revision == 2
+    assert resumed.attempt_history[-1].blocked.model_dump() == result["blocked"]
+    assert resumed.scan_step.job_id != step.job_id
+    assert resumed.waiting_for == f'job:{resumed.scan_step.job_id}'
+    assert log.read_bytes() == before and job_count(db) == 2
 
 
 @pytest.mark.parametrize("fixture", ["orca/hcn_irc_orca60.out", "orca/cope_irc_extopt_mace_orca611.out"])
@@ -266,7 +304,21 @@ def test_normal_irc_without_geometry_sidecars_cannot_admit_endpoint_opt(tmp_path
 
 
 def test_partial_gaussian_irc_submits_outer_frame_opt_but_never_claims_verified(tmp_path, admission):
-    db, record, step = waiting_fixture_stage(tmp_path, purpose="irc", engine="gaussian")
+    from rdkit import Chem
+
+    from cloudra.tools.core import gaussian_frames
+    from cloudra.tools.core.irc_path import xyz_block
+
+    # Use the job's first native Input orientation; extracted IRC frames are
+    # sorted by reaction coordinate and do not carry a starting TS XYZ here.
+    native = (FIXTURES / 'gaussian/hcn_ts_irc_g16.log').read_text()
+    rows = gaussian_frames._parse_last_input_orientation(native.split('Distance matrix', 1)[0])
+    assert rows is not None
+    symbols = [Chem.GetPeriodicTable().GetElementSymbol(number) for number, *_ in rows]
+    positions = [point for _, *point in rows]
+    assert symbols == ['C', 'N', 'H']
+    db, record, step = waiting_fixture_stage(tmp_path, purpose="irc", engine="gaussian",
+        seed=xyz_block(symbols, positions), smiles='C#N')
     install_log(record, step, "gaussian/hcn_ts_irc_g16.log")
     result = finish(db, step.job_id)
     saved = process.load_record(str(tmp_path), record.run_id)
@@ -284,15 +336,17 @@ def test_partial_gaussian_irc_submits_outer_frame_opt_but_never_claims_verified(
     assert job_count(db) == 2
 
 
-@pytest.mark.parametrize("engine,fixture,xyz", [
-    ("orca", "orca/co2_freq_orca42.out", CO2_XYZ),
-    ("gaussian", "gaussian/water_opt_freq_g16.out", WATER_XYZ),
+@pytest.mark.parametrize("engine,fixture,xyz,smiles", [
+    ("orca", "orca/co2_freq_orca42.out", CO2_XYZ, "O=C=O"),
+    ("gaussian", "gaussian/water_opt_freq_g16.out", WATER_XYZ, "O"),
 ])
 @pytest.mark.parametrize("defect", ["none", "missing_log", "missing_geometry", "saved_mismatch", "log_mismatch", "no_frequencies", "synthetic_wrong_mode"])
 def test_native_endpoint_opt_freq_chain_requires_same_geometry_and_real_frequency(
-    tmp_path, admission, engine, fixture, xyz, defect,
+    tmp_path, admission, engine, fixture, xyz, smiles, defect,
 ):
-    db, record, step = waiting_fixture_stage(tmp_path, purpose="reactant_opt", engine=engine, seed=xyz)
+    db, record, step = waiting_fixture_stage(
+        tmp_path, purpose="reactant_opt", engine=engine, seed=xyz, smiles=smiles,
+    )
     install_log(record, step, fixture)
     opt_result = finish(db, step.job_id)
     saved = process.load_record(str(tmp_path), record.run_id)
@@ -300,6 +354,11 @@ def test_native_endpoint_opt_freq_chain_requires_same_geometry_and_real_frequenc
     assert saved.terminal is None
     assert handle_process_job_terminal(db, step.job_id) == opt_result
     frequency = saved.job_steps[-1]
+    assert frequency.endpoint_source == step.endpoint_source
+    origin = frequency.endpoint_source
+    assert origin.kind == "species_reference" and origin.label == "reactant"
+    assert Path(origin.source_path).read_text() == xyz
+    assert origin.sha256 == hashlib.sha256(Path(origin.source_path).read_bytes()).hexdigest()
     frequency_log = install_log(saved, frequency, fixture)
     geometry = Path(frequency.input_path).with_name("optimized.xyz")
     if defect == "missing_log":
@@ -333,6 +392,31 @@ def test_native_endpoint_opt_freq_chain_requires_same_geometry_and_real_frequenc
         assert saved.terminal == "candidate_only"
     assert job_count(db) == 2
     assert handle_process_job_terminal(db, frequency.job_id) == result
+
+
+@pytest.mark.parametrize("engine,fixture,xyz,smiles", [
+    ("orca", "orca/co2_freq_orca42.out", CO2_XYZ, "O=C=O"),
+    ("gaussian", "gaussian/water_opt_freq_g16.out", WATER_XYZ, "O"),
+])
+def test_endpoint_opt_without_source_provenance_never_submits_frequency(
+    tmp_path, admission, engine, fixture, xyz, smiles,
+):
+    db, record, step = waiting_fixture_stage(
+        tmp_path, purpose="reactant_opt", engine=engine, seed=xyz, smiles=smiles,
+    )
+    step.endpoint_source = None
+    with use_pipeline_database(db):
+        process.save_record(record)
+    install_log(record, step, fixture)
+
+    result = finish(db, step.job_id)
+    saved = process.load_record(str(tmp_path), record.run_id)
+    assert saved.terminal == "candidate_only"
+    assert "accepted optimization has no endpoint source provenance" in saved.stage_record("verdict").detail
+    assert saved.waiting_for == ""
+    assert [job.purpose for job in saved.job_steps] == ["reactant_opt"]
+    assert job_count(db) == 1
+    assert handle_process_job_terminal(db, step.job_id) == result
 
 
 @pytest.mark.parametrize("purpose", ["scan", "frequency", "irc"])

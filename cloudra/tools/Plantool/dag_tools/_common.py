@@ -12,7 +12,6 @@ from pydantic import Field
 from cloudra.base.role_identity import legacy_agent_id_for_role
 from cloudra.base.session_class import Session
 from cloudra.base.tools_class import Tool, output_schema
-from cloudra.dag.completion import build_projection
 from cloudra.dag.engine import DagEngine
 from cloudra.dag.models import (
     CoverageContract,
@@ -167,22 +166,6 @@ def resolve_delivery_target(
     return None, "not_found"
 
 
-def render_projection_view(
-    snapshot: Any,
-    *,
-    mode: OrchestrationMode,
-    contract: CoverageContract,
-    history: list[Any],
-) -> dict[str, Any]:
-    projection = build_projection(
-        snapshot,
-        mode=mode,
-        contract=contract,
-        history=history,
-    )
-    return projection.model_dump(mode="json")
-
-
 class DagToolOutput(output_schema):
     is_success: bool
     action: str
@@ -216,6 +199,21 @@ def fail(action: str, error: str, *, accepted: bool | None = None) -> DagToolOut
         accepted=accepted,
         error=error,
     )
+
+
+def final_review_request_id(actor: Any) -> str | None:
+    """Read the runtime-owned assignment, including the existing tool bridge."""
+    return getattr(actor, "final_review_request_id", None) or getattr(
+        getattr(actor, "_runtime_agent", None), "final_review_request_id", None
+    )
+
+
+def review_scope_allows(actor: Any, kind: str, request_id: str) -> bool:
+    """Research agents can inspect all requests; each reviewer has one inbox."""
+    if getattr(actor, "type", None) != "supervisor":
+        return True
+    assigned = final_review_request_id(actor)
+    return kind != "exit" if assigned is None else kind == "exit" and request_id == assigned
 
 
 @dataclass

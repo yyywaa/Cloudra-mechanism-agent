@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
 import inspect
 import json
 import logging
 import math
+from pathlib import Path
 from typing import Any, Iterable
 
 from pydantic import ValidationError
@@ -36,7 +38,7 @@ from cloudra.runtime_v2.schemas import (
 )
 from cloudra.runtime_v2.tool_catalog import javascript_instructions
 from cloudra.runtime_v2.turn_pipeline import DeltaSink, LLMResponse
-from cloudra.tools.capabilities import is_direct_only, visual_tools
+from cloudra.tools.capabilities import is_direct_only, supervisor_access_for, visual_tools
 from cloudra.tools.name_hints import hint_unknown_tool, is_retired_tool_name
 
 logger = logging.getLogger(__name__)
@@ -256,6 +258,8 @@ class LegacyContextPrefix:
         self._revisions: dict[str, str | None] = {}
         self._prompt_revision = ""
         self._capability_revision = ""
+        self._js_revision = ""
+        self._tool_selection = None
         self._pending_install: tuple[dict[str, Any], ...] = ()
         self._pending_appends: tuple[dict[str, Any], ...] = ()
         # 跨 run/重启回灌（Task 4）：会话上下文投影的头部即上次安装的前缀，
@@ -264,6 +268,7 @@ class LegacyContextPrefix:
         # 投影头部，跨 run 不重装、不重发。
         if restored:
             meta = dict(restored.get("meta") or {})
+            self._tool_selection = meta.get("tool_selection")
             prefix_len = int(meta.get("prefix_len") or 0)
             messages = list(restored.get("messages") or [])
             if prefix_len and len(messages) >= prefix_len:
@@ -271,6 +276,7 @@ class LegacyContextPrefix:
                 self._revisions = dict(meta.get("revisions") or {})
                 self._prompt_revision = str(meta.get("prompt_revision") or "")
                 self._capability_revision = str(meta.get("capability_revision") or "")
+                self._js_revision = str(meta.get('js_revision') or '')
 
     # ------------------------------------------------------------- pipeline 协议
 
@@ -292,13 +298,14 @@ class LegacyContextPrefix:
         self._revisions = self._dynamic_revisions(assembly)
         self._prompt_revision = assembly.prompt_revision
         self._capability_revision = assembly.capability_revision
+        self._js_revision = self._js_message_revision(js_message)
         self._pending_install = tuple(messages)
         self._pending_appends = ()
         return messages
 
     async def refresh(self) -> list[dict[str, Any]]:
         """每轮只读复查动态源：变化追加带来源/替代关系的新消息，不变返回空。"""
-        assembly, _js = await asyncio.to_thread(self._assemble)
+        assembly, js_message = await asyncio.to_thread(self._assemble)
         appends: list[dict[str, Any]] = []
         # 静态边界：角色 prompt / 技能清单 / 工具协议在 run 内真实变化时是
         # 新的冷启动边界——记录原因并以追加消息表达，不重写已发送的前缀，
@@ -331,6 +338,14 @@ class LegacyContextPrefix:
             )
             self._prompt_revision = assembly.prompt_revision
             self._capability_revision = assembly.capability_revision
+        js_revision = self._js_message_revision(js_message)
+        if js_revision != self._js_revision:
+            if js_message is not None:
+                appends.append({'role': 'system', 'content':
+                    '[Tool directory update]\nThe current directory and reader protocol below '
+                    'supersedes earlier versions. Read current contracts before calling tools.\n\n'
+                    + str(js_message['content'])})
+            self._js_revision = js_revision
         new_revisions = self._dynamic_revisions(assembly)
         new_messages = {
             source.kind: message
@@ -369,13 +384,18 @@ class LegacyContextPrefix:
         self._pending_appends = ()
         return pending
 
+    def set_tool_selection(self, record: dict) -> None:
+        self._tool_selection = dict(record)
+
     def snapshot_meta(self) -> dict:
         """随 context.prefix_installed 事件持久化的安装元数据（回灌用）。"""
         return {
             "prefix_len": len(self._initial or []),
+            "tool_selection": self._tool_selection,
             "revisions": dict(self._revisions),
             "prompt_revision": self._prompt_revision,
             "capability_revision": self._capability_revision,
+            'js_revision': self._js_revision,
         }
 
     async def current_prefix(self) -> tuple[list[dict[str, Any]], dict]:
@@ -388,18 +408,22 @@ class LegacyContextPrefix:
         messages.extend(assembly.observation_messages)
         meta = {
             "prefix_len": len(messages),
+            "tool_selection": self._tool_selection,
             "revisions": self._dynamic_revisions(assembly),
             "prompt_revision": assembly.prompt_revision,
             "capability_revision": assembly.capability_revision,
+            'js_revision': self._js_message_revision(js_message),
         }
         return messages, meta
 
     def adopt(self, messages: list[dict[str, Any]], meta: dict) -> None:
         """compact 安装后采纳新头部：后续轮次 matches() 命中，不重装。"""
         self._initial = list(messages)
+        self._tool_selection = meta.get("tool_selection")
         self._revisions = dict(meta.get("revisions") or {})
         self._prompt_revision = str(meta.get("prompt_revision") or "")
         self._capability_revision = str(meta.get("capability_revision") or "")
+        self._js_revision = str(meta.get('js_revision') or '')
 
     # ------------------------------------------------------------------ 内部
 
@@ -423,6 +447,10 @@ class LegacyContextPrefix:
                 ),
             }
         return assembly, js_message
+
+    @staticmethod
+    def _js_message_revision(message: dict | None) -> str:
+        return hashlib.sha256(json.dumps(message, sort_keys=True, ensure_ascii=False).encode('utf-8')).hexdigest()
 
     @staticmethod
     def _dynamic_revisions(assembly) -> dict[str, str | None]:
@@ -593,6 +621,36 @@ class LegacyLLMProvider:
         """
         return legacy_default_settings(agent)
 
+    async def select_tool_names(self, agent, messages, *, resolved_settings):
+        """A no-tool auxiliary request using the current effective model."""
+        from cloudra.persistence.database import ComputeDB
+        from cloudra.services.conformer_model_budget import ModelRequestAccounting
+        settings = resolved_settings.model_copy(deep=True)
+        client = self._make_client(settings)
+        accounting = None
+        succeeded = False
+        try:
+            database = await asyncio.to_thread(ComputeDB)
+            accounting = await ModelRequestAccounting.for_agent(database, agent.project_id, agent.id)
+            client.request_accounting = accounting
+            kwargs = dict(model=settings.model, messages=messages, stream=False,
+                temperature=settings.temperature, max_tokens=settings.max_tokens)
+            if settings.reasoning_effort:
+                kwargs['reasoning_effort'] = settings.reasoning_effort
+            self._log_request_fingerprint(agent, kwargs, kind='tool_selection')
+            response = await asyncio.wait_for(client.create(**kwargs), timeout=settings.timeout or 300)
+            message = response.choices[0].message
+            succeeded = True
+            return LLMResponse(content=message.content or '',
+                tool_calls=list(getattr(message, 'tool_calls', None) or []),
+                usage=dict(client.last_usage or {}))
+        finally:
+            try:
+                if accounting is not None:
+                    await accounting.finish(success=succeeded, usage=client.last_usage)
+            finally:
+                await client.aclose()
+
     async def complete(
         self,
         agent: AgentSession,
@@ -682,15 +740,13 @@ class LegacyLLMProvider:
                 fingerprint["model"],
             )
 
-    async def _complete_with_client(
+    def _request_kwargs(
         self,
         agent: AgentSession,
-        client: LLMClient,
         settings: RuntimeSettings,
         messages: list[dict[str, Any]],
         tools: list[str],
-        on_delta: DeltaSink | None,
-    ) -> LLMResponse:
+    ) -> dict[str, Any]:
         native_adapter = _native_search_adapter_for(settings)
         rename_search = native_adapter is not None and native_adapter.name == "deepseek"
         from cloudra.runtime_v2.tool_catalog import wire_tool_schemas
@@ -738,6 +794,31 @@ class LegacyLLMProvider:
         js_protocol = effective_invocation_protocol(agent) is InvocationProtocol.JAVASCRIPT
         if js_protocol:
             kwargs["parallel_tool_calls"] = False
+        return kwargs
+
+    def estimate_prompt_tokens(self, agent: AgentSession, messages: list[dict], tools: list[str]) -> int:
+        """Use the same request projection for budgeting and sending."""
+        from cloudra.infra.token_estimator import TokenEstimator
+
+        kwargs = self._request_kwargs(agent, legacy_default_settings(agent), messages, tools)
+        tokens = TokenEstimator.count_messages(kwargs["messages"])
+        if kwargs.get("tools"):
+            tokens += TokenEstimator.count_text(json.dumps(kwargs["tools"], ensure_ascii=False))
+        return tokens
+
+    async def _complete_with_client(
+        self,
+        agent: AgentSession,
+        client: LLMClient,
+        settings: RuntimeSettings,
+        messages: list[dict[str, Any]],
+        tools: list[str],
+        on_delta: DeltaSink | None,
+    ) -> LLMResponse:
+        native_adapter = _native_search_adapter_for(settings)
+        rename_search = native_adapter is not None and native_adapter.name == "deepseek"
+        kwargs = await asyncio.to_thread(self._request_kwargs, agent, settings, messages, tools)
+        js_protocol = effective_invocation_protocol(agent) is InvocationProtocol.JAVASCRIPT
         self._log_request_fingerprint(agent, kwargs, kind="agent")
         try:
             if native_adapter is not None and native_adapter.transport == "responses":
@@ -898,7 +979,9 @@ async def _close_stream(response: Any) -> None:
 class _LegacyAgentBridge:
     """Duck-typed old-Agent surface required by existing tool classes."""
 
-    def __init__(self, agent: AgentSession, workspace_dir: str | None) -> None:
+    def __init__(self, agent: AgentSession, workspace_dir: str | None, event_log=None) -> None:
+        self._runtime_agent = agent
+        self.final_review_request_id = agent.final_review_request_id
         self.id = agent.id
         self.name = agent.role_id
         # dag_* 工具的 _actor() 依 type=="supervisor" 判 GraphActor.SUPERVISOR
@@ -918,6 +1001,16 @@ class _LegacyAgentBridge:
         self.orchestration_mode = agent.settings.orchestration_mode.value
         self.session_id = agent.id
         self._permissions = agent.capabilities.permissions
+        self._event_log = event_log
+
+    def known_file_sha256(self, absolute_path: str) -> str | None:
+        """Internal known-version binding; tool arguments carry no concurrency hash."""
+        if self._event_log is None:
+            return None
+        root = Path(self.working_directory).resolve()
+        target = Path(absolute_path).resolve()
+        relative = target.relative_to(root).as_posix()
+        return self._event_log.known_file_sha256(self.conversation_id, self.id, relative, str(target))
 
     def permission_all(self):
         """Legacy IntFlag projection of the v2 capability permission set."""
@@ -960,9 +1053,9 @@ class LegacyToolExecutor:
         ``dag/supervisor_tools.py`` re-checks the ``supervisor_access``
         projection and enforces the path/action guards (evidence reads stay
         inside the workspace/artifact roots, hub actions are whitelisted,
-        hub call can create an independent peer). Direct controls (stop) are runtime
-        lifecycle, not supervised business tools — they take the normal
-        path below.
+        hub call can create an independent peer). Top-level tools with a
+        Supervisor capability still use this executor; lifecycle controls
+        without one (stop) take the normal path below.
         """
         from cloudra.dag.supervisor_tools import SupervisorToolExecutor, dumps_result
         from cloudra.persistence.paths import data_dir
@@ -976,7 +1069,7 @@ class LegacyToolExecutor:
             artifact_root=str(data_dir() / "artifacts"),
         )
         executor.bind_run(
-            agent=_LegacyAgentBridge(agent, workspace),
+            agent=_LegacyAgentBridge(agent, workspace, self.core.event_log),
             session=Session(id=agent.id, path=""),
         )
         payload = await executor.execute(call.name, call.arguments, session_id=agent.id)
@@ -990,7 +1083,9 @@ class LegacyToolExecutor:
         from cloudra.runtime_v2.subagent_bridge import NATIVE_TOOL_NAMES, handle_native_tool
         from cloudra.tools import get_tools_lst
 
-        if agent.role_id == "supervisor" and not is_direct_only(call.name):
+        if agent.role_id == "supervisor" and (
+            not is_direct_only(call.name) or supervisor_access_for(call.name) != "none"
+        ):
             return await self._execute_supervisor(agent, call)
 
         if call.name in NATIVE_TOOL_NAMES:
@@ -1030,7 +1125,7 @@ class LegacyToolExecutor:
         # 经构造器拿到调用者身份（不再需要 object.__setattr__ 绕过 pydantic 校验）；
         # 不声明它的工具（log_parser 等无状态工具）按原样构造。
         if "subagent" in getattr(entry.cls, "model_fields", {}):
-            actor = _LegacyAgentBridge(agent, project.workspace_dir)
+            actor = _LegacyAgentBridge(agent, project.workspace_dir, self.core.event_log)
             tool = entry.instantiate(subagent=actor)
         else:
             tool = entry.instantiate()
@@ -1041,7 +1136,7 @@ class LegacyToolExecutor:
         try:
             parsed = schema_cls.model_validate(call.arguments)
         except ValidationError as exc:
-            return ToolResult(is_success=False, summary=validation_feedback(exc))
+            return ToolResult(is_success=False, summary=validation_feedback(exc, schema=schema_cls))
         from cloudra.runtime_v2.invocation_context import report_tool_progress
         from cloudra.runtime_v2.schemas import ToolProgress
 

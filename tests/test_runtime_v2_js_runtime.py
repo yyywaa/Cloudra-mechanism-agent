@@ -285,12 +285,29 @@ async def test_policy_block_rejects_and_catching_grants_no_authority():
 async def test_direct_controls_are_not_exposed_to_the_guest():
     core = RuntimeCore(strict_events=True)
     agent = _agent()
-    ctx = _ctx(agent, tools=["echo", "stop", "ask_user", "schedule"])
+    ctx = _ctx(agent, tools=["echo", "stop", "ask_user", "schedule", "agent_hub"])
     runtime = _runtime(core)
-    code = "text([typeof tools.echo, typeof tools.stop, typeof tools.ask_user, typeof tools.schedule]);"
+    code = "text(Object.keys(tools));"
     result = await runtime.execute(ctx, ToolCall("w", "js_exec", {"code": code}))
     assert result.is_success
-    assert result.data["outputs"] == [["function", "undefined", "undefined", "undefined"]]
+    assert result.data["outputs"] == [["echo"]]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["stop", "ask_user", "schedule"])
+async def test_guest_direct_control_call_has_actionable_denial_without_execution(name):
+    core = RuntimeCore(strict_events=True)
+    agent = _agent()
+    ctx = _ctx(agent, tools=["echo", name])
+    executor = EchoExecutor()
+    runtime = _runtime(core, tools=executor)
+    code = (f"try {{ await tools.{name}({{}}); }} catch (e) {{"
+            "text([e.code, e.tool_name, e.effect_state]); }")
+    result = await runtime.execute(ctx, ToolCall("w", "js_exec", {"code": code}))
+    assert result.is_success
+    assert result.data["outputs"] == [["direct_only_in_guest", name, "not_started"]]
+    assert executor.calls == []
+    assert not any(e.type == "tool.started" for e in core.event_log)
 
 
 @pytest.mark.asyncio
@@ -721,7 +738,7 @@ print(f"HOST_EXITED {proc.returncode}", flush=True)
 
 
 @pytest.mark.asyncio
-async def test_host_exits_when_parent_is_sigkilled():
+async def test_host_exits_when_parent_is_sigkilled(orphan_subreaper):
     """父进程被 SIGKILL 时 finally 不会执行——JS host 的兜底自清理是
     stdin 管道 EOF（宿主在等工具回复时读到 stdin 关闭即退出）。
 
@@ -750,6 +767,10 @@ async def test_host_exits_when_parent_is_sigkilled():
         await asyncio.wait_for(child.wait(), timeout=10)
 
         def host_gone() -> bool:
+            if orphan_subreaper:
+                # kill(pid, 0) also succeeds for zombies. waitpid both proves
+                # termination and reaps this test's adopted host process.
+                return os.waitpid(host_pid, os.WNOHANG)[0] == host_pid
             try:
                 os.kill(host_pid, 0)
             except ProcessLookupError:
@@ -763,6 +784,7 @@ async def test_host_exits_when_parent_is_sigkilled():
                     "js host survived parent SIGKILL (stdin EOF self-cleanup failed)"
                 )
             await asyncio.sleep(0.05)
+        host_pid = None
     finally:
         if child.returncode is None:
             child.kill()
@@ -772,6 +794,95 @@ async def test_host_exits_when_parent_is_sigkilled():
                 os.kill(host_pid, signal.SIGKILL)
             except (ProcessLookupError, PermissionError):
                 pass
+            if orphan_subreaper:
+                await asyncio.to_thread(os.waitpid, host_pid, 0)
+
+
+@pytest.mark.asyncio
+async def test_document_provenance_compacts_only_contract_in_mixed_js_output():
+    core = RuntimeCore(strict_events=True)
+    agent = _agent()
+    ctx = _ctx(agent, tools=["get_tool_docs", "echo"])
+    doc = {"name": "read", "revision": "v1", "content": "ACTUAL_CONTRACT", "references": []}
+
+    class Documents:
+        async def execute(self, agent, call):
+            if call.name == "get_tool_docs":
+                return ToolResult(True, "loaded", {"documents": [doc]})
+            return ToolResult(True, "energy", {"energy": -42.5})
+
+    result = await _runtime(core, tools=Documents()).execute(
+        ctx,
+        ToolCall("w", "js_exec", {"code":
+            'const docs = await tools.get_tool_docs({names: ["read"]}); '
+            'const energy = await tools.echo({}); '
+            'text(docs.data.documents); text(energy.data); text("USER_NOTE");'}),
+    )
+    assert result.is_success
+    assert "ACTUAL_CONTRACT" in result.summary
+    compact = result.data["tool_document_compact_content"]
+    assert "ACTUAL_CONTRACT" not in compact
+    assert "read" in compact and "v1" in compact and "get_tool_docs" in compact
+    assert '-42.5' in compact and "USER_NOTE" in compact
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('initial_status', ['empty', 'failed'])
+async def test_on_demand_contract_versions_survive_output_compaction_and_refresh(tmp_path, monkeypatch, initial_status):
+    from types import SimpleNamespace
+
+    from cloudra.runtime_v2.adapters import LegacyToolExecutor
+    from cloudra.runtime_v2.agent_runner import AgentRunner
+    from cloudra.runtime_v2.tool_selection import ToolSelectionRecord
+    from cloudra.runtime_v2.turn_pipeline import TurnPipeline
+    from cloudra.tools import get_tools_lst
+    from tests.agent_scenarios import ScriptedProvider
+
+    core = RuntimeCore(strict_events=True)
+    agent = _agent()
+    agent.capabilities = AgentCapabilities(permissions=PermissionSet(read=True), tools=['read', 'get_tool_docs'])
+    await core.contexts.record_tool_selection(agent=agent, run_id='initial', messages=[],
+        record=ToolSelectionRecord(status=initial_status, source='llm', selection_id='s', catalog_revision='c'))
+    executor = LegacyToolExecutor(SimpleNamespace(event_log=core.event_log,
+        require_project=lambda _: SimpleNamespace(workspace_dir=str(tmp_path))))
+    ctx = _ctx(agent, tools=agent.capabilities.tools)
+    call = ToolCall('read-docs', 'js_exec', {'code':
+        'const r = await tools.get_tool_docs({names:["read"]}); text(r.data.documents);'})
+    result = await _runtime(core, tools=executor).execute(ctx, call)
+    assert result.is_success
+    pipeline = TurnPipeline(event_log=core.event_log, stages=[], llm=ScriptedProvider(), tools=executor)
+    runner = AgentRunner(core, pipeline)
+    await runner._commit_turn_output(agent, 'read-docs', SimpleNamespace(content='', reasoning='',
+        tool_exchanges=[(call, result)], blocked_call=None))
+    state = core.contexts.prefix_state(agent.id)
+    old_version = state['meta']['tool_document_revisions']['read']
+    assert await core.contexts.install_compacted(agent=agent, run_id='compact',
+        messages=[{'role': 'assistant', 'content': 'Summary'}], prefix_meta=state['meta'],
+        expected_version=len(state['messages']), trigger='test')
+    entry = next(entry for entry in get_tools_lst() if entry.tool_name == 'read')
+    monkeypatch.setattr(entry, 'tool_description', entry.tool_description + ' UPDATED_READ_CONTRACT')
+    await pipeline._initial_tool_documents(agent, 'next', [], core.contexts, None)
+    state = core.contexts.prefix_state(agent.id)
+    assert state['meta']['tool_document_revisions']['read'] != old_version
+    assert 'superseded' in str(state['messages'])
+
+
+@pytest.mark.asyncio
+async def test_transformed_document_output_preserves_attached_non_document_data():
+    core = RuntimeCore(strict_events=True)
+    agent = _agent()
+    doc = {'name': 'read', 'revision': 'v1', 'content': 'CONTRACT_BODY', 'references': []}
+
+    class Documents:
+        async def execute(self, agent, call):
+            return ToolResult(True, 'loaded', {'documents': [doc]})
+
+    result = await _runtime(core, tools=Documents()).execute(_ctx(agent, tools=['get_tool_docs']),
+        ToolCall('mixed-doc', 'js_exec', {'code':
+            'const r = await tools.get_tool_docs({names:["read"]}); '
+            'text(r.data.documents[0].content + " ENERGY_MARKER -42.5");'}))
+    assert result.is_success
+    assert 'ENERGY_MARKER -42.5' in result.data['tool_document_compact_content']
 
 
 def test_terminate_process_survives_missing_killpg(monkeypatch):

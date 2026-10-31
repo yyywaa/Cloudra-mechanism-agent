@@ -48,6 +48,11 @@ class CancelPost(BaseModel):
     message: Optional[str] = None
 
 
+class ComputeCancelPost(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reason: str = Field(min_length=1)
+
+
 class RestartPost(BaseModel):
     message: Optional[str] = None
     settings: dict[str, Any] = Field(default_factory=dict)
@@ -124,6 +129,22 @@ class GlobalConfigFieldPatch(BaseModel):
 class GlobalConfigPatch(BaseModel):
     slot: Literal["coordinator", "follower"]
     changes: GlobalConfigFieldPatch
+
+
+class SearchConfigPatch(BaseModel):
+    """Shared Search/Fetch settings; omitted keys are preserved, empty clears."""
+
+    model_config = ConfigDict(extra="forbid")
+    search_provider: Literal["deepseek", "auto", "tavily", "brave", "bing", "duckduckgo"] = "deepseek"
+    deepseek_api_key: str = ""
+
+
+class ToolDocumentLoadingPatch(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    strategy: Literal['llm', 'semantic'] | None = None
+    semantic_backend: Literal['jev', 'reranker'] | None = None
+    jev: dict[str, Any] | None = None
+    reranker: dict[str, Any] | None = None
 
 
 class OpenRouterExchangeRequest(BaseModel):

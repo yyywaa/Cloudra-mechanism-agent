@@ -4,8 +4,8 @@ Single source for the invocation-protocol-aware tool surface:
 
 - ``wire_tool_schemas(agent, tool_names)`` — what the model *sees*:
   traditional runs get the permitted business schemas; javascript runs get
-  ``js_exec`` plus the permitted direct controls (stop / ask_user /
-  schedule).  This is not a privilege grant: js_exec runs pure guest logic
+  ``js_exec`` plus the permitted direct tools (stop / ask_user /
+  schedule / agent_hub). This is not a privilege grant: js_exec runs pure guest logic
   and every actual tool call rechecks capabilities at admission, so a
   read-only role may select the JS protocol without gaining bash.
 - ``tool_declarations(tool_names, *, visual_mode)`` — deterministic
@@ -16,7 +16,7 @@ Single source for the invocation-protocol-aware tool surface:
   silently widened to ``any`` and never invented.
 - ``validate_wire_route`` — stable protocol errors for misrouted calls
   (js_exec in traditional mode, top-level business calls in JS mode, direct
-  controls inside a guest program).  Misrouted calls are never executed.
+  tools inside a guest program). Misrouted calls are never executed.
 """
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ def js_exec_schema():
         "name": "js_exec",
         "description": "Run one bounded JavaScript program to orchestrate available tools. "
                        "The program is the only tool call in this response; use await tools.NAME(args), "
-                       "then text(value). Backend calls execute serially. Direct controls stay top-level.",
+                       "then text(value). Backend calls execute serially. Direct tools, including agent_hub, stay top-level.",
         "parameters": {"type": "object", "properties": {
             "code": {"type": "string", "description": "JavaScript with top-level await."}},
             "required": ["code"], "additionalProperties": False}}}
@@ -109,7 +109,7 @@ def validate_wire_route(
         if tool_name == JS_EXEC_NAME or is_direct_only(tool_name):
             return (
                 f"protocol_error[direct_only_in_guest]: {tool_name!r} is a direct "
-                "control and cannot be called from inside a JavaScript program; "
+                "tool and cannot be called from inside a JavaScript program; "
                 "return it as a top-level tool call instead"
             )
         return None
@@ -143,7 +143,7 @@ def guest_tool_names(
     orchestration_mode: OrchestrationMode | str = OrchestrationMode.STANDARD,
     role_id: str | None = None,
 ) -> list[str]:
-    """Names callable inside a JS program: no direct controls, visual-gated,
+    """Names callable inside a JS program: no direct tools, visual-gated,
     gated by the run's orchestration mode (dag_* tools are hidden in standard
     mode; Supervisor verdict tools outside dag_guided), and filtered by the
     agent's role allowlist projection when role_id is given."""
@@ -162,7 +162,7 @@ def wire_tool_schemas(agent: AgentSession, tool_names: list[str] | None) -> list
     """Protocol- and orchestration-mode-aware wire projection for one LLM request.
 
     Traditional: the permitted business schemas (unchanged legacy surface).
-    Javascript: ``js_exec`` plus the permitted direct controls only.  Tools
+    Javascript: ``js_exec`` plus the permitted direct tools only. Tools
     that hard-fail under the agent's orchestration mode are never projected.
     """
     from cloudra.runtime_v2.adapters import legacy_tool_schemas  # lazy: import cycle
@@ -212,15 +212,15 @@ def javascript_instructions(
     """Deterministic JS-mode instructions appended to the model request.
 
     Describes the execution envelope, JSON serialization, explicit output,
-    the serial backend, the fixed limits and the direct-only controls; the
+    the serial backend, the fixed limits and the direct-only tools; the
     generated declarations are documentation, not executable guest input.
     """
-    declarations = tool_declarations(
-        tool_names,
-        visual_mode=visual_mode,
-        orchestration_mode=orchestration_mode,
-        role_id=role_id,
-    )
+    names = guest_tool_names(tool_names, visual_mode=visual_mode,
+        orchestration_mode=orchestration_mode, role_id=role_id)
+    declarations = tool_declarations(['get_tool_docs'] if 'get_tool_docs' in names else [],
+        visual_mode=visual_mode, orchestration_mode=orchestration_mode, role_id=role_id)
+    manifest = tool_capability_manifest(names, visual_mode=visual_mode,
+        orchestration_mode=orchestration_mode, role_id=role_id)
     return (
         "This run uses the JavaScript invocation protocol. To use tools, call "
         "js_exec({code}) with an ECMAScript program that uses top-level await.\n"
@@ -243,7 +243,7 @@ def javascript_instructions(
         "probe tools by trial calls or inspect application source to discover schemas.\n"
         "- Backend calls execute serially, one at a time, even under "
         "Promise.all.\n"
-        "- Direct controls (stop, ask_user, schedule) are NOT callable inside "
+        "- Direct tools (stop, ask_user, schedule, agent_hub) are NOT callable inside "
         "a program; return them as top-level tool calls instead, and never "
         "call js_exec recursively. Send exactly one js_exec per response and "
         "do not combine it with other tool calls.\n"
@@ -254,9 +254,44 @@ def javascript_instructions(
         "program in a later js_exec call.\n"
         "- Program output is not scientific evidence; completed child call "
         "results are recorded as tool.result_recorded events.\n"
-        "Available tool functions and their argument/data types:\n"
-        f"{declarations}"
+        "Bootstrap reader contract:\n"
+        f"{declarations}\n\n"
+        "Current capability directory (names and purposes, not argument contracts):\n"
+        f"{manifest}\n"
+        "For a business tool whose detailed contract is absent, first call tools.get_tool_docs({names: [name]}), "
+        "then text(r.summary). Loaded contracts are supplied automatically in the next model request. "
+        "Do not print full document batches: they can exceed the 64 KiB program output limit. "
+        "Load a small set for the next action; request additional contracts when needed. "
+        "Only documentation is loaded; all calls retain their existing permission checks."
     )
+
+
+def tool_capability_manifest(tool_names, *, visual_mode=True,
+        orchestration_mode=OrchestrationMode.STANDARD, role_id=None) -> str:
+    from cloudra.tools import get_tools_lst
+    from cloudra.tools.documentation import tool_capability_summaries
+
+    names = guest_tool_names(tool_names, visual_mode=visual_mode,
+        orchestration_mode=orchestration_mode, role_id=role_id)
+    summaries = tool_capability_summaries(names, entries=get_tools_lst())
+    return "\n".join(f"- {item.name}: {item.summary}" for item in summaries)
+
+
+def _function_declaration(name, entry, args_type, data_type):
+    description = str(getattr(entry, "tool_description", "") or "").strip()
+    if not description:
+        description = _schema_description(_input_schema_of(entry))
+    description = description.replace("*/", "* /")
+    comment = f"  /** {description} */\n" if description else ""
+    return f"{comment}  {_js_ident(name)}(args: {args_type}): Promise<ToolResponse<{data_type}>>;"
+
+
+def render_tool_declaration(entry) -> str:
+    """Render one actual contract without a second availability projection."""
+    decls, args_type, data_type = _render_tool_types(entry.tool_name, entry)
+    function = _function_declaration(entry.tool_name, entry, args_type, data_type)
+    return "\n\n".join([_DECLARATION_HEADER, *decls,
+        "declare const tools: {\n" + function + "\n};", _DECLARATION_FOOTER])
 
 
 def tool_declarations(
@@ -285,19 +320,7 @@ def tool_declarations(
         entry = by_name.get(name)
         decls, args_type, data_type = _render_tool_types(name, entry)
         sections.extend(decls)
-        # Tool descriptions carry workflow, permission and failure guidance
-        # that input-schema docstrings often omit. Preserve that contract in
-        # the JS declaration; the schema remains the source for argument types.
-        description = str(getattr(entry, "tool_description", "") or "").strip()
-        if not description:
-            description = _schema_description(_input_schema_of(entry))
-        # Keep generated comments valid even if a tool description contains a
-        # comment terminator.
-        description = description.replace("*/", "* /")
-        comment = f"  /** {description} */\n" if description else ""
-        functions.append(
-            f"{comment}  {_js_ident(name)}(args: {args_type}): Promise<ToolResponse<{data_type}>>;"
-        )
+        functions.append(_function_declaration(name, entry, args_type, data_type))
     sections.append("declare const tools: {\n" + "\n".join(functions) + "\n};" if functions
                     else "declare const tools: Record<string, never>;")
     sections.append(_DECLARATION_FOOTER)

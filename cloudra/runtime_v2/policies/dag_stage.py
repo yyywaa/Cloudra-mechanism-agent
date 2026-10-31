@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 from typing import Any
 
 from cloudra.base.role_identity import legacy_agent_id_for_role
@@ -89,6 +90,7 @@ class DagPolicyStage:
         *,
         explicit_stop: bool,
         stop_arguments: dict[str, Any] | None = None,
+        candidate_answer: str = "",
     ):
         """统一结束门禁的 DAG 判定（runner 收尾前调用一次）。
 
@@ -113,14 +115,34 @@ class DagPolicyStage:
             # 原始调用参数，pydantic 默认值不会生效，缺省必须在这里补齐——
             # 缺省即声明 complete 并进入完成审计；要 partial 必须显式声明。
             disposition = str(args.get("delivery_disposition") or "complete")
+            user_stop_event_id = None
+            if disposition == "user_terminated" and self._core is not None and ctx.agent.current_run is not None:
+                events = await asyncio.to_thread(self._core.event_log.query_session, ctx.agent.id,
+                    types={"agent.cancel_requested"})
+                event = next((item for item in reversed(events)
+                    if item.data.get("actor") == "user" and item.project_id == ctx.agent.project_id
+                    and item.run_id in {None, ctx.agent.current_run.run_id}
+                    and item.created_at >= ctx.agent.current_run.started_at), None)
+                user_stop_event_id = event.event_id if event is not None else None
             return await controller.audit_stop(
                 disposition,
-                approval_id=args.get("approval_id"),
-                user_stop_event_id=args.get("user_stop_event_id"),
+                user_stop_event_id=user_stop_event_id,
+                reason=args.get("reason"),
+                final_answer=args.get("final_answer"),
+                candidate_answer=candidate_answer,
             )
         report = await asyncio.to_thread(controller.delivery_report)
         disposition = "complete" if report.complete else "partial"
-        return await controller.audit_stop(disposition)
+        return await controller.audit_stop(disposition, candidate_answer=candidate_answer)
+
+    async def on_run_end(self, agent, *, explicit_stop: bool) -> None:
+        controller = self._controllers.get(agent.id)
+        if controller is None or self._core is None:
+            return
+        events = await asyncio.to_thread(self._core.event_log.query_session, agent.id,
+            types={'agent.completion_gate'}, limit=1)
+        if events and events[-1].data.get('action') == 'allow_final':
+            await controller.commit_stop()
 
     @staticmethod
     def _apply_delivery_delta(ctx: PipelineContext, result: ToolResult, finished) -> None:
@@ -154,6 +176,14 @@ class DagPolicyStage:
         return PolicyResult.allow()
 
     async def after_tool(self, ctx: PipelineContext, call: ToolCall, result: ToolResult) -> None:
+        if (ctx.agent.role_id == 'supervisor' and self._core is not None
+                and call.name in {'write', 'edit'}
+                and result.is_success and result.data.get('is_written')
+                and Path(result.data.get('filepath') or '') == Path('PROCESS.md')):
+            from cloudra.runtime_v2.notices import RESEARCH_OBSERVATION_PIN_KEY
+
+            if self._core.notices.pin_is_consumed(ctx.agent.id, RESEARCH_OBSERVATION_PIN_KEY):
+                self._core.notices.unpin(ctx.agent.id, RESEARCH_OBSERVATION_PIN_KEY)
         if ctx.agent.role_id == "supervisor":
             # 督导裁决落库后非轮询投递裁决通知（durable 行 + pin + mailbox +
             # 条件 wake，cancelled 不复活）：结构化裁决 dag_review_evidence、
@@ -168,7 +198,6 @@ class DagPolicyStage:
                     "dag_review_step",
                     "dag_accept_mechanism",
                 }
-                and result.is_success
                 and self._core is not None
             ):
                 from cloudra.runtime_v2.supervision import flush_review_notifications
@@ -186,8 +215,32 @@ class DagPolicyStage:
             payload,
         )
         self._apply_delivery_delta(ctx, result, finished)
+        changed = Path(result.data.get('filepath') or '')
+        if (self._core is not None and ctx.settings.orchestration_mode.value == 'dag_guided'
+                and call.name in {'write', 'edit'} and result.is_success
+                and result.data.get('is_written') and changed.parent == Path('.')
+                and changed.suffix.lower() == '.md'
+                and result.data.get('after_sha256')
+                and result.data.get('after_sha256') != result.data.get('before_sha256')):
+            from cloudra.runtime_v2.supervision import notify_supervisor
+
+            try:
+                await notify_supervisor(
+                    self._core, ctx.agent.project_id, reason=f'Research notes updated: {changed.name}',
+                    changed_note=(changed.name, result.data['after_sha256']),
+                )
+            except Exception:
+                # Notebook maintenance must not turn a completed research action into a failure.
+                logger.warning('Could not notify Supervisor about %s', changed.name, exc_info=True)
+        if self._core is not None and call.name in {'dag_remove_node', 'dag_remove_edge'}:
+            from cloudra.runtime_v2.supervision import flush_review_notifications
+            await flush_review_notifications(self._core, ctx.agent.project_id)
 
     async def before_llm(self, ctx: PipelineContext, messages: list[dict[str, Any]]) -> None:
+        if self._core is not None and ctx.agent.role_id == "supervisor":
+            from cloudra.runtime_v2.supervision_context import sync_supervisor_task_context
+
+            await sync_supervisor_task_context(self._core, ctx.agent)
         controller = await self._controller(ctx)
         notices = getattr(ctx, "notices", None)
         if controller is None:

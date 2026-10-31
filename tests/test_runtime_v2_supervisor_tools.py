@@ -184,25 +184,25 @@ async def test_supervisor_capabilities_and_wire_projection(tmp_path):
     try:
         expected = set(capabilities.supervisor_allowed_tools()) | {"stop"}
         assert set(supervisor.capabilities.tools) == expected
-        for name in ("dag_review_step", "dag_accept_mechanism", "log_parser", "read", "stop"):
+        for name in ("dag_review_step", "dag_accept_mechanism", "log_parser", "read", "write", "edit", "stop"):
             assert name in supervisor.capabilities.tools
-        for name in ("bash", "submit_compute_job", "write", "edit", "qm_input_writer"):
+        for name in ("bash", "submit_compute_job", "qm_input_writer"):
             assert name not in supervisor.capabilities.tools
         # 裁决工具需要 guided 模式上下文（dag_review_step 在 record/standard 拒绝）。
         assert supervisor.settings.orchestration_mode.value == "dag_guided"
 
-        # javascript（默认协议）：js_exec + stop 直接控制类，业务工具只进 guest 声明。
+        # javascript（默认协议）：js_exec + stop/agent_hub 顶层工具，其余业务进 guest。
         js_names = {
             (schema.get("function") or {}).get("name")
             for schema in wire_tool_schemas(supervisor, supervisor.capabilities.tools)
         }
-        assert js_names == {"js_exec", "stop"}
+        assert js_names == {"js_exec", "stop", "agent_hub"}
         guest = guest_tool_names(
             supervisor.capabilities.tools,
             orchestration_mode=supervisor.settings.orchestration_mode,
         )
         assert "log_parser" in guest and "dag_review_step" in guest
-        assert "stop" not in guest and "bash" not in guest
+        assert "stop" not in guest and "agent_hub" not in guest and "bash" not in guest
         declarations = tool_declarations(
             supervisor.capabilities.tools,
             orchestration_mode=supervisor.settings.orchestration_mode,
@@ -210,7 +210,7 @@ async def test_supervisor_capabilities_and_wire_projection(tmp_path):
         assert "log_parser(args:" in declarations
         assert "bash(args:" not in declarations  # 工具描述文本里可出现 "bash" 字样
 
-        # traditional：投影即收窄后的全集（含 stop），无 bash/write/compute。
+        # traditional：投影即收窄后的全集（含 stop），文档写限定 PROCESS.md。
         supervisor.settings.invocation_protocol = InvocationProtocol.TRADITIONAL
         traditional_names = {
             (schema.get("function") or {}).get("name")

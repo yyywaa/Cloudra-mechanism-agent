@@ -1,6 +1,7 @@
-"""IRC 路径判定件（ts_guess strict verify 与 benchmark 评分共用唯一实现）。
+"""IRC 几何区间诊断（工具、TS 流程与 Benchmark 共用）。
 
-严格档路径方向证明：不要求 IRC 收敛到极小值，但要求双侧带坐标端点各自
+区间诊断不替代真实端点优化证据，也不否决已建立的 IRC → Opt → Freq 方向。
+该诊断检查双侧带坐标端点各自
 **几何上位于 TS 与对应端点参考几何之间**——端点的监测对距离须落在
 [TS, 参考几何] 区间内（带容差）且比 TS 更靠近参考几何；两端允许
 direct/swapped 无序配对，任一指派成立即方向一致。
@@ -24,13 +25,89 @@ direct/swapped 无序配对，任一指派成立即方向一致。
 距离指纹（每原子到他原子的距离排序向量，旋转平移不变）+ Hungarian
 最优指派把任意原子序的几何重排到同一坐标序，原子序重排的输入不再
 构成障碍。已知边界：TS↔中间体构象差大时指派可能错配——区间证明是
-最后一道判官；对齐距离矩阵 rmsd 超过保守闸门（1.0 Å）的组合不可信，
+一种几何提示；对齐距离矩阵 rmsd 超过保守范围（1.0 Å）的组合不可判断，
 直接按 undecidable 跳过（返回 None），不带着可疑对应进区间证明。
 """
 
 from __future__ import annotations
 
 from typing import Optional, Sequence
+
+
+def same_geometry(reference, mobile) -> bool:
+    """Same coordinates up to atom order and proper rigid rotation.
+
+    Reuse the existing six-decimal XYZ rounding bound; this is identity of a
+    calculation geometry, not a conformer or chemical similarity criterion.
+    """
+    import numpy as np
+
+    if reference is None or mobile is None:
+        return False
+    ref_symbols, mob_symbols = reference[0], mobile[0]
+    if len(ref_symbols) == 0 or sorted(ref_symbols) != sorted(mob_symbols):
+        return False
+    ref = np.asarray(reference[1], dtype=float)
+    mob = np.asarray(mobile[1], dtype=float)
+    ref = ref - ref.mean(axis=0)
+    mob = mob - mob.mean(axis=0)
+    tolerance = np.sqrt(3) * 10 ** -6
+
+    def proper_rotation(left, right):
+        u, _, vt = np.linalg.svd(left.T @ right)
+        if np.linalg.det(u @ vt) < 0:
+            u[:, -1] *= -1
+        return u @ vt
+
+    def matches(perm):
+        ordered = mob[perm]
+        residual = np.linalg.norm(ordered @ proper_rotation(ordered, ref) - ref, axis=1)
+        return bool(np.max(residual) <= tolerance)
+
+    alignment = align_atom_order(*reference, *mobile)
+    if alignment is not None and matches(alignment[0]):
+        return True
+
+    # Distance-fingerprint ties can choose an improper symmetry, or mix several
+    # symmetries. Keep the lineage-aware interval alignment above unchanged, but
+    # search alternative strict-identity correspondences here. Two independent
+    # centered vectors determine a proper rotation: at most n * (n - 1) anchor
+    # pairs, rather than factorial permutations of equivalent atoms.
+    d_ref, d_mob = dist_matrix(ref), dist_matrix(mob)
+    fp_ref, fp_mob = np.sort(d_ref, axis=1), np.sort(d_mob, axis=1)
+    compatible = np.array(mob_symbols)[:, None] == np.array(ref_symbols)[None, :]
+    for i in range(len(ref_symbols)):
+        # If each atom moves by at most tolerance, a pair distance changes by
+        # at most twice that bound. This only prunes correspondence candidates;
+        # the original proper-rotation residual remains the acceptance test.
+        compatible[:, i] &= np.max(np.abs(fp_mob - fp_ref[i]), axis=1) <= 2 * tolerance
+    if not np.all(np.any(compatible, axis=0)):
+        return False
+
+    first = int(np.argmax(np.linalg.norm(ref, axis=1)))
+    cross = np.linalg.norm(np.cross(ref[first], ref), axis=1)
+    second = int(np.argmax(cross))
+    for mob_first in np.flatnonzero(compatible[:, first]):
+        # Collinear geometries need only one axis; rotation about it is free.
+        seconds = np.flatnonzero(compatible[:, second]) if cross[second] > 0 else [None]
+        for mob_second in seconds:
+            ref_anchors, mob_anchors = [first], [mob_first]
+            if mob_second is not None:
+                if mob_first == mob_second or abs(
+                    d_ref[first, second] - d_mob[mob_first, mob_second]
+                ) > 2 * tolerance:
+                    continue
+                ref_anchors.append(second)
+                mob_anchors.append(mob_second)
+            rotated = mob @ proper_rotation(mob[mob_anchors], ref[ref_anchors])
+            cost = np.linalg.norm(rotated[:, None, :] - ref[None, :, :], axis=2)
+            cost[~compatible] = 1e9
+            perm = np.argmin(cost, axis=0).tolist()
+            if len(set(perm)) != len(perm):
+                perm = _hungarian(cost)
+            if perm is not None and matches(perm):
+                return True
+    return False
 
 _STRICT_PAIR_DELTA_MIN_ANG = 0.15
 _STRICT_INTERVAL_TOL_ANG = 0.10
@@ -242,7 +319,7 @@ def _hungarian(cost) -> Optional[list[int]]:
     return perm
 
 
-def align_atom_order(ref_symbols, ref_pos, mob_symbols, mob_pos):
+def align_atom_order(ref_symbols, ref_pos, mob_symbols, mob_pos, *, atom_order=None):
     """把 mobile 几何重排到 reference 的原子序（任意原子序输入的对应件）。
 
     原子数/元素多重集不等 → None（进不了这一层，调用方按 undecidable 处理）。
@@ -258,6 +335,13 @@ def align_atom_order(ref_symbols, ref_pos, mob_symbols, mob_pos):
         return None
     d_ref = dist_matrix(ref_pos)
     d_mob = dist_matrix(mob_pos)
+    if atom_order is not None:
+        if (len(atom_order) != n or any(type(index) is not int for index in atom_order)
+                or sorted(atom_order) != list(range(n))
+                or any(ref_symbols[i] != mob_symbols[index] for i, index in enumerate(atom_order))):
+            return None
+        rmsd = float(np.sqrt(((d_ref - d_mob[np.ix_(atom_order, atom_order)]) ** 2).mean()))
+        return (list(atom_order), rmsd) if rmsd <= _ALIGN_MAX_RMSD_ANG else None
     fp_ref = np.sort(d_ref, axis=1)
     fp_mob = np.sort(d_mob, axis=1)
     cost = np.full((n, n), 1e9)
@@ -354,13 +438,15 @@ def classify_watch_pairs(symbols, d_ts, d_int, ts_bonds, int_bonds) -> dict:
 
 def evaluate_endpoint_between(symbols: Sequence[str], ts_pos, end_pos,
                               intermediate_pos, watch_pairs: Sequence[Sequence[int]],
-                              charge: int = 0, *, index_base: int = 1) -> dict:
+                              charge: int = 0, *, index_base: int = 1, intermediate_molecule=None) -> dict:
     """判断一个部分 IRC 端点是否位于 TS 与某个端点参考几何之间。
 
     判定对来源（硬闸门）：显式 watch_pairs > 键图 diff（A 层，两侧感知均为
     rdDetermineBonds 时）> distance_top5 回退。B 层提名对只进 details。"""
     import numpy as np
 
+    if intermediate_molecule is not None:
+        intermediate_pos = intermediate_molecule.GetConformer().GetPositions()
     n = len(symbols)
     arrays = [np.asarray(pos, dtype=float) for pos in (ts_pos, end_pos, intermediate_pos)]
     if any(pos.shape != (n, 3) for pos in arrays):
@@ -399,11 +485,20 @@ def evaluate_endpoint_between(symbols: Sequence[str], ts_pos, end_pos,
         pairs = [pair for pair in pairs if abs(d_int[pair] - d_ts[pair]) > _STRICT_PAIR_EPS_ANG]
     else:
         ts_bonds, src_ts = perceive_bonds(symbols, ts_pos, charge)
-        int_bonds, src_int = perceive_bonds(symbols, intermediate_pos, charge)
+        known_graph = intermediate_molecule is not None and not (
+            intermediate_molecule.HasProp("cloudra_graph_status")
+            and intermediate_molecule.GetProp("cloudra_graph_status") == "unresolved"
+        )
+        if known_graph:
+            int_bonds = {tuple(sorted((bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()))): float(bond.GetBondTypeAsDouble())
+                         for bond in intermediate_molecule.GetBonds()}
+            src_int = "declared_molecule"
+        else:
+            int_bonds, src_int = perceive_bonds(symbols, intermediate_pos, charge)
         perception = f"ts={src_ts},intermediate={src_int}"
         cls = classify_watch_pairs(symbols, d_ts, d_int, ts_bonds, int_bonds)
         b_pairs = cls["b"]
-        authoritative = src_ts == src_int == "rdDetermineBonds"
+        authoritative = src_ts == "rdDetermineBonds" and src_int in {"rdDetermineBonds", "declared_molecule"}
         if authoritative and cls["bond_diff"]:
             pairs, layer = cls["bond_diff"], "bond_diff"
         else:
@@ -484,18 +579,21 @@ def evaluate_endpoint_between(symbols: Sequence[str], ts_pos, end_pos,
 def assign_irc_endpoints(symbols: Sequence[str], ts_pos, end_a_pos, end_b_pos,
                          intermediate_a_pos, intermediate_b_pos,
                          watch_pairs: Sequence[Sequence[int]],
-                         charge: int = 0, *, index_base: int = 1) -> dict:
+                         charge: int = 0, *, index_base: int = 1, reference_molecules=None) -> dict:
     """尝试 IRC 两端与两个端点参考几何的 direct/swapped 无序配对。"""
     assignments = []
-    for name, target_a, target_b in (
-        ("direct", intermediate_a_pos, intermediate_b_pos),
-        ("swapped", intermediate_b_pos, intermediate_a_pos),
+    mol_a, mol_b = reference_molecules or (None, None)
+    for name, target_a, target_b, reference_a, reference_b in (
+        ("direct", intermediate_a_pos, intermediate_b_pos, mol_a, mol_b),
+        ("swapped", intermediate_b_pos, intermediate_a_pos, mol_b, mol_a),
     ):
         result_a = evaluate_endpoint_between(
-            symbols, ts_pos, end_a_pos, target_a, watch_pairs, charge, index_base=index_base
+            symbols, ts_pos, end_a_pos, target_a, watch_pairs, charge, index_base=index_base,
+            intermediate_molecule=reference_a,
         )
         result_b = evaluate_endpoint_between(
-            symbols, ts_pos, end_b_pos, target_b, watch_pairs, charge, index_base=index_base
+            symbols, ts_pos, end_b_pos, target_b, watch_pairs, charge, index_base=index_base,
+            intermediate_molecule=reference_b,
         )
         assignments.append({
             "name": name,
@@ -534,22 +632,23 @@ def prove_irc_endpoint_direction(
     intermediate_b: tuple[Sequence[str], object],
     watch_pairs: Sequence[Sequence[int]],
     charge: int = 0,
-    *, index_base: int = 1,
+    *, index_base: int = 1, atom_orders=None, reference_molecules=None,
 ) -> dict:
     """Align four geometries to the TS and apply the shared IRC direction test.
 
-    This is the single deterministic path-direction predicate used by ``ts_guess``
-    and benchmark self-consistency.  It deliberately proves only geometric
-    direction; optimization convergence and file provenance remain separate facts.
+    This is a deterministic geometric diagnostic, not endpoint-optimization
+    evidence. Its result is advisory when native IRC → Opt → Freq lineage exists.
     """
     aligned = []
-    for label, (symbols, positions) in (
+    aligned_molecules = []
+    for slot, (label, (symbols, positions)) in enumerate((
         ("IRC endpoint A", endpoint_a),
         ("IRC endpoint B", endpoint_b),
         ("intermediate A", intermediate_a),
         ("intermediate B", intermediate_b),
-    ):
-        result = align_atom_order(ts_symbols, ts_pos, symbols, positions)
+    )):
+        result = align_atom_order(ts_symbols, ts_pos, symbols, positions,
+                                  atom_order=atom_orders[slot] if atom_orders else None)
         if result is None:
             return {
                 "is_decidable": False,
@@ -561,13 +660,18 @@ def prove_irc_endpoint_direction(
             }
         perm, rmsd = result
         aligned.append([positions[k] for k in perm])
+        if reference_molecules is not None and slot >= 2:
+            from cloudra.tools.core.molecule import renumber_atoms
+
+            reference = reference_molecules[slot - 2]
+            aligned_molecules.append(renumber_atoms(reference, list(perm)) if reference is not None else None)
 
     result = assign_irc_endpoints(
         ts_symbols,
         ts_pos,
         aligned[0], aligned[1], aligned[2], aligned[3],
         watch_pairs,
-        charge, index_base=index_base,
+        charge, index_base=index_base, reference_molecules=aligned_molecules or None,
     )
     result["aligned_positions"] = aligned
     return result

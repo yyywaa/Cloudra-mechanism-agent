@@ -73,3 +73,13 @@ async def test_non_posix_guard_waits_for_exit_before_acknowledging_cancel(tmp_pa
         release.set()
         guard.cancel()
         await asyncio.gather(guard, return_exceptions=True)
+
+
+def test_monitor_import_does_not_require_posix_calculator_wrapper(monkeypatch):
+    import importlib
+    import sys
+
+    from cloudra.runtime import monitor
+
+    monkeypatch.setitem(sys.modules, "cloudra.runtime.calc_lock_wrapper", None)
+    importlib.reload(monitor)

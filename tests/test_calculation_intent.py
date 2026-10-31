@@ -1,5 +1,6 @@
-"""calculation_intent + qm_input_writer 严格化（Task 2）：无法实现的选项
-明确拒绝、不静默丢参；生成文本可重新 inspect 出一致意图。"""
+"""Native calculation settings are preserved and questionable options warn."""
+
+from copy import deepcopy
 
 import pytest
 
@@ -11,6 +12,7 @@ from cloudra.services.compute_admission import resource_underestimate
 from cloudra.tools.Chemtool.qm_input_writer import QmInputWriter, QmInputWriter_input_schema
 from cloudra.tools.core.calculation_intent import (
     TASK_VOCABULARY,
+    compare_calculation_input,
     inspect_input,
     intent_from_writer,
     validate_writer_request,
@@ -41,6 +43,12 @@ def _codes(entries):
     return [e["code"] for e in entries]
 
 
+def test_explicit_native_orca_scan_is_not_advised_to_use_itself():
+    issues = validate_writer_request(dict(engine='orca', method='HF', basis_set='STO-3G',
+        task_type=[{'opt': None}], orca_blocks='%geom Scan B 0 1 = 1.0, 2.0, 5 end end'))
+    assert 'scan_requires_ts_guess' not in _codes(issues)
+
+
 def _writer(tmp_path, **overrides):
     xyz = tmp_path / "water.xyz"
     xyz.write_text(_WATER_XYZ, encoding="utf-8")
@@ -50,32 +58,34 @@ def _writer(tmp_path, **overrides):
         "basis_set": "" if overrides.get('external_program') else "6-31g(d)",
         "source_type": "xyz_file",
         "source_value": str(xyz),
+        "charge": 0,
         "output_path": str(tmp_path / "job.inp"),
     }
     args.update(overrides)
     return QmInputWriter().tool_call(QmInputWriter_input_schema(**args), session=None)
 
 
-# --- validate_writer_request：固定 code/field/message 形状 ---
+# --- validate_writer_request：结构化可见建议 ---
 
 
 def test_validate_entries_shape_and_empty_means_no_conflict():
-    entries = validate_writer_request({"engine": "orca", "task_type": [{"numfreq": None}]})
+    entries = validate_writer_request({"engine": "orca", "task_type": [{"FutureTask": None}]})
     assert entries
     for entry in entries:
-        assert set(entry) == {"code", "field", "message"}
+        assert set(entry) == {"code", "field", "message", "severity"}
+        assert entry['severity'] == 'warning'
     assert validate_writer_request(
         {"engine": "orca", "task_type": [{"opt": None}, {"freq": None}]}
     ) == []
 
 
-def test_unknown_numfreq_key_rejected_with_suggestion():
+def test_native_numfreq_key_is_accepted_without_alias_rewrite():
     entries = validate_writer_request({"engine": "orca", "task_type": [{"numfreq": None}]})
-    assert "unknown_task_key" in _codes(entries)
-    assert "frequency_mode='numeric'" in entries[0]["message"]
+    assert entries == []
+    assert intent_from_writer({'engine': 'orca', 'task_type': [{'NumFreq': None}]}).tasks == {'frequency'}
 
 
-def test_gaussian_opt_suboptions_rejected_for_orca():
+def test_gaussian_opt_suboptions_warn_for_orca():
     entries = validate_writer_request(
         {"engine": "orca", "task_type": [{"opt": "ts,calcfc,noeigen"}]}
     )
@@ -83,14 +93,47 @@ def test_gaussian_opt_suboptions_rejected_for_orca():
     assert "orca_blocks" in entries[0]["message"]
 
 
-def test_orca_end_setting_rejected():
+@pytest.mark.parametrize("task,option,needs_hessian", [
+    ("opt", "CalcFC", False),
+    ("opt", "ModRedundant", False),
+    ("opt", "ReadCartesianFC", True),
+    ("opt", "FCCards", True),
+    ("irc", "CalcFC", False),
+    ("irc", "ReadCartesianFC", False),
+    ("irc", "FCCards", False),
+    ("irc", "ModRedundant", True),
+])
+@pytest.mark.parametrize("option_in_keywords", [False, True])
+def test_gaussian_hessian_declarations_remain_task_specific(task, option, needs_hessian, option_in_keywords):
+    # A declaration in either field must use the same task-specific vocabulary.
+    arguments = {
+        "engine": "gaussian",
+        "task_type": [{task: "TS" if task == "opt" else "Forward"}],
+        "keywords": "SCF=Tight",
+    }
+    if option_in_keywords:
+        arguments["keywords"] += f" {task}=({option})"
+    else:
+        arguments["task_type"][0][task] += f",{option}"
+    original = deepcopy(arguments)
+    entries = validate_writer_request(arguments)
+    assert ("initial_hessian_unspecified" in _codes(entries)) is needs_hessian
+    assert all(entry["severity"] == "warning" for entry in entries)
+    assert arguments == original, "advice must not inject or rewrite native options"
+
+
+def test_gaussian_non_task_keyword_does_not_require_a_hessian():
+    assert validate_writer_request({"engine": "gaussian", "keywords": "SCF=Tight"}) == []
+
+
+def test_orca_end_setting_warns():
     entries = validate_writer_request(
         {"engine": "orca", "task_type": [{"opt": None}], "end_setting": "B 1 34 S 15 0.02"}
     )
     assert "gaussian_only_field" in _codes(entries)
 
 
-def test_conflicting_and_duplicate_task_blocks_rejected():
+def test_conflicting_and_duplicate_task_blocks_warn():
     conflicting = validate_writer_request(
         {"engine": "orca", "task_type": [{"opt": "ts"}, {"opt": None}]}
     )
@@ -101,16 +144,16 @@ def test_conflicting_and_duplicate_task_blocks_rejected():
     assert "duplicate_task" in _codes(duplicate)
 
 
-def test_frequency_mode_without_frequency_task_rejected():
+def test_frequency_mode_without_frequency_task_warns():
     entries = validate_writer_request(
         {"engine": "orca", "task_type": [{"opt": None}], "frequency_mode": "numeric"}
     )
     assert "frequency_mode_without_frequency" in _codes(entries)
 
 
-def test_bare_orca_scan_without_geom_block_rejected():
+def test_bare_orca_scan_without_geom_block_warns():
     entries = validate_writer_request({"engine": "orca", "task_type": [{"scan": None}]})
-    assert "scan_requires_orca_blocks" in _codes(entries)
+    assert "scan_requires_ts_guess" in _codes(entries)
 
 
 # --- single_point / sp 拼写统一（规范词汇是 TASK_VOCABULARY 的 single_point） ---
@@ -128,12 +171,11 @@ def test_single_point_key_accepted_and_normalized():
         assert intent.certainty == "known"
 
 
-def test_unknown_task_key_error_lists_both_sp_spellings():
+def test_unknown_task_key_warns_without_guessing_a_replacement():
     entries = validate_writer_request({"engine": "orca", "task_type": [{"singlepoint": None}]})
     assert "unknown_task_key" in _codes(entries)
-    assert "single_point" in entries[0]["message"]
-    assert "'sp'" in entries[0]["message"]
-    assert "Did you mean 'single_point'?" in entries[0]["message"]
+    assert entries[0]['severity'] == 'warning'
+    assert 'preserved' in entries[0]['message']
 
 
 def test_sp_and_single_point_spelling_conflict_detected():
@@ -148,28 +190,33 @@ def test_sp_and_single_point_spelling_conflict_detected():
     assert "duplicate_task" in _codes(duplicate)
 
 
-# --- writer 行为：拒绝不落盘；成功时 unapplied_options 为空 ---
+# --- writer 行为：保留参数并返回 warning；成功时 unapplied_options 为空 ---
 
 
 @pytest.mark.asyncio
-async def test_writer_refusal_writes_no_file(tmp_path):
+async def test_writer_questionable_options_are_written_with_warnings(tmp_path):
     result = await _writer(tmp_path, task_type=[{"opt": "ts,calcfc,noeigen"}])
-    assert result.is_success is False
-    assert result.unapplied_options
-    assert not (tmp_path / "job.inp").exists()
+    assert result.is_success, result.message
+    assert not result.unapplied_options
+    assert result.warnings
+    assert 'calcfc,noeigen' in (tmp_path / 'job.inp').read_text()
 
 
 @pytest.mark.asyncio
-async def test_writer_rejects_invalid_options_before_building_coordinates(tmp_path, monkeypatch):
-    def unexpected_build(*_args, **_kwargs):
-        raise AssertionError("invalid request must not start coordinate generation")
+async def test_writer_warning_does_not_skip_coordinate_work(tmp_path, monkeypatch):
+    original = QmInputWriter._get_molecule
+    calls = []
 
-    monkeypatch.setattr(QmInputWriter, "_get_coordinates", staticmethod(unexpected_build))
+    def record_build(*args, **kwargs):
+        calls.append(True)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(QmInputWriter, "_get_molecule", staticmethod(record_build))
     result = await _writer(tmp_path, task_type=[{"opt": "ts,calcfc,noeigen"}])
 
-    assert result.is_success is False
-    assert result.unapplied_options
-    assert "gaussian_only_suboption" in result.message
+    assert result.is_success, result.message
+    assert calls
+    assert 'gaussian_only_suboption' in _codes(result.warnings)
 
 
 @pytest.mark.asyncio
@@ -301,6 +348,121 @@ def test_inspect_incomplete_input_is_not_guessed():
     intent = inspect_input("# nothing recognizable here\n", engine="orca")
     assert intent.tasks == set()
     assert intent.certainty == "unknown"
+
+
+@pytest.mark.parametrize('route,expected', [
+    ('# HF/STO-3G Opt ! IRC Opt=TS\n', {'minimum_opt'}),
+    ('# HF/STO-3G Opt\n ! IRC Opt=TS\n Freq\n', {'minimum_opt', 'frequency'}),
+    ('# HF/STO-3G Opt\n ! unmatched quote " and parenthesis ( are comments\n Freq\n',
+     {'minimum_opt', 'frequency'}),
+    ('# HF/STO-3G\n ! IRC is a comment\n Opt=(TS,CalcFC)\n', {'ts_opt'}),
+    ('# HF/STO-3G Opt=(TS,\n ! IRC and unmatched ( are comments\n CalcFC)\n', {'ts_opt'}),
+])
+def test_gaussian_route_comments_do_not_create_tasks_or_hide_continuation(route, expected):
+    text = route + '\n# IRC and Opt=TS are title text!\n\n0 1\nH 0 0 0\n\n'
+
+    intent = inspect_input(text, engine='gaussian')
+
+    assert intent.tasks == expected
+    assert (intent.charge, intent.multiplicity) == (0, 1)
+
+
+@pytest.mark.parametrize('quote', ['"', "'"])
+def test_gaussian_route_comments_preserve_bang_in_quoted_external_path(quote):
+    from cloudra.tools.core.native_input_sections import gaussian_sections
+
+    external = f'external={quote}/tmp/driver!native{quote}'
+    text = (f'# {external} Opt ! IRC Opt=TS are comments\n'
+            '\n# IRC Opt=TS is still title text!\n\n-1 2\nH 0 0 0\n\nkeep this trailing!\n')
+
+    intent = inspect_input(text, engine='gaussian')
+    section, = gaussian_sections(text)
+
+    assert intent.tasks == {'minimum_opt'}
+    assert intent.provider == 'driver!native'
+    assert external in section.route
+    assert section.charge == (-1, 2)
+    assert section.geometry == ['H 0 0 0']
+    assert 'keep this trailing!' in section.trailing
+
+
+@pytest.mark.parametrize('second_route,expected', [
+    ('# HF/STO-3G Freq ! Opt=TS is a comment\n', {'minimum_opt', 'frequency'}),
+    ('# HF/STO-3G\n ! IRC is a comment\n Opt=TS\n', {'minimum_opt', 'ts_opt'}),
+])
+def test_gaussian_route_comments_preserve_link1_section_boundaries(second_route, expected):
+    from cloudra.tools.core.native_input_sections import gaussian_sections
+
+    first = '# HF/STO-3G Opt ! IRC is a comment\n\nfirst title!\n\n0 1\nH 0 0 0\n\n'
+    second = second_route + '\nsecond title!\n\n-1 2\nH 0 0 1\n\n'
+    text = first + '--Link1--\n' + second
+
+    intent = inspect_input(text, engine='gaussian')
+    sections = gaussian_sections(text)
+
+    assert intent.tasks == expected
+    assert [section.charge for section in sections] == [(0, 1), (-1, 2)]
+    assert [section.geometry for section in sections] == [['H 0 0 0'], ['H 0 0 1']]
+
+
+@pytest.mark.parametrize('comment', [
+    '! basis selection (previous run',
+    '! basis selection "previous run',
+])
+def test_gaussian_tail_comments_do_not_erase_explicit_gen_ts(comment):
+    from cloudra.tools.core.native_input_sections import gaussian_sections
+
+    tail = comment + '\nH 0\nSTO-3G\n****\n'
+    text = '#p HF/Gen Opt=(TS,CalcFC)\n\nTS trial\n\n0 1\nH 0 0 0\n\n' + tail
+
+    assert inspect_input(text, engine='gaussian').tasks == {'ts_opt'}
+    section, = gaussian_sections(text)
+    assert comment in section.trailing  # Native tail evidence retains its original text.
+
+
+def test_gaussian_tail_comments_preserve_real_modredundant_scan_cards():
+    tail = '! IRC Opt=TS are not tasks, and "( is just a comment\nB 1 2 S 5 0.1 ! old range (\n'
+    arguments = dict(engine='gaussian', method='HF', basis_set='STO-3G',
+        task_type=[{'opt': 'modredundant'}], end_setting=tail)
+    text = '# HF/STO-3G Opt=ModRedundant\n\nscan\n\n0 1\nH 0 0 0\nH 0 0 1\n\n' + tail
+
+    assert inspect_input(text, engine='gaussian').tasks == {'relaxed_scan'}
+    assert intent_from_writer(arguments).tasks == {'relaxed_scan'}
+
+
+@pytest.mark.parametrize('changed_basis', [False, True])
+def test_gaussian_tail_comments_compare_settings_without_hiding_basis_changes(changed_basis):
+    expected_tail = '! declared basis (\nH 0\nSTO-3G\n****\n'
+    actual_tail = '! observed basis "\nH 0\n' + ('6-31G' if changed_basis else 'STO-3G') + '\n****\n'
+    # The complete native contract includes the task present in the input.
+    expected = dict(engine='gaussian', method='HF', basis_set='Gen',
+        keywords='Opt=TS', end_setting=expected_tail)
+    text = '# HF/Gen Opt=TS\n\ntrial\n\n0 1\nH 0 0 0\n\n' + actual_tail
+
+    differences = compare_calculation_input(text, expected, charge=0, multiplicity=1)
+
+    assert {difference.field for difference in differences} == ({'end_setting'} if changed_basis else set())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('kind', ['gen_ts', 'modredundant_scan'])
+async def test_gaussian_tail_comments_survive_writer_and_semantic_round_trip(tmp_path, kind):
+    if kind == 'gen_ts':
+        tail = '! basis selection (previous run\nO H 0\nSTO-3G\n****\n'
+        task, basis, expected_tasks = 'ts', 'Gen', {'ts_opt'}
+    else:
+        tail = '! IRC and unmatched "( are comments\nB 1 2 S 5 0.1 ! old range (\n'
+        task, basis, expected_tasks = 'modredundant', 'STO-3G', {'relaxed_scan'}
+
+    result = await _writer(tmp_path, engine='gaussian', method='HF', basis_set=basis,
+        task_type=[{'opt': task}], end_setting=tail, output_path=str(tmp_path / 'job.gjf'))
+
+    assert result.is_success, result.message
+    assert result.unapplied_options == []
+    assert 'malformed_native_end_setting' not in _codes(result.warnings)
+    content = (tmp_path / 'job.gjf').read_text()
+    assert tail in content
+    assert inspect_input(content, engine='gaussian').tasks == expected_tasks
 
 
 # --- MethodPolicy fail-closed 不因意图模型放宽 ---

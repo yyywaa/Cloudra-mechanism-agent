@@ -84,7 +84,7 @@ class RuntimeSettingsPatch(BaseModel):
     base_url: Optional[str] = None
     temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
     max_tokens: Optional[int] = Field(default=None, ge=1)
-    context_window: Optional[int] = Field(default=None, ge=1)
+    context_window: Optional[int] = Field(default=None, ge=0)
     top_p: Optional[float] = Field(default=None, gt=0.0, le=1.0)
     frequency_penalty: Optional[float] = Field(default=None, ge=-2.0, le=2.0)
     presence_penalty: Optional[float] = Field(default=None, ge=-2.0, le=2.0)
@@ -122,7 +122,7 @@ class RuntimeSettings(RuntimeSettingsPatch):
     temperature: float = 1.0
     max_tokens: int = 32768
     # 0 = 未设置（与 model/base_url 的空串约定一致）：真实窗口由桥接层从
-    # config 槽位补全（legacy_default_settings）；补丁通道 ge=1 进不来 0。
+    # config 槽位补全（legacy_default_settings）；补丁可用 0 恢复继承。
     context_window: int = 0
     top_p: Optional[float] = None
     frequency_penalty: float = 0.0
@@ -223,6 +223,9 @@ class AgentSession(BaseModel):
     # AgentHub peer call requests a result notification without creating a
     # parent/child relationship (and therefore without cancellation cascade).
     requested_by_session_id: Optional[str] = None
+    # Internal binding: each final delivery request has an independent reviewer.
+    # Researchers never supply this identity through AgentHub tool arguments.
+    final_review_request_id: str | None = None
     state: AgentState = AgentState.QUEUED
     settings: RuntimeSettings = Field(default_factory=RuntimeSettings)
     settings_revision: int = 0

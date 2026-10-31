@@ -65,23 +65,45 @@ def _live_sessions(core, project_id: str) -> list[AgentSession]:
 
 
 def _resolve_live_target(
-    core, project_id: str, target: str, *, wakeable_role_only: bool = False
+    core, project_id: str, target: str, *, wakeable_role_only: bool = False, author: AgentSession | None = None
 ) -> AgentSession | None:
-    """Resolve explicit ids; role calls may skip failed/cancelled sessions."""
+    """Resolve ids/roles first, then fall back to a display name."""
     t = target.strip()
     if not t:
         return None
     sessions = _live_sessions(core, project_id)
     clean = t.lstrip("@").lower()
+    if author is not None and clean == "parent" and author.parent_session_id:
+        parent = core.agents.get(author.parent_session_id)
+        if parent is not None and parent.project_id == project_id:
+            return parent
     by_id = core.agents.get(t)
     if by_id is not None and by_id.project_id == project_id:
         return by_id
+    if author is not None and clean == "coordinator" and author.parent_session_id:
+        parent = core.agents.get(author.parent_session_id)
+        if parent is not None and parent.project_id == project_id and parent.role_id == "coordinator":
+            if not wakeable_role_only or parent.state not in {AgentState.FAILED, AgentState.CANCELLED}:
+                return parent
     matches = [a for a in sessions if a.role_id == clean]
+    if clean == "supervisor":
+        # The role alias belongs to the ongoing research discussion. A final
+        # reviewer stays addressable through its explicit session id above.
+        matches = [a for a in matches if a.final_review_request_id is None]
+    if matches or clean == "supervisor":
+        if wakeable_role_only:
+            matches = [
+                a for a in matches if a.state not in {AgentState.FAILED, AgentState.CANCELLED}
+            ]
+        return matches[-1] if matches else None
+    name_matches = [a for a in sessions if a.display_name.strip().lower() == clean]
     if wakeable_role_only:
-        matches = [
-            a for a in matches if a.state not in {AgentState.FAILED, AgentState.CANCELLED}
+        wakeable = [
+            a for a in name_matches if a.state not in {AgentState.FAILED, AgentState.CANCELLED}
         ]
-    return matches[-1] if matches else None
+        if wakeable:
+            return wakeable[-1]
+    return name_matches[-1] if name_matches else None
 
 
 async def _notify(
@@ -98,26 +120,6 @@ async def _notify(
     # mention/call 自动 reopen——消息驻留 durable 信箱，用户显式复活后首轮
     # 即可读到。其余状态照常唤醒（策略由 dispatcher 唯一解析）。
     wake = WakePolicy.PARK_TERMINAL
-    if author is not None:
-        from cloudra.runtime_v2.policies.permission import require_delegation_permissions
-        try:
-            require_delegation_permissions(author.capabilities.permissions, target.capabilities.permissions)
-        except CommandRejected:
-            from cloudra.runtime_v2.supervision import find_project_supervisor
-
-            # Review feedback from the project's bound Supervisor is control
-            # plane traffic to its Coordinator, not permission delegation.
-            # A role name alone cannot authorize a privileged peer wake.
-            supervisor_feedback = (
-                post_id is not None
-                and author.project_id == project_id == target.project_id
-                and find_project_supervisor(core, project_id) is author
-                and author.parent_session_id == target.id
-                and author.requested_by_session_id is None
-                and target.role_id == "coordinator"
-            )
-            if not supervisor_feedback:
-                wake = WakePolicy.NEVER
     # This snapshot describes wake intent. Persisting the message may yield,
     # so requested is not evidence that the recipient actually started a run.
     target_state = target.state.value
@@ -128,6 +130,12 @@ async def _notify(
         content=content,
         sender=sender,
         post_id=post_id,
+        manifest=(
+            {"kind": "task_assignment", "session_id": target.id, "parent_session_id": author.id}
+            if post_id is None and author is not None
+            and author.project_id == project_id == target.project_id
+            and target.parent_session_id == author.id else None
+        ),
         wake=wake,
     )
     return {
@@ -184,10 +192,10 @@ async def _post(core, author: AgentSession, args: dict[str, Any]) -> ToolResult:
     kind = args["kind"]
     to_agent = str(args.get("to_agent") or "").strip()
     if (
-        to_agent and _resolve_live_target(core, author.project_id, to_agent) is None
+        to_agent and _resolve_live_target(core, author.project_id, to_agent, author=author) is None
         and core.roles.get(to_agent.lstrip("@").lower()) is None
     ):
-        return _err(f"Addressee {to_agent!r} is neither a project session nor a known role_id.")
+        return _err(f"Addressee {to_agent!r} is neither a project session, display_name, nor a known role_id.")
     parent_id = args.get("parent_id") or None
     retry_post_id = str(args.get("post_id") or "").strip()
     if retry_post_id:
@@ -206,7 +214,7 @@ async def _post(core, author: AgentSession, args: dict[str, Any]) -> ToolResult:
         # Freeze the recipient set with the post. A retry must only finish its
         # original deliveries; a session created later cannot receive an old
         # broadcast just because one recipient temporarily failed.
-        addressee = _resolve_live_target(core, author.project_id, to_agent) if to_agent else None
+        addressee = _resolve_live_target(core, author.project_id, to_agent, author=author) if to_agent else None
         parent = await asyncio.to_thread(core.event_log.get, parent_id) if parent_id else None
         original = (
             core.agents.get(parent.session_id)
@@ -463,9 +471,9 @@ async def _search(core, author: AgentSession, args: dict[str, Any]) -> ToolResul
     posts = [post for _, _, post in scored[:limit]]
     # The library layer: registered knowledge providers (GraphRAG plugins)
     # are queried on every hub search — same tool, no extra interface.
-    from cloudra.runtime_v2.knowledge import render_library_hits, search_library
+    from cloudra.runtime_v2.knowledge import registered_providers, render_library_hits, search_library
 
-    library = await search_library(keyword, limit=5)
+    library, library_errors = await search_library(keyword, limit=5)
 
     # The skills layer: match domain skills on demand
     matched_skills = []
@@ -497,9 +505,8 @@ async def _search(core, author: AgentSession, args: dict[str, Any]) -> ToolResul
     )
     sources_status = {
         "project_posts": "available",
-        "library": "available" if _providers_present() else (
-            "no_hits" if not library else "available"
-        ),
+        "library": ('partial' if len(library_errors) < len(registered_providers()) else 'unavailable')
+        if library_errors else ('available' if registered_providers() else 'no_hits'),
         "skills": "available" if matched_skills else "no_hits",
     }
 
@@ -515,15 +522,13 @@ async def _search(core, author: AgentSession, args: dict[str, Any]) -> ToolResul
 
     if library:
         summary_parts.append(f"Library hits ({len(library)}):\n{render_library_hits(library)}")
+    if library_errors:
+        summary_parts.append('Library source errors:\n' + '\n'.join(
+            f'- {name}: {error}' for name, error in library_errors.items()))
 
     summary = "\n\n".join(summary_parts)
-    return _ok(summary, posts=posts, library=library, skills=matched_skills, sources_status=sources_status)
-
-
-def _providers_present() -> bool:
-    from cloudra.runtime_v2.knowledge import registered_providers
-
-    return bool(registered_providers())
+    return _ok(summary, posts=posts, library=library, library_errors=library_errors,
+               skills=matched_skills, sources_status=sources_status)
 
 
 def _directory(core, author: AgentSession) -> ToolResult:
@@ -555,7 +560,7 @@ async def _call(core, author: AgentSession, args: dict[str, Any]) -> ToolResult:
         post = await asyncio.to_thread(lambda: next((p for p in _posts(core, author.project_id) if p["id"] == raw_post_id), None))
         if post is not None:
             post_line = f"Related post {post['id']} (topic {post['topic']})."
-    target = _resolve_live_target(core, author.project_id, raw_to, wakeable_role_only=True)
+    target = _resolve_live_target(core, author.project_id, raw_to, wakeable_role_only=True, author=author)
     text = format_incoming_call(
         caller_agent_id=author.role_id,
         caller_session_id=author.id,
@@ -565,14 +570,12 @@ async def _call(core, author: AgentSession, args: dict[str, Any]) -> ToolResult:
     )
 
     if target is not None:
-        from cloudra.runtime_v2.policies.permission import require_delegation_permissions
-        require_delegation_permissions(author.capabilities.permissions, target.capabilities.permissions)
         notification = await _notify(core, author.project_id, target, sender=author.role_id, content=text, author=author)
         return _ok(f"Called {target.id} (non-blocking).", session_id=target.id, notifications=[notification])
 
     # A missing role is a request for a new peer, independent of the caller's
-    # role, settings, and cancellation tree. Supervisor is system-managed and
-    # has one instance per project; every caller uses the same rule for it.
+    # role, settings, and cancellation tree. Process and final Supervisors are
+    # system-managed; callers cannot create them through a missing role alias.
     role_id = raw_to.lstrip("@").lower()
     try:
         core.roles.require(role_id)
@@ -582,7 +585,7 @@ async def _call(core, author: AgentSession, args: dict[str, Any]) -> ToolResult:
         matches = difflib.get_close_matches(role_id, valid_roles, n=2, cutoff=0.35)
         suggestion = f" Did you mean '{matches[0]}'?" if matches else ""
         return _err(
-            f"Target {raw_to!r} is neither a live session nor a known role.{suggestion} "
+            f"Target {raw_to!r} is neither a project session, display_name, nor a known role.{suggestion} "
             f"Available roles: {valid_roles}."
         )
     if role_id == "supervisor":
@@ -668,7 +671,7 @@ async def _dispatch_hub_tool(core, author: AgentSession, call: ToolCall) -> Tool
     try:
         args = AgentHub_input_schema.model_validate(call.arguments).model_dump()
     except ValidationError as exc:
-        return _err(validation_feedback(exc))
+        return _err(validation_feedback(exc, schema=AgentHub_input_schema))
     action = args["action"]
     if action == "post":
         return await _post(core, author, args)

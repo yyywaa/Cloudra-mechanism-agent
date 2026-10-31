@@ -15,7 +15,8 @@
   单原子离子（如 ``[F-]``）也作为独立组分保留。
 - **身份**：新增的氢按 ``(父重原子输入序号, 该父原子上的第 k 个氢)`` 登记稳定身份，
   **绝不**用 ``AddHs`` 之后的数组下标充当跨反应映射。
-- **构建**：逐组分独立嵌入 + 力场优化，每一步迭代落一帧轨迹；失败与不收敛的轨迹同样保留。
+- **构建**：已有完整几何原样保留；无坐标时逐组分嵌入 + 力场优化，每一步迭代落一帧轨迹；
+  失败与不收敛的轨迹同样保留。真实坐标可继续计算，不表示已成为力场极小值。
 - **开壳层**：按声明电荷和总多重度检查电子数奇偶性/范围；自由基数仅作诊断。只生成
   未优化的 ETKDG 种子，跳过 MMFF/UFF，不把种子冒充科学确证的驻点。
   显式电子态声明优先；即使声明为闭壳层，带局域自由基标记的图仍保守地跳过力场。
@@ -32,18 +33,21 @@ docstring 的参数表）产出**复合物候选**。组装需要已嵌入的组
 
 from __future__ import annotations
 
+import math
 import os
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, TypeAdapter, field_validator
 
 from cloudra.persistence.fs_utils import atomic_write_text
 from cloudra.tools.core.complex_assembly import (
     AssemblyParameters,
     AssemblyResult,
+    _min_interfragment_gap,
     assemble,
 )
 from cloudra.tools.core.electronic_state import electronic_state_details, electronic_state_issue
+from cloudra.tools.core.molecule import Molecule, copy_conformer, renumber_atoms
 from cloudra.tools.core.structure_artifacts import (
     FORCE_FIELD_ENERGY_UNIT,
     TrajectoryArtifact,
@@ -111,15 +115,22 @@ OptimizationStatus = Literal[
     "skipped_electronic_state",  # 电子态声明或自由基图标记需避开力场，仅生成未优化种子
 ]
 
-# 不能被下游当成"可用起点几何"的优化状态。
+# 不满足力场极小值资格的优化状态；未收敛末帧仍可能是下一种方法的种子。
 _NON_USABLE_OPTIMIZATION = ("failed", "not_converged")
 
 
 class StructureInput(BaseModel):
-    """结构来源。三个入口都把各自的输入归一到这里，不再各写一份解析。"""
+    """结构来源。外部文本与内部 Mol 在这里归一。"""
 
-    kind: Literal["smiles", "mol_block", "xyz_text"] = Field(description="输入类型")
-    value: str = Field(description="SMILES 串 / MOL block 文本 / xyz 文本")
+    kind: Literal["smiles", "mol_block", "xyz_text", "molecule"] = Field(description="输入类型")
+    value: str | Molecule = Field(description="原生 Mol 或入口结构文本")
+
+    @field_validator("value", mode="before")
+    @classmethod
+    def parse_native_molecule(cls, value, info):
+        if info.data.get("kind") == "molecule":
+            return TypeAdapter(Molecule).validate_python(value)
+        return value
 
 
 class BuildStrategy(BaseModel):
@@ -210,13 +221,8 @@ class BuildComponent(BaseModel):
     """一个可独立处理的组分（分子图连通分量）。"""
 
     component_id: str = Field(description="组分编号，如 frag0")
+    mol: Molecule
     source_atom_indices: list[int] = Field(description="所属输入原子序号（加氢前，0-based，升序）")
-    symbols: list[str] = Field(description="该组分加显式氢后的元素序列（按输出原子顺序）")
-    atom_count: int
-    heavy_atom_count: int
-    formal_charge: int = Field(description="该组分形式电荷总和")
-    single_atom: bool = Field(description="是否单原子组分（单原子组分无需调用力场）")
-    isomeric_smiles: str = Field(description="该组分的规范异构 SMILES，用于核对立体化学是否保留")
     embed_status: EmbedStatus
     optimization_status: OptimizationStatus
     engine: str = Field(default="", description=f"实际使用的力场（{MMFF_ENGINE}/{UFF_ENGINE}）或空串")
@@ -230,20 +236,44 @@ class BuildComponent(BaseModel):
     )
     diagnostics: list[str] = Field(default_factory=list)
 
+    @property
+    def symbols(self) -> list[str]:
+        return [atom.GetSymbol() for atom in self.mol.GetAtoms()]
+
+    @property
+    def atom_count(self) -> int:
+        return self.mol.GetNumAtoms()
+
+    @property
+    def heavy_atom_count(self) -> int:
+        return self.mol.GetNumHeavyAtoms()
+
+    @property
+    def formal_charge(self) -> int:
+        return Chem.GetFormalCharge(self.mol)
+
+    @property
+    def single_atom(self) -> bool:
+        return self.atom_count == 1
+
+    @property
+    def isomeric_smiles(self) -> str:
+        return _canonical_isomeric_smiles(Chem.RemoveHs(self.mol))
+
 
 class PreparedStructure(BaseModel):
-    """构建产物。收敛/可用性一律用枚举与路径表达，不用自由文本。"""
+    """构建产物。Mol 托管结构，枚举记录收敛与可用性，路径指向导出文件。"""
 
     status: BuildStatus
+    mol: Molecule | None = None
     message: str = Field(default="", description="给定状态的说明；不承载收敛判定本身")
     has_coordinates: bool = Field(
-        default=False, description="是否产出了可用的 3D 坐标（仅 status='ok' 且请求了嵌入时为 True）"
+        default=False, description="是否保留或生成了可继续计算的真实坐标；不表示力场已收敛或驻点已验证"
     )
     components: list[BuildComponent] = Field(default_factory=list)
     atom_identities: list[AtomIdentity] = Field(
         default_factory=list, description="按**完整结构输出原子顺序**排列的稳定身份表"
     )
-    symbols: list[str] = Field(default_factory=list, description="完整结构的元素序列（按输出原子顺序）")
     candidate_paths: list[str] = Field(
         default_factory=list, description="可交给下游的候选结构文件；仅 status='ok' 且 has_coordinates 时非空"
     )
@@ -258,14 +288,20 @@ class PreparedStructure(BaseModel):
     trajectory_ids: list[str] = Field(default_factory=list, description="本次构建的全部轨迹编号")
     trajectory_manifest_path: str = Field(default="", description="轨迹清单路径")
     artifact_path: str = Field(default="", description="本产物 JSON 的路径")
-    total_charge: int = 0
-    formal_charge_sum: int = 0
     electronic_state: dict = Field(
         default_factory=dict,
         description="输入声明、总电子数、局域自由基数、alpha/beta 电子数与开壳层分类；"
         "局域自由基数仅作诊断，不限制所声明的自旋耦合。",
     )
     diagnostics: list[str] = Field(default_factory=list)
+
+    @property
+    def symbols(self) -> list[str]:
+        return [atom.GetSymbol() for atom in self.mol.GetAtoms()] if self.mol is not None else []
+
+    @property
+    def formal_charge_sum(self) -> int:
+        return Chem.GetFormalCharge(self.mol) if self.mol is not None else 0
 
     def atom_identity(self, index: int) -> AtomIdentity:
         """按完整结构的输出原子序号取身份表条目（越界即 fail-loud）。"""
@@ -291,7 +327,9 @@ class PreparedStructure(BaseModel):
 
 
 def _parse_input(structure: StructureInput, total_charge: int):
-    """把三种输入解析成带键级与立体化学的 RDKit Mol；失败抛 ValueError。"""
+    """把入口输入解析成带键级与立体化学的 RDKit Mol；失败抛 ValueError。"""
+    if structure.kind == "molecule":
+        return Chem.Mol(structure.value)
     if structure.kind == "smiles":
         mol = Chem.MolFromSmiles(structure.value)
         if mol is None:
@@ -339,56 +377,16 @@ def _canonical_isomeric_smiles(fragment_mol) -> str:
 def _submol_by_input_indices(mol, indices: list[int]):
     """按**给定的输入原子序号顺序**构造子分子，返回 ``(submol, {输入序号: 子分子下标})``。
 
-    不用 ``GetMolFrags(asMols=True)`` 的原子顺序，是因为那需要假设它等于索引视图的顺序；
-    这里显式构造，下标映射由构造过程本身保证。逐键搬运立体化学（含双键的 stereo atoms），
-    随后统一 ``SanitizeMol``；任何搬运失败都会在 sanitize 阶段 fail-loud。
+    在分子副本上删除未选原子，再按请求顺序重排。由 RDKit 保留原子/键属性、
+    构象和立体参考，避免逐字段重建时丢失化学信息；输入分子不变。
     """
-    rw = Chem.RWMol()
-    old_to_new: dict[int, int] = {}
-    for old_index in indices:
-        source = mol.GetAtomWithIdx(old_index)
-        atom = Chem.Atom(source.GetAtomicNum())
-        atom.SetFormalCharge(source.GetFormalCharge())
-        atom.SetIsotope(source.GetIsotope())
-        atom.SetChiralTag(source.GetChiralTag())
-        atom.SetNumExplicitHs(source.GetNumExplicitHs())
-        atom.SetNoImplicit(source.GetNoImplicit())
-        atom.SetNumRadicalElectrons(source.GetNumRadicalElectrons())
-        old_to_new[old_index] = rw.AddAtom(atom)
-
-    # 两趟：先建齐全部键，再设立体化学。``SetStereoAtoms`` 会校验两个参考原子分别与
-    # 本键的 begin/end 相连；若在后续键还没加进来时就设，引用键尚不存在 → RDKit 抛
-    # "endIdx not connected to end atom of bond"（双键立体化学的参考原子常是远端取代基）。
-    stereo_to_set: list[tuple[int, int, object, list[int]]] = []
-    for bond in mol.GetBonds():
-        begin, end = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
-        if begin not in old_to_new or end not in old_to_new:
-            continue
-        new_begin, new_end = old_to_new[begin], old_to_new[end]
-        rw.AddBond(new_begin, new_end, bond.GetBondType())
-        # 必须连同键方向一起搬运：双键的 E/Z 在 MOL block 与规范 SMILES 里都由**相邻单键的
-        # 方向**（ENDUPRIGHT/ENDDOWNRIGHT）承载，只搬 GetStereo() 会让立体标记静默丢失。
-        rw.GetBondBetweenAtoms(new_begin, new_end).SetBondDir(bond.GetBondDir())
-        if bond.GetStereo() != Chem.BondStereo.STEREONONE:
-            stereo_atoms = list(bond.GetStereoAtoms())
-            if len(stereo_atoms) != 2:
-                raise ValueError(
-                    f"bond {begin}-{end} carries stereo {bond.GetStereo()} but "
-                    f"{len(stereo_atoms)} stereo atoms; refusing to guess the reference atoms"
-                )
-            if any(a not in old_to_new for a in stereo_atoms):
-                raise ValueError(
-                    f"bond {begin}-{end} references stereo atom(s) {stereo_atoms} that are not in "
-                    f"this component {list(indices)}; the component split would lose stereo"
-                )
-            stereo_to_set.append((new_begin, new_end, bond.GetStereo(), stereo_atoms))
-
-    for new_begin, new_end, stereo, stereo_atoms in stereo_to_set:
-        new_bond = rw.GetBondBetweenAtoms(new_begin, new_end)
-        new_bond.SetStereo(stereo)
-        new_bond.SetStereoAtoms(old_to_new[stereo_atoms[0]], old_to_new[stereo_atoms[1]])
-
-    submol = rw.GetMol()
+    old_to_new = {old_index: new_index for new_index, old_index in enumerate(indices)}
+    rw = Chem.RWMol(mol)
+    for old_index in reversed(range(mol.GetNumAtoms())):
+        if old_index not in old_to_new:
+            rw.RemoveAtom(old_index)
+    retained_order = {old_index: new_index for new_index, old_index in enumerate(sorted(indices))}
+    submol = renumber_atoms(rw, [retained_order[index] for index in indices])
     Chem.SanitizeMol(submol)
     return submol, old_to_new
 
@@ -405,7 +403,7 @@ def _add_hydrogens_with_identity(submol, component_id: str):
     数组位置无关。落在原子上的数组下标会随拆分方式改变，不能充当跨反应映射。
     """
     n_before = submol.GetNumAtoms()
-    mol_h = Chem.AddHs(submol)
+    mol_h = Chem.AddHs(submol, addCoords=bool(submol.GetNumConformers() and submol.GetConformer().Is3D()))
     hydrogen_by_index: dict[int, tuple[int, int]] = {}
     per_parent: dict[int, list[int]] = {}
     for new_index in range(n_before, mol_h.GetNumAtoms()):
@@ -562,28 +560,15 @@ def _render_xyz(mol, conf_id: int, title: str,
     return "\n".join(lines) + "\n"
 
 
-class _ComponentBuild:
-    """内部载体（刻意不用 pydantic：这里要持有 RDKit Mol 对象）。"""
-
-    def __init__(self, component: BuildComponent, mol, conf_id: int,
-                 identities: list[AtomIdentity]):
-        self.component = component
-        self.mol = mol
-        self.conf_id = conf_id
-        self.identities = identities
-
-
 def _build_component(mol, indices: list[int], component_id: str, request: PreparationRequest,
                      out_dir: str, artifacts: list[TrajectoryArtifact],
-                     index_offset: int, candidate_sink=None, *, skip_force_field: bool) -> _ComponentBuild:
+                     index_offset: int, candidate_sink=None, *, skip_force_field: bool) -> tuple[BuildComponent, list[AtomIdentity]]:
     """构建单个组分：切分 → 加氢 → （可选）嵌入 → 力场优化（含轨迹）→ 落盘。"""
     submol, old_to_new = _submol_by_input_indices(mol, indices)
     submol_atom_to_input = {new: old for old, new in old_to_new.items()}
     diagnostics: list[str] = []
 
     formal_charge = sum(a.GetFormalCharge() for a in submol.GetAtoms())
-    heavy_atom_count = sum(1 for a in submol.GetAtoms() if a.GetAtomicNum() > 1)
-    isomeric_smiles = _canonical_isomeric_smiles(submol)
 
     mol_h, hydrogen_by_index = _add_hydrogens_with_identity(submol, component_id)
     identities = _identity_table(
@@ -606,6 +591,11 @@ def _build_component(mol, indices: list[int], component_id: str, request: Prepar
             "coordinate embedding was not requested (strategy.embed=False); only the structural "
             "resolution (split / AddHs / identity table / charge self-check) was performed"
         )
+    elif mol_h.GetNumConformers() and mol_h.GetConformer().Is3D():
+        conf_id = mol_h.GetConformer().GetId()
+        diagnostics.append("Input coordinates retained; no embedding or force-field optimization was run.")
+        if component_capture:
+            component_capture.capture(mol_h, conf_id, generator="component_input_geometry")
     elif single_atom:
         # 单原子组分无需调用力场：位置即原点，没有可优化的内部自由度。
         conf = Chem.Conformer(1)
@@ -711,13 +701,8 @@ def _build_component(mol, indices: list[int], component_id: str, request: Prepar
 
     component = BuildComponent(
         component_id=component_id,
+        mol=copy_conformer(mol_h, conf_id) if conf_id is not None else mol_h,
         source_atom_indices=list(indices),
-        symbols=[a.GetSymbol() for a in mol_h.GetAtoms()],
-        atom_count=mol_h.GetNumAtoms(),
-        heavy_atom_count=heavy_atom_count,
-        formal_charge=formal_charge,
-        single_atom=single_atom,
-        isomeric_smiles=isomeric_smiles,
         embed_status=embed_status,
         optimization_status=optimization_status,
         engine=engine,
@@ -727,10 +712,7 @@ def _build_component(mol, indices: list[int], component_id: str, request: Prepar
         xyz_path=xyz_path,
         diagnostics=diagnostics,
     )
-    return _ComponentBuild(
-        component=component, mol=mol_h, conf_id=(conf_id if conf_id is not None else 0),
-        identities=identities,
-    )
+    return component, identities
 
 
 # ---------------------------------------------------------------------------
@@ -746,16 +728,15 @@ def _finalize(prepared: PreparedStructure, out_dir: str) -> PreparedStructure:
     return prepared
 
 
-def _empty(status: BuildStatus, message: str, total_charge: int, out_dir: str,
-           formal_charge_sum: int = 0,
+def _empty(status: BuildStatus, message: str, out_dir: str,
+           mol=None,
            diagnostics: Optional[list[str]] = None,
            electronic_state: Optional[dict] = None) -> PreparedStructure:
     return _finalize(
         PreparedStructure(
             status=status,
             message=message,
-            total_charge=total_charge,
-            formal_charge_sum=formal_charge_sum,
+            mol=mol,
             electronic_state=dict(electronic_state or {}),
             diagnostics=list(diagnostics or []),
         ),
@@ -763,16 +744,16 @@ def _empty(status: BuildStatus, message: str, total_charge: int, out_dir: str,
     )
 
 
-def _component_is_usable(build: _ComponentBuild) -> bool:
+def _component_is_usable(component: BuildComponent) -> bool:
     """闭壳层力场组装的组分资格：嵌入过、且优化真的收敛。
 
     单原子组分无需嵌入与力场（位置即原点，是确定值），不受"嵌入过+收敛"要求的约束。
     """
-    if build.component.single_atom:
+    if component.single_atom:
         return True
     return (
-        build.component.embed_status == "embedded"
-        and build.component.optimization_status == "converged"
+        component.embed_status == "embedded"
+        and component.optimization_status == "converged"
     )
 
 
@@ -803,16 +784,21 @@ def prepare_structure(request: PreparationRequest, *, candidate_sink=None) -> Pr
         return _empty(
             "invalid_input",
             f"Could not build a structure from the request: {exc}",
-            request.total_charge, out_dir,
+            out_dir,
         )
+
+    preserve_geometry = request.strategy.embed and bool(mol.GetNumConformers() and mol.GetConformer().Is3D())
+    if preserve_geometry and not all(
+        math.isfinite(float(value)) for position in mol.GetConformer().GetPositions() for value in position
+    ):
+        return _empty("invalid_input", "Input coordinates must be finite.", out_dir, mol)
 
     fragments = _fragment_atom_tuples(mol)
     if not fragments:
         return _empty(
-            "invalid_input", "The input structure contains no atoms", request.total_charge, out_dir,
+            "invalid_input", "The input structure contains no atoms", out_dir,
         )
 
-    formal_charge_sum = sum(a.GetFormalCharge() for a in mol.GetAtoms())
     state_details = electronic_state_details(
         mol, charge=request.total_charge, multiplicity=request.multiplicity,
         electronic_character=request.electronic_character,
@@ -825,7 +811,7 @@ def prepare_structure(request: PreparationRequest, *, candidate_sink=None) -> Pr
         status, message = state_issue
         return _empty(
             status, message,
-            request.total_charge, out_dir, formal_charge_sum,
+            out_dir, mol,
             diagnostics=[
                 f"{len(fragments)} component(s) were not built: the electronic state is unsupported"
             ],
@@ -836,26 +822,41 @@ def prepare_structure(request: PreparationRequest, *, candidate_sink=None) -> Pr
     components: list[BuildComponent] = []
     identities: list[AtomIdentity] = []
     component_paths: list[str] = []
-    builds: list[_ComponentBuild] = []
     index_offset = 0
 
     for position, indices in enumerate(fragments):
         component_id = f"frag{position}"
-        build = _build_component(
+        component, component_identities = _build_component(
             mol, list(indices), component_id, request, out_dir, artifacts, index_offset, candidate_sink,
             skip_force_field=state_details["requires_spin_aware_geometry"],
         )
-        identity_symbols = [a.symbol for a in build.identities]
-        if identity_symbols != build.component.symbols:
+        identity_symbols = [a.symbol for a in component_identities]
+        if identity_symbols != component.symbols:
             raise ValueError(
                 f"component {component_id}: identity table symbols {identity_symbols} do not match "
-                f"the built element sequence {build.component.symbols}"
+                f"the built element sequence {component.symbols}"
             )
-        components.append(build.component)
-        builds.append(build)
-        identities.extend(build.identities)
-        component_paths.append(build.component.mol_path)
-        index_offset += build.component.atom_count
+        components.append(component)
+        identities.extend(component_identities)
+        component_paths.append(component.mol_path)
+        index_offset += component.atom_count
+
+    built_mol = Chem.Mol(components[0].mol)
+    for component in components[1:]:
+        built_mol = Chem.CombineMols(built_mol, component.mol)
+
+    if preserve_geometry:
+        # Splitting groups fragments together. Restore the input atom order,
+        # appending only newly added hydrogens after the existing input atoms.
+        order = sorted(range(len(identities)), key=lambda index: (
+            identities[index].input_atom_index is None,
+            identities[index].input_atom_index if identities[index].input_atom_index is not None
+            else identities[index].parent_input_atom_index,
+            identities[index].hydrogen_ordinal or 0,
+        ))
+        built_mol = renumber_atoms(built_mol, order)
+        identities = [identities[index].model_copy(update={"index": new_index})
+                      for new_index, index in enumerate(order)]
 
     trajectory_manifest = write_trajectory_manifest(out_dir, artifacts) if artifacts else ""
 
@@ -878,14 +879,12 @@ def prepare_structure(request: PreparationRequest, *, candidate_sink=None) -> Pr
                     "name two different atoms."
                 ),
                 components=components,
+                mol=built_mol,
                 atom_identities=identities,
-                symbols=[atom.symbol for atom in identities],
                 component_paths=component_paths,
                 trajectory_ids=[artifact.trajectory_id for artifact in artifacts],
                 trajectory_manifest_path=trajectory_manifest,
-                total_charge=request.total_charge,
                 electronic_state=state_details,
-                formal_charge_sum=formal_charge_sum,
                 diagnostics=[f"built atoms (0-based): {numbering}"],
             ),
             out_dir,
@@ -894,10 +893,23 @@ def prepare_structure(request: PreparationRequest, *, candidate_sink=None) -> Pr
     diagnostics: list[str] = []
     assembly: Optional[AssemblyResult] = None
     assembly_paths: list[str] = []
-    if len(components) > 1 and not request.strategy.embed:
+    if preserve_geometry:
+        status: BuildStatus = "ok"
+        has_coordinates = True
+        message = "Input geometry retained as an unverified seed; no embedding, force-field optimization or reassembly was run."
+        if len(components) > 1:
+            groups = [list(group) for group in Chem.GetMolFrags(built_mol)]
+            gap, pair = _min_interfragment_gap(built_mol.GetConformer().GetPositions(), groups)
+            if gap < request.strategy.assembly.min_interfragment_distance:
+                status = "assembly_failed"
+                has_coordinates = False
+                message = (f"Input geometry has an interfragment collision at atoms {pair}: {gap:.4f} Å "
+                           f"< {request.strategy.assembly.min_interfragment_distance} Å; coordinates were not moved.")
+        diagnostics.extend(diagnostic for component in components for diagnostic in component.diagnostics)
+    elif len(components) > 1 and not request.strategy.embed:
         # 组装的对象是**已嵌入的**组分坐标（刚性放置要冻结片内几何），因此 embed=False
         # 只做结构解析的调用方拿不到复合物候选；明确报出原因，不做隐式补算。
-        status: BuildStatus = "assembly_failed"
+        status = "assembly_failed"
         has_coordinates = False
         message = (
             f"{len(components)} connected components detected, but the build strategy requested "
@@ -920,12 +932,12 @@ def prepare_structure(request: PreparationRequest, *, candidate_sink=None) -> Pr
     elif len(components) > 1:
         # 组装前闸门：任一组分坐标不可用（嵌入失败/优化未收敛/缺参数）就不进 assemble——
         # 把占位坐标或未收敛几何拼成"复合物"等于交付无意义结构。
-        unusable = [build for build in builds if not _component_is_usable(build)]
+        unusable = [component for component in components if not _component_is_usable(component)]
         if unusable:
             details = "; ".join(
-                f"{build.component.component_id} (embed={build.component.embed_status}, "
-                f"optimization={build.component.optimization_status})"
-                for build in unusable
+                f"{component.component_id} (embed={component.embed_status}, "
+                f"optimization={component.optimization_status})"
+                for component in unusable
             )
             status = "optimization_failed"
             has_coordinates = False
@@ -936,14 +948,14 @@ def prepare_structure(request: PreparationRequest, *, candidate_sink=None) -> Pr
                 "meaningless. Fix the component builds first."
             )
             diagnostics.append(
-                f"assembly refused: {len(unusable)} of {len(builds)} component(s) failed the "
+                f"assembly refused: {len(unusable)} of {len(components)} component(s) failed the "
                 "usability gate (embedded + converged, or single-atom)"
             )
         else:
             # 组装（用户批准的方案 A）：刚性放置采样 + 碰撞剔除 + 力场弛豫；反应中心给出时按
             # 反应模式做约束预优化并条件释放约束。组装参数就是 BuildStrategy.assembly 的默认值。
             assembly = assemble(
-                components=[(build.mol, build.conf_id) for build in builds],
+                components=[(component.mol, component.mol.GetConformer().GetId()) for component in components],
                 output_dir=os.path.join(out_dir, "assembly"),
                 parameters=request.strategy.assembly,
                 reaction_center=list(request.strategy.reaction_center) or None,
@@ -954,6 +966,7 @@ def prepare_structure(request: PreparationRequest, *, candidate_sink=None) -> Pr
             if assembly.status == "ok":
                 status = "ok"
                 has_coordinates = True
+                built_mol = assembly.candidates[0].mol
                 assembly_paths = list(assembly.candidate_paths)
                 message = (
                     f"{len(components)} connected components assembled ({assembly.mode} mode): "
@@ -974,35 +987,35 @@ def prepare_structure(request: PreparationRequest, *, candidate_sink=None) -> Pr
             "embedding was not requested."
         )
     else:
-        only = builds[0]
-        if only.component.embed_status == "failed":
+        only = components[0]
+        if only.embed_status == "failed":
             status = "optimization_failed"
             has_coordinates = False
             message = (
-                f"Conformer embedding failed for component {only.component.component_id}; the "
+                f"Conformer embedding failed for component {only.component_id}; the "
                 "recorded coordinates are placeholders and must not be used as a starting geometry."
             )
-        elif only.component.single_atom:
+        elif only.single_atom:
             status = "ok"
             has_coordinates = True
             message = "Single-atom structure; its coordinate is the origin (no force field needed)."
-        elif only.component.optimization_status in _NON_USABLE_OPTIMIZATION:
+        elif only.optimization_status in _NON_USABLE_OPTIMIZATION:
             status = "optimization_failed"
-            has_coordinates = False
+            has_coordinates = only.optimization_status == "not_converged"
             message = (
-                f"Component {only.component.component_id} did not converge under "
-                f"{only.component.engine or 'any force field'} (or the optimization raised); its "
-                "coordinates must not be used as a starting geometry. See the recorded trajectory "
-                "for the last state."
+                f"Component {only.component_id} did not converge under "
+                f"{only.engine or 'any force field'} (or the optimization raised); "
+                "its embedded coordinates remain an unqualified seed for a separate quantum-chemistry "
+                "optimization, not a force-field minimum. See the recorded trajectory for the last state."
             )
-        elif only.component.optimization_status == "missing_parameters":
+        elif only.optimization_status == "missing_parameters":
             status = "missing_parameters"
-            has_coordinates = False
+            has_coordinates = True
             message = (
                 "No force field covers every atom of this structure (MMFF94 and UFF both "
                 "unavailable); coordinates were embedded but NOT optimized."
             )
-        elif only.component.optimization_status == "skipped_electronic_state":
+        elif only.optimization_status == "skipped_electronic_state":
             status = "ok"
             has_coordinates = True
             message = (
@@ -1010,10 +1023,10 @@ def prepare_structure(request: PreparationRequest, *, candidate_sink=None) -> Pr
                 "MMFF94/UFF were skipped; subsequent optimization and scientific qualification "
                 "must use the declared electronic state."
             )
-            diagnostics.extend(only.component.diagnostics)
-        elif only.component.optimization_status == "not_required":
-            status = "missing_parameters"
-            has_coordinates = False
+            diagnostics.extend(only.diagnostics)
+        elif only.optimization_status == "not_required":
+            status = "ok"
+            has_coordinates = True
             message = (
                 "Force-field optimization was disabled by the build strategy, so the structure was "
                 "embedded but not optimized."
@@ -1023,19 +1036,24 @@ def prepare_structure(request: PreparationRequest, *, candidate_sink=None) -> Pr
             has_coordinates = True
             message = "Single component built and optimized; coordinates are ready for downstream use."
 
+    if has_coordinates and not all(
+        math.isfinite(float(value)) for position in built_mol.GetConformer().GetPositions() for value in position
+    ):
+        status = "invalid_input"
+        has_coordinates = False
+        message = "Built coordinates are nonfinite; no usable geometry was delivered."
+
     prepared = PreparedStructure(
         status=status,
         message=message,
         has_coordinates=has_coordinates,
         components=components,
+        mol=built_mol,
         atom_identities=identities,
-        symbols=[symbol for component in components for symbol in component.symbols],
         candidate_paths=[],
         component_paths=component_paths,
         trajectory_ids=[a.trajectory_id for a in artifacts],
         trajectory_manifest_path=trajectory_manifest,
-        total_charge=request.total_charge,
-        formal_charge_sum=formal_charge_sum,
         electronic_state=state_details,
         diagnostics=diagnostics,
     )
@@ -1043,19 +1061,18 @@ def prepare_structure(request: PreparationRequest, *, candidate_sink=None) -> Pr
     prepared.assembly = assembly
     prepared.candidate_paths = assembly_paths
 
-    if status == "ok" and has_coordinates and len(builds) == 1:
-        build = builds[0]
+    if status == "ok" and has_coordinates and (len(components) == 1 or preserve_geometry):
         xyz_path = os.path.join(out_dir, PREPARED_XYZ_NAME)
         mol_path = os.path.join(out_dir, PREPARED_MOL_NAME)
         atomic_write_text(
             xyz_path,
             _render_xyz(
-                build.mol, build.conf_id,
+                prepared.mol, prepared.mol.GetConformer().GetId(),
                 "prepared by cloudra structure_builder (per-component build)",
-                build.identities,
+                identities,
             ),
         )
-        atomic_write_text(mol_path, Chem.MolToMolBlock(build.mol, confId=build.conf_id))
+        atomic_write_text(mol_path, Chem.MolToMolBlock(prepared.mol))
         prepared.candidate_paths = [xyz_path, mol_path]
 
     return _finalize(prepared, out_dir)

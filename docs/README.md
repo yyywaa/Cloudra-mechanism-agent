@@ -1,46 +1,40 @@
-# Cloudra 文档中心
+# Cloudra 文档
 
-> **治理规则（2026-09-20 起）**：计划书 / 调研报告 / 进度手记 / 工作分工这类
-> 阶段性文档，**完成使命即归档**（移入就近的 `archive/`），不再保留在主线；
-> 主线只留「描述当前状态、随代码同步更新」的权威文档。判断标准一句话：
-> 六个月后它描述的还是现状吗？不是就该在 archive/ 里。
+[English](README_EN.md) · [项目首页](../README_CN.md)
 
-## 权威文档（随代码同步更新）
+第一次使用，从[安装与第一个任务](../README_CN.md#安装与启动)开始。阅读论文或核查实验结果，从[论文、数据与复现](RESEARCH_DATA_CN.md)开始。
 
-| 文档 | 主题 |
-| :--- | :--- |
-| 根 `README.md` / `AGENTS.md` / `CHANGELOG.md` | 项目定位、仓库地图（模块职责与坑点）、演进记录 |
-| [`DAG_ORCHESTRATION.md`](DAG_ORCHESTRATION.md) | 机理交付图编排规范（runtime_v2 核心编排） |
-| [`RUNTIME_OBSERVABILITY.md`](RUNTIME_OBSERVABILITY.md) | Agent 活动、工具完整回执、实时阶段与计算关联 API |
-| [`TS_PROCESS_SOP.md`](TS_PROCESS_SOP.md) | TS 搜索自动化流程 SOP（`ts_prepare`/`ts_resume`） |
-| [`KNOWLEDGE_TAGS.md`](KNOWLEDGE_TAGS.md) | 知识库标签体系 |
-| [`PHASE8_NODE_REGISTRY.md`](PHASE8_NODE_REGISTRY.md) | 多节点/Slurm 注册表 |
-| [`PLUGINS.md`](PLUGINS.md) | 插件机制 |
-| [`novelty.md`](novelty.md) | 学术与技术定位（对标 El Agente 系列，论文立项依据） |
-| [`../scripts/README.md`](../scripts/README.md) | 开发、运行、数据维护与一次性文档脚本索引 |
-| [`licenses/README.md`](licenses/README.md) | 项目许可证与第三方代码归属 |
-| `superpowers/plans/` `superpowers/specs/` | **设计历史**（按日期归档惯例保留，不更新） |
-| `gold_compute/README.md` | gold 战役现行策略：边选反应边填自算 gold；候选不来自既有文档 |
-| `ideapool/reaction_candidates/*.md` | **存量** benchmark 题源（生成器输入）；本轮新候选另开策展，不从这里抄 |
+## 使用与理解结果
 
-## 归档位置
+| 文档 | 你可以在这里找到 |
+| --- | --- |
+| [配置指南](CONFIGURATION_CN.md) | 模型登录、联网搜索、对话命令与服务访问。 |
+| [TS 流程与科学验收](TS_PROCESS_SOP.md) | 过渡态搜索、修订、停止以及频率和 IRC 证据要求。 |
+| [DAG 编排](DAG_ORCHESTRATION.md) | 三种模式、机理图、证据绑定与 Supervisor 审查。 |
+| [论文、数据与复现](RESEARCH_DATA_CN.md) | 论文源文件、图表复算、原始实验、Gold 与重新运行的不同入口。 |
 
-- `docs/archive/`：已实现的架构计划（DAG schema 重构、TS 后端门）、benchmark
-  设计调研（benchmark_survey/）、评测报告（benchmarks/），以及已完成的
-  [TS 交接](archive/HANDOFF_ts_strict_verify.md)和[旧运行异常记录](archive/HARNESS_NOTES.md)；
-- `gold_compute/archive/`：已废止的 gold 战役计划（旧池全边 DFT、文献填充、批次手记），
-  以及已完成的[能垒回填](../gold_compute/archive/HANDOFF_backfill.md)和
-  [HG2 配对纠正](../gold_compute/archive/HANDOFF_hg2_pairing.md)交接；
-- `paper/archive/`：论文进度手记、参考答案分工计划、被 narrative 取代的
-  benchmark_construction 初稿，以及[阶段性文献调研快照](../paper/archive/chemistry_ai_agents_literature_report.md)；
-- `ideapool/archive/`：GraphRAG 指南、benchmark 文献遴选、novelty 计划旧版
-  （v0.7，由 `docs/novelty.md` 取代）。
+## 部署与配置
 
-## 写作区（非本中心管辖）
+- [SSH 远端计算](../deploy/ssh_remote_node.md)：Cloudra 在本机运行，量化计算提交到远端。
+- [HPC / Slurm 部署](../deploy/hpc_cluster_deployment.md)：集群部署、环境准备和操作示例。
+- [节点注册表](NODE_REGISTRY.md)：节点配置、工作区路由及执行语义。
+- [MACE / ORCA 外部势配置](../deploy/mace_omol25_orca_external_setup.md)、[macOS xTB-IFF 适配](../deploy/xtbiff_macos_shim.md)：特定工具环境。
 
-- `paper/`：论文正文（`draft.md`、`main.tex`、`sections/`、
-  `benchmark_construction_narrative.md`、`literature_gap_analysis.md`、
-  `supplementary_information.md`）；
-- [`paper/literature/`](../paper/literature/README.md)：文献原件与下载残留索引；
-- `assets/`：标志原图；前端使用的静态资源仍在 `frontend/public/`；
-- `知识卡片/`、`申请材料/`、`软著申请材料/`：外部交付物，保持原路径。
+## 参与开发
+
+从[贡献指南](../CONTRIBUTING.md)了解开发检查与提交方式；[AGENTS.md](../AGENTS.md)维护协作规则。
+
+| 文档 | 内容 |
+| --- | --- |
+| [架构与目录地图](ARCHITECTURE.md) | Agent 内核、计算调度、数据存储及模块职责。 |
+| [工具调用协议](TOOL_PROTOCOLS.md) | JavaScript / traditional 协议、工具文档加载与运行边界。 |
+| [运行观测](RUNTIME_OBSERVABILITY.md) | Agent 活动、完整工具回执与计算关联 API。 |
+| [插件开发](PLUGINS.md) | 插件接口、事件与知识检索。 |
+| [知识标签](KNOWLEDGE_TAGS.md) | 知识库标签约定。 |
+| [IDPP 路径模式](IDPP_MODES.md) | 路径模式、数值停止和证据语义。 |
+| [脚本索引](../scripts/README.md) | 运行与数据维护脚本。 |
+| [许可证与第三方归属](licenses/README.md) | 项目及第三方组件的许可信息。 |
+
+## 历史记录
+
+已完成的计划、旧设计和验收过程留在 `docs/archive/`、`docs/superpowers/`、`gold_compute/archive/`、`paper/archive/` 与 `ideapool/archive/`，供需要时追溯。它们不代替上面的当前指南，也不构成新的待算任务。版本变化见 [CHANGELOG](../CHANGELOG.md)。

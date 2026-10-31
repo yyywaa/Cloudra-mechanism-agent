@@ -88,6 +88,29 @@ _REQUIRES_HOST_AND_RDKIT = pytest.mark.skipif(
 
 _BARRIER = "Done. The computed barrier is 5.0 kcal/mol."
 
+# 父 agent 通过真实工具交付已算物种，不凭最终消息中的能垒声明评分。
+_DELIVERY_GRAPH_PROGRAM = r"""
+const written = await tools.write({
+  path: "mechanism_graph.json",
+  content: JSON.stringify({
+    nodes: [{id: "R", role: "reactant", smiles: ["O"]}],
+    edges: [],
+  }),
+});
+text("DELIVERY WRITTEN ok=" + written.is_success);
+"""
+
+
+@pytest.fixture
+def approve_workspace_change(monkeypatch):
+    """文件写入的审批 LLM 使用替身；实际 write 与文件落盘保持真实。"""
+    from cloudra.infra.yolo_guard import YoloGuard
+
+    async def approve(self, tool_name, tool_args, agent, session, **_kwargs):
+        return True, ""
+
+    monkeypatch.setattr(YoloGuard, "judge", approve)
+
 # CLI 子 agent 完整链（smiles → writer → 同步 submit → query → parser）。
 # 同步 submit 由真实 guard 阻塞到终态（确定性同步点：monitor 启动耗时不参与
 # 竞速），parse 必然读到已完成的日志。
@@ -110,6 +133,7 @@ def _fit_resources(program: str) -> str:
 
 _CHILD_SYNC_CHAIN_PROGRAM = _fit_resources(r"""
 const w = await tools.qm_input_writer({
+  engine: "gaussian",
   source_type: "smiles", source_value: "O",
   method: "b3lyp", basis_set: "6-31g(d)",
   task_type: [{ "sp": null }],
@@ -148,6 +172,7 @@ else { text("PARENT SUBMITTED job=" + s.data.job_id + " state=" + s.data.state);
 # 第二次同输入成功，两个编号不同、旧失败记录保留。
 _CHILD_FAIL_THEN_RESUBMIT_PROGRAM = _fit_resources(r"""
 const w = await tools.qm_input_writer({
+  engine: "gaussian",
   source_type: "smiles", source_value: "O",
   method: "b3lyp", basis_set: "6-31g(d)",
   task_type: [{ "sp": null }],
@@ -166,6 +191,7 @@ else {
 
 _CHILD_RESUBMIT_CHAIN_PROGRAM = _fit_resources(r"""
 const w = await tools.qm_input_writer({
+  engine: "gaussian",
   source_type: "smiles", source_value: "O",
   method: "b3lyp", basis_set: "6-31g(d)",
   task_type: [{ "sp": null }],
@@ -187,35 +213,37 @@ else {
 }
 """)
 
-# 非法输入 → 可解释失败且无半成品；纠正后继续。
+# 畸形几何拒绝；原生选项保留并警告；纠正后继续。
 _CHILD_MALFORMED_THEN_CORRECTED_PROGRAM = r"""
 const badText = "5\ntruncated\nC 0.0 0.0 0.0\n";
 const badWrite = await tools.write({
-  path: "xyz/bad.xyz", content: badText, expected_sha256: "missing",
+  path: "xyz/bad.xyz", content: badText,
 });
 const goodText = "3\nwater\nO 0.000000 0.000000 0.117300\n" +
                  "H 0.000000 0.757200 -0.469200\nH 0.000000 -0.757200 -0.469200\n";
 const goodWrite = await tools.write({
-  path: "xyz/water.xyz", content: goodText, expected_sha256: "missing",
+  path: "xyz/water.xyz", content: goodText,
 });
 const badSource = await tools.qm_input_writer({
-  source_type: "xyz_file", source_value: "xyz/bad.xyz",
-  method: "b3lyp", engine: "gaussian", output_path: "calc/bad_from_xyz.gjf",
+  source_type: "xyz_file", source_value: "xyz/bad.xyz", charge: 0,
+  method: "b3lyp", basis_set: "6-31g(d)", engine: "gaussian", output_path: "calc/bad_from_xyz.gjf",
 });
-const badOption = await tools.qm_input_writer({
+const nativeOption = await tools.qm_input_writer({
   engine: "orca", source_type: "smiles", source_value: "O",
   method: "b3lyp", basis_set: "def2-svp",
   task_type: [{ "opt": "TS,calcfc,noeigen" }],
-  output_path: "calc/bad_orca.inp",
+  output_path: "calc/native_orca.inp",
 });
 text("WRITTEN bad=" + badWrite.is_success + " good=" + goodWrite.is_success +
      " | MALFORMED ok=" + badSource.is_success +
-     " | BAD OPTION ok=" + badOption.is_success);
+     " | NATIVE OPTION ok=" + nativeOption.is_success +
+     " warnings=" + nativeOption.data.warnings.length);
 """
 
 _CHILD_CORRECTED_CHAIN_PROGRAM = _fit_resources(r"""
 const w = await tools.qm_input_writer({
-  source_type: "xyz_file", source_value: "xyz/water.xyz",
+  engine: "gaussian",
+  source_type: "xyz_file", source_value: "xyz/water.xyz", charge: 0,
   method: "b3lyp", basis_set: "6-31g(d)",
   task_type: [{ "sp": null }],
   nproc: __CPUS__, mem: "__MEMORY_MB__MB",
@@ -247,6 +275,7 @@ if (parsed.is_success) {
 # Web 路径子 agent：提交后不轮询——ComputeNotifyBroker 回传唤醒后 query+parser。
 _CHILD_PREP_PROGRAM = _fit_resources(r"""
 const w = await tools.qm_input_writer({
+  engine: "gaussian",
   source_type: "smiles", source_value: "O",
   method: "b3lyp", basis_set: "6-31g(d)",
   task_type: [{ "sp": null }],
@@ -330,8 +359,10 @@ def _script_standard_roles(llm: ScriptedLLM) -> None:
         text(2, "suspended until children finish"),
         # run2（子完成唤醒）：异步提交 + 按真实门禁挂起；回执在 run 内校验
         js(1, _PARENT_ASYNC_SUBMIT_PROGRAM),
-        text(2, _BARRIER, expect=Receipt(
+        js(2, _DELIVERY_GRAPH_PROGRAM, expect=Receipt(
             tool="js_exec", contains=["PARENT SUBMITTED job="])),
+        text(3, _BARRIER, expect=Receipt(
+            tool="js_exec", contains=["DELIVERY WRITTEN ok=true"])),
     ])
     llm.script("small_mol", [
         js(1, _CHILD_SYNC_CHAIN_PROGRAM),
@@ -496,7 +527,7 @@ def _assert_job_chain(core, *, engine, workspace: Path, project_id: str,
 # ---------------------------------------------------------------------------
 
 @_REQUIRES_HOST_AND_RDKIT
-def test_cli_full_chain_standard_js(tmp_path, monkeypatch):
+def test_cli_full_chain_standard_js(tmp_path, monkeypatch, approve_workspace_change):
     engine = install_engine(monkeypatch, tmp_path / "bin", "gaussian")
     llm = ScriptedLLM()
     _script_standard_roles(llm)
@@ -562,11 +593,17 @@ def test_cli_full_chain_standard_js(tmp_path, monkeypatch):
     # 最终消息只作审计留痕：它不参与任何评分（评分只读交付物）
     assert any("5.0 kcal/mol" in m for m in parent_messages), parent_messages
 
-    # 评分落库（空沙箱无图 → 零证据倒扣，与既有契约一致）
+    # 图文件实际交付，但本用例的日志没有物种绑定声明；计算跑通不等于科学证据齐全。
+    assert json.loads((workspace / "mechanism_graph.json").read_text()) == {
+        "nodes": [{"id": "R", "role": "reactant", "smiles": ["O"]}], "edges": [],
+    }
+    assert len(_tool_call_ids(core, parent.id, "write")) == 1
     runs = runner.db.list_runs_for("")
     assert [r["task_id"] for r in runs] == ["T1"]
+    assert runs[0]["graph_score"] == 0.0
     assert runs[0]["final_score"] == -1.0
-    assert any("mechanism_graph.json not found" in n for n in runs[0]["notes"]), runs[0]["notes"]
+    assert any("unbound nodes" in note for note in runs[0]["notes"])
+    assert not any("mechanism_graph.json not found" in note for note in runs[0]["notes"])
 
     # 追踪链可定位：project → parent/child → tool_call → job → 产物
     child_submits = set(_tool_call_ids(core, child.id, "submit_compute_job"))
@@ -586,7 +623,7 @@ def test_cli_full_chain_standard_js(tmp_path, monkeypatch):
 
 @_REQUIRES_HOST_AND_RDKIT
 @pytest.mark.asyncio
-async def test_web_full_chain_standard_js(tmp_path, monkeypatch):
+async def test_web_full_chain_standard_js(tmp_path, monkeypatch, approve_workspace_change):
     from cloudra.benchmark.batch import BenchmarkService
     from cloudra.runtime_v2.compute_notify import ComputeNotifyBroker
     from cloudra.scheduler.daemon import SchedulerDaemon
@@ -600,7 +637,11 @@ async def test_web_full_chain_standard_js(tmp_path, monkeypatch):
     llm.script("coordinator", [
         js(1, _SPAWN_PROGRAM),
         text(2, "suspended until children and compute finish"),
+        # 子任务完成后先漏交文件；基础交付反馈要求下一轮补图。
         text(1, _BARRIER),
+        js(2, _DELIVERY_GRAPH_PROGRAM),
+        text(3, _BARRIER, expect=Receipt(
+            tool="js_exec", contains=["DELIVERY WRITTEN ok=true"])),
         text(1, _BARRIER),
     ])
     llm.script("small_mol", [
@@ -674,13 +715,29 @@ async def test_web_full_chain_standard_js(tmp_path, monkeypatch):
         bdb = BenchmarkDB(tmp_path / "bench" / "benchmark.db")
         runs = bdb.list_runs_for(batch_id)
         assert [r["task_id"] for r in runs] == ["T1"]
+        assert runs[0]["graph_score"] == 0.0
         assert runs[0]["final_score"] == -1.0
+        assert any("unbound nodes" in note for note in runs[0]["notes"])
+        assert not any("mechanism_graph.json not found" in note for note in runs[0]["notes"])
 
         # 追踪链：batch_id → project_id → parent/child → tool_call → job
         parent = core.require_agent(final["tasks"][0]["agent_id"])
         assert parent.role_id == "coordinator"
         assert _tool_call_ids(core, child.id, "log_parser")
         assert rows[0]["conversation_id"] == project_id
+        assert json.loads((sandbox / "mechanism_graph.json").read_text()) == {
+            "nodes": [{"id": "R", "role": "reactant", "smiles": ["O"]}], "edges": [],
+        }
+        parent_events = core.event_log.query_session(parent.id)
+        missing = next(event for event in parent_events if event.type == "agent.completion_gate"
+                       and event.data.get("source") == "benchmark_delivery"
+                       and event.data.get("action") == "continue_work")
+        written = next(event for event in parent_events if event.type == "tool.finished"
+                       and event.data.get("tool_name") == "write")
+        completed = next(event for event in parent_events if event.seq > written.seq
+                         and event.type == "agent.completion_gate"
+                         and event.data.get("action") == "allow_final")
+        assert missing.seq < written.seq < completed.seq
     finally:
         await broker.close()
         await scheduler.close()
@@ -731,6 +788,7 @@ def test_cli_full_chain_traditional_equivalent(tmp_path, monkeypatch):
     llm.script("small_mol", [
         calls(1, [("qm_input_writer", {
             "source_type": "smiles", "source_value": "O",
+            "engine": "gaussian",
             "method": "b3lyp", "basis_set": "6-31g(d)",
             "task_type": [{"sp": None}], "nproc": _TEST_CPUS,
             "mem": f"{_TEST_MEMORY_MB}MB",
@@ -861,8 +919,8 @@ def test_cli_engine_failure_then_resubmit(tmp_path, monkeypatch):
 
 @_REQUIRES_HOST_AND_RDKIT
 def test_cli_malformed_inputs_fail_then_corrected(tmp_path, monkeypatch):
-    """非法输入（XYZ 首行原子数与内容不符 + ORCA 用 Gaussian 子选项）第一
-    步可解释失败且无半成品；纠正后继续到最后一步。写文件走真实 write 工具与
+    """畸形 XYZ 无半成品；显式 ORCA 子选项保留并警告，不擅自拒绝。
+    纠正几何后继续到最后一步。写文件走真实 write 工具与
     工作区路径语义（审批 LLM 是外部服务，用替身自动放行）。"""
     from cloudra.infra.yolo_guard import YoloGuard
 
@@ -880,7 +938,7 @@ def test_cli_malformed_inputs_fail_then_corrected(tmp_path, monkeypatch):
     llm.script("small_mol", [
         js(1, _CHILD_MALFORMED_THEN_CORRECTED_PROGRAM),
         js(2, _CHILD_CORRECTED_CHAIN_PROGRAM, expect=Receipt(
-            tool="js_exec", contains=["MALFORMED ok=false", "BAD OPTION ok=false"])),
+            tool="js_exec", contains=["MALFORMED ok=false", "NATIVE OPTION ok=true warnings=1"])),
         text(3, "corrected and completed", expect=Receipt(
             tool="js_exec", contains=["CORRECTED job="])),
     ])
@@ -890,9 +948,10 @@ def test_cli_malformed_inputs_fail_then_corrected(tmp_path, monkeypatch):
     # 写文件的路径语义：相对路径落在沙箱（不是进程 cwd）
     assert (workspace / "xyz" / "bad.xyz").is_file()
     assert (workspace / "xyz" / "water.xyz").is_file()
-    # 无半成品：两次非法调用都不产生输出文件
+    # 畸形输入不落文件；显式原生子选项按当前契约保留，不能静默翻译。
     assert not (workspace / "calc" / "bad_from_xyz.gjf").exists()
-    assert not (workspace / "calc" / "bad_orca.inp").exists()
+    native_input = (workspace / "calc" / "native_orca.inp").read_text()
+    assert "OptTS" in native_input and "calcfc,noeigen" in native_input
     # 纠正后的链路照常产出并跑完
     assert (workspace / "calc" / "input.gjf").is_file()
     rows = _compute_rows()
@@ -902,7 +961,7 @@ def test_cli_malformed_inputs_fail_then_corrected(tmp_path, monkeypatch):
         e for e in core.event_log.query_session(child.id)
         if e.type == "tool.finished" and e.data.get("tool_name") == "qm_input_writer"
     ]
-    assert len(writer_events) == 3  # 两次失败 + 一次成功，逐次真实执行
+    assert len(writer_events) == 3  # 一次失败 + 原生保留 + 纠正成功，逐次真实执行
     # 可解释：失败回执带拒绝原因（不是空消息）
     summaries = [str(e.data.get("result_summary") or "") for e in writer_events]
     # 畸形 XYZ 由输入校验确定性拦截（34293c1d 起报 "Invalid input ..."）；
@@ -911,7 +970,8 @@ def test_cli_malformed_inputs_fail_then_corrected(tmp_path, monkeypatch):
         "Invalid input for qm_input_writer" in s or "Failed to generate" in s
         for s in summaries
     ), summaries
-    assert any("calcfc" in s or "refused" in s.lower() for s in summaries), summaries
+    outputs = _program_outputs(core, child)
+    assert any("NATIVE OPTION ok=true warnings=1" in output for output in outputs), outputs
 
 
 @_REQUIRES_HOST
@@ -951,7 +1011,7 @@ def test_cli_js_business_failure_envelope(tmp_path, monkeypatch):
 
 # ---------------------------------------------------------------------------
 # dag_guided 主场景：草稿 → 真实 Supervisor 接受 → 子执行 → 显式送审 →
-# 督导裁决 → 父按真实门禁结束（WAITING_APPROVAL/wait_review + 退出裁决）
+# 缺失 IRC 的可达边必须阻止退出，partial 不能绕过科学门。
 # ---------------------------------------------------------------------------
 
 _GUIDED_PROPOSE_PROGRAM = r"""
@@ -961,6 +1021,12 @@ const proposal = await tools.dag_propose_mechanism({
   steps: [{ name: "step1", from: "R", to: "P" }],
 });
 text("PROPOSED ok=" + proposal.is_success + " " + proposal.summary);
+const artifact = await tools.write({path: "mechanism_graph.json", content: JSON.stringify({
+  nodes: [{id: "R", role: "reactant", smiles: ["O"]},
+          {id: "P", role: "product", smiles: ["O"]}],
+  edges: [{id: "step1", from: "R", to: "P"}]
+})});
+if (!artifact.is_success) { throw new Error(artifact.summary); }
 """
 
 _GUIDED_SPAWN_PROGRAM = r"""
@@ -987,6 +1053,7 @@ def _guided_child_program(core, agent) -> str:
     assert node is not None, "species R missing from the delivery graph"
     return f'''
 const w = await tools.qm_input_writer({{
+  engine: "gaussian",
   source_type: "smiles", source_value: "O",
   method: "b3lyp", basis_set: "6-31g(d)",
   task_type: [{{ "freq": null }}],
@@ -1040,6 +1107,14 @@ def _supervisor_catchup_program(core, agent) -> str:
     dag_review_call / dag_review_evidence）。
     """
     store = _dag_store(agent.project_id)
+    if agent.final_review_request_id:
+        return (
+            "const r = await tools.dag_review_evidence({"
+            f' request_id: "{agent.final_review_request_id}", verdict: "reject", '
+            ' reason: "The accessible step still lacks native IRC evidence.", '
+            ' next_action: "Obtain native IRC and endpoint optimization evidence before resubmitting." });\n'
+            'text("EXIT REJECTED ok=" + r.is_success);'
+        )
     draft = store.latest_draft()
     if draft is not None and draft.get("state") == "open":
         return (
@@ -1060,48 +1135,26 @@ def _supervisor_catchup_program(core, agent) -> str:
             ' reason: "parsed optimization evidence supports the claim" });\n'
             'text("CALL VERDICT ok=" + r.is_success + " " + r.summary);'
         )
-    queued = [r for r in store.list_review_requests("queued") if r.kind == "exit"]
-    if queued:
-        return (
-            "const r = await tools.dag_review_evidence({"
-            f' request_id: "{queued[0].request_id}", verdict: "accept", '
-            ' reason: "partial delivery under the declared scope is acceptable" });\n'
-            'text("EXIT REVIEW ok=" + r.is_success + " " + r.summary);'
-        )
     return 'text("SUPERVISOR: no pending supervision item");'
 
 
-def _exit_stop_arguments(core, agent) -> dict:
-    """退出收尾参数：已有 accept 裁决时带 approval_id，否则幂等重声明 partial。
-
-    督导的子完成回传可能先于退出裁决到达父 agent（多跑一轮），此时重复声明
-    partial 只会复用同 basis 的退出请求（不重复入队）；裁决到达后同一步骤
-    自动带上 approval_id 放行。
-    """
-    store = _dag_store(agent.project_id)
-    requests = [
-        r for r in store.list_review_requests("resolved") if r.kind == "exit"
-    ]
-    if requests:
-        decision = store.get_review_decision_for_request(requests[-1].request_id)
-        if decision is not None and decision.verdict == "accept":
-            return {
-                "delivery_disposition": "partial",
-                "approval_id": decision.decision_id,
-            }
-    return {"delivery_disposition": "partial"}
-
-
 @_REQUIRES_HOST_AND_RDKIT
+@pytest.mark.parametrize("disposition", ["complete", "partial"])
 @pytest.mark.parametrize("draft_order", ["before_suspend", "after_suspend"])
-def test_cli_guided_supervisor_loop(tmp_path, monkeypatch, draft_order):
-    """dag_guided 主场景（四个事实源 + 真实督导裁决回路）。
+def test_cli_guided_supervisor_loop(tmp_path, monkeypatch, draft_order, disposition):
+    """Complete claims require IRC; partial claims require final review.
 
     所有图/证据事件都经生产工具（dag_propose_mechanism / dag_bind_evidence /
     dag_accept_mechanism / dag_review_call / dag_review_evidence）与真实
     Supervisor runtime_v2 agent 走；测试只读 store 生成脚本参数，绝不直接改
     DAG 状态绕过门禁。
     """
+    from cloudra.infra.yolo_guard import YoloGuard
+
+    async def _approve(self, tool_name, tool_args, agent, session, **_kwargs):
+        return True, ""
+
+    monkeypatch.setattr(YoloGuard, "judge", _approve)
     engine = install_engine(monkeypatch, tmp_path / "bin", "gaussian")
     class GuidedLLM(ScriptedLLM):
         """通知可在当前 run 或下一 run 到达；业务动作按真实草稿状态选择。"""
@@ -1145,8 +1198,19 @@ def test_cli_guided_supervisor_loop(tmp_path, monkeypatch, draft_order):
                     else:
                         step = text(turn, "suspended until the Supervisor decides on the draft")
                 else:
-                    step = calls(turn, [("stop", _exit_stop_arguments)], content=_BARRIER)
+                    rejected = any(event.type == "agent.completion_gate"
+                        and event.data.get("action") == "continue_work"
+                        and event.data.get("source") == "dag"
+                        for event in self.core.event_log.query_session(agent.id))
+                    step = (crash(turn, "expected incomplete IRC gate rejection") if rejected else
+                            calls(turn, [("stop", {"delivery_disposition": disposition})],
+                                  content="Only the reactant calculation is available; IRC evidence is missing."))
                 self.script("coordinator", [step])
+            elif agent.role_id == "supervisor":
+                key = (agent.role_id, agent.id, agent.current_run.run_id)
+                turn = self._turn_index.get(key, 0) + 1
+                self.script("supervisor", [js(turn, _supervisor_catchup_program) if turn == 1
+                    else text(turn, "Supervision turn complete.")])
             return await super().complete(agent, messages, tools, **kwargs)
 
         def calls_seen_for_supervisor(self):
@@ -1174,16 +1238,6 @@ def test_cli_guided_supervisor_loop(tmp_path, monkeypatch, draft_order):
             child_steps.append(text(turn, "call verdict received", run=extra_run))
     llm.script("small_mol", child_steps)
 
-    # Supervisor：真实 agent；每轮自读持久信箱裁决当前待办（run 键控脚本）
-    supervisor_steps = []
-    for run_index in range(1, 9):
-        supervisor_steps.append(js(1, _supervisor_catchup_program, run=run_index))
-        for turn in range(2, 6):
-            supervisor_steps.append(
-                text(turn, "Supervision turn complete.", run=run_index)
-            )
-    llm.script("supervisor", supervisor_steps)
-
     runner, result, core = _run_cli_task(
         tmp_path, monkeypatch, llm, mode=OrchestrationMode.DAG_GUIDED, backend=backend
     )
@@ -1196,7 +1250,10 @@ def test_cli_guided_supervisor_loop(tmp_path, monkeypatch, draft_order):
     agents = {a.role_id: a for a in core.agents.values()}
     child = agents["small_mol"]
     parent = agents["coordinator"]
-    supervisor = agents["supervisor"]      # 真实 spawn 出来的督导 agent
+    supervisors = [agent for agent in core.agents.values() if agent.role_id == "supervisor"]
+    supervisor = next(agent for agent in supervisors if not agent.final_review_request_id)
+    final_supervisors = [agent for agent in supervisors if agent.final_review_request_id]
+    assert len(final_supervisors) == (1 if disposition == "partial" else 0)
 
     # 显式验证两种合法交错，不能靠机器速度碰巧覆盖其中一种。
     parent_events = core.event_log.query_session(parent.id)
@@ -1210,9 +1267,12 @@ def test_cli_guided_supervisor_loop(tmp_path, monkeypatch, draft_order):
     assert child.state is AgentState.SUCCEEDED, (
         f"child ended {child.state.value}:\n{_dump_session(core, child.id)}"
     )
-    assert parent.state is AgentState.SUCCEEDED, (
+    assert parent.state is AgentState.FAILED, (
         f"parent ended {parent.state.value}:\n{_dump_session(core, parent.id)}"
     )
+    assert any(event.type == "llm.failed"
+               and "expected incomplete IRC gate rejection" in event.data.get("error", "")
+               for event in parent_events)
 
     # 督导裁决全部经生产工具（事件级证据）
     supervisor_tools = [
@@ -1222,11 +1282,11 @@ def test_cli_guided_supervisor_loop(tmp_path, monkeypatch, draft_order):
     ]
     assert "dag_accept_mechanism" in supervisor_tools, supervisor_tools
     assert "dag_review_call" in supervisor_tools, supervisor_tools
-    assert "dag_review_evidence" in supervisor_tools, supervisor_tools
+    assert "dag_review_evidence" not in supervisor_tools, supervisor_tools
     supervisor_runs = [
         e for e in core.event_log.query_session(supervisor.id) if e.type == "run.started"
     ]
-    assert len(supervisor_runs) >= 3  # 草稿 / 送审 / 退出请求各一轮裁决
+    assert len(supervisor_runs) >= 2  # 草稿 / 显式计算证据送审分别触发过程督导。
 
     # 图存储是权威：草稿被督导接受，显式送审的 CallReview 被裁决
     store = _dag_store(project_id)
@@ -1239,22 +1299,37 @@ def test_cli_guided_supervisor_loop(tmp_path, monkeypatch, draft_order):
     assert review.state != "pending", review.state          # 督导已裁决
     assert review.tool_call_id in _tool_call_ids(core, child.id, "log_parser")
 
-    # 父按真实门禁结束：partial 等裁决（wait_review）→ 带 approval_id 收尾
-    parent_states = [
-        (e.data.get("to"), e.data.get("reason"))
-        for e in core.event_log.query_session(parent.id)
-        if e.type == "agent.state_changed"
-    ]
-    assert ("waiting_approval", "wait_review") in parent_states, parent_states
-    parent_messages = [
-        str((e.data or {}).get("content") or "")
-        for e in core.event_log.query_session(parent.id)
-        if e.type == "agent.message_emitted"
-    ]
-    assert any("5.0 kcal/mol" in m for m in parent_messages), parent_messages
-    dispositions = getattr(store, "list_delivery_dispositions", None)
-    if dispositions is not None:
-        assert any(d.get("disposition") == "partial" for d in dispositions()), dispositions
+    # Partial may request final review, while complete remains blocked by IRC.
+    # A rejected partial preserves those gaps and cannot record a disposition.
+    gates = [event.data for event in parent_events if event.type == "agent.completion_gate"
+             and event.data.get("source") == "dag"]
+    assert any(gate.get("action") == "continue_work" for gate in gates), gates
+    assert not any(gate.get("action") == "allow_final" for gate in gates), gates
+    exit_requests = [request for request in store.list_review_requests(None) if request.kind == "exit"]
+    if disposition == "partial":
+        assert len(exit_requests) == 1
+        request = exit_requests[0]
+        assert request.state == "resolved"
+        assert request.proposal["disposition"] == "partial"
+        assert any("short_irc" in gap["detail"] for gap in request.proposal["remaining_gaps"])
+        decision = store.get_review_decision_for_request(request.request_id)
+        assert decision is not None and decision.verdict == "reject"
+        assert decision.reason and decision.next_action
+        assert final_supervisors[0].final_review_request_id == request.request_id
+        final_tools = [event.data.get("tool_name")
+            for event in core.event_log.query_session(final_supervisors[0].id)
+            if event.type == "tool.requested"]
+        assert "dag_review_evidence" in final_tools
+        actions = [gate.get("action") for gate in gates]
+        assert actions.index("wait_review") < actions.index("continue_work"), actions
+    else:
+        assert exit_requests == []
+        assert not any(gate.get("action") == "wait_review" for gate in gates), gates
+    with store.db.connect() as connection:
+        assert connection.execute("SELECT COUNT(*) FROM dag_delivery_dispositions").fetchone()[0] == 0
+    edge = next(edge for edge in store.load_snapshot().delivery.edges if edge.name == "step1")
+    assert next(stage for stage in edge.stages if stage.kind.value == "short_irc").status.value == "pending"
+    assert not result.selfconsistency_passed
 
 
 # ---------------------------------------------------------------------------
@@ -1262,14 +1337,13 @@ def test_cli_guided_supervisor_loop(tmp_path, monkeypatch, draft_order):
 # ---------------------------------------------------------------------------
 
 _GUEST_FAIL_CLOSED_PROGRAM = r"""
-const stopType = typeof tools.stop;
-text("GUEST STOP typeof=" + stopType);
 try {
-  const stopped = await tools.stop({ reason: "guest direct control attempt" });
-  text("GUEST STOP ok=" + stopped.is_success + " " + stopped.summary);
+  await tools.stop({ reason: "guest direct control attempt" });
+  throw new Error("guest stop unexpectedly executed");
 } catch (err) {
-  if (stopType !== "undefined" || !(err instanceof TypeError)) { throw err; }
-  text("GUEST STOP rejected=TypeError");
+  if (err.code !== "direct_only_in_guest" || err.tool_name !== "stop" ||
+      err.effect_state !== "not_started") { throw err; }
+  text("GUEST STOP rejected=direct_only_in_guest effect=not_started");
 }
 """
 
@@ -1294,6 +1368,7 @@ async function attemptWriter(args) {
   }
 }
 const bad = await attemptWriter({
+  engine: "gaussian",
   source_type: "smiles", source_value: "O", method: "b3lyp",
   basis_set: "6-31g(d)", task_type: [{ "sp": null }],
   output_path: "calc/bad_method.gjf",
@@ -1328,7 +1403,7 @@ def test_cli_guest_fail_closed_and_role_projection(tmp_path, monkeypatch):
         js(1, _GUEST_FAIL_CLOSED_PROGRAM),
         text(2, "guest surface checked", expect=Receipt(
             tool="js_exec", contains=[
-                "GUEST STOP typeof=undefined", "GUEST STOP rejected=TypeError",
+                "GUEST STOP rejected=direct_only_in_guest effect=not_started",
             ])),
     ])
     _, _, core = _run_cli_task(tmp_path, monkeypatch, llm)
@@ -1336,12 +1411,12 @@ def test_cli_guest_fail_closed_and_role_projection(tmp_path, monkeypatch):
     assert child.state is AgentState.SUCCEEDED, _dump_session(core, child.id)
     assert _tool_call_ids(core, child.id, "stop") == []
     outputs = _program_outputs(core, child)
-    assert "GUEST STOP typeof=undefined" in outputs, outputs
-    assert "GUEST STOP rejected=TypeError" in outputs, outputs
+    assert "GUEST STOP rejected=direct_only_in_guest effect=not_started" in outputs, outputs
 
     # 客体调用被拒（stop 是 direct-only，不能从程序内调用）
     child_calls = [c for c in llm.calls_seen if c["role"] == "small_mol"]
-    assert child_calls and child_calls[0]["tools"] == ["*"]  # 能力投影 = 角色 tool_policy
+    assert child_calls and set(child_calls[0]["tools"]) == set(child.capabilities.tools)
+    assert "*" not in child_calls[0]["tools"]
 
     # 督导面是 registry 的 supervisor_access 投影：不含 bash / 计算入口
     from cloudra.tools.capabilities import supervisor_tool_names
@@ -1398,6 +1473,123 @@ def test_cli_child_inherits_unattended_and_ask_user_blocked(tmp_path, monkeypatc
     }
     assert "waiting_input" not in states, states
     assert child.state is AgentState.SUCCEEDED
+
+
+@_REQUIRES_HOST
+@pytest.mark.asyncio
+@pytest.mark.parametrize("entrypoint", ["cli", "web"])
+async def test_benchmark_hub_peer_runs_unattended_without_manual_approval(
+    tmp_path, monkeypatch, entrypoint,
+):
+    """Benchmark 的独立 peer 服从项目无人值守设置，真实只读 Bash 不挂审批。"""
+    from cloudra.infra.yolo_guard import YoloGuard
+    from tests.agent_scenarios import benchmark_peer_unattended_provider
+
+    async def approve(self, tool_name, tool_args, agent, session, **_kwargs):
+        return True, ""
+
+    # 仅替换外部审查服务；命令分类、审批分流和 Bash 执行器保持真实。
+    monkeypatch.setattr(YoloGuard, "judge", approve)
+    bash_arguments = json.loads((
+        _HERE / "fixtures" / "benchmark_peer_approval_20261020" / "approval-request.json"
+    ).read_text(encoding="utf-8"))["normalized_arguments"]
+    llm = benchmark_peer_unattended_provider(bash_arguments)
+
+    stop_event = threading.Event()
+    execution = None
+    batch = scheduler = broker = None
+    core = None
+    try:
+        if entrypoint == "cli":
+            backend = RuntimeV2Backend(
+                llm=llm, start_scheduler=False, stop_event=stop_event,
+                poll_interval_s=0.05, stuck_grace_s=10.0,
+            )
+            execution = asyncio.create_task(asyncio.to_thread(
+                _run_cli_task, tmp_path, monkeypatch, llm, backend=backend,
+            ))
+            await wait_until(
+                lambda: backend.core_by_task("T1") is not None,
+                timeout=10.0, what="CLI benchmark core",
+            )
+            core = backend.core_by_task("T1")
+        else:
+            core = RuntimeCore(strict_events=True)
+            _, scheduler, broker, service = await _web_harness(core, llm, tmp_path)
+            tasks_dir = _write_tasks(tmp_path / "tasks", "T1")
+            await service.start(tasks_dirs=[tasks_dir], only="", concurrency=1)
+            batch = service._batch
+
+        def bash_dispatched():
+            return any(e.type == "approval.requested" for e in core.event_log) or any(
+                "BASH finished" in output
+                for agent in core.agents.values() if agent.role_id == "small_mol"
+                for output in _program_outputs(core, agent)
+            )
+
+        # 等真正到达 Bash 审批或执行结果，旧实现会稳定复现 waiting_approval。
+        try:
+            await wait_until(bash_dispatched, timeout=20.0, what="peer Bash dispatch")
+        except AssertionError:
+            pytest.fail("Peer did not reach Bash:\n" + "\n".join(
+                f"{e.type}: {e.data}" for e in core.event_log
+                if e.type in {"program.finished", "tool.finished", "tool.blocked", "llm.failed"}
+            ))
+        peer = next(a for a in core.agents.values() if a.role_id == "small_mol")
+        parent = next(a for a in core.agents.values() if a.role_id == "coordinator")
+        approvals = [e.data for e in core.event_log if e.type == "approval.requested"]
+        assert approvals == [], f"Benchmark peer entered manual approval: {approvals}"
+        assert peer.parent_session_id is None  # Hub peer 仍是独立会话，不伪装成子树。
+        assert peer.requested_by_session_id == parent.id
+        assert peer.settings.yolo is True
+        assert peer.settings.unattended is True
+        assert peer.settings.clean_context is True
+
+        if execution is not None:
+            await asyncio.wait_for(asyncio.shield(execution), timeout=20.0)
+        else:
+            await wait_until(
+                lambda: service.status()["status"] == "done",
+                timeout=20.0, what="Web benchmark completion",
+            )
+            assert service.status()["tasks"][0]["status"] == "scored"
+
+        assert peer.state is AgentState.SUCCEEDED, _dump_session(core, peer.id)
+        assert len(_tool_call_ids(core, peer.id, "bash")) == 1
+        assert any(
+            e.type == "tool.finished" and e.data.get("tool_name") == "bash"
+            for e in core.event_log.query_session(peer.id)
+        )
+        assert len(_tool_call_ids(core, peer.id, "ask_user")) == 1
+        outputs = _program_outputs(core, peer)
+        assert any("BASH finished" in o and "=== graph" in o for o in outputs), outputs
+        assert any(
+            e.type == "tool.blocked" and e.data.get("tool_name") == "ask_user"
+            and e.data.get("stage") == "unattended"
+            for e in core.event_log.query_session(peer.id)
+        )
+        assert not any(
+            e.type == "interaction.requested" for e in core.event_log.query_session(peer.id)
+        )
+        states = {
+            e.data.get("to") for e in core.event_log.query_session(peer.id)
+            if e.type == "agent.state_changed"
+        }
+        assert states.isdisjoint({"waiting_approval", "waiting_input"}), states
+    finally:
+        # RED 也必须收尾：停止测试推理等待，不启动也不终止任何 QM 进程。
+        if execution is not None:
+            stop_event.set()
+            await asyncio.wait_for(
+                asyncio.gather(execution, return_exceptions=True), timeout=20.0,
+            )
+        if batch is not None:
+            await batch.shutdown()
+            await core.runner.cancel_all()
+        if broker is not None:
+            await broker.close()
+        if scheduler is not None:
+            await scheduler.close()
 
 
 @_REQUIRES_HOST_AND_RDKIT
@@ -1522,8 +1714,8 @@ async def test_web_concurrent_mixed_success_and_failure(tmp_path, monkeypatch):
 
 @_REQUIRES_HOST_AND_RDKIT
 @pytest.mark.asyncio
-async def test_web_stop_cascades_but_keeps_live_compute(tmp_path, monkeypatch):
-    """batch stop：级联取消推理子树并停止新请求；已提交的计算继续登记与运行
+async def test_web_shutdown_cascades_but_keeps_live_compute(tmp_path, monkeypatch):
+    """service shutdown：级联取消推理子树并停止新请求；已提交的计算继续登记与运行
     （测试用控制文件释放引擎后自行收尾），绝不被 kill。"""
     from cloudra.infra.compute_utils import calc_lock_path, guard_lock_path
     from cloudra.infra.flocks import is_lock_held
@@ -1573,7 +1765,7 @@ async def test_web_stop_cascades_but_keeps_live_compute(tmp_path, monkeypatch):
         calc_lock = calc_lock_path(workdir, job_id)
         assert is_lock_held(guard_lock)
         assert is_lock_held(calc_lock)
-        await service.stop()
+        await service.shutdown()
         await wait_until(
             lambda: service.status()["status"] == "stopped",
             timeout=60.0,

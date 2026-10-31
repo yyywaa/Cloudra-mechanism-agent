@@ -13,10 +13,63 @@ ORCA_FIXTURES = Path(__file__).parent / "fixtures" / "orca"
 GAUSSIAN_FIXTURES = Path(__file__).parent / "fixtures" / "gaussian"
 
 
+def test_frequency_without_cartesian_table_uses_native_input_echo():
+    """Actual IA8 NumFreq output has inline input coordinates but no Cartesian table."""
+    from cloudra.tools.core.irc_evidence import probe_log
+    from cloudra.tools.core.irc_path import parse_xyz
+
+    path = ORCA_FIXTURES / 'ch2oo_numfreq_input_echo.out'
+    n_imag, geometry = probe_log(path)
+    assert n_imag == 1
+    assert geometry is not None
+    assert geometry[0] == ['C', 'O', 'O', 'H', 'H']
+    assert geometry[1][0] == pytest.approx([-.423508, -.004670, .002086])
+    assert parse_xyz(orca_frames.final_xyz_from_text(path.read_text())) == geometry
+
+
+def test_optimization_input_echo_is_never_a_final_geometry():
+    text = (ORCA_FIXTURES / 'ch2oo_numfreq_input_echo.out').read_text()
+    text = text.replace('! NumFreq GFN2-xTB TightSCF', '! Opt GFN2-xTB TightSCF')
+    assert orca_frames.final_xyz_from_text(text) == ''
+
+
+def test_irc_anchor_can_use_its_native_input_echo(tmp_path):
+    from cloudra.tools.core.irc_evidence import irc_start_geometry
+
+    text = (ORCA_FIXTURES / 'ch2oo_numfreq_input_echo.out').read_text()
+    text = text.replace('! NumFreq GFN2-xTB TightSCF', '! IRC GFN2-xTB TightSCF')
+    text += 'Intrinsic Reaction Coordinate Calculation\n* FORWARD IRC *\n* BACKWARD IRC *\n'
+    path = tmp_path / 'irc.out'
+    path.write_text(text)
+    geometry = irc_start_geometry(path)
+    assert geometry is not None
+    assert geometry[0] == ['C', 'O', 'O', 'H', 'H']
+    assert geometry[1][0] == pytest.approx([-.423508, -.004670, .002086])
+
+
+def test_orca_xtb_optts_short_dipole_block_retains_final_geometry():
+    """IA8 job 739: cclib assumes dipole contribution rows absent in GFN2-xTB."""
+    frames = orca_frames.extract_frames(str(ORCA_FIXTURES / "ch2oo_optts_gfn2_orca611.out"))
+    assert len(frames) == 10
+    assert frames[-1].converged is True
+    assert frames[-1].frequencies_cm == []  # Optimization alone cannot verify a TS.
+    assert frames[-1].electronic_energy_hartree == pytest.approx(-11.083861872140)
+    rows = [line.split() for line in frames[-1].xyz.splitlines()[2:]]
+    assert [row[0] for row in rows] == ["C", "O", "O", "H", "H"]
+    for row, expected in zip(rows, [
+        [-0.423530, -0.004703, 0.002036],
+        [0.591597, -0.682213, -0.372134],
+        [1.476819, 0.188463, 0.229121],
+        [-1.261767, -0.509001, 0.485509],
+        [-0.434262, 1.076129, -0.083405],
+    ], strict=True):
+        assert [float(value) for value in row[1:]] == pytest.approx(expected)
+
+
 def test_final_frame_energy_matches_orca_hartree_line():
     log = ORCA_FIXTURES / "dvb_opt_orca42.out"
     frames = orca_frames.extract_frames(str(log))
-    assert frames[-1].scf_energy_hartree == pytest.approx(
+    assert frames[-1].electronic_energy_hartree == pytest.approx(
         orca_frames.final_energy_hartree(log.read_text()), rel=0, abs=1e-7,
     )
 
@@ -56,8 +109,8 @@ def test_orca_thermochemistry_matches_gaussian_field_semantics():
     assert thermo["zero_point_correction_hartree"] == pytest.approx(0.00684398)
     # 含 ZPE 口径（Total thermal correction 0.00309561 + ZPE 0.00684398）
     assert thermo["thermal_energy_correction_hartree"] == pytest.approx(0.00993959)
-    assert thermo["thermal_enthalpy_correction_hartree"] == pytest.approx(0.00094421)
-    assert thermo["thermal_gibbs_correction_hartree"] == pytest.approx(-0.01495982)
+    assert thermo["thermal_enthalpy_correction_hartree"] == pytest.approx(0.01088379)
+    assert thermo["thermal_gibbs_correction_hartree"] == pytest.approx(-0.01495983)
     # 总量
     assert thermo["total_thermal_energy_hartree"] == pytest.approx(-184.74782658)
     assert thermo["total_enthalpy_hartree"] == pytest.approx(-184.74688237)
@@ -70,7 +123,7 @@ def test_orca_opt_frames_carry_convergence_and_xyz():
     frames = orca_frames.extract_frames(str(ORCA_FIXTURES / "dvb_opt_orca42.out"))
     assert len(frames) == 4
     assert all(f.xyz for f in frames)
-    assert all(f.scf_energy_hartree is not None for f in frames)
+    assert all(f.electronic_energy_hartree is not None for f in frames)
     assert frames[-1].converged is True
 
 
@@ -319,6 +372,34 @@ def test_sidecar_roots_find_parent_dir_of_cloudra_capture(tmp_path):
     assert xyz is not None and "endpoint frame" in xyz
 
 
+@pytest.mark.parametrize('neighbor_in_parent', [False, True])
+def test_irc_reader_never_uses_another_jobs_only_backward_endpoint(tmp_path, neighbor_in_parent):
+    jobdir = tmp_path / 'current'
+    jobdir.mkdir()
+    log = _write_synthetic_irc_log(jobdir, 'current')
+    forward = jobdir / 'current_IRC_F.xyz'
+    forward.write_text(_IRC_ENDPOINT_XYZ)
+    neighbor_dir = tmp_path if neighbor_in_parent else jobdir
+    (neighbor_dir / 'another_IRC_B.xyz').write_text(_IRC_ENDPOINT_XYZ.replace('endpoint frame', 'foreign job'))
+
+    result = orca_frames.extract_irc_endpoints(str(log))
+
+    assert result['forward']['geometry_ref'] == str(forward)
+    assert result['backward']['geometry_ref'] is None
+    assert result['backward']['availability'] == 'unavailable'
+
+
+def test_irc_log_without_native_name_never_adopts_unique_neighbor_pair(tmp_path):
+    log = _write_synthetic_irc_log(tmp_path)
+    log.write_text('\n'.join(log.read_text().splitlines()[1:]) + '\n')
+    for direction in ('F', 'B'):
+        (tmp_path / f'another_IRC_{direction}.xyz').write_text(_IRC_ENDPOINT_XYZ)
+
+    result = orca_frames.extract_irc_endpoints(str(log))
+
+    assert all(endpoint['geometry_ref'] is None for endpoint in result.values())
+
+
 # ---------------------------------------------------------------------------
 # 末帧几何文本回退（cclib 对 ORCA 6.1 日志整体崩溃时的权威通道）
 # ---------------------------------------------------------------------------
@@ -420,8 +501,8 @@ def test_neb_frames_come_from_the_per_image_side_files():
     frames = orca_frames.extract_frames(str(NEB_FIXTURE))
     assert [f.frame for f in frames] == [0, 4, 8]
     # 真实能量（Eh），来自边文件注释行 `Coordinates from ORCA-job neb_im8 E -93.03...`
-    assert frames[0].scf_energy_hartree == pytest.approx(-93.300300911883, abs=1e-9)
-    assert frames[-1].scf_energy_hartree == pytest.approx(-93.031209778059, abs=1e-9)
+    assert frames[0].electronic_energy_hartree == pytest.approx(-93.300300911883, abs=1e-9)
+    assert frames[-1].electronic_energy_hartree == pytest.approx(-93.031209778059, abs=1e-9)
     for frame in frames:
         assert frame.xyz.splitlines()[0].strip() == "3"
 
@@ -529,8 +610,8 @@ def test_opt_frames_text_fallback_survives_cclib61_crash(monkeypatch):
     monkeypatch.setattr(orca_frames, "_ccread_from_text", _crash_ccread)
     frames = orca_frames.extract_frames_from_text(_ORCA61_OPTTS_LOG)
     assert [f.frame for f in frames] == [0, 1]  # 尾块去重，不重复计帧
-    assert frames[0].scf_energy_hartree == pytest.approx(-100.000001)
-    assert frames[1].scf_energy_hartree == pytest.approx(-100.000002)
+    assert frames[0].electronic_energy_hartree == pytest.approx(-100.000001)
+    assert frames[1].electronic_energy_hartree == pytest.approx(-100.000002)
     assert "1.100000" in frames[0].xyz and "1.200000" in frames[1].xyz
     assert frames[1].converged is True
     assert frames[1].frequencies_cm[1] == -164.95
@@ -551,7 +632,7 @@ def test_opt_frames_fallback_appends_differing_final_block(monkeypatch):
     )
     frames = orca_frames.extract_frames_from_text(log)
     assert [f.frame for f in frames] == [0, 1, 2]
-    assert frames[2].scf_energy_hartree == pytest.approx(-100.0000025)
+    assert frames[2].electronic_energy_hartree == pytest.approx(-100.0000025)
     assert "1.200500" in frames[2].xyz
     assert frames[2].converged is True
 
@@ -565,7 +646,7 @@ def test_sp_frames_text_fallback_survives_cclib61_crash(monkeypatch):
         + "FINAL SINGLE POINT ENERGY     -76.400000000001\n"
     )
     assert len(frames) == 1
-    assert frames[0].scf_energy_hartree == pytest.approx(-76.400000000001)
+    assert frames[0].electronic_energy_hartree == pytest.approx(-76.400000000001)
     assert "1.200000" in frames[0].xyz
 
 
@@ -595,3 +676,50 @@ async def test_format_converter_log_to_xyz_end_to_end_on_cclib61_crash(tmp_path,
     )
     assert result.is_success is True, result.message
     assert "1.200000" in out.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize('base_exists', [True, False])
+def test_irc_explicit_echo_base_uses_only_exact_sidecars(tmp_path, base_exists):
+    log = _write_synthetic_irc_log(tmp_path, 'input')
+    log.write_text('O   R   C   A\nINPUT FILE\nNAME = input.inp\n|  1> ! IRC\n'
+                   '|  2> %base "native"\n|  3> * xyz 0 1\n'
+                   + log.read_text())
+    for direction in ('F', 'B'):
+        for stem in ('foreign', 'input', log.stem):
+            (tmp_path / f'{stem}_IRC_{direction}.xyz').write_text(_IRC_ENDPOINT_XYZ)
+        if base_exists:
+            (tmp_path / f'native_IRC_{direction}.xyz').write_text(_IRC_ENDPOINT_XYZ)
+    result = orca_frames.extract_irc_endpoints(str(log))
+    for name, direction in [('forward', 'F'), ('backward', 'B')]:
+        expected = str(tmp_path / f'native_IRC_{direction}.xyz') if base_exists else None
+        assert result[name]['geometry_ref'] == expected
+
+
+@pytest.mark.parametrize('capture', [False, True])
+def test_explicit_base_endpoints_survive_dag_snapshot(tmp_path, capture):
+    from cloudra.dag.evidence_ingest import snapshot_evidence_file
+
+    log = _write_synthetic_irc_log(tmp_path, 'input')
+    log.write_text('O   R   C   A\n|  1> %base "native"\n' + log.read_text())
+    if capture:
+        capture_dir = tmp_path / '.cloudra'
+        capture_dir.mkdir()
+        log = log.rename(capture_dir / 'calc-123.out.log')
+    for direction in ('F', 'B'):
+        (tmp_path / f'native_IRC_{direction}.xyz').write_text(_IRC_ENDPOINT_XYZ)
+    snapshot = snapshot_evidence_file(log, tmp_path)
+    for direction in ('F', 'B'):
+        (tmp_path / f'native_IRC_{direction}.xyz').unlink()
+    endpoints = orca_frames.extract_irc_endpoints(snapshot.snapshot_path)
+    assert all(orca_frames.read_endpoint_geometry(endpoint) == _IRC_ENDPOINT_XYZ
+               for endpoint in endpoints.values())
+
+
+@pytest.mark.parametrize('directive', ['%base "foreign"', '|  2> # %base "foreign"'])
+def test_base_outside_native_directive_does_not_authorize_foreign_endpoints(tmp_path, directive):
+    log = _write_synthetic_irc_log(tmp_path)
+    log.write_text(directive + '\n' + log.read_text())
+    for direction in ('F', 'B'):
+        (tmp_path / f'foreign_IRC_{direction}.xyz').write_text(_IRC_ENDPOINT_XYZ)
+    assert all(endpoint['geometry_ref'] is None
+               for endpoint in orca_frames.extract_irc_endpoints(str(log)).values())

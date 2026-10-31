@@ -42,6 +42,7 @@ from cloudra.runtime_v2.supervision import (
     reconcile_supervision,
 )
 from cloudra.runtime_v2.turn_pipeline import LLMResponse, TurnPipeline
+from tests.test_runtime_v2_completion_gate import _seed_complete_delivery
 
 SUPERVISOR_ROLE_ID = "supervisor"
 
@@ -292,7 +293,7 @@ async def test_cancelled_supervisor_is_not_resurrected_by_release_or_new_reviews
             e for e in core.event_log.query_session(supervisor.id) if e.type == "run.started"
         ]
         assert len(runs) == 1
-        # parked：通知照常投递信箱驻留（显式恢复后首轮即可见）。
+        # 取消收尾扫描复用原版本；只有新增待办另驻留通知，不复活 Supervisor。
         inbox = core.mailbox.inbox(supervisor.id)
         assert inbox is not None and inbox.qsize() == 1
     finally:
@@ -358,7 +359,7 @@ async def test_failed_supervisor_is_not_resurrected_by_notification():
             e for e in core.event_log.query_session(supervisor.id) if e.type == "run.started"
         ]
         assert len(runs) == 1
-        # parked：通知照常投递信箱驻留（不唤醒、不开新 run）。
+        # parked：失败时复用已消费的版本；新增待办只驻留一条，不唤醒。
         inbox = core.mailbox.inbox(supervisor.id)
         assert inbox is not None and inbox.qsize() == 1
         # 待办保留：两条送审 review 都还在信箱里等显式恢复。
@@ -366,6 +367,57 @@ async def test_failed_supervisor_is_not_resurrected_by_notification():
     finally:
         llm.release.set()
         await _teardown(core, supervisor)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scientific_pending", [True, False])
+async def test_supervisor_failure_alerts_only_for_pending_scientific_work(tmp_path, scientific_pending):
+    """A single notification must surface a failed scientific review, without notebook noise."""
+    from tests.agent_scenarios import ProviderFault, ScenarioHarness, ScriptedProvider, Step
+
+    coordinator_wait = asyncio.Event()
+    provider = ScriptedProvider(by_role={
+        "supervisor": [Step(error=ProviderFault("scripted provider failure", status_code=400))],
+        "coordinator": [Step(wait_for=coordinator_wait)],
+    })
+    harness = await ScenarioHarness.start(tmp_path, workspace_dir=tmp_path, provider=provider)
+    supervisor = None
+    try:
+        coordinator = await harness.spawn("coordinator", query="", orchestration_mode="dag_guided")
+        if scientific_pending:
+            review_id = await _seed_pending_review(harness.project.id)
+        else:
+            await asyncio.to_thread((tmp_path / "PROCESS.md").write_text, "Provisional hypothesis\n")
+
+        await notify_supervisor(
+            harness.core, harness.project.id, reason="single project update",
+            changed_note=None if scientific_pending else ("PROCESS.md", "fixture-note-version"),
+        )
+        supervisor = find_project_supervisor(harness.core, harness.project.id)
+        assert supervisor is not None
+        await harness.wait_for(lambda: supervisor.state is AgentState.FAILED, "Supervisor LLM failure")
+        if scientific_pending:
+            await harness.wait_for(
+                lambda: len(_injections(harness.core, coordinator.id, "[Supervision] ALERT")) == 1
+                and coordinator.state is AgentState.RUNNING,
+                "failure itself delivers the scientific backlog alert", timeout=2,
+            )
+            assert len(_pin_events(harness.core, coordinator.id, TERMINAL_SUPERVISOR_PIN_KEY)) == 1
+            assert await _pending_review_ids(harness.project.id) == [review_id]
+            assert coordinator.state is AgentState.RUNNING
+        else:
+            await harness.settle()
+            assert _injections(harness.core, coordinator.id, "[Supervision] ALERT") == []
+            assert _pin_events(harness.core, coordinator.id, TERMINAL_SUPERVISOR_PIN_KEY) == []
+            assert coordinator.state is AgentState.QUEUED
+
+        await harness.settle()
+        assert supervisor.state is AgentState.FAILED
+        assert provider.call_count("supervisor") == 1
+        assert harness.types(supervisor).count("run.started") == 1
+        assert _injections(harness.core, coordinator.id, "[Sub-agent finished]") == []
+    finally:
+        await harness.aclose()
 
 
 @pytest.mark.asyncio
@@ -429,14 +481,30 @@ class _ParseTools:
         return ToolResult(is_success=True, summary=f"ok:{call.name}", data={})
 
 
+async def _approve_final_delivery(project_id: str, session_id: str) -> None:
+    """督导生命周期测试已通过最终审查的交付种子；不启动运行时督导。"""
+    from cloudra.dag.controller import DagController
+    from cloudra.dag.review_requests import ReviewDecision
+
+    db = await asyncio.to_thread(lambda: ConversationDB(project_id).init())
+    controller = DagController(db, session_id, "dag_guided", conversation_id=project_id)
+    gate = await controller.audit_stop("complete")
+    assert gate.action == "wait_review"
+    request = await asyncio.to_thread(controller.store.get_review_request, gate.request_id)
+    assert (await asyncio.to_thread(controller.store.resolve_review, ReviewDecision(
+        request_id=request.request_id, basis_fingerprint=request.basis_fingerprint,
+        verdict="accept", reason="fixture final-delivery review accepted"),
+        expected_basis=request.basis_fingerprint))["accepted"]
+
+
 @pytest.mark.asyncio
 async def test_research_tool_completions_create_no_reviews_and_no_supervisor():
     """§5 核心语义：24 次研究侧工具完成不创建任何 review、不启动 Supervisor。
 
     覆盖 registry 原自动入箱的四类工具（log_parser/reaction_mapping/
     thermo_analysis/ts_guess，各 6 次）：完成后只登记证据与事实（dag_evidence
-    行在），CallReview 信箱保持为空，项目里绝不出现 supervisor agent
-    （notify 不发生——它只在显式送审路径被调用）。
+    行在），CallReview 信箱保持为空，项目里不出现 supervisor agent
+    （最终交付已在种子中获得一次督导接受，研究工具完成不触发额外审查）。
     """
     tools_of_interest = ("log_parser", "reaction_mapping", "thermo_analysis", "ts_guess")
     responses = [
@@ -492,10 +560,9 @@ async def test_research_tool_completions_create_no_reviews_and_no_supervisor():
     from cloudra.runtime_v2.schemas import OrchestrationMode
 
     research.settings.orchestration_mode = OrchestrationMode.DAG_GUIDED
-    # Task 4A：guided 协调者的 run 收尾要过统一结束门禁的交付覆盖审计；
-    # 本用例的焦点是"工具完成不产生 review/督导"，种子一个覆盖通过的
-    # 交付图让门禁透明放行（否则纯文本收尾会进入 wait_review 并通知督导）。
+    # 本用例只守研究工具完成的通知边界，最终交付审查先作为种子接受。
     await _seed_complete_delivery(project.id)
+    await _approve_final_delivery(project.id, research.id)
     try:
         await bus.execute(
             Command(
@@ -624,91 +691,6 @@ class _RoutingLLM:
         return self.research_responses.pop(0)
 
 
-async def _seed_complete_delivery(project_id: str, *, supported_step_contract: bool = False) -> None:
-    """覆盖通过的交付图种子：r/p 节点（structure_supported）+ step1 边。
-
-    Task 4A 统一结束门禁后，guided Coordinator 的 run 收尾（显式 stop 与纯
-    文本最终回复同边界）要过交付覆盖审计：覆盖不通过会进入 wait_review /
-    continue_work 而不是 succeeded。本文件这些用例的焦点是督导/反馈机制
-    本身，用覆盖通过的交付图让门禁透明放行。``supported_step_contract=True``
-    时 step1 携带 ts_opt/frequency 阶段契约且均已 supported（显式送审的
-    绑定目标要求阶段在契约中存在）。"""
-
-    def _write() -> None:
-        from cloudra.dag.engine import DagEngine
-        from cloudra.dag.models import (
-            AddEdge,
-            AddNode,
-            ElementaryStepEdge,
-            GraphActor,
-            MutationBatch,
-            OccurrenceNode,
-            StageState,
-            StageStatus,
-        )
-
-        db = ConversationDB(project_id).init()
-        store = DagStore(db)
-        store.ensure_bundle("s1")
-        engine = DagEngine(store)
-        for node_id, label, role in (("r", "R", "reactant"), ("p", "P", "product")):
-            result = engine.apply_batch(
-                MutationBatch(
-                    session_id="s1",
-                    actor=GraphActor.HARNESS,
-                    actor_id="test-harness",
-                    base_revisions=store.load_bundle().revisions,
-                    rationale=f"seed {role}",
-                    operations=[
-                        AddNode(
-                            op="add_node",
-                            graph="delivery",
-                            node=OccurrenceNode(
-                                node_id=node_id,
-                                label=label,
-                                role=role,
-                                evidence_level="structure_supported",
-                            ),
-                        )
-                    ],
-                )
-            )
-            assert result.accepted
-        edge_kwargs: dict = {"evidence_level": "endpoint_supported"}
-        if supported_step_contract:
-            edge_kwargs = {
-                "stages": [
-                    StageState(kind="ts_opt", status=StageStatus.SUPPORTED),
-                    StageState(kind="frequency", status=StageStatus.SUPPORTED),
-                ]
-            }
-        result = engine.apply_batch(
-            MutationBatch(
-                session_id="s1",
-                actor=GraphActor.HARNESS,
-                actor_id="test-harness",
-                base_revisions=store.load_bundle().revisions,
-                rationale="seed step1 (coverage-complete)",
-                operations=[
-                    AddEdge(
-                        op="add_edge",
-                        graph="delivery",
-                        edge=ElementaryStepEdge(
-                            edge_id="step1",
-                            source_node_id="r",
-                            target_node_id="p",
-                            label="step 1",
-                            **edge_kwargs,
-                        ),
-                    )
-                ],
-            )
-        )
-        assert result.accepted
-
-    await asyncio.to_thread(_write)
-
-
 @pytest.mark.asyncio
 async def test_explicit_submission_latches_supervisor_then_24_parses_and_peer_message():
     """端到端（24 解析场景）：显式送审一条证据 → Supervisor 进入门闩挂起；
@@ -782,10 +764,9 @@ async def test_explicit_submission_latches_supervisor_then_24_parses_and_peer_me
     from cloudra.runtime_v2.schemas import OrchestrationMode
 
     research.settings.orchestration_mode = OrchestrationMode.DAG_GUIDED
-    # Task 4A：统一结束门禁下 guided 收尾要过交付覆盖审计；阶段契约保留
-    # （显式送审绑定 step1.ts_opt 需要它），但全部 supported 使覆盖通过，
-    # run1/run2/run3 的纯文本收尾被门禁透明放行。
-    await _seed_complete_delivery(project.id, supported_step_contract=True)
+    # 最终交付已审查；显式送审阶段契约仍保留，普通解析不另起审查。
+    await _seed_complete_delivery(project.id)
+    await _approve_final_delivery(project.id, research.id)
 
     supervisor = None
     child = None
@@ -887,6 +868,9 @@ async def test_explicit_submission_latches_supervisor_then_24_parses_and_peer_me
             )
         ).data
         await _wait_state(child, "succeeded")
+        # Child state commits before its completion message wakes the parent.
+        # Do not mistake the parent's previous succeeded state for run 3.
+        await _wait_run_count(core, research, 3)
         await _wait_state(research, "succeeded")  # run3 结束
         assert llm.seen_child_completion, (
             "the parent's next turn must see the delivered child-completion message"
@@ -899,8 +883,7 @@ async def test_explicit_submission_latches_supervisor_then_24_parses_and_peer_me
 class _ExitReviewLLM:
     """退出审批全环的 fake LLM。
 
-    coordinator：第一次 stop partial 无批准（进 wait_review 挂起）；被裁决
-    通知唤醒后再 stop 一次 partial（同 basis 复用已接受的退出裁决）。
+    coordinator：提交冻结的 partial 答复；接受裁决后程序直接复用旧门禁结题。
     supervisor：读出 queued 退出请求，dag_review_evidence 接受后 stop。
     """
 
@@ -908,7 +891,6 @@ class _ExitReviewLLM:
         self.project_id = project_id
         self.coordinator_calls = 0
         self.supervisor_calls = 0
-        self._supervisor = None
 
     def _queued_exit_request_id(self) -> str:
         store = DagStore(ConversationDB(self.project_id))
@@ -946,38 +928,13 @@ class _ExitReviewLLM:
                     ToolCall(
                         id="stop-1",
                         name="stop",
-                        arguments={"delivery_disposition": "partial", "reason": "partial"},
+                        arguments={"delivery_disposition": "partial", "reason": "partial",
+                                   "final_answer": "frozen-roundtrip-answer"},
                     )
                 ],
             )
-        # 第二拍：裁决已落库；等督导完全终态再 stop，避免 wait_background
-        # 把这次 stop 判成"挂起"而非交付（ sibling 非终态时不做交付审计）。
-        # Task 4A 时序注记：统一结束边界里 notify 与挂起的相对次序让第二拍
-        # 可能早于测试主体回填 self._supervisor——这里把"引用已回填"也并入
-        # 等待条件（测试设施修复，不是行为契约）。
-        from cloudra.runtime_v2.schemas import AgentState as _AS
-
-        deadline = asyncio.get_running_loop().time() + 5.0
-        while True:
-            supervisor = self._supervisor
-            if supervisor is not None and supervisor.state in {
-                _AS.SUCCEEDED,
-                _AS.FAILED,
-                _AS.CANCELLED,
-            }:
-                break
-            if asyncio.get_running_loop().time() > deadline:
-                raise AssertionError("supervisor did not reach a terminal state")
-            await asyncio.sleep(0.01)
         return LLMResponse(
-            content="",
-            tool_calls=[
-                ToolCall(
-                    id="stop-2",
-                    name="stop",
-                    arguments={"delivery_disposition": "partial", "reason": "partial"},
-                )
-            ],
+            content="unreviewed-roundtrip-confirmation", stop_requested=True,
         )
 
 
@@ -987,8 +944,8 @@ async def test_exit_review_roundtrip_drives_coordinator_to_approved_partial(tmp_
 
     coordinator stop partial → 持久化退出请求 + 通知 Supervisor（不再轮询
     daemon）→ 真实 Supervisor agent 经 dag_review_evidence 裁决接受 →
-    裁决通知非轮询投递（pin + mailbox + wake）→ coordinator 恢复后同一
-    版本复用已接受裁决，partial 交付落 allow_final。
+    裁决通知非轮询投递（pin + mailbox + wake）→ runner 复查同一版本，
+    无第二轮模型或 stop 工具就将冻结答复交付为 allow_final。
     """
     from cloudra.runtime_v2.adapters import LegacyToolExecutor
     from cloudra.runtime_v2.invocation import InvocationService
@@ -1079,16 +1036,19 @@ async def test_exit_review_roundtrip_drives_coordinator_to_approved_partial(tmp_
         assert await asyncio.to_thread(_request_ids), (
             "wait_review gate fired without a persisted exit review request"
         )
-        supervisor = find_project_supervisor(core, project.id)
+        from cloudra.runtime_v2.supervision import find_final_review_supervisor
+
+        request_ids = await asyncio.to_thread(_request_ids)
+        supervisor = find_final_review_supervisor(core, project.id, request_ids[0])
         assert supervisor is not None
-        llm._supervisor = supervisor
 
         # Supervisor 裁决 → 通知投递 → coordinator 恢复 → 批准结束。
         await _wait_state(coordinator, "succeeded")
-        # 第二拍是裁决通知唤醒后的重 stop（复用已接受裁决放行）；supervisor
-        # （parent=coordinator）的完成回传会再唤醒一轮，故只断言至少两拍，
-        # 不把轮次顺序当时序契约。
-        assert llm.coordinator_calls >= 2
+        assert llm.coordinator_calls == 1
+        emitted = [event.data.get("content") for event in core.event_log.query_session(
+            coordinator.id, types={"agent.message_emitted"})]
+        assert "frozen-roundtrip-answer" in emitted
+        assert "unreviewed-roundtrip-confirmation" not in emitted
 
         def _read_back():
             db = ConversationDB(project.id)
@@ -1287,11 +1247,9 @@ async def test_flush_does_not_mark_sent_when_recipient_is_empty(tmp_path):
 # --------------------------------------------------------------------- Task 4
 # 反馈矩阵、结束竞态（lost wakeup）与模式切换。
 #
-# 反馈唯一投递口契约（计划 §3）：裁决通知 = flush_review_notifications 的
-# pin（按 decision_id key 去重）+ mailbox + 条件 wake；运行报告 =
-# 普通子 agent 完成回传（deliver_child_completion_to_parent，
-# parent=Coordinator）。两条通道内容不同（结构化裁决 vs 运行收尾），各自
-# 只投递一次。
+# 反馈唯一投递口契约：裁决通知 = flush_review_notifications 的 pin（按
+# decision_id key 去重）+ mailbox + 条件 wake。Supervisor 不额外投递
+# 普通子 agent 完成回报；其科学待办失败由既有 D2 告警通道报告。
 
 
 async def _seed_review_request(project_id: str, requester: str, *, question: str) -> str:
@@ -1498,7 +1456,7 @@ def _supervisor_tool_calls(core, supervisor_id: str, tool_name: str):
 @pytest.mark.asyncio
 async def test_feedback_delivered_once_to_running_coordinator_without_restart(tmp_path):
     """反馈矩阵·running：裁决落在正在运行的 Coordinator 身上——不重启
-    （run 不换），裁决通知与完成报告各投递一次，两者都进入下一轮上下文。"""
+    （run 不换），裁决通知唯一投递并进入下一轮上下文，不附加普通完成回报。"""
     llm = _MailboxAdjudicatorLLM("", coord_latch=True)
     core, bus, _stages = _full_wiring(llm)
     project = await _guided_project(bus, tmp_path, "feedback-running")
@@ -1533,7 +1491,7 @@ async def test_feedback_delivered_once_to_running_coordinator_without_restart(tm
 
         decision = await asyncio.to_thread(_decision_for, project.id, request_id)
         assert decision is not None and decision.verdict == "accept"
-        # 各投递一次：裁决通知消息、裁决 pin、完成报告。
+        # 唯一反馈：裁决通知消息与裁决 pin，不重复发普通完成回报。
         assert len(_injections(core, coordinator.id, decision.decision_id)) == 1
         assert len(_pin_events(core, coordinator.id, f"review-{decision.decision_id}")) == 1
         reports = [
@@ -1541,12 +1499,12 @@ async def test_feedback_delivered_once_to_running_coordinator_without_restart(tm
             for e in _injections(core, coordinator.id, "[Sub-agent finished]")
             if supervisor.id in str(e.data.get("content", ""))
         ]
-        assert len(reports) == 1
+        assert reports == []
         # 最新裁决进入下一轮上下文（第二轮 call 的消息快照）。
         followup = llm.seen[coordinator.id][1]
         flat = "\n".join(str(m.get("content", "")) for m in followup)
         assert decision.decision_id in flat and "verdict=accept" in flat
-        assert "[Sub-agent finished]" in flat
+        assert "[Sub-agent finished]" not in flat
     finally:
         llm.release.set()
         llm.coord_release.set()
@@ -1556,7 +1514,7 @@ async def test_feedback_delivered_once_to_running_coordinator_without_restart(tm
 @pytest.mark.asyncio
 async def test_feedback_wakes_succeeded_coordinator_into_new_run(tmp_path):
     """反馈矩阵·succeeded：休眠的 Coordinator 被裁决通知正常 wake 开新
-    run，裁决内容进入新 run 的上下文；通知与报告仍各只投递一次。"""
+    run，裁决内容进入新 run 的上下文；不额外投递普通完成回报。"""
     llm = _MailboxAdjudicatorLLM("")
     core, bus, _stages = _full_wiring(llm)
     project = await _guided_project(bus, tmp_path, "feedback-succeeded")
@@ -1588,14 +1546,14 @@ async def test_feedback_wakes_succeeded_coordinator_into_new_run(tmp_path):
             for e in _injections(core, coordinator.id, "[Sub-agent finished]")
             if supervisor.id in str(e.data.get("content", ""))
         ]
-        assert len(reports) == 1
-        # run 2 起的某一轮上下文带裁决与报告。
+        assert reports == []
+        # run 2 起的某一轮上下文只带裁决反馈。
         later = llm.seen[coordinator.id][1:]
         flat = "\n".join(
             str(m.get("content", "")) for call in later for m in call
         )
         assert decision.decision_id in flat
-        assert "[Sub-agent finished]" in flat
+        assert "[Sub-agent finished]" not in flat
     finally:
         llm.release.set()
         await _teardown(core, coordinator, supervisor)
@@ -1603,9 +1561,8 @@ async def test_feedback_wakes_succeeded_coordinator_into_new_run(tmp_path):
 
 @pytest.mark.asyncio
 async def test_feedback_marks_sent_without_resurrecting_cancelled_coordinator(tmp_path):
-    """反馈矩阵·cancelled：用户取消的 Coordinator 不复活——裁决通知与完成
-    报告都照常投递信箱驻留（parked：显式恢复后可见），通知行闭环标记
-    sent，全程零新 run。"""
+    """反馈矩阵·cancelled：裁决通知驻留信箱、不复活 Coordinator；没有普通
+    完成回报，通知行闭环标记 sent，全程零新 run。"""
     llm = _MailboxAdjudicatorLLM("")
     core, bus, _stages = _full_wiring(llm)
     project = await _guided_project(bus, tmp_path, "feedback-cancelled")
@@ -1629,10 +1586,10 @@ async def test_feedback_marks_sent_without_resurrecting_cancelled_coordinator(tm
         decision = await asyncio.to_thread(_decision_for, project.id, request_id)
         assert decision is not None  # 裁决本身落库
         assert coordinator.state.value == "cancelled"
-        # parked：裁决消息、pin、完成报告照常投递驻留，但不唤醒不开新 run。
+        # parked：裁决消息与 pin 驻留，但不唤醒、不附加普通完成回报。
         assert len(_injections(core, coordinator.id, decision.decision_id)) == 1
         assert len(_pin_events(core, coordinator.id, f"review-{decision.decision_id}")) == 1
-        assert len(_injections(core, coordinator.id, "[Sub-agent finished]")) == 1
+        assert _injections(core, coordinator.id, "[Sub-agent finished]") == []
         runs = [
             e for e in core.event_log.query_session(coordinator.id) if e.type == "run.started"
         ]
@@ -1649,9 +1606,8 @@ async def test_feedback_marks_sent_without_resurrecting_cancelled_coordinator(tm
 
 @pytest.mark.asyncio
 async def test_supervisor_parent_is_coordinator_not_submitting_researcher(tmp_path):
-    """计划 Task 4 身份契约：Supervisor 的 parent 必须是 Coordinator（反馈
-    走普通子 agent 完成回传到 Coordinator），不是首次提交证据的研究子
-    agent；裁决通知仍按 requester 投递给提交者本人。"""
+    """Supervisor 的 parent 保持 Coordinator 身份；裁决反馈按 requester
+    投递给提交者，不因父子关系重复发普通完成回报。"""
     llm = _MailboxAdjudicatorLLM("")
     core, bus, _stages = _full_wiring(llm)
     project = await _guided_project(bus, tmp_path, "parent-identity")
@@ -1689,7 +1645,7 @@ async def test_supervisor_parent_is_coordinator_not_submitting_researcher(tmp_pa
         await _wait_state(researcher, "succeeded")  # 裁决通知 wake 开的 run
         decision = await asyncio.to_thread(_decision_for, project.id, request_id)
         assert decision is not None
-        # 裁决通知按 requester 投递给提交者；完成报告只给 Coordinator。
+        # 裁决通知按 requester 投递给提交者；Supervisor 无普通完成回报。
         assert len(_injections(core, researcher.id, decision.decision_id)) == 1
         assert _injections(core, coordinator.id, decision.decision_id) == []
         reports = [
@@ -1697,7 +1653,7 @@ async def test_supervisor_parent_is_coordinator_not_submitting_researcher(tmp_pa
             for e in _injections(core, coordinator.id, "[Sub-agent finished]")
             if supervisor.id in str(e.data.get("content", ""))
         ]
-        assert len(reports) == 1
+        assert reports == []
     finally:
         llm.release.set()
         await _teardown(core, coordinator, supervisor, researcher)
@@ -1762,8 +1718,8 @@ async def test_new_review_arriving_mid_turn_is_consumed_in_same_run(tmp_path):
 
 
 class _StopWindowTrap:
-    """PolicyStage 钩子：在 supervisor 的 on_run_end（stop 裁决之后、
-    finish_run 之前）注入一条新送审——确定性命中"信箱判空与正常结束之间"
+    """PolicyStage 钩子：在 supervisor 的结束审计（LLM stop 决策之后、
+    最终收件锁之前）注入一条新送审——确定性命中"信箱判空与正常结束之间"
     的竞态窗口（计划 §4）。before/after 钩子全是 no-op。"""
 
     name = "stop_window_trap"
@@ -1786,8 +1742,10 @@ class _StopWindowTrap:
     async def before_llm(self, ctx, messages, **_kwargs) -> None:
         return None
 
-    async def on_run_end(self, agent, *, explicit_stop: bool, **_kwargs) -> None:
-        if not self._armed or agent.role_id != SUPERVISOR_ROLE_ID:
+    async def audit_run_end(self, ctx, *, explicit_stop: bool, **_kwargs) -> None:
+        # on_run_end runs under the recipient lock. A test trap cannot post to
+        # that same recipient there; use the real pre-lock audit boundary.
+        if not self._armed or ctx.agent.role_id != SUPERVISOR_ROLE_ID:
             return
         self._armed = False
         await _seed_review_request(
@@ -2213,8 +2171,8 @@ async def test_interrupted_supervisor_explicit_recovery_reads_full_backlog(tmp_p
     supervisor1 = find_project_supervisor(core1, project.id)
     assert supervisor1 is not None and supervisor1.state.value == "running"
 
-    # 进程重启：restore 把 running 尸体落 failed，并把子（supervisor）的
-    # 终态回传给父（coordinator 是 queued：投递驻留信箱，恢复路径不 wake）。
+    # 进程重启：restore 把 running 尸体落 failed，不发普通子 agent 回报。
+    # 科学待办告警留给后面的 reconcile，装载路径不 wake Coordinator。
     core2 = RuntimeCore(strict_events=True)
     core2.store = store
     restore_core(core2, store)
@@ -2223,13 +2181,12 @@ async def test_interrupted_supervisor_explicit_recovery_reads_full_backlog(tmp_p
     reports = [
         e
         for e in core2.event_log.query_session(coordinator.id, types={"agent.message_injected"})
-        if supervisor1.id in str(e.data.get("content", ""))
+        if "[Sub-agent finished]" in str(e.data.get("content", ""))
+        and supervisor1.id in str(e.data.get("content", ""))
     ]
-    assert reports, "restore must deliver the zombie supervisor's failure to its parent"
-    assert "interrupted by process restart" in reports[-1].data["content"]
+    assert reports == []
 
-    # reconcile 不自动复活 failed：park-don't-wake——新事件只有一条补投；
-    # restore 已按未消费 message_injected 重建原通知，信箱里是重建 + 补投。
+    # reconcile 不自动复活 failed：restore 重建原通知，同版本不再重复补投。
     # 装载路径 auto_wake=False：D2 告警仍 pin + mailbox，但不把 Coordinator 打进 LLM。
     events_before = len(core2.event_log)
     await reconcile_supervision(core2, project.id, auto_wake=False)
@@ -2237,10 +2194,10 @@ async def test_interrupted_supervisor_explicit_recovery_reads_full_backlog(tmp_p
     supervisor_events = [
         e for e in new_events if e.session_id == supervisor2.id
     ]
-    assert [e.type for e in supervisor_events] == ["agent.message_injected"]
+    assert supervisor_events == []
     assert supervisor2.state is AgentState.FAILED
     inbox = core2.mailbox.inbox(supervisor2.id)
-    assert inbox is not None and inbox.qsize() == 2
+    assert inbox is not None and inbox.qsize() == 1
     # D2 告警：Coordinator 收到 pin + 投递（点名终态/不复活/恢复入口）。
     assert any(
         e.type == "context.pin_set"
@@ -2311,18 +2268,17 @@ async def test_duplicate_notification_after_decision_does_not_rerun_review(tmp_p
     """恢复矩阵·裁决后重复通知幂等。
 
     已裁决的请求（resolved + 通知闭环）之后：reconcile 因无可消费待办而
-    no-op；即便再来一次裸 notify 唤醒 supervisor，它重读信箱发现为空也只
-    stop——裁决工具调用数不增长（dag_review_evidence 只被请求一次，
+    no-op；即便再来一次裸 notify，也不重开空 run；
+    裁决工具调用数不增长（dag_review_evidence 只被请求一次，
     resolve_review 的 duplicate_decision 守卫兜底）。"""
     llm = _MailboxAdjudicatorLLM("")
     core, bus, _stages = _full_wiring(llm)
     project = await _guided_project(bus, tmp_path, "recover-idempotent")
     llm.project_id = project.id
-    # Task 4A：覆盖通过的交付图让统一结束门禁透明——否则 supervisor 完成
-    # 回传唤醒 coordinator 后，其纯文本收尾会创建退出审批请求并再次通知
-    # supervisor（多一次 run），干扰本用例的幂等断言。
+    # 最终交付预先通过审查，本用例只守这一份咨询裁决的重复通知。
     await _seed_complete_delivery(project.id)
     coordinator = await _spawn_guided_coordinator(bus, project)
+    await _approve_final_delivery(project.id, coordinator.id)
     supervisor = None
     try:
         request_id = await _seed_review_request(
@@ -2349,10 +2305,10 @@ async def test_duplicate_notification_after_decision_does_not_rerun_review(tmp_p
             == runs_before
         )
 
-        # 裸 notify（迟到重复通知）：唤醒但信箱已空 → 立即 stop，不重跑裁决。
+        # 裸 notify（迟到重复通知）：同一已完成版本不重开空 run。
         await notify_supervisor(core, project.id, reason="stale duplicate nudge")
         await _wait_state(supervisor, "succeeded")
-        await _wait_run_count(core, supervisor, runs_before + 1)
+        assert len(await _wait_run_count(core, supervisor, runs_before)) == runs_before
         assert len(_supervisor_tool_calls(core, supervisor.id, "dag_review_evidence")) == 1
         # 决定仍只有一份；请求保持 resolved。
         later = await asyncio.to_thread(_decision_for, project.id, request_id)

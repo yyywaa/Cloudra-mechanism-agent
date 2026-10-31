@@ -40,15 +40,84 @@ def test_capability_projection_matches_registry_declarations():
     assert capabilities.supervisor_access_for("get_skill") == "skill_read"
     assert capabilities.supervisor_access_for("read") == "evidence_read"
     assert capabilities.supervisor_access_for("log_parser") == "evidence_read"
-    assert capabilities.supervisor_access_for("reaction_mapping") == "evidence_read"
+    assert capabilities.supervisor_access_for("reaction_mapping") == "none"
     assert capabilities.supervisor_access_for("agent_hub") == "hub"
     assert capabilities.supervisor_access_for("dag_review_step") == "review_decision"
     assert capabilities.supervisor_access_for("bash") == "none"
-    assert capabilities.supervisor_access_for("write") == "none"
+    assert capabilities.supervisor_access_for("write") == "process_write"
     assert capabilities.supervisor_access_for("submit_compute_job") == "none"
     assert capabilities.supervisor_access_for("no_such_tool") == "none"
     allowed = capabilities.supervisor_allowed_tools()
     assert "bash" not in allowed and "get_skill" in allowed
+
+
+@pytest.mark.asyncio
+async def test_supervisor_can_create_and_edit_process_without_user_approval(tmp_path):
+    from cloudra.base.session_class import Session
+    from cloudra.runtime_v2.adapters import _LegacyAgentBridge
+
+    workspace = tmp_path / 'workspace'
+    workspace.mkdir()
+    core = RuntimeCore(strict_events=True)
+    bus = CommandBus(core)
+    project = (await bus.execute(Command(type='project.create',
+        payload={'name': 'process', 'workspace_dir': str(workspace)}))).data
+    agent = (await bus.execute(Command(type='agent.spawn', target={'project_id': project.id},
+        payload={'role_id': 'supervisor'}))).data
+    executor = _executor(tmp_path, core=core, project_id=project.id)
+    executor.bind_run(agent=_LegacyAgentBridge(agent, str(workspace), core.event_log), session=Session(id=agent.id, path=''))
+    created = await executor.execute('write', {'path': 'PROCESS.md', 'content': 'Hypothesis: concerted\n'}, session_id=agent.id)
+    assert created['is_success'], created
+    read = await executor.execute('read', {'path': 'PROCESS.md'}, session_id=agent.id)
+    core.event_log.append('tool.result_recorded', stream='agent', project_id=project.id,
+        session_id=agent.id, data={'tool_name': 'read', 'result': {'is_success': True, 'data': read}})
+    edited = await executor.execute('edit', {'path': 'PROCESS.md',
+        'edits': [{'old_text': 'concerted', 'new_text': 'unresolved'}]}, session_id=agent.id)
+    assert edited['is_success'], edited
+    assert (workspace / 'PROCESS.md').read_text() == 'Hypothesis: unresolved\n'
+    assert not [event for event in core.event_log.query_project(project.id) if event.type == 'approval.requested']
+
+
+@pytest.mark.asyncio
+async def test_notebook_supervisor_does_not_hold_coordinator_completion(tmp_path):
+    import asyncio
+
+    from cloudra.dag.stop_audit import has_running_siblings
+
+    core = RuntimeCore(strict_events=True)
+    bus = CommandBus(core)
+    project = (await bus.execute(Command(type='project.create', payload={'name': 'notes'}))).data
+    coordinator = (await bus.execute(Command(type='agent.spawn', target={'project_id': project.id},
+        payload={'role_id': 'coordinator'}))).data
+    await bus.execute(Command(type='agent.spawn', target={'project_id': project.id},
+        payload={'role_id': 'supervisor', 'parent_session_id': coordinator.id}))
+    assert not await asyncio.to_thread(has_running_siblings, core, project_id=project.id, session_id=coordinator.id)
+    await bus.execute(Command(type='agent.spawn', target={'project_id': project.id},
+        payload={'role_id': 'small_mol', 'parent_session_id': coordinator.id}))
+    assert await asyncio.to_thread(has_running_siblings, core, project_id=project.id, session_id=coordinator.id)
+
+
+@pytest.mark.asyncio
+async def test_supervisor_note_completion_does_not_reopen_finished_coordinator():
+    from cloudra.runtime_v2.schemas import AgentState
+    from cloudra.runtime_v2.subagent_bridge import deliver_child_completion_to_parent
+
+    core = RuntimeCore(strict_events=True)
+    bus = CommandBus(core)
+    project = (await bus.execute(Command(type='project.create', payload={'name': 'notes-finished'}))).data
+    parent = (await bus.execute(Command(type='agent.spawn', target={'project_id': project.id},
+        payload={'role_id': 'coordinator'}))).data
+    supervisor = (await bus.execute(Command(type='agent.spawn', target={'project_id': project.id},
+        payload={'role_id': 'supervisor', 'parent_session_id': parent.id}))).data
+    await core.agent_host.start_run(parent)
+    await core.agent_host.finish_run(parent, outcome='succeeded')
+    await core.agent_host.start_run(supervisor)
+    await core.agent_host.finish_run(supervisor, outcome='succeeded')
+    await deliver_child_completion_to_parent(core, supervisor)
+    assert parent.state is AgentState.SUCCEEDED
+    inbox = core.mailbox.inbox(parent.id)
+    assert inbox is None or inbox.empty()
+    assert not [event for event in core.event_log.query_session(parent.id) if event.type == 'agent.message_injected']
 
 
 def test_dag_message_supervisor_is_not_on_the_supervisor_wire():
@@ -256,7 +325,7 @@ async def test_reaction_mapping_structure_path_escape_rejected(tmp_path):
     assert "permission denied" in result["message"]
 
 
-# --- AgentHub：原生 bridge、动作限权、call 不隐式 spawn ---
+# --- AgentHub：原生 bridge、动作限权、call 创建独立 peer ---
 
 
 class _FakeEventLog:
@@ -409,13 +478,27 @@ async def test_hub_without_core_reports_unavailable(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_supervisor_hub_cannot_spawn_writable_peer(tmp_path):
+@pytest.mark.parametrize('target,existing', [('small_mol', False), ('writer', False), ('writer', True)])
+async def test_supervisor_hub_can_call_independent_writable_peer(tmp_path, target, existing):
     core=RuntimeCore(strict_events=True)
     bus=CommandBus(core)
     project=(await bus.execute(Command(type='project.create',payload={'name':'readonly-hub'}))).data
     supervisor=(await bus.execute(Command(type='agent.spawn',target={'project_id':project.id},payload={'role_id':'supervisor'}))).data
+    if existing:
+        peer=(await bus.execute(Command(type='agent.spawn',target={'project_id':project.id},payload={'role_id':target}))).data
+        target=peer.id
     before=set(core.agents)
     result=await _executor(tmp_path,core=core,project_id=project.id).execute(
-        'agent_hub',{'action':'call','to':'small_mol','message':'calculate'},session_id=supervisor.id)
-    assert result['is_success'] is False
-    assert set(core.agents)==before
+        'agent_hub',{'action':'call','to':target,'message':'calculate'},session_id=supervisor.id)
+    assert result['is_success'] is True
+    peer = core.agents[result['session_id']]
+    assert peer.capabilities.permissions.write
+    assert not supervisor.capabilities.permissions.write
+    assert peer.parent_session_id is None
+    if existing:
+        assert peer.id == target
+        assert set(core.agents) == before
+    else:
+        assert set(core.agents) == before | {peer.id}
+        requested = core.event_log.query_project(project.id, types={'agent.spawn_requested'})
+        assert requested[-1].data['requested_by_session_id'] == supervisor.id

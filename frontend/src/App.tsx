@@ -5,6 +5,7 @@ import DagPanel from './DagPanel';
 import OpsPanel from './OpsPanel';
 import type { Agent, CompletionSummary, ComputeJob, EventEnvelope, Project } from './types';
 import GlobalConfig from './GlobalConfig';
+import ComposerModelPicker from './ComposerModelPicker';
 import ProjectSettingsModal from './ProjectSettingsModal';
 import KnowledgePanel from './KnowledgePanel';
 import BenchmarkPanel from './BenchmarkPanel';
@@ -26,8 +27,9 @@ import {
   type ToolItem,
 } from './timeline';
 import { boundEventPage, boundStreamView, LiveEventBuffer, mergeAndTrimLiveEvents } from './eventWindow';
-import { resolveComposerSendTarget } from './composerSend';
+import { composerInteractionFor, resolveComposerSendTarget } from './composerSend';
 import { planSseReconnect } from './sseReconnect';
+import { mergeAgentSnapshot, mergeProjectAgentSnapshot } from './agentState';
 import {
   archiveProjectConfirm,
   cancelAllComputeConfirm,
@@ -203,6 +205,7 @@ export default function App() {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
+  const [projectStream, setProjectStream] = useState<{ projectId: string; cursor: number } | null>(null);
   const [events, setEvents] = useState<EventEnvelope[]>([]);
   // One historical page, isolated from the live tail while browsing.
   const [olderEvents, setOlderEvents] = useState<EventEnvelope[]>([]);
@@ -226,17 +229,21 @@ export default function App() {
   }, [sidebarOpen]);
 
   const [pendingMessages, setPendingMessages] = useState<MessageItem[]>([]);
+  const pendingMessageSeqRef = useRef(0);
   const [roles, setRoles] = useState<Array<{ role_id: string; display_name: string }>>([]);
   const [draft, setDraft] = useState('');
   const [slashSelected, setSlashSelected] = useState(0);
   const [slashDismissed, setSlashDismissed] = useState(false);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [newProject, setNewProject] = useState('');
+  const [projectCreateExpanded, setProjectCreateExpanded] = useState(false);
+  const newProjectNameRef = useRef<HTMLInputElement>(null);
+  useLayoutEffect(() => {
+    if (projectCreateExpanded) newProjectNameRef.current?.focus();
+  }, [projectCreateExpanded]);
   const [sending, setSending] = useState(false);
   const [connState, setConnState] = useState<'connecting' | 'live' | 'offline'>('connecting');
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [approvals, setApprovals] = useState<Array<Record<string, unknown>>>([]);
-  const [interactions, setInteractions] = useState<Array<Record<string, unknown>>>([]);
   const [interactionCollapsed, setInteractionCollapsed] = useState(false);
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
   const [globalOpen, setGlobalOpen] = useState(() => {
@@ -269,8 +276,11 @@ export default function App() {
   // message_injected echo (which carries paths only) can still render them.
   const uploadedArtifactsRef = useRef<Map<string, string>>(new Map());
 
+  const approvals = attention.get(activeProjectId ?? '')?.approvals ?? [];
+  const interactions = attention.get(activeProjectId ?? '')?.interactions ?? [];
   const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
   const activeAgent = agents.find((a) => a.id === activeAgentId) ?? null;
+  const composerInteraction = composerInteractionFor(interactions, activeAgent?.id ?? null);
   // Visual mode gates the composer attach button; defaults to on.
   const visualOn = activeProject
     ? (activeAgent?.settings.visual_mode ?? activeProject.settings.defaults?.visual_mode ?? true) !== false
@@ -387,10 +397,77 @@ export default function App() {
   const activeProjectIdRef = useRef(activeProjectId);
   activeProjectIdRef.current = activeProjectId;
   const decisionSendingRef = useRef(false);
-  const pendingRevisionRef = useRef(0);
   const activeAgentIdRef = useRef(activeAgentId);
   const agentSelectionVersionRef = useRef(0);
+  const agentStateThroughRef = useRef(new Map<string, number>());
   const maxSeqRef = useRef(0);
+
+  const projectsRef = useRef(projects);
+  projectsRef.current = projects;
+  const pendingLoadsRef = useRef(new Map<string, Promise<ProjectPending | undefined>>());
+  const pendingDirtyRef = useRef(new Set<string>());
+
+  const refreshProjectPending = useCallback((projectId: string, changed = false): Promise<ProjectPending | undefined> => {
+    if (!projectsRef.current.some((project) => project.id === projectId && !project.archived)) return Promise.resolve(undefined);
+    const existing = pendingLoadsRef.current.get(projectId);
+    if (existing) {
+      if (changed) pendingDirtyRef.current.add(projectId);
+      return existing;
+    }
+    const promise: Promise<ProjectPending | undefined> = Promise.resolve().then(async () => {
+      let latest: ProjectPending | undefined;
+      do {
+        pendingDirtyRef.current.delete(projectId);
+        try {
+          const [approvals, interactions] = await Promise.all([
+            api.approvals(projectId), api.interactions(projectId),
+          ]);
+          const project = projectsRef.current.find((item) => item.id === projectId && !item.archived);
+          if (!project || pendingLoadsRef.current.get(projectId) !== promise) return;
+          // A committed change arrived while HTTP was running. Do not publish
+          // its older snapshot; callers share the follow-up request as well.
+          if (pendingDirtyRef.current.has(projectId)) continue;
+          const pending = { name: project.name, approvals, interactions };
+          latest = pending;
+          setAttention((prev) => new Map(prev).set(projectId, pending));
+        } catch {
+          // Keep the last visible pending state; the next fallback retries.
+        }
+      } while (pendingDirtyRef.current.has(projectId) && projectsRef.current.some((item) => item.id === projectId && !item.archived));
+      return latest;
+    }).finally(() => {
+      if (pendingLoadsRef.current.get(projectId) === promise) {
+        pendingLoadsRef.current.delete(projectId);
+        pendingDirtyRef.current.delete(projectId);
+      }
+    });
+    pendingLoadsRef.current.set(projectId, promise);
+    return promise;
+  }, []);
+
+  const removePendingItem = useCallback((projectId: string, kind: 'approvals' | 'interactions', id: string | number) => {
+    if (pendingLoadsRef.current.has(projectId)) pendingDirtyRef.current.add(projectId);
+    setAttention((prev) => {
+      const pending = prev.get(projectId);
+      if (!pending) return prev;
+      const rows = pending[kind].filter((item) => String(item.interaction_id ?? item.approval_id ?? item.id) !== String(id));
+      return new Map(prev).set(projectId, { ...pending, [kind]: rows });
+    });
+  }, []);
+
+  useEffect(() => {
+    const ids = new Set(projects.filter((project) => !project.archived).map((project) => project.id));
+    setAttention((prev) => {
+      if ([...prev.keys()].every((id) => ids.has(id))) return prev;
+      return new Map([...prev].filter(([id]) => ids.has(id)));
+    });
+    for (const id of pendingLoadsRef.current.keys()) {
+      if (!ids.has(id)) {
+        pendingLoadsRef.current.delete(id);
+        pendingDirtyRef.current.delete(id);
+      }
+    }
+  }, [projects]);
 
   // Shortcut Cmd+B / Ctrl+B toggles project sidebar
   useEffect(() => {
@@ -463,6 +540,16 @@ export default function App() {
 
   /* ---------------------------------------------------- project switching */
 
+  const refreshAgentStates = useCallback(async (projectId: string) => {
+    const view = await api.projectView(projectId);
+    if (activeProjectIdRef.current !== projectId) return;
+    const latestSeq = new Map(agentStateThroughRef.current);
+    for (const agent of view.agents) {
+      agentStateThroughRef.current.set(agent.id, Math.max(latestSeq.get(agent.id) ?? 0, view.cursor));
+    }
+    setAgents((prev) => mergeProjectAgentSnapshot(prev, view.agents, view.cursor, latestSeq));
+  }, []);
+
   const selectProject = useCallback((projectId: string) => {
     setActiveProjectId(projectId);
   }, []);
@@ -497,6 +584,7 @@ export default function App() {
       const version = ++agentSelectionVersionRef.current;
       activeAgentIdRef.current = agentId;
       setActiveAgentId(agentId);
+      setEvents([]);
       setPendingMessages([]);
       setStreamView({ streamText: '', frozen: [] });
       setOlderEvents([]);
@@ -511,22 +599,20 @@ export default function App() {
         flushRafRef.current = null;
       }
       try {
+        const detailsThrough = agentStateThroughRef.current.get(agentId) ?? 0;
         const [agent, eventList] = await Promise.all([api.getAgent(agentId), api.events(agentId)]);
         if (version !== agentSelectionVersionRef.current) return;
-        setAgents((prev) =>
-          dedupeAgents(
-            prev.some((a) => a.id === agentId)
-              ? prev.map((a) => (a.id === agentId ? agent : a))
-              : [...prev, agent],
-          ),
-        );
+        const advanced = (agentStateThroughRef.current.get(agentId) ?? 0) !== detailsThrough;
+        setAgents((prev) => prev.some((current) => current.id === agentId)
+          ? prev.map((current) => current.id === agentId ? mergeAgentSnapshot(current, agent, advanced) : current)
+          : [...prev, agent]);
         const page = boundEventPage(eventList, EVENTS_WINDOW);
-        setEvents(page);
+        setEvents((prev) => mergeAndTrimLiveEvents(prev, page, EVENTS_WINDOW).live);
         setHasOlder(eventList.length >= EVENTS_WINDOW || page.length < eventList.length);
         // Anchors for future thinking segments must account for the fetched
         // history — otherwise the first chunks land at seq 0.5, above the
         // triggering user message, and no SSE echo ever re-bases them.
-        maxSeqRef.current = eventList.reduce((m, e) => Math.max(m, e.session_seq ?? 0), 0);
+        maxSeqRef.current = eventList.reduce((m, e) => Math.max(m, e.session_seq ?? 0), maxSeqRef.current);
       } catch (e) {
         if (version === agentSelectionVersionRef.current) reportError(e);
       }
@@ -537,8 +623,9 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     ++agentSelectionVersionRef.current;
-    ++pendingRevisionRef.current;
     setAgents([]);
+    agentStateThroughRef.current.clear();
+    setProjectStream(null);
     activeAgentIdRef.current = null;
     setActiveAgentId(null);
     setEvents([]);
@@ -549,16 +636,16 @@ export default function App() {
     maxSeqRef.current = 0;
     setPendingMessages([]);
     setPendingImages([]);
-    setApprovals([]);
-    setInteractions([]);
     setSidebarJobs(null);
     if (!activeProjectId) return;
     api
-      .listAgents(activeProjectId)
-      .then((list) => {
+      .projectView(activeProjectId)
+      .then((view) => {
         if (cancelled) return;
-        const agents = dedupeAgents(list);
+        const agents = dedupeAgents(view.agents);
+        for (const agent of agents) agentStateThroughRef.current.set(agent.id, view.cursor);
         setAgents(agents);
+        setProjectStream({ projectId: activeProjectId, cursor: view.cursor });
         // A jump from the attention dock / a desktop notification overrides
         // the default "select the first agent".
         const jump = jumpTargetRef.current;
@@ -584,22 +671,14 @@ export default function App() {
   /* ------------------------------------------------------------ SSE stream */
 
   useEffect(() => {
-    if (!activeProjectId) return;
+    if (!activeProjectId || projectStream?.projectId !== activeProjectId) return;
     setConnState('connecting');
-    let cursor = 0;
+    let cursor = projectStream.cursor;
     let replaying = true;
+    let synced = false;
     let source: ReturnType<typeof streamProject> | null = null;
     let closed = false;
     let reconnectTimer: number | null = null;
-
-    const refreshPending = (kind: 'approvals' | 'interactions') => {
-      const revision = pendingRevisionRef.current;
-      void api[kind](activeProjectId).then((items) => {
-        if (closed || pendingRevisionRef.current !== revision) return;
-        if (kind === 'approvals') setApprovals(items);
-        else setInteractions(items);
-      }).catch(() => undefined);
-    };
 
     const connect = () => {
       if (closed) return;
@@ -624,13 +703,20 @@ export default function App() {
         onEvent: (event) => {
           if (closed) return;
           if (event.type === 'project.synced') {
+            cursor = Math.max(cursor, Number(event.data.replayed_through ?? 0));
             replaying = false;
-            if (activeProjectId) {
-              api
-                .listAgents(activeProjectId)
-                .then((list) => { if (!closed) setAgents(dedupeAgents(list)); })
-                .catch(() => undefined);
+            if (synced) {
+              // 重连既补聊天记录，也按同一 cursor 的权威快照校准所有 Agent。
+              void refreshAgentStates(activeProjectId).catch(() => undefined);
+              const agentId = activeAgentIdRef.current;
+              const version = agentSelectionVersionRef.current;
+              if (agentId) void api.events(agentId).then((page) => {
+                if (closed || version !== agentSelectionVersionRef.current) return;
+                setEvents((prev) => mergeAndTrimLiveEvents(prev, page, EVENTS_WINDOW).live);
+                maxSeqRef.current = page.reduce((max, item) => Math.max(max, item.session_seq ?? 0), maxSeqRef.current);
+              }).catch(() => undefined);
             }
+            synced = true;
             return;
           }
           if (event.type === 'project.deleted') {
@@ -646,31 +732,33 @@ export default function App() {
           }
           cursor = Math.max(cursor, event.seq);
         const sessionId = event.session_id;
+        const updateAgent = Boolean(sessionId && event.seq > (agentStateThroughRef.current.get(sessionId) ?? 0));
+        if (sessionId && event.seq > 0) {
+          agentStateThroughRef.current.set(sessionId, Math.max(agentStateThroughRef.current.get(sessionId) ?? 0, event.seq));
+        }
         // Agent list / chip state updates, regardless of selection.
-        if (event.type === 'agent.spawned' && activeProjectId) {
-          api
-            .listAgents(activeProjectId)
-            .then((list) => { if (!closed) setAgents(dedupeAgents(list)); })
-            .catch(() => undefined);
+        if (event.type === 'agent.spawned' && activeProjectId && updateAgent) {
+          const spawned = { ...event.data, completion: null } as unknown as Agent;
+          setAgents((prev) => prev.some((agent) => agent.id === spawned.id) ? prev : [...prev, spawned]);
           // Surface the new sub-agent: auto-expand its parent's chip.
           const parentId = event.data?.parent_session_id;
           if (typeof parentId === 'string' && parentId) {
             setExpandedAgents((prev) => new Set(prev).add(parentId));
           }
         }
-        if (event.type === 'agent.state_changed' && sessionId && !replaying) {
+        if (event.type === 'agent.state_changed' && sessionId && updateAgent) {
           const to = String(event.data.to ?? '');
           setAgents((prev) =>
             dedupeAgents(prev.map((a) => (a.id === sessionId ? { ...a, state: to } : a))),
           );
         }
-        if (event.type === 'agent.task_updated' && sessionId && !replaying) {
+        if (event.type === 'agent.task_updated' && sessionId && updateAgent) {
           const task = event.data?.current_task != null ? String(event.data.current_task) : null;
           setAgents((prev) =>
             dedupeAgents(prev.map((a) => (a.id === sessionId ? { ...a, current_task: task } : a))),
           );
         }
-        if (event.type === 'run.started' && sessionId && !replaying) {
+        if (event.type === 'run.started' && sessionId && updateAgent) {
           const runId = String(event.data.run_id ?? event.run_id ?? '');
           const protocol = event.data.invocation_protocol;
           setAgents((prev) =>
@@ -679,6 +767,7 @@ export default function App() {
                 a.id === sessionId
                   ? {
                       ...a,
+                      completion: null,
                       current_run: {
                         run_id: runId,
                         started_at: String(event.data.started_at ?? event.created_at ?? ''),
@@ -693,32 +782,31 @@ export default function App() {
             ),
           );
         }
-        if ((event.type === 'run.finished' || event.type === 'agent.cancelled') && sessionId && !replaying) {
+        if ((event.type === 'run.finished' || event.type === 'agent.cancelled') && sessionId && updateAgent) {
           setAgents((prev) =>
             dedupeAgents(prev.map((a) => (a.id === sessionId ? { ...a, current_run: null } : a))),
           );
           // 完成依据（已验证完成 / 部分交付 / 未独立验证）由服务端从收尾事件
           // 投影，本地无从重建：收尾后拉一次当前 agent 把它补齐（只补正在看的
-          // 那个，swarm 里其它 agent 等切换时再取）。
+          // 那个，其他 agent 在切换时补齐；不能覆盖 SSE 已推进的状态）。
           if (sessionId === activeAgentIdRef.current) {
-            void api
-              .getAgent(sessionId)
-              .then((fresh) =>
-                setAgents((prev) =>
-                  dedupeAgents(prev.map((a) => (a.id === sessionId ? { ...a, ...fresh } : a))),
-                ),
-              )
-              .catch(() => undefined);
+            const version = agentSelectionVersionRef.current;
+            const through = agentStateThroughRef.current.get(sessionId);
+            void api.getAgent(sessionId).then((fresh) => {
+              if (closed || version !== agentSelectionVersionRef.current || agentStateThroughRef.current.get(sessionId) !== through) return;
+              setAgents((prev) => prev.map((agent) => agent.id === sessionId
+                ? { ...agent, completion: agent.current_run ? null : fresh.completion } : agent));
+            }).catch(() => undefined);
           }
         }
         if (event.type === 'approval.requested' || event.type === 'tool.approval_requested') {
           if (!replaying) {
             pushToast('info', `Approval requested: ${short(event.data.tool_name ?? event.data.message ?? '', 60)}`);
           }
-          if (activeProjectId) refreshPending('approvals');
+          if (activeProjectId) void refreshProjectPending(activeProjectId, true);
         }
         if (event.type === 'approval.decided' && activeProjectId) {
-          refreshPending('approvals');
+          void refreshProjectPending(activeProjectId, true);
         }
         // Compact feedback: the button only queues the request — the actual
         // run happens at the next turn boundary and can take minutes on
@@ -746,7 +834,7 @@ export default function App() {
             event.type === 'interaction.expired') &&
           activeProjectId
         ) {
-          refreshPending('interactions');
+          void refreshProjectPending(activeProjectId, true);
         }
         // Timeline events for the visible agent.
         if (sessionId && sessionId === activeAgentIdRef.current) {
@@ -763,13 +851,6 @@ export default function App() {
             applyStreamEvent(prev, event, maxSeqRef.current), Boolean(prev.omitted),
           ));
           bufferEvent(event);
-          if (event.type === 'agent.message_injected') {
-            const content = String(event.data.content ?? '');
-            setPendingMessages((prev) => {
-              const idx = prev.findIndex((m) => m.content === content);
-              return idx === -1 ? prev : prev.filter((_, i) => i !== idx);
-            });
-          }
           if (event.type === 'llm.failed' && !replaying) {
             pushToast('error', `LLM failed: ${short(event.data.error ?? event.data.message ?? '', 100)}`);
           }
@@ -786,34 +867,7 @@ export default function App() {
     }
     source?.close();
   };
-}, [activeProjectId, pushToast]);
-
-  /* -------------------------------------------------- approvals polling */
-
-  useEffect(() => {
-    if (!activeProjectId) return;
-    let cancelled = false;
-    const poll = async () => {
-      const revision = pendingRevisionRef.current;
-      try {
-        const [a, i] = await Promise.all([
-          api.approvals(activeProjectId),
-          api.interactions(activeProjectId),
-        ]);
-        if (cancelled || pendingRevisionRef.current !== revision) return;
-        setApprovals(a);
-        setInteractions(i);
-      } catch {
-        /* polling errors are transient */
-      }
-    };
-    void poll();
-    const timer = window.setInterval(poll, 4000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [activeProjectId]);
+}, [activeProjectId, projectStream, pushToast, refreshProjectPending, refreshAgentStates]);
 
   /* ------------------------------------- cross-project attention polling */
 
@@ -848,45 +902,40 @@ export default function App() {
     };
   }, []);
 
-  // Poll approvals/ask_user for EVERY non-archived project: the SSE stream
-  // and the Inspector only cover the active one, and a request that parks
-  // an agent in another project must still reach the user.
+  // One fallback supplies both the active Inspector and cross-project attention.
+  // Three project workers bound fan-out; slow rounds never overlap themselves.
   useEffect(() => {
     const targets = projects.filter((p) => !p.archived);
-    if (targets.length === 0) {
-      setAttention(new Map());
-      return;
-    }
+    if (targets.length === 0) return;
     let cancelled = false;
+    let running = false;
     const poll = async () => {
-      const results = await Promise.all(
-        targets.map(async (p) => {
-          try {
-            const [approvals, interactions] = await Promise.all([
-              api.approvals(p.id),
-              api.interactions(p.id),
-            ]);
-            return [p.id, { name: p.name, approvals, interactions } satisfies ProjectPending] as const;
-          } catch {
-            return null; // one unreachable project must not sink the rest
+      if (running) return;
+      running = true;
+      try {
+        const next = new Map<string, ProjectPending>();
+        let index = 0;
+        const worker = async () => {
+          while (!cancelled && index < targets.length) {
+            const project = targets[index++];
+            const pending = await refreshProjectPending(project.id);
+            if (pending) next.set(project.id, pending);
           }
-        }),
-      );
-      if (cancelled) return;
-      const next = new Map<string, ProjectPending>();
-      for (const r of results) if (r) next.set(r[0], r[1]);
-      setAttention(next);
-      // First poll only seeds the baseline — re-opening the app must not
-      // re-alert for long-pending requests.
-      const items = collectPending(next);
-      if (!attentionBaselineRef.current) {
-        attentionBaselineRef.current = true;
-        attentionSeenRef.current = new Set(items.map((i) => i.key));
-        return;
+        };
+        await Promise.all(Array.from({ length: Math.min(3, targets.length) }, worker));
+        if (cancelled) return;
+        const items = collectPending(next);
+        if (!attentionBaselineRef.current) {
+          attentionBaselineRef.current = true;
+          attentionSeenRef.current = new Set(items.map((item) => item.key));
+          return;
+        }
+        const fresh = diffNewItems(items, attentionSeenRef.current);
+        attentionSeenRef.current = new Set(items.map((item) => item.key));
+        for (const item of fresh) notifyAttention(item);
+      } finally {
+        running = false;
       }
-      const fresh = diffNewItems(items, attentionSeenRef.current);
-      attentionSeenRef.current = new Set(items.map((i) => i.key));
-      for (const item of fresh) notifyAttention(item);
     };
     void poll();
     const timer = window.setInterval(poll, 5000);
@@ -894,58 +943,45 @@ export default function App() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [projects, notifyAttention]);
-
-  const refreshProjectPending = useCallback(async (projectId: string) => {
-    try {
-      const [approvals, interactions] = await Promise.all([
-        api.approvals(projectId),
-        api.interactions(projectId),
-      ]);
-      setAttention((prev) => {
-        const next = new Map(prev);
-        next.set(projectId, { name: prev.get(projectId)?.name ?? '', approvals, interactions });
-        return next;
-      });
-    } catch {
-      /* the next poll reconciles */
-    }
-  }, []);
+  }, [projects, notifyAttention, refreshProjectPending]);
 
   const handleAttentionDecide = useCallback(
     async (item: PendingAttention, decision: 'approve' | 'deny') => {
       try {
         await api.decideApproval(item.projectId, item.id, decision, decision === 'deny' ? 'denied by user' : '');
+        removePendingItem(item.projectId, 'approvals', item.id);
         pushToast('ok', `${decision === 'approve' ? 'Approved' : 'Denied'} · ${item.projectName}`);
       } catch (e) {
         reportError(e);
       } finally {
-        await refreshProjectPending(item.projectId);
+        await refreshProjectPending(item.projectId, true);
       }
     },
-    [pushToast, reportError, refreshProjectPending],
+    [pushToast, reportError, refreshProjectPending, removePendingItem],
   );
 
   const handleAttentionRespond = useCallback(
     async (item: PendingAttention, response: string) => {
       try {
         await api.respondInteraction(item.projectId, item.id, response);
+        removePendingItem(item.projectId, 'interactions', item.id);
         pushToast('ok', `Response sent · ${item.projectName}`);
       } catch (e) {
         reportError(e);
       } finally {
-        await refreshProjectPending(item.projectId);
+        await refreshProjectPending(item.projectId, true);
       }
     },
-    [pushToast, reportError, refreshProjectPending],
+    [pushToast, reportError, refreshProjectPending, removePendingItem],
   );
 
   /* ------------------------------------------------------------- actions */
 
   async function createProject(name: string, workspaceDir?: string) {
     const resp = await api.createProject(name, workspaceDir);
-    const list = await api.listProjects(true);
-    setProjects(list);
+    setProjects((prev) => prev.some((p) => p.id === resp.data.id)
+      ? prev.map((p) => (p.id === resp.data.id ? resp.data : p))
+      : [...prev, resp.data]);
     setActiveProjectId(resp.data.id);
     pushToast('ok', `Project "${name}" created`);
   }
@@ -957,6 +993,7 @@ export default function App() {
       await createProject(name, newProjectWs.trim() || undefined);
       setNewProject('');
       setNewProjectWs('');
+      setProjectCreateExpanded(false);
     } catch (e) {
       reportError(e);
     }
@@ -984,13 +1021,12 @@ export default function App() {
 
 
 
-  async function changeWorkspace(dir: string) {
-    if (!activeProject) return;
+  async function changeWorkspace(project: Project, dir: string) {
     const value = dir.trim() || null;
-    if (value === (activeProject.workspace_dir ?? null)) return;
+    if (value === (project.workspace_dir ?? null)) return;
     try {
-      const resp = await api.patchProject(activeProject.id, { workspace_dir: value });
-      setProjects((prev) => prev.map((p) => (p.id === activeProject.id ? resp.data : p)));
+      const resp = await api.patchProject(project.id, { workspace_dir: value });
+      setProjects((prev) => prev.map((p) => (p.id === project.id ? resp.data : p)));
       pushToast('ok', value ? `Workspace → ${value}` : 'Workspace cleared');
     } catch (e) {
       reportError(e);
@@ -1027,19 +1063,11 @@ export default function App() {
       decisionSendingRef.current = false;
       setSending(false);
     }
-    const revision = ++pendingRevisionRef.current;
     pushToast('ok', t.interactionSentToast || 'Response sent to agent');
-    if (activeProjectIdRef.current === projectId) {
-      setInteractions((items) => items.filter((item) => String(item.interaction_id ?? item.id) !== String(interactionId)));
-    }
+    removePendingItem(projectId, 'interactions', interactionId);
+    void refreshProjectPending(projectId, true);
     // The mutation succeeded. A failed refresh must not suggest resubmission.
-    void Promise.all([api.interactions(projectId), api.listAgents(projectId)])
-      .then(([updated, sessions]) => {
-        if (activeProjectIdRef.current !== projectId || pendingRevisionRef.current !== revision) return;
-        setInteractions(updated);
-        setAgents(dedupeAgents(sessions));
-      })
-      .catch(() => undefined);
+    void refreshAgentStates(projectId).catch(() => undefined);
     return true;
   };
 
@@ -1061,18 +1089,10 @@ export default function App() {
       decisionSendingRef.current = false;
       setSending(false);
     }
-    const revision = ++pendingRevisionRef.current;
     pushToast('ok', decision === 'approve' ? t.approvalApprovedToast : t.approvalDeniedToast);
-    if (activeProjectIdRef.current === projectId) {
-      setApprovals((items) => items.filter((item) => String(item.id) !== String(approvalId)));
-    }
-    void Promise.all([api.approvals(projectId), api.listAgents(projectId)])
-      .then(([updated, sessions]) => {
-        if (activeProjectIdRef.current !== projectId || pendingRevisionRef.current !== revision) return;
-        setApprovals(updated);
-        setAgents(dedupeAgents(sessions));
-      })
-      .catch(() => undefined);
+    removePendingItem(projectId, 'approvals', approvalId);
+    void refreshProjectPending(projectId, true);
+    void refreshAgentStates(projectId).catch(() => undefined);
     return true;
   };
 
@@ -1119,11 +1139,12 @@ export default function App() {
       draft,
       sending,
       hasProject: Boolean(activeProject),
-      hasAgent: Boolean(activeAgent),
+      activeAgentId: activeAgent?.id ?? null,
       interactions,
     });
     if (target.kind === 'noop' || !activeProject) return;
     const content = draft.trim();
+    const pendingId = `pending-${++pendingMessageSeqRef.current}`;
     const images = pendingImages.map((p) => p.path);
     const imageArtifactIds = pendingImages.map((p) => p.artifactId);
     setSending(true);
@@ -1220,7 +1241,7 @@ export default function App() {
         return;
       }
       setPendingImages([]);
-      if (target.kind === 'spawn_coordinator') {
+      if (!activeAgent) {
         // With images attached the spawn `query` cannot carry them, so spawn
         // idle and deliver text + images as the first message instead.
         const resp = await api.spawnAgent(activeProject.id, {
@@ -1228,25 +1249,22 @@ export default function App() {
           query: images.length > 0 ? undefined : content,
           language: lang,
           settings: {
+            ...activeProject.settings.defaults,
             orchestration_mode: activeProject.settings.orchestration_mode,
-            yolo: activeProject.settings.defaults?.yolo ?? false,
-            visual_mode: activeProject.settings.defaults?.visual_mode ?? true,
-            schedule_mode: activeProject.settings.defaults?.schedule_mode ?? false,
-            invocation_protocol: activeProject.settings.defaults?.invocation_protocol ?? 'javascript',
           },
         });
-        setDraft('');
+        setDraft((current) => current === draft ? '' : current);
         if (images.length > 0) {
           await api.sendMessage(resp.data.id, content, images, imageArtifactIds, lang);
         }
         await selectAgent(resp.data.id);
       } else {
-        // Optimistic echo; reconciled when the SSE echo arrives.
+        // The command receipt confirms this exact local send; SSE may arrive independently.
         setPendingMessages((prev) => [
           ...prev,
           {
             kind: 'message',
-            id: `pending-${Date.now()}`,
+            id: pendingId,
             seq: Number.MAX_SAFE_INTEGER,
             sender: 'user',
             senderLabel: 'user',
@@ -1257,10 +1275,18 @@ export default function App() {
           },
         ]);
         setDraft('');
-        await api.sendMessage(activeAgent!.id, content, images, imageArtifactIds, lang);
+        const agentId = activeAgent.id;
+        const version = agentSelectionVersionRef.current;
+        const receipt = await api.sendMessage(agentId, content, images, imageArtifactIds, lang);
+        setPendingMessages((prev) => prev.filter((message) => message.id !== pendingId));
+        void api.eventDetail(agentId, receipt.event_id).then((message) => {
+          if (version !== agentSelectionVersionRef.current) return;
+          setEvents((prev) => mergeAndTrimLiveEvents(prev, [message], EVENTS_WINDOW).live);
+          maxSeqRef.current = Math.max(maxSeqRef.current, message.session_seq ?? 0);
+        }).catch(reportError);
       }
     } catch (e) {
-      setPendingMessages((prev) => prev.filter((m) => m.content !== content));
+      setPendingMessages((prev) => prev.filter((message) => message.id !== pendingId));
       setPendingImages((prev) => (prev.length === 0 ? pendingImages : prev));
       reportError(e);
     } finally {
@@ -1286,6 +1312,15 @@ export default function App() {
     } catch (e) {
       reportError(e);
     }
+  }
+
+  function updateAgentSettings(updated: Agent[]) {
+    const byId = new Map(updated.map((agent) => [agent.id, agent]));
+    // 设置接口的响应可能早于最新 SSE，不能把它携带的旧运行态写回去。
+    setAgents((prev) => prev.map((agent) => {
+      const fresh = byId.get(agent.id);
+      return fresh ? mergeAgentSnapshot(agent, fresh, true) : agent;
+    }));
   }
 
   async function handleSaveProjectSettings(patch: {
@@ -1327,9 +1362,7 @@ export default function App() {
           const updated = await Promise.all(
             targets.map((a) => api.patchSettings(a.id, { orchestration_mode: patch.orchestration_mode })),
           );
-          setAgents((prev) =>
-            dedupeAgents(prev.map((a) => updated.find((u) => u.data.id === a.id)?.data ?? a)),
-          );
+          updateAgentSettings(updated.map((result) => result.data));
         }
       }
 
@@ -1343,7 +1376,7 @@ export default function App() {
   async function handleSaveAgentSettings(agentId: string, patch: Record<string, unknown>) {
     try {
       const resp = await api.patchSettings(agentId, patch);
-      setAgents((prev) => dedupeAgents(prev.map((a) => (a.id === agentId ? resp.data : a))));
+      updateAgentSettings([resp.data]);
       pushToast('ok', `Agent 设置已更新: ${resp.data.display_name}`);
     } catch (e) {
       reportError(e);
@@ -1355,12 +1388,10 @@ export default function App() {
     const id = targetId ?? activeAgent?.id;
     const name = displayName ?? (targetId ? (agents.find((a) => a.id === targetId)?.display_name ?? targetId) : activeAgent?.display_name);
     if (!id) return;
+    const projectId = activeProjectId;
     try {
       await api.cancel(id);
-      if (activeProjectId) {
-        const list = await api.listAgents(activeProjectId);
-        setAgents(dedupeAgents(list));
-      }
+      if (projectId) await refreshAgentStates(projectId);
       pushToast('ok', `Cancelled ${name ?? id}`);
     } catch (e) {
       reportError(e);
@@ -1386,9 +1417,7 @@ export default function App() {
       );
       const updated = await Promise.all(targets.map((a) => api.patchSettings(a.id, { schedule_mode: checked })));
       if (updated.length > 0) {
-        setAgents((prev) =>
-          dedupeAgents(prev.map((a) => updated.find((u) => u.data.id === a.id)?.data ?? a)),
-        );
+        updateAgentSettings(updated.map((result) => result.data));
       }
       pushToast('ok', `Schedule mode ${checked ? 'on' : 'off'} (project-wide)`);
     } catch (e) {
@@ -1418,9 +1447,7 @@ export default function App() {
       );
       const updated = await Promise.all(targets.map((a) => api.patchSettings(a.id, { yolo: checked })));
       if (updated.length > 0) {
-        setAgents((prev) =>
-          dedupeAgents(prev.map((a) => updated.find((u) => u.data.id === a.id)?.data ?? a)),
-        );
+        updateAgentSettings(updated.map((result) => result.data));
       }
       pushToast('ok', `YOLO ${checked ? 'on' : 'off'} (project-wide)`);
     } catch (e) {
@@ -1456,9 +1483,7 @@ export default function App() {
         targets.map((a) => api.patchSettings(a.id, { invocation_protocol: protocol })),
       );
       if (updated.length > 0) {
-        setAgents((prev) =>
-          dedupeAgents(prev.map((a) => updated.find((u) => u.data.id === a.id)?.data ?? a)),
-        );
+        updateAgentSettings(updated.map((result) => result.data));
       }
       pushToast('ok', `Invocation protocol → ${protocol} (project-wide; next run)`);
     } catch (e) {
@@ -1488,9 +1513,7 @@ export default function App() {
       );
       const updated = await Promise.all(targets.map((a) => api.patchSettings(a.id, { visual_mode: checked })));
       if (updated.length > 0) {
-        setAgents((prev) =>
-          dedupeAgents(prev.map((a) => updated.find((u) => u.data.id === a.id)?.data ?? a)),
-        );
+        updateAgentSettings(updated.map((result) => result.data));
       }
       pushToast('ok', `Visual mode ${checked ? 'on' : 'off'} (project-wide)`);
     } catch (e) {
@@ -1533,6 +1556,7 @@ export default function App() {
 
   /* ------------------------------------------------------------ rendering */
 
+  const agentRunning = activeAgent?.state === 'running';
   const sessionEvents = useMemo(
     () =>
       activeAgentId
@@ -1573,7 +1597,7 @@ export default function App() {
         sender: 'assistant',
         senderLabel: activeAgent?.display_name ?? 'assistant',
         content: streamView.streamText,
-        streaming: true,
+        streaming: agentRunning,
       });
     }
     if (streamView.streamThinking) {
@@ -1591,7 +1615,7 @@ export default function App() {
           id: 'stream-thinking',
           seq: streamView.streamThinkingSeq || maxSeqRef.current + 0.3,
           text: st,
-          live: Boolean(streamView.streamThinkingLive),
+          live: agentRunning && Boolean(streamView.streamThinkingLive),
         });
       }
     }
@@ -1606,6 +1630,7 @@ export default function App() {
     streamView.streamThinkingSeq,
     pendingMessages,
     activeAgent?.display_name,
+    agentRunning,
     olderEvents.length,
   ]);
   const runningTool = useMemo(
@@ -1623,12 +1648,22 @@ export default function App() {
     },
     [timeline],
   );
-  const liveThinking = Boolean(streamView.streamThinkingLive);
+  const liveThinking = agentRunning && Boolean(streamView.streamThinkingLive);
 
   const currentAgentActivity = useMemo<{
     type: 'generating' | 'running_tool' | 'waiting' | 'thinking' | 'running' | 'idle';
     label: string;
   }>(() => {
+    // 历史工具行和已到达的分片不能替代 Agent 的当前生命周期状态。
+    if (activeAgent?.state === 'waiting_approval') {
+      return { type: 'waiting', label: 'Waiting for approval' };
+    }
+    if (activeAgent?.state === 'waiting_input') {
+      return { type: 'waiting', label: 'Waiting for user input' };
+    }
+    if (activeAgent?.state !== 'running') {
+      return { type: 'idle', label: 'Ready' };
+    }
     if (streamView.streamText) {
       return { type: 'generating', label: 'Streaming response…' };
     }
@@ -1641,16 +1676,7 @@ export default function App() {
     if (liveThinking) {
       return { type: 'thinking', label: 'Reasoning / Thinking…' };
     }
-    if (activeAgent?.state === 'running') {
-      return { type: 'running', label: 'Processing turn…' };
-    }
-    if (activeAgent?.state === 'waiting_approval') {
-      return { type: 'waiting', label: 'Waiting for approval' };
-    }
-    if (activeAgent?.state === 'waiting_input') {
-      return { type: 'waiting', label: 'Waiting for user input' };
-    }
-    return { type: 'idle', label: 'Ready' };
+    return { type: 'running', label: 'Processing turn…' };
   }, [streamView.streamText, runningTool, liveThinking, activeAgent?.state]);
 
   // Agent tree: sub-agents fold under their parent's chip in the agent bar.
@@ -1864,9 +1890,22 @@ export default function App() {
 
         <div className="left-sidebar-content">
           {/* New Project Creator Bar */}
-          <div className="new-project-bar">
+          <button
+            type="button"
+            className="acid-project-create-toggle"
+            aria-expanded={projectCreateExpanded}
+            aria-controls="sidebar-new-project-form"
+            onClick={() => setProjectCreateExpanded((expanded) => !expanded)}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            {lang === 'zh' ? '新建项目' : 'New project'}
+          </button>
+          <div id="sidebar-new-project-form" className="new-project-bar" data-expanded={projectCreateExpanded}>
             <div className="new-project-row">
               <input
+                ref={newProjectNameRef}
                 className="input"
                 value={newProject}
                 onChange={(e) => setNewProject(e.target.value)}
@@ -2023,7 +2062,7 @@ export default function App() {
                                     openPathPicker({
                                       title: `${t.sidebarRename} ${p.name}`,
                                       initialPath: p.workspace_dir ?? undefined,
-                                      onSelect: (newDir) => void changeWorkspace(newDir),
+                                      onSelect: (newDir) => void changeWorkspace(p, newDir),
                                     });
                                   }}
                                 >
@@ -2151,7 +2190,7 @@ export default function App() {
                 setSidebarOpen(true);
               }}
             >
-              <img src="/logo.png" alt="Cloudra" className="brand-logo-icon" />
+              <img src="/logo.svg" alt="Cloudra" className="brand-logo-icon" />
               <span className="brand-logo-text">Cloudra</span>
             </div>
             <div className="agentbar-divider" />
@@ -2558,8 +2597,8 @@ export default function App() {
               placeholder={
                 !activeProject
                   ? 'Select or create a project first…'
-                  : interactions.length > 0
-                    ? `Reply to ${activeAgent?.display_name ?? 'agent'}: ${short(cleanPromptText(interactions[0].prompt ?? interactions[0].message), 60)}…`
+                  : composerInteraction
+                    ? `Reply to ${activeAgent?.display_name ?? 'agent'}: ${short(cleanPromptText(composerInteraction.prompt ?? composerInteraction.message), 60)}…`
                     : activeAgent
                       ? activeAgent.state === 'failed' || activeAgent.state === 'cancelled'
                         ? `Message ${activeAgent.display_name} — this reopens it with a fresh run…`
@@ -2608,7 +2647,30 @@ export default function App() {
               {activeAgent && activeAgent.state === 'running' && (
                 <button className="btn ghost sm" onClick={() => cancelAgent()}>Cancel</button>
               )}
-              <button className="btn primary sm" onClick={sendMessage} disabled={!draft.trim() || !activeProject || sending}>
+              {activeProject && (
+                <ComposerModelPicker
+                  key={`${activeAgent?.id ?? activeProject.id}:${globalOpen}`}
+                  currentModel={activeAgent?.settings.model || activeProject.settings.defaults?.model}
+                  reasoningEffort={activeAgent?.settings.reasoning_effort ?? activeProject.settings.defaults?.reasoning_effort}
+                  slot={activeAgent && activeAgent.role_id !== 'coordinator' ? 'follower' : 'coordinator'}
+                  onConfigure={() => setGlobalOpen(true)}
+                  onChoose={async (model, effort) => {
+                    const changes = effort === undefined ? { model } : { model, reasoning_effort: effort };
+                    if (activeAgent) {
+                      await handleSaveAgentSettings(activeAgent.id, changes);
+                    } else {
+                      const response = await api.patchProject(activeProject.id, {
+                        settings: {
+                          orchestration_mode: activeProject.settings.orchestration_mode,
+                          defaults: { ...activeProject.settings.defaults, ...changes },
+                        },
+                      });
+                      setProjects((prev) => prev.map((project) => project.id === activeProject.id ? response.data : project));
+                    }
+                  }}
+                />
+              )}
+              <button className="btn primary sm composer-send-btn" onClick={sendMessage} disabled={!draft.trim() || !activeProject || sending}>
                 {sending ? 'Sending…' : 'Send'}
               </button>
             </div>

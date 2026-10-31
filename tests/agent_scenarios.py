@@ -20,19 +20,29 @@
 | 默认 invocation protocol | 普通问答（默认协议下的纯文本收尾） |
 | Benchmark 方法策略作用域 | 模型看到当前范围；普通项目残留白名单仍能生成用户指定的计算输入 |
 | 角色权限矩阵 | small_mol 技能→计算入口、unattended 拒批 |
+| Benchmark 项目默认设置 | AgentHub 独立 peer 的 Bash 自动审批与 ask_user 拦截 |
 | 重试预算与 fail-fast 分类 | provider 暂态重试 / 永久 4xx |
 | 压缩阈值与摘要 | context overflow |
 | 结题门禁 + 编排模式 | dag_guided 证据门与督导裁决、仅修订论证后清除旧拒绝 |
+| 停止请求 + 最终答复门禁 | 未放行的候选答复不进入用户消息，放行事件先于最终答复 |
+| 独立最终督导 + 用户题干 | 部分退出新建审查上下文，完整读取人类约束而不继承过程意图 |
 | 消息投递/恢复语义 | 异步子 Agent 回传、重启 |
+| 重启后的按需收口 | 用户重新发消息时先关闭旧工具/程序，再进入新回复 |
 | 督导反馈通知 + 后台等待 | 只读督导反馈唤醒协调员，消费消息后仍保护运行中的计算 |
-| 计算完成通知 + 后台等待 | 高通量仍在运行时消费单个结果，再回到等待状态 |
+| 计算完成通知 + 后台等待 | 高通量仍在运行时消费单个结果，再回到等待状态；配置预算的 TS 终态通知能唤醒并落盘 |
+| 计算失败记账 + 进程锁 | 公开 JS 工具不得把仍持计算/守卫锁的作业记为失败或投递失败审阅 |
+| 单作业取消 + 项目归属 | 公开 JS 工具撤回排队作业，向持锁计算请求取消，并拒绝跨项目操作 |
 | 工具进度持久化 | 阶段记录落盘失败立即终止 Agent，不重试工具副作用 |
 | YOLO 审批结构校验 | 非布尔结论不得写入文件 |
-| TS 故障检查点 + 干预预算 | 重复相同 scan 续接保留原故障、不耗尽预算 |
-| TS fixture 频率门禁 + 终态事件 | 真实零虚频日志阻止 IRC，重复 resume 保留故障与预算 |
+| YOLO TS 流程审查 | 提交被拒后改走 Python 仍需审批；获准诊断可正常执行 |
+| TS 故障检查点 + 重复恢复 | 重复相同 scan 续接保留原故障与同一重试作业 |
+| TS fixture 频率门禁 + 终态事件 | 真实零虚频日志阻止 IRC，重复 resume 保留故障与原流程 |
+| TS 完成后的频率恢复 | 原生日志解析器断言不阻断频率提交，保留既有 TS 作业和科学待验证状态 |
+| TS 连续 IRC 输入修订 | 同一流程可连续修订三次，重复输入不重复提交，原科学失败与日志保留 |
 | TS 构象文件修订 | 相对路径绑定工作区；更换结构清除旧绑定并保留同一流程 |
 | TS 同结构文件替换 | 复制同一结构后保留映射和初猜声明，无需 Agent 重复填写 |
-| TS 结构编号覆盖 | 源文件、Agent 原子表与任务声明统一到旧编号，显式新编号只转换一次 |
+| TS 结构编号转换 | 内部分子与Agent视图使用同一编号，源文件保持原样，显式新编号只转换一次 |
+| TS 缺省准备 | 不填结构来源时生成两端并自动映射、推导反应中心，返回实际完成清单 |
 """
 
 from __future__ import annotations
@@ -47,6 +57,7 @@ from cloudra.runtime_v2.adapters import LegacyToolExecutor
 from cloudra.runtime_v2.agent_runner import AgentRunner
 from cloudra.runtime_v2.commands import CommandBus
 from cloudra.runtime_v2.core import RuntimeCore
+from cloudra.runtime_v2.effects import EventDraft
 from cloudra.runtime_v2.invocation import InvocationService
 from cloudra.runtime_v2.persistence import RuntimeStore
 from cloudra.runtime_v2.policies import default_stages
@@ -71,6 +82,7 @@ class Step:
     error: BaseException | None = None
     stop: bool = False
     reasoning: str = ""
+    usage: dict[str, int] = field(default_factory=dict)
     wait_for: asyncio.Event | None = None
 
 
@@ -119,6 +131,11 @@ class ScriptedProvider:
             return len(self.calls)
         return sum(1 for role, _ in self.calls if role == role_id)
 
+    async def select_tool_names(self, agent, messages, *, resolved_settings):
+        self.selection_calls = getattr(self, 'selection_calls', [])
+        self.selection_calls.append((agent.id, messages))
+        return LLMResponse(content='[]')
+
     async def complete(
         self,
         agent: AgentSession,
@@ -148,6 +165,7 @@ class ScriptedProvider:
             tool_calls=tool_calls,
             stop_requested=step.stop,
             reasoning=step.reasoning,
+            usage=step.usage,
         )
 
     async def summarize(self, messages: list[dict[str, Any]]) -> str:
@@ -185,7 +203,7 @@ def ordinary_method_input_steps(source: Path, output: Path) -> list[Step]:
     """普通项目生成不在旧白名单里的方法/基组；无需启动 QM。"""
     return [Step(tools=[("qm_input_writer", {
         "engine": "orca", "source_type": "xyz_file", "source_value": str(source),
-        "method": "PBE0", "basis_set": "def2-TZVP", "output_path": str(output),
+        "method": "PBE0", "basis_set": "def2-TZVP", "charge": 0, "output_path": str(output),
     })]), Step(stop=True)]
 
 
@@ -198,6 +216,103 @@ def malformed_shell_steps() -> list[Step]:
     ]
 
 
+def benchmark_delivery_recovery_steps(output: Path, *, explicit_stop: bool) -> list[Step]:
+    """Benchmark 漏交图时先收取缺口反馈，再补文件并结束；不启动量化计算。"""
+    finish = Step(tools=[("stop", {})]) if explicit_stop else Step(text="candidate result")
+    return [
+        finish,
+        Step(tools=[("write", {
+            "path": output.name,
+            "content": '{"nodes":[{"id":"R","role":"reactant","smiles":["O"]}],"edges":[]}',
+        })]),
+        Step(text="delivery recorded", stop=True),
+    ]
+
+
+def benchmark_peer_unattended_provider(bash_arguments: dict[str, Any]) -> ScriptedProvider:
+    """两条 Benchmark 入口共用：Hub 独立 peer 回放真实 Bash，再拒绝向人求助。"""
+    import json
+
+    return ScriptedProvider(by_role={
+        "coordinator": [
+            Step(tools=[("agent_hub", {
+                "action": "call", "to": "small_mol",
+                "message": "Inspect the workspace and report back.",
+            })]),
+            Step(stop=True),
+        ],
+        "small_mol": [
+            Step(tools=[("js_exec", {
+                "code": "const inspected = await tools.bash(" + json.dumps(bash_arguments) + ");\n"
+                        'text("BASH finished " + JSON.stringify(inspected));',
+            })]),
+            Step(tools=[("ask_user", {"question": "Which pathway should I follow?"})]),
+            Step(stop=True),
+        ],
+    })
+
+
+def ts_bypass_then_diagnostic_steps() -> list[Step]:
+    """直接提交被拒后换 Python，最后执行获准的诊断写入。"""
+    return [
+        Step(tools=[('submit_compute_job', {'input_file': 'ts.inp', 'job_type': 'orca'})]),
+        Step(tools=[('bash', {'command': 'python3 -c \'from pathlib import Path; Path("bypassed.txt").write_text("bypass")\''})]),
+        Step(tools=[('write', {'path': 'diagnostic.txt', 'content': 'diagnostic observation'})]),
+        Step(stop=True),
+    ]
+
+
+def pending_stop_answer_step(answer: str) -> Step:
+    """带候选答复的部分退出请求；是否展示由真实完成门禁决定。"""
+    return Step(tools=[("stop", {"delivery_disposition": "partial", "final_answer": answer})])
+
+
+
+def final_delivery_review_steps(review: Step, resume: asyncio.Event, park: asyncio.Event) -> dict[str, list[Step]]:
+    """接受裁决由运行时结题；拒绝裁决才继续模型研究回合。"""
+    return {
+        "coordinator": [Step(tools=[("stop", {"delivery_disposition": "complete"})]),
+                        Step(wait_for=resume, tools=[("stop", {"delivery_disposition": "complete"})]),
+                        Step(wait_for=park)],
+        "supervisor": [review, Step(stop=True)],
+    }
+
+
+def frozen_exit_confirmation_steps(
+    review: Step, continuation: Step, *, answer: str, disposition: str = "partial",
+) -> dict[str, list[Step]]:
+    """接受裁决由运行时确认冻结答复；续研脚本只应在不能结题时调用。"""
+    return {
+        "coordinator": [Step(tools=[("stop", {
+            "delivery_disposition": disposition, "reason": "Report the observed evidence.",
+            "final_answer": answer,
+        })]), continuation],
+        "supervisor": [review, Step(stop=True)],
+    }
+
+
+def independent_partial_review_steps(
+    review: Step,
+    attempt: asyncio.Event,
+    *,
+    prior_intent: str,
+) -> dict[str, list[Step]]:
+    """过程督导先休眠；部分退出由新督导审查，接受后程序直接完成。"""
+    stop = {"delivery_disposition": "partial", "reason": "Report the observed partial evidence."}
+    return {
+        "coordinator": [
+            Step(wait_for=attempt, tools=[("dag_delivery_report", {})]),
+            Step(tools=[("stop", stop)]),
+        ],
+        "supervisor": [Step(text=prior_intent, stop=True), review, Step(stop=True)],
+    }
+
+
+def confirm_partial_stop_step(release: asyncio.Event) -> Step:
+    """督导裁决后确认已提交材料；程序绑定批准与答复，无需模型复制标识。"""
+    return Step(wait_for=release, tools=[("stop", {"delivery_disposition": "partial"})])
+
+
 def compute_result_recovery_steps() -> list[Step]:
     """已完成计算唤醒后处理结果，其他作业继续运行时再次挂起。"""
     return [
@@ -206,9 +321,90 @@ def compute_result_recovery_steps() -> list[Step]:
     ]
 
 
+def budgeted_ts_result_recovery_steps(run_id: str) -> list[Step]:
+    """配置预算的 TS 终态通知唤醒后，读取真实回执再结束当前运行。"""
+    return [Step(tools=[("ts_inspect", {"run_id": run_id})]), Step(stop=True)]
+
+
+def ts_completed_optimization_frequency_resume_steps(run_id: str, ready: asyncio.Event) -> list[Step]:
+    """完成 TS 优化后修订频率设置，沿真实恢复入口提交独立频率作业。"""
+    return [Step(wait_for=ready, tools=[("ts_resume", {
+        "run_id": run_id,
+        "changes": {"verification": {"frequency": {"frequency_mode": "numeric", "keywords": "NumFreq TightSCF"}}},
+        "reason": "Use numerical frequencies on the completed TS optimization geometry",
+    })]), Step(stop=True)]
+
+
+def ts_repeated_irc_input_repair_steps(
+    run_id: str, frequency_ready: asyncio.Event, irc_ready: asyncio.Event,
+) -> list[Step]:
+    """先修复不合格频率，再连续修订 IRC 输入；重发最后一次输入不新增作业。"""
+    steps = ts_completed_optimization_frequency_resume_steps(run_id, frequency_ready)[:-1]
+    for keywords in ("TightSCF", "VeryTightSCF", "TightSCF SlowConv", "TightSCF SlowConv"):
+        steps.append(Step(wait_for=irc_ready, tools=[("ts_resume", {
+            "run_id": run_id,
+            "changes": {"verification": {"irc": {"keywords": keywords}}},
+            "reason": "Repair the queued IRC input settings",
+        })]))
+    return [*steps, Step(stop=True)]
+
+
+def queued_native_ts_optimization(workspace: Path, seed: str, project_id: str, owner_id: str):
+    """Bind one real TS input/job before replaying its native completed log."""
+    from cloudra.persistence.database import ComputeDB
+    from cloudra.services.ts_pipeline_context import use_pipeline_database
+    from cloudra.services.ts_pipeline_store import create_process
+    from cloudra.tools.core import ts_process
+    from cloudra.tools.core.molecule import read_molecule
+    from cloudra.tools.core.reaction_state import ReactionStructures
+    from tests.ts_fixtures import calculation_input
+
+    db = ComputeDB().init()
+    declaration = calculation_input(reactant_smiles="C=[O+][O-]", product_smiles="C1OO1", method="GFN2-xTB")
+    state = create_process(db, request_key="native-log-fixture", payload={
+        "project_id": project_id, "owner_id": owner_id, "workspace_dir": str(workspace),
+        "input": declaration.model_dump(mode="json"),
+    })
+    folder = workspace / "ts" / "ts_0001" / "jobs" / "initial"
+    folder.mkdir(parents=True)
+    geometry = folder / "candidate.xyz"
+    geometry.write_text(seed)
+    molecule = read_molecule(str(geometry))
+    record = ts_process.TsProcessRecord(run_id="ts_0001", pipeline_id=state["process_id"],
+        workspace_dir=str(workspace), run_dir=str(folder.parent.parent), input=declaration,
+        owner_conversation_id=project_id, owner_session_id=owner_id, stage="refine",
+        structures=ReactionStructures(reactant=molecule, product=molecule, candidate=molecule,
+            product_to_reactant=tuple(range(molecule.GetNumAtoms()))))
+    error, input_path = ts_process._write_refinement_input(record, str(folder))
+    assert error == ""
+    with use_pipeline_database(db):
+        error, job_id = ts_process._submit_step(record, "ts_opt", input_path, "orca")
+        assert error == ""
+        step = ts_process.TsJobStep(purpose="ts_opt", job_id=job_id, input_path=input_path,
+            state="ready", actual_calculation=declaration.ts_optimization,
+            source_input_revision=record.declaration_revision)
+        record.job_steps = [step]
+        record.waiting_for = f"job:{job_id}"
+        ts_process.save_record(record)
+    return db, record, step
+
+
 def supervisor_feedback_recovery_steps() -> list[Step]:
     """协调员收到督导反馈后重新进入一轮，未完成计算仍受结题门禁保护。"""
     return [Step(tools=[("agent_hub", {"action": "browse"})]), Step(stop=True)]
+
+
+def interrupted_program_fixture(agent: AgentSession) -> list[EventDraft]:
+    """崩溃现场：一个已有真实 run 留下尚未结束的程序和已启动的工具。"""
+    assert agent.current_run is not None
+    program = {"execution_id": "interrupted-program", "outer_tool_call_id": "interrupted-js"}
+    tool = {"execution_id": program["execution_id"], "tool_call_id": "interrupted-tool",
+            "tool_name": "todo_read"}
+    return [EventDraft(kind, "agent", agent.project_id, agent.id, agent.current_run.run_id, data)
+            for kind, data in (
+                ("program.submitted", program), ("program.started", program),
+                ("tool.requested", tool), ("tool.started", tool),
+            )]
 
 
 class ScenarioHarness:
@@ -434,10 +630,18 @@ class ScenarioHarness:
 
 
 # Names shared by the zero-key TS state-machine regressions.
-TS_SCENARIOS = ('ts_prepare_once_auto_complete', 'ts_failed_scan_repair_same_run', 'ts_readonly_inspection',
+TS_SCENARIOS = ('ts_prepare_once_auto_complete', 'ts_failed_scan_retry_same_run', 'ts_readonly_inspection',
+                'ts_automatic_preparation',
                 'ts_resume_scan_without_freeze', 'ts_d1_atom_binding_native_scan_recovery',
                 'ts_conformer_source_revision_same_run', 'ts_same_structure_source_keeps_declarations',
-                'ts_canonical_source_overwrite')
+                'ts_source_reorder_keeps_imported_state', 'ts_queued_refinement_revision_same_run',
+                'ts_stop_prevents_automatic_progression', 'ts_stopped_attempt_resumes_same_run',
+                'ts_file_seed_preoptimization_can_be_removed_after_failure',
+                'ts_acknowledged_completion_recovers_without_resume',
+                'ts_run_scan_revision_inherits_shared_input_settings',
+                'ts_resume_native_cclib_assertion_keeps_completed_ts',
+                'ts_resume_repeated_irc_repairs_preserve_scientific_failure',
+                'ts_mode_advisory_wakes_owner_while_irc_continues')
 
 
 def d1_component_order_files(workspace: Path) -> tuple[Path, Path]:
@@ -471,3 +675,79 @@ def scope_review_completion_steps() -> list[Step]:
     """Read authoritative delivery, then request completion after scoped re-review."""
     return [Step(tools=[("dag_delivery_report", {})]),
             Step(tools=[("stop", {"delivery_disposition": "complete"})])]
+
+def stale_review_resubmit_steps(ts_file, resubmit, finish, park) -> list[Step]:
+    """Real file resubmission after an administrative stale-review notification."""
+    return [
+        Step(tools=[("dag_submit_step_evidence", {"step_name": "step1", "ts_file": ts_file})]),
+        Step(wait_for=park, tools=[('dag_view', {})]),
+        Step(tools=[("stop", {"delivery_disposition": "partial"})]),
+        Step(wait_for=resubmit, tools=[("dag_submit_step_evidence", {"step_name": "step1", "ts_file": ts_file})]),
+        Step(tools=[("dag_delivery_report", {})]),
+        Step(wait_for=finish, text="gather missing scientific evidence"),
+    ]
+
+
+def supervisor_stale_file_review_steps(review_id: str) -> list[Step]:
+    """Read a removed target's review through the real Supervisor tool, then finish."""
+    return [Step(tools=[('dag_view_evidence', {'review_id': review_id})]), Step(stop=True)]
+
+
+def named_agent_communication_steps() -> list[Step]:
+    """Launch a named instance, then address that instance through the real Hub."""
+    return [
+        Step(tools=[("subagent_launcher", {
+            "role_id": "explorer", "display_name": "lane_ts_scout",
+            "query": "Inspect the assigned transition-state evidence", "is_wait": False,
+        })]),
+        Step(tools=[("agent_hub", {
+            "action": "call", "to": "lane_ts_scout", "message": "Report the assigned evidence",
+        })]),
+        Step(stop=True),
+    ]
+
+
+def ts_separated_product_recovery_steps(
+    run_id: str, component_logs: list[str], ready: asyncio.Event,
+) -> list[Step]:
+    """Inspect a candidate, supply component evidence, then read the durable verdict."""
+    return [
+        Step(wait_for=ready, tools=[('ts_inspect', {'run_id': run_id})]),
+        Step(tools=[('ts_resume', {
+            'run_id': run_id,
+            'changes': {'verification': {'product_endpoint': {'component_logs': component_logs}}},
+            'reason': 'Verify the separated products using their independent frequency evidence',
+        })]),
+        Step(tools=[('ts_inspect', {'run_id': run_id})]),
+        Step(stop=True),
+    ]
+
+
+def invalid_compute_job_type_steps(job_type: Any) -> list[Step]:
+    """模型错填类型后继续收尾；合法类型使用缺失文件，绝不启动 QM。"""
+    return [Step(tools=[('submit_compute_job', {
+        'input_file': 'missing.inp', 'job_type': job_type,
+    })]), Step(stop=True)]
+
+
+def live_compute_failure_steps(job_id: int, ready: asyncio.Event) -> list[Step]:
+    """回放真实公共 JS 失败记账调用；锁状态由场景中的执行端持有。"""
+    import json
+
+    arguments = {"job_id": job_id, "reason": "Reconcile a suspected orphaned job"}
+    return [Step(wait_for=ready, tools=[("js_exec", {
+        "code": "const result = await tools.mark_compute_job_failed("
+                + json.dumps(arguments) + ");\ntext(JSON.stringify(result));",
+    })]), Step(stop=True)]
+
+
+def scoped_compute_cancellation_steps(job_ids: list[int], ready: asyncio.Event) -> list[Step]:
+    """作业归属由工具执行上下文取得，模型只声明取消对象和原因。"""
+    import json
+
+    arguments = [{"job_id": job_id, "reason": "Withdraw this superseded trial"} for job_id in job_ids]
+    return [Step(wait_for=ready, tools=[("js_exec", {
+        "code": "for (const args of " + json.dumps(arguments) + ") {\n"
+                "  const result = await tools.cancel_compute_job(args);\n"
+                "  text(JSON.stringify(result));\n}",
+    })]), Step(stop=True)]

@@ -50,3 +50,9 @@ lsof + SIGKILL，两天内就再造了两个 POSIX-only 构件）。
 - web_launcher npm `cmd /c`
 
 - 主线同步至 `2b261d6a`：保留兼容层；Web 启动使用平台原生 `PYTHONPATH` 分隔符，回归已纳入 windows-smoke。
+
+## v0.1.0 同步（2026-11-01）
+
+合并主线 v0.1.0，包含 Acid 默认风格、双语入口、研究数据与复现文档。保留 Windows 文件锁、JS 宿主环境、进程终止和启动路径适配。POSIX 作业取消请求只在 POSIX 分支导入计算 owner；Windows 继续等待作业退出和锁释放后确认取消。
+
+Release 中的 `Cloudra-v0.1.0-windows-source.zip` 是本分支源码包，不是 Windows 安装程序。原生 Windows 完整量化执行仍受上方 bash 依赖限制。

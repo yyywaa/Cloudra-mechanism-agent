@@ -297,6 +297,12 @@ def _decide_spawn_agent(core: RuntimeCore, command: Command) -> Decision:
                 "invalid_request", "a peer requester and a child parent cannot both be set"
             )
         role = core.roles.require(role_id)
+        final_review_request_id = payload.get("final_review_request_id")
+        if final_review_request_id is not None and (
+            command.actor != "system" or role_id != "supervisor"
+            or not isinstance(final_review_request_id, str) or not final_review_request_id
+        ):
+            raise CommandRejected("forbidden", "final reviewers are bound by the runtime only")
         query_sender = "system"
         if requested_by_session_id is not None:
             requester = core.require_agent(requested_by_session_id)
@@ -307,13 +313,13 @@ def _decide_spawn_agent(core: RuntimeCore, command: Command) -> Decision:
             parent = core.require_agent(parent_session_id)
             if parent.project_id != project_id:
                 raise CommandRejected("invalid_request", "parent agent belongs to another project")
-        from cloudra.runtime_v2.policies.permission import require_delegation_permissions
         caller_id = parent_session_id or requested_by_session_id
         if caller_id is not None:
-            caller = core.require_agent(caller_id)
-            require_delegation_permissions(caller.capabilities.permissions, role.permissions)
+            core.require_agent(caller_id)
         elif command.actor == "agent":
             raise CommandRejected("forbidden", "Agent delegation requires a bound requester identity")
+        if command.actor == "user":
+            query_sender = "user"
         settings_patch = RuntimeSettingsPatch.model_validate(payload.get("settings") or {})
         settings = core.agent_host.effective_settings(project, role, settings_patch)
         agent = core.agent_host.build(
@@ -321,6 +327,7 @@ def _decide_spawn_agent(core: RuntimeCore, command: Command) -> Decision:
             role=role,
             parent_session_id=parent_session_id,
             requested_by_session_id=requested_by_session_id,
+            final_review_request_id=final_review_request_id,
             display_name=payload.get("display_name"),
             settings=settings,
         )
@@ -711,20 +718,21 @@ DECIDERS: dict[str, Decider] = {
 
 async def _compact_agent(core: RuntimeCore, command: Command) -> CommandResult:
     agent = core.require_agent(command.target.get("session_id", ""))
-    envelope = core.record(
-        "compaction.requested",
-        stream="agent",
-        project_id=agent.project_id,
-        session_id=agent.id,
-        run_id=agent.current_run.run_id if agent.current_run else None,
-        data={"actor": command.actor},
+    events: list[EventEnvelope] = []
+
+    def project(envelope: EventEnvelope) -> None:
+        apply_event(core, envelope)
+        events.append(envelope)
+
+    await core.event_writer.commit_and_apply(
+        [EventDraft(
+            "compaction.requested", stream="agent", project_id=agent.project_id,
+            session_id=agent.id, run_id=agent.current_run.run_id if agent.current_run else None,
+            data={"actor": command.actor},
+        )],
+        project,
     )
-    # The runner picks this up at the next turn boundary; the session context
-    # 跨 run 连续（Task 4），压缩请求跨 run 存活、应用到会话上下文投影。
-    # pending_compactions 是 compaction.requested 的事件投影：唯一写入点是
-    # apply_event（这里），消费在 runner 的轮次边界。
-    apply_event(core, envelope)
-    return CommandResult(command_id=command.command_id, event_id=await asyncio.to_thread(_last_event_id, core), data=agent)
+    return CommandResult(command_id=command.command_id, event_id=events[-1].event_id, data=agent)
 
 
 async def _decide_approval(core: RuntimeCore, command: Command) -> CommandResult:
@@ -956,6 +964,10 @@ class CommandBus:
                     decision = _decide_cancel_agent(core, command, parked_sessions=parked)
                 else:
                     decision = decider(core, command)
+                if await self._recover_interrupted_invocations(decision):
+                    # Publication may submit a nested message. Re-decide so
+                    # that an already reopened session does not get two runs.
+                    decision = decider(core, command)
                 # 拍 2-4：落日志/发布/持久化 → apply → effects
                 result = await self._apply_decision(command, decision)
             else:
@@ -970,6 +982,44 @@ class CommandBus:
 
     # -------------------------------------------------------------- internals
 
+    async def _recover_interrupted_invocations(self, decision: Decision) -> bool:
+        # restore clears current_run after marking its agent FAILED. Both a
+        # new message and explicit restart accept that state, so waiting for
+        # state_conflict would never recover it. Only reopening a failed
+        # session needs the local lookup; live/parked/invalid paths do not.
+        session_id = next((
+            draft.session_id for draft in decision.events
+            if draft.type == "agent.state_changed"
+            and draft.data.get("from") == AgentState.FAILED.value
+            and draft.data.get("to") == AgentState.QUEUED.value
+        ), None)
+        if session_id is None:
+            return False
+        from cloudra.runtime_v2.failures import RunFailureKind
+        from cloudra.runtime_v2.persistence import plan_interrupted_invocations
+
+        def plan_recovery() -> list[EventDraft]:
+            log = self.core.event_log
+            latest = log.query_session(session_id, types={"run.started", "run.finished", "agent.cancelled"}, limit=1)
+            if not latest or latest[0].type != "run.finished" or latest[0].run_id is None:
+                return []
+            if latest[0].data.get("failure_kind") != RunFailureKind.RUNTIME_INTERRUPTED.value:
+                return []
+            return plan_interrupted_invocations(log.query_session(
+                session_id, run_id=latest[0].run_id, limit=None,
+                types={"tool.requested", "tool.started", "tool.result_recorded", "tool.finished", "program.submitted", "program.finished"},
+            ))
+
+        drafts = await asyncio.to_thread(plan_recovery)
+        if not drafts:
+            return False
+        # Publish only after the complete compensation batch is durable. A
+        # reentrant hub subscriber must see every old call already closed.
+        await self.core.event_writer.commit_and_apply(
+            drafts, lambda envelope: apply_event(self.core, envelope),
+        )
+        return True
+
     def _append_draft(self, draft: EventDraft) -> EventEnvelope:
         return self.core.event_log.append(
             draft.type,
@@ -981,12 +1031,7 @@ class CommandBus:
         )
 
     async def _flush(self) -> None:
-        """拍 2：经共享 EventWriter 持久化（store 存在时）并发布未发布事件。
-
-        bus 直接持久化自己的事件，不再依赖 API 层的 hub 持久化订阅搭车；
-        订阅仍在（运行期 turn 内事件靠它），append_event 幂等（INSERT OR
-        IGNORE），重叠写无害。writer 的游标保证不重发/不重写。
-        """
+        """Persist and publish through the runtime's single shared writer."""
         await self.core.event_writer.flush()
 
     async def _persist_appended(self, keep: int | None = None) -> None:
@@ -1000,13 +1045,13 @@ class CommandBus:
     async def _apply_decision(self, command: Command, decision: Decision) -> CommandResult:
         core = self.core
         envelopes: list[EventEnvelope] = []
+
+        def project(envelope: EventEnvelope) -> None:
+            apply_event(core, envelope)
+            envelopes.append(envelope)
+
         try:
-            for draft in decision.events:
-                before_append = len(core.event_log)
-                envelope = self._append_draft(draft)
-                await self._persist_appended(keep=before_append)
-                apply_event(core, envelope)
-                envelopes.append(envelope)
+            await core.event_writer.commit_and_apply(decision.events, project)
             # 拍 4：副作用（runner/mailbox/文件系统/内存秘密覆盖）
             for effect in decision.effects:
                 await _execute_effect(core, effect)
@@ -1035,9 +1080,12 @@ class CommandBus:
                     data=self._resolve_result(decision.result),
                 )
             raise
+        receipt = envelopes[-1] if envelopes else None
+        if command.type == "agent.message":
+            receipt = next(event for event in envelopes if event.type == "agent.message_injected")
         return CommandResult(
             command_id=command.command_id,
-            event_id=envelopes[-1].event_id if envelopes else "",
+            event_id=receipt.event_id if receipt else "",
             data=self._resolve_result(decision.result),
         )
 
@@ -1109,18 +1157,18 @@ class CommandBus:
         # 先冲刷事件 writer：快照水位必须是已落盘前缀，不能用 live
         # high_watermarks——并发 append 会把水位抬过尚未 persist 的事件。
         await core.event_writer.flush()
-        last_seqs = core.event_writer.persisted_watermarks()
-        payload = {
-            "projects": {k: v.model_dump(mode="json") for k, v in core.projects.items()},
-            "agents": {k: v.model_dump(mode="json") for k, v in core.agents.items()},
-            "roles": {k: v.model_dump(mode="json") for k, v in core.roles._roles.items()},
-            "runtime_defaults": core.runtime_defaults.model_dump(mode="json"),
-            "session_contexts": {
-                k: v.model_dump(mode="json") for k, v in core.session_contexts.items()
-            },
-            "pending_compactions": sorted(core.pending_compactions),
-            "launch_groups": core.launch_groups.snapshot(),
-        }
-        await asyncio.to_thread(core.store.write_snapshot_payload, payload, last_seqs)
+        unpublished = []
+        async with core.command_lock, core.event_writer._lock:
+            # Synchronous notices can append while a store write is off-loop,
+            # including from the first flush's subscribers. Drain before
+            # freezing their state and the durable cursor together.
+            while core.event_writer._persisted < len(core.event_log):
+                unpublished.extend(await core.event_writer._flush_locked())
+            snapshot = core.snapshot()
+        try:
+            await asyncio.to_thread(core.store.save_snapshot, **snapshot)
+        finally:
+            # Snapshot caching cannot suppress already durable live events.
+            await core.event_writer._publish(unpublished)
         self._snapshot_event_mark = len(core.event_log)
         self._snapshot_at = time.monotonic()

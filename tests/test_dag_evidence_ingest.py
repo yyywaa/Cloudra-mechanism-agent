@@ -1,5 +1,6 @@
 """Unit tests for evidence file ingest, workspace sandboxing, and TS vibration validation."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,25 @@ def test_snapshot_evidence_file_success(tmp_path):
     assert snap.sha256
     assert Path(snap.snapshot_path).exists()
     assert snap.is_qm_log is False
+
+
+def test_dag_irc_snapshot_keeps_missing_side_instead_of_archiving_neighbor(tmp_path):
+    from tests.test_orca_frames import _IRC_ENDPOINT_XYZ, _write_synthetic_irc_log
+
+    log = _write_synthetic_irc_log(tmp_path, 'current')
+    log.write_text('ORCA VERSION 6\n! IRC\n' + log.read_text())
+    forward = tmp_path / 'current_IRC_F.xyz'
+    forward.write_text(_IRC_ENDPOINT_XYZ)
+    neighbor = tmp_path / 'another_IRC_B.xyz'
+    neighbor.write_text(_IRC_ENDPOINT_XYZ.replace('endpoint frame', 'foreign job'))
+
+    snapshot = snapshot_evidence_file(log, workspace_root=tmp_path)
+
+    manifest = json.loads(Path(snapshot.metadata['irc_manifest']['snapshot_path']).read_text())
+    assert manifest['endpoints']['forward']['filename'] == forward.name
+    assert manifest['endpoints']['backward']['filename'] is None
+    archived = snapshot.metadata['irc_sidecars']
+    assert [Path(item['snapshot_path']).name for item in archived] == [forward.name]
 
 
 def test_snapshot_evidence_file_traversal_blocked(tmp_path):
@@ -84,38 +104,41 @@ def test_snapshot_qm_log_water_minimum(tmp_path):
 
 def test_validate_ts_mode():
     res = validate_ts_mode(freqs=[-521.21, 100.0, 500.0], normal_modes=None, description="C-C bond cleavage")
-    assert res.is_valid is True
+    assert res.frequency_count_valid is True
+    assert res.frequency_data_present is True
     assert res.n_imag == 1
     assert res.imaginary_frequencies == [-521.21]
     assert res.mode_matched is False
 
     # 0 imaginary frequencies -> not a TS
     res_zero = validate_ts_mode(freqs=[100.0, 500.0], normal_modes=None, description="C-C bond cleavage")
-    assert res_zero.is_valid is False
+    assert res_zero.frequency_count_valid is False
     assert res_zero.n_imag == 0
 
     # 2 imaginary frequencies -> second-order saddle point
     res_two = validate_ts_mode(freqs=[-521.21, -120.0, 100.0], normal_modes=None, description="C-C bond cleavage")
-    assert res_two.is_valid is False
+    assert res_two.frequency_count_valid is False
     assert res_two.n_imag == 2
 
     empty = validate_ts_mode(None, imaginary_freqs=[])
-    assert empty.verified is False
-    assert empty.is_valid is False
+    assert empty.frequency_data_present is False
+    assert empty.frequency_count_valid is False
+    assert empty.mode_matched is False
 
 
 def test_validate_species_minimum():
     res = validate_species_minimum(freqs=[100.0, 500.0, 1500.0])
-    assert res.is_valid is True
+    assert res.frequency_count_valid is True
+    assert res.frequency_data_present is True
     assert res.n_imag == 0
 
     res_imag = validate_species_minimum(freqs=[-50.0, 100.0, 1500.0])
-    assert res_imag.is_valid is False
+    assert res_imag.frequency_count_valid is False
     assert res_imag.n_imag == 1
 
     # A stale empty imaginary list must not override a negative full spectrum.
     inconsistent = validate_species_minimum(
         freqs=[-74.94, 108.03, 250.68], imaginary_freqs=[]
     )
-    assert inconsistent.is_valid is False
+    assert inconsistent.frequency_count_valid is False
     assert inconsistent.imaginary_frequencies == [-74.94]

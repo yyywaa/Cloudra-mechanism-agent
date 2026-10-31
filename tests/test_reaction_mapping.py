@@ -150,6 +150,48 @@ def test_unbalanced_reaction_is_operational_failure():
         analyze_reaction_mapping("CC", "CCC")
 
 
+def test_ts_mapping_automatically_adopts_ranked_complete_symmetric_binding():
+    from cloudra.tools.Chemtool.reaction_mapping import bind_reaction_structures
+    from cloudra.tools.core.ts_inputs import TsInput
+
+    declaration = TsInput(reaction={
+        'reactant_smiles': 'CC', 'product_smiles': 'CC', 'charge': 0, 'multiplicity': 1,
+    })
+    reactant = Chem.AddHs(Chem.MolFromSmiles('CC'))
+    product = Chem.AddHs(Chem.MolFromSmiles('CC'))
+
+    result = bind_reaction_structures(declaration, reactant, product)
+    repeated = bind_reaction_structures(declaration, reactant, product)
+
+    assert result['mapping_status'] == 'ambiguous'
+    assert result['binding_status'] == 'complete'
+    assert result['atom_map'] == result['candidates'][0]['atom_map']
+    assert repeated['atom_map'] == result['atom_map']
+    assert sorted(result['atom_map']) == list(range(1, reactant.GetNumAtoms() + 1))
+    assert 'Automatically selected' in result['message']
+
+
+def test_ts_mapping_explicit_candidate_overrides_automatic_selection():
+    from cloudra.tools.Chemtool.reaction_mapping import bind_reaction_structures
+    from cloudra.tools.core.ts_inputs import TsInput
+
+    declaration = TsInput(reaction={
+        'reactant_smiles': 'CC', 'product_smiles': 'CC', 'charge': 0, 'multiplicity': 1,
+    })
+    reactant = Chem.AddHs(Chem.MolFromSmiles('CC'))
+    product = Chem.AddHs(Chem.MolFromSmiles('CC'))
+    automatic = bind_reaction_structures(declaration, reactant, product)
+    selected = len(automatic['candidates']) - 1
+    assert selected > 0
+    declaration.reaction.selected_candidate = selected
+
+    result = bind_reaction_structures(declaration, reactant, product)
+
+    assert result['binding_status'] == 'complete'
+    assert result['atom_map'] == automatic['candidates'][selected]['atom_map']
+    assert result['atom_map'] != automatic['atom_map']
+
+
 @pytest.mark.asyncio
 async def test_tool_returns_advisory_mapping_result(mock_session):
     """工具边界应保留 ambiguous，而不是把顶层候选改写成 pass。"""
@@ -164,7 +206,8 @@ async def test_tool_returns_advisory_mapping_result(mock_session):
     assert result.is_success is True
     assert result.mapping_status == "ambiguous"
     assert any(c["heavy_atom_map"] == [4, 5, 6, 1, 2, 3] for c in result.candidates)
-    assert "manual" in result.message or "agent" in result.message
+    assert result.binding_status == 'complete'
+    assert result.atom_map == result.candidates[0]['atom_map']
 
 
 @pytest.mark.asyncio
@@ -210,8 +253,8 @@ async def test_claisen_full_map_round_trips_into_ts_guess_interpolate(tmp_path, 
     """真实的显式氢/异序端点必须能直接沿 mapping 进入插值，不靠手工重排 XYZ。"""
     reactant = tmp_path / "allyl_vinyl_ether.mol"
     product = tmp_path / "pentenal.mol"
-    _write_mol(reactant, "C=COCC=C")
-    _write_mol(product, "C=CCCC=O")
+    _write_mol(reactant, "[CH2:1]=[CH:2][O:3][CH2:4][CH:5]=[CH2:6]")
+    _write_mol(product, "[CH2:4]=[CH:5][CH2:6][CH2:1][CH:2]=[O:3]")
 
     mapping = await ReactionMapping().safe_call(
         ReactionMapping_input_schema(
@@ -229,9 +272,8 @@ async def test_claisen_full_map_round_trips_into_ts_guess_interpolate(tmp_path, 
     interpolated = await TsGuess().safe_call(
         TsGuess_input_schema(
             mode="interpolate",
-            reactant_text=Chem.MolToXYZBlock(reactant_mol),
-            product_text=Chem.MolToXYZBlock(product_mol),
-            atom_map=mapping.atom_map,
+            reactant_path=str(reactant),
+            product_path=str(product),
             watch_pairs=mapping.watch_pairs,
             n_images=5,
             interp_method="linear",
@@ -298,7 +340,7 @@ async def test_concrete_watch_pairs_follow_renumbered_reactant_coordinates(tmp_p
 
 
 @pytest.mark.asyncio
-async def test_symmetric_concrete_embedding_is_inconclusive_without_labels(tmp_path, mock_session):
+async def test_symmetric_concrete_embedding_uses_ranked_mapping_without_manual_labels(tmp_path, mock_session):
     reactant = tmp_path / "ethane_r.mol"
     product = tmp_path / "ethane_p.mol"
     _write_mol(reactant, "CC")
@@ -315,8 +357,9 @@ async def test_symmetric_concrete_embedding_is_inconclusive_without_labels(tmp_p
     )
 
     assert result.reactant_identity == result.product_identity == "match"
-    assert result.binding_status == "inconclusive"
-    assert result.atom_map == []
+    assert result.binding_status == "complete"
+    assert result.atom_map == result.candidates[0]['atom_map']
+    assert result.mapping_status == 'ambiguous'
     assert any("symmetric" in item or "not unique" in item for item in result.binding_diagnostics)
 
 
@@ -476,27 +519,26 @@ def _methanol_with_deuterium(d_idx: int):
 
 def test_deuterium_pairs_with_deuterium_in_full_atom_map():
     """两端羟基氢都是 D：D 必须配到 D，而不是按排序索引错配到某个甲基 H。"""
-    from cloudra.tools.Chemtool.reaction_mapping import _expand_full_atom_map
+    from cloudra.tools.Chemtool.reaction_mapping import _expand_full_atom_maps
 
     reactant = _methanol_with_deuterium(5)
     product = _methanol_with_deuterium(5)
-    atom_map, diagnostic = _expand_full_atom_map(
+    atom_maps, diagnostic = _expand_full_atom_maps(
         reactant, product, [0, 1], [0, 1], [1, 2],
     )
-    assert atom_map == [1, 2, 3, 4, 5, 6], (atom_map, diagnostic)
+    assert atom_maps == [[1, 2, 3, 4, 5, 6]], (atom_maps, diagnostic)
     # D（product idx 5）确实配到了 reactant 的 D（idx 5），不是某个 H
-    assert atom_map[5] == 6
+    assert atom_maps[0][5] == 6
 
 
-def test_isotope_mismatched_hydrogens_fail_loud_instead_of_mispairing():
-    """总库存同位素计数相等（各一个 D），但同一映射中心上 H/D 分布错位：
-    不得按排序索引把 D 配到 H 上——必须 fail-loud 报 isotope。"""
-    from cloudra.tools.Chemtool.reaction_mapping import _expand_full_atom_map
+def test_transferred_deuterium_keeps_its_isotope_identity():
+    """跨中心的 D 必须仍映射到 D；只枚举未局部配对的氢。"""
+    from cloudra.tools.Chemtool.reaction_mapping import _expand_full_atom_maps
 
     reactant = _methanol_with_deuterium(5)   # D 在羟基上
     product = _methanol_with_deuterium(2)    # D 在甲基上
-    atom_map, diagnostic = _expand_full_atom_map(
+    atom_maps, diagnostic = _expand_full_atom_maps(
         reactant, product, [0, 1], [0, 1], [1, 2],
     )
-    assert atom_map == []
-    assert "isotope" in diagnostic.lower()
+    assert atom_maps == [[1, 2, 6, 3, 4, 5]]
+    assert reactant.GetAtomWithIdx(atom_maps[0][2] - 1).GetIsotope() == product.GetAtomWithIdx(2).GetIsotope() == 2

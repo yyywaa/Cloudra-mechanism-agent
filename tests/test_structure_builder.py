@@ -94,6 +94,10 @@ def test_formal_charge_sum_matches_and_is_enforced(tmp_path):
     assert bad.status == "charge_mismatch"
     assert "sum to -1" in bad.message
     assert bad.components == []
+    for prepared in (ok, bad):
+        assert "total_charge" not in prepared.model_dump()
+        with open(prepared.artifact_path, encoding="utf-8") as handle:
+            assert "total_charge" not in json.load(handle)
 
 
 def test_stereochemistry_is_preserved_per_component(tmp_path):
@@ -117,6 +121,74 @@ def test_stereo_survives_the_component_mol_round_trip(tmp_path):
     # 读回后去掉显式氢再比规范异构 SMILES：E/Z 与手性都必须原样保留
     assert Chem.MolToSmiles(Chem.RemoveHs(reread)) == component.isomeric_smiles
     assert "/" in component.isomeric_smiles or "\\" in component.isomeric_smiles
+
+
+def test_submol_preserves_atom_properties_and_conformers_without_mutating_source():
+    source = Chem.MolFromSmiles("[13CH3:7][C@H:8]([F:9])[Cl:10].[Na+:11]")
+    source.SetProp("origin", "declared-input")
+    source.SetProp("_private_source", "native-state")
+    source.SetIntProp("revision", 4)
+    source.SetDoubleProp("confidence", 0.75)
+    source.SetBoolProp("verified", False)
+    for atom in source.GetAtoms():
+        atom.SetProp("origin", f"input-{atom.GetIdx()}")
+    source.GetBondWithIdx(0).SetProp("evidence", "declared-bond")
+    for conformer_id in (3, 17):
+        conf = Chem.Conformer(source.GetNumAtoms())
+        conf.SetId(conformer_id)
+        for index in range(source.GetNumAtoms()):
+            conf.SetAtomPosition(index, (index, conformer_id, 0.25))
+        source.AddConformer(conf, assignId=False)
+    before = source.ToBinary(Chem.PropertyPickleOptions.AllProps)
+
+    selected, mapping = builder_mod._submol_by_input_indices(source, [3, 1, 0, 2])
+
+    assert mapping == {3: 0, 1: 1, 0: 2, 2: 3}
+    assert selected.GetPropsAsDict(includePrivate=True, includeComputed=False) == {
+        "origin": "declared-input", "_private_source": "native-state",
+        "revision": 4, "confidence": 0.75, "verified": False,
+    }
+    assert [atom.GetAtomMapNum() for atom in selected.GetAtoms()] == [10, 8, 7, 9]
+    assert [atom.GetIsotope() for atom in selected.GetAtoms()] == [0, 0, 13, 0]
+    assert [atom.GetProp("origin") for atom in selected.GetAtoms()] == [
+        "input-3", "input-1", "input-0", "input-2",
+    ]
+    assert selected.GetBondBetweenAtoms(2, 1).GetProp("evidence") == "declared-bond"
+    assert [conf.GetId() for conf in selected.GetConformers()] == [3, 17]
+    assert selected.GetConformer(17).GetPositions().tolist() == [
+        [3.0, 17.0, 0.25], [1.0, 17.0, 0.25], [0.0, 17.0, 0.25], [2.0, 17.0, 0.25],
+    ]
+    assert Chem.MolToSmiles(selected) == "[13CH3:7][C@H:8]([F:9])[Cl:10]"
+    selected.GetAtomWithIdx(0).SetProp("origin", "changed")
+    selected.SetProp("origin", "changed")
+    selected.GetConformer(17).SetAtomPosition(0, (9.0, 9.0, 9.0))
+    assert source.ToBinary(Chem.PropertyPickleOptions.AllProps) == before
+
+
+def test_prepared_molecule_keeps_state_and_accepts_native_input(tmp_path):
+    source = Chem.MolFromSmiles("[13CH3:7][OH:8]")
+    source.GetAtomWithIdx(0).SetProp("origin", "original-carbon")
+    source.GetBondWithIdx(0).SetProp("evidence", "declared-bond")
+    before = source.ToBinary(Chem.PropertyPickleOptions.AllProps)
+    structure = StructureInput(kind="molecule", value=source)
+    structure = StructureInput.model_validate_json(structure.model_dump_json())
+    prepared = prepare_structure(PreparationRequest(
+        structure=structure,
+        output_dir=str(tmp_path / "native"),
+        strategy=BuildStrategy(embed=False, optimize=False),
+    ))
+
+    assert prepared.status == "ok"
+    assert prepared.mol.GetAtomWithIdx(0).GetIsotope() == 13
+    assert prepared.mol.GetAtomWithIdx(0).GetAtomMapNum() == 7
+    assert prepared.mol.GetAtomWithIdx(0).GetProp("origin") == "original-carbon"
+    assert prepared.components[0].mol.GetBondWithIdx(0).GetProp("evidence") == "declared-bond"
+    restored = builder_mod.PreparedStructure.model_validate_json(prepared.model_dump_json())
+    assert restored.mol.GetAtomWithIdx(0).GetProp("origin") == "original-carbon"
+    restored.mol.GetAtomWithIdx(0).SetFormalCharge(1)
+    assert restored.formal_charge_sum == 1
+    assert prepared.formal_charge_sum == 0
+    assert source.ToBinary(Chem.PropertyPickleOptions.AllProps) == before
 
 
 def test_repeated_identical_components_are_not_merged(tmp_path):
@@ -277,6 +349,69 @@ def test_single_component_is_deliverable_with_candidates(tmp_path):
     assert on_disk["artifact_path"] == prepared.artifact_path
 
 
+def _water_pair():
+    mol = Chem.AddHs(Chem.MolFromSmiles("O.O"))
+    conf = Chem.Conformer(mol.GetNumAtoms())
+    coordinates = [(0, 0, 0), (3, 0, 0), (-.75, .58, 0), (.75, .58, 0),
+                   (2.25, -.58, 0), (3.75, -.58, 0)]
+    for index, position in enumerate(coordinates):
+        conf.SetAtomPosition(index, position)
+    mol.AddConformer(conf)
+    return mol
+
+
+@pytest.mark.parametrize("kind", ["xyz_text", "mol_block", "molecule"])
+def test_complete_input_geometry_is_preserved_without_rebuilding(tmp_path, monkeypatch, kind):
+    from cloudra.tools.core.molecule import to_xyz
+
+    source = _water_pair()
+    value = {"xyz_text": to_xyz(source), "mol_block": Chem.MolToMolBlock(source), "molecule": source}[kind]
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("existing complete coordinates must not be embedded, relaxed, or reassembled")
+
+    monkeypatch.setattr(builder_mod.AllChem, "EmbedMolecule", forbidden)
+    monkeypatch.setattr(builder_mod, "_optimize_component", forbidden)
+    monkeypatch.setattr(builder_mod, "assemble", forbidden)
+    prepared = _prepare(tmp_path, value, kind=kind)
+
+    assert prepared.status == "ok", prepared.message
+    assert prepared.has_coordinates
+    assert prepared.assembly is None
+    assert prepared.symbols == [atom.GetSymbol() for atom in source.GetAtoms()]
+    assert prepared.mol.GetConformer().GetPositions() == pytest.approx(source.GetConformer().GetPositions())
+    assert [atom.input_atom_index for atom in prepared.atom_identities] == list(range(source.GetNumAtoms()))
+    assert prepared.trajectory_ids == []
+    assert prepared.candidate_path(".xyz")
+
+
+def test_retaining_input_geometry_does_not_bypass_fragment_collision_check(tmp_path):
+    source = _water_pair()
+    source.GetConformer().SetAtomPosition(1, (.2, 0, 0))
+    prepared = _prepare(tmp_path, source, kind="molecule")
+    assert prepared.status == "assembly_failed"
+    assert not prepared.has_coordinates
+    assert "collision" in prepared.message.lower()
+
+
+def test_mol_2d_drawing_is_embedded_instead_of_preserved_as_3d(tmp_path, monkeypatch):
+    source = Chem.AddHs(Chem.MolFromSmiles("CCO"))
+    builder_mod.AllChem.Compute2DCoords(source)
+    assert not source.GetConformer().Is3D()
+    embed = builder_mod.AllChem.EmbedMolecule
+    embedded = []
+
+    def record_embedding(mol, params):
+        embedded.append(mol.GetNumAtoms())
+        return embed(mol, params)
+
+    monkeypatch.setattr(builder_mod.AllChem, "EmbedMolecule", record_embedding)
+    prepared = _prepare(tmp_path, Chem.MolToMolBlock(source), kind="mol_block")
+    assert prepared.status == "ok", prepared.message
+    assert embedded == [source.GetNumAtoms()]
+    assert prepared.mol.GetConformer().Is3D()
+
+
 def test_declared_doublet_with_even_electron_count_is_refused(tmp_path):
     prepared = _prepare(tmp_path, "CCCC", multiplicity=2)
     assert prepared.status == "unsupported_spin"
@@ -285,11 +420,11 @@ def test_declared_doublet_with_even_electron_count_is_refused(tmp_path):
 
 
 def test_missing_force_field_parameters_is_explicit(tmp_path, monkeypatch):
-    """MMFF 与 UFF 都不可用时：明确返回 missing_parameters，坐标不得当成品交付。"""
+    """力场资格仍明确失败，但真实种子可供其他方法继续优化。"""
     monkeypatch.setattr(builder_mod, "_select_engine", lambda mol: None)
     prepared = _prepare(tmp_path, "CCO")
     assert prepared.status == "missing_parameters"
-    assert prepared.has_coordinates is False
+    assert prepared.has_coordinates is True
     assert prepared.components[0].optimization_status == "missing_parameters"
     assert any("NOT optimized" in d for d in prepared.components[0].diagnostics)
 
@@ -375,12 +510,12 @@ def test_trajectory_agrees_with_rdkit_single_shot_minimizer(tmp_path):
     assert record.final_frame.energy == pytest.approx(ff.CalcEnergy(), abs=1e-3)
 
 
-def test_not_converged_trajectory_is_kept_and_not_delivered(tmp_path, monkeypatch):
-    """达迭代上限未收敛：轨迹保留（收敛码 1），构建结果明确不可交付。"""
+def test_not_converged_trajectory_retains_seed_without_claiming_a_minimum(tmp_path, monkeypatch):
+    """未收敛轨迹不能冒充力场极小值，真实末帧仍可作为下一方法的种子。"""
     monkeypatch.setattr(builder_mod, "_make_force_field", _stuck_force_field)
     prepared = _prepare(tmp_path, "CCO", steps=3)
     assert prepared.status == "optimization_failed"
-    assert prepared.has_coordinates is False
+    assert prepared.has_coordinates is True
     assert prepared.candidate_paths == []
 
     record = read_trajectory(

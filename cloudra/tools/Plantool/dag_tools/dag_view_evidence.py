@@ -19,14 +19,14 @@ from cloudra.base.tool_actor import ToolActorContext
 from cloudra.base.tools_class import input_schema
 from cloudra.dag.models import GraphRef, OrchestrationMode
 from cloudra.dag.store import InvalidGraphReference
-from cloudra.tools.Plantool.dag_tools._common import DagToolBase, DagToolOutput, fail
+from cloudra.tools.Plantool.dag_tools._common import DagToolBase, DagToolOutput, fail, review_scope_allows
 
 
 class DagViewEvidenceInput(input_schema):
     review_id: str = Field(
         default="",
         description=(
-            "The call or file review id (from the review inbox) to read evidence for. "
+            "The call, file or final-delivery review id (from the review inbox) to read. "
             "Provide either this or evidence_id."
         ),
     )
@@ -46,7 +46,7 @@ class DagViewEvidence(DagToolBase):
     tool_id: str = "t-dag-view-evidence"
     tool_name: str = "dag_view_evidence"
     tool_description: str = (
-        "Read file-review scientific checks and repair actions, or the full source arguments + parsed result behind one CallReview "
+        "Read a final-delivery proposal and verdict, file-review scientific checks and repair actions, or the full source arguments + parsed result behind one CallReview "
         "(or evidence id). Use for: checking the source log path, compute job, "
         "and the raw parser output when the inbox summary is too terse; "
         "distinguishing a broken parser from a genuinely missing source file. "
@@ -69,18 +69,32 @@ class DagViewEvidence(DagToolBase):
             )
             if review is None:
                 request = await asyncio.to_thread(store.get_review_request, user_input.review_id.strip())
-                if request is None or request.kind != "evidence":
+                if request is None or request.kind not in {"evidence", "exception", "exit"}:
                     return fail("dag_view_evidence", f"evidence review {user_input.review_id!r} does not exist")
+                if not review_scope_allows(self.subagent, request.kind, request.request_id):
+                    return fail("dag_view_evidence", "This request is outside this Supervisor's assigned review scope", accepted=False)
+                decision = await asyncio.to_thread(store.get_review_decision_for_request, request.request_id)
                 result = {"review_id": request.request_id, "state": request.state,
+                          "kind": request.kind, "question": request.question, "target_ids": request.target_ids,
                           "proposal": request.proposal,
-                          "supporting_refs": [ref.model_dump(mode="json") for ref in request.supporting_refs]}
+                          "supporting_refs": [ref.model_dump(mode="json") for ref in request.supporting_refs],
+                          "counterevidence_refs": [ref.model_dump(mode="json") for ref in request.counterevidence_refs],
+                          "decision": decision.model_dump(mode="json") if decision is not None else None}
                 if request.proposal.get("element_type") in ("step", "species") and len(request.target_ids) == 1:
                     from cloudra.dag.file_science import file_scientific_checks
                     snapshot = await asyncio.to_thread(store.load_snapshot)
-                    result["scientific_checks"] = await asyncio.to_thread(
-                        file_scientific_checks, store, snapshot.delivery, request.target_ids[0], irc_files=request.proposal.get("irc_files"), evidence_refs=request.supporting_refs,
-                        workspace_root=getattr(self.subagent, "working_directory", None))
+                    try:
+                        result["scientific_checks"] = await asyncio.to_thread(
+                            file_scientific_checks, store, snapshot.delivery, request.target_ids[0], irc_files=request.proposal.get("irc_files"), endpoint_refs=request.proposal.get("endpoint_refs"), evidence_refs=request.supporting_refs,
+                            workspace_root=getattr(self.subagent, "working_directory", None))
+                    except InvalidGraphReference as exc:
+                        result["message"] = (
+                            f"{exc} Showing the original review and decision as history; "
+                            "they do not validate or grant evidence credit to a replacement target."
+                        )
                 return DagToolOutput(is_success=True, action="dag_view_evidence", result=result)
+            if not review_scope_allows(self.subagent, "call", review.review_id):
+                return fail("dag_view_evidence", "This call review is outside this Supervisor's assigned review scope", accepted=False)
             ref = await asyncio.to_thread(
                 store.resolve_evidence_for_call, review.tool_call_id
             )

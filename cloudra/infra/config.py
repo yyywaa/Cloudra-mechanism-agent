@@ -24,10 +24,20 @@ import logging
 import os
 from collections.abc import Callable
 from pathlib import Path
-from typing import Optional
+from typing import Any, Literal, Optional
 
 import yaml
-from pydantic import Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    FiniteFloat,
+    StrictInt,
+    TypeAdapter,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from cloudra.persistence.fs_utils import atomic_write_text
@@ -60,8 +70,8 @@ class LLMConfig(BaseSettings):
     key: str = ""
     supports_vision: bool = True
     # 模型原生网页搜索：off / auto / openai / openrouter / deepseek / gemini / custom。
-    # 默认 auto：按 base_url+model 自动识别并启用服务商侧搜索；
-    # off 时保持传统 web_search 工具调用。
+    # 默认 auto：按 base_url+model 自动识别；DeepSeek 只有显式设为 deepseek
+    # 才切换到 Responses 原生搜索。off 时保持独立 search 工具调用。
     native_search: str = "auto"
     # 原生搜索注入参数（verbatim 写入 extra_body）。custom 与无原生搜索的服务商
     # （如中转站 DeepSeek）用它指定 {plugins/ web_search_options / tools} 等字段。
@@ -138,11 +148,69 @@ class MethodPolicyConfig(BaseSettings):
     改这里之后必须重跑 gen_*_tasks.py 重新生成题集；regenerate-identically 守卫
     会核对题集与本配置的默认值一致（测试环境走默认值）。
     """
-    # 四档共用（组合条目把基组钉进许可）
+    # easy/normal/hard 共用（组合条目把基组钉进许可）；impossible 仅半经验方法
     allowed_methods: list[str] = Field(default_factory=lambda: ["xtb", "pm7", "b3lyp/def2svp"])
-    allowed_methods_impossible: list[str] = Field(default_factory=lambda: ["xtb", "pm7", "b3lyp/def2svp"])
+    allowed_methods_impossible: list[str] = Field(default_factory=lambda: ["xtb", "pm7"])
 
     model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+
+class JevSelectionConfig(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    endpoint: str = ''
+    model: str = ''
+    key: str = Field(default='', repr=False)
+    min_probability: FiniteFloat | None = Field(default=None, ge=0, le=1)
+    max_tools: StrictInt | None = Field(default=None, ge=1)
+
+
+class RerankerSelectionConfig(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    endpoint: str = ''
+    model: str = ''
+    key: str = Field(default='', repr=False)
+    min_score: FiniteFloat | None = None
+    max_tools: StrictInt | None = Field(default=None, ge=1)
+
+
+class ToolDocumentLoadingConfig(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    strategy: Literal['llm', 'semantic'] = 'llm'
+    semantic_backend: Literal['jev', 'reranker'] = 'jev'
+    jev: JevSelectionConfig = Field(default_factory=JevSelectionConfig)
+    reranker: RerankerSelectionConfig = Field(default_factory=RerankerSelectionConfig)
+
+    @model_validator(mode='after')
+    def configured_backend(self):
+        from urllib.parse import urlsplit
+        for backend in (self.jev, self.reranker):
+            if backend.endpoint:
+                url = urlsplit(backend.endpoint)
+                if url.scheme not in ('http', 'https') or not url.netloc:
+                    raise ValueError('Selection endpoint must be a complete HTTP(S) URL')
+        if self.strategy == 'semantic':
+            backend = getattr(self, self.semantic_backend)
+            boundary = backend.min_probability if self.semantic_backend == 'jev' else backend.min_score
+            if not backend.endpoint or not backend.model or boundary is None:
+                raise ValueError('Semantic selection requires endpoint, model and its own selection boundary')
+            if self.semantic_backend == 'jev' and not backend.key:
+                raise ValueError('Jev selection requires its API key')
+        return self
+
+    def to_display_dict(self) -> dict[str, Any]:
+        data = self.model_dump(mode='json')
+        for name in ('jev', 'reranker'):
+            data[name]['key_set'] = bool(data[name].pop('key'))
+        return data
+
+    def with_patch(self, changes: dict[str, Any]):
+        data = self.model_dump(mode='json')
+        for name, value in changes.items():
+            if name in ('jev', 'reranker') and isinstance(value, dict):
+                data[name] = {**data[name], **value}
+            else:
+                data[name] = value
+        return type(self).model_validate(data)
 
 
 class CloudraConfig(BaseSettings):
@@ -163,6 +231,7 @@ class CloudraConfig(BaseSettings):
     # LLM configs
     coordinator: LLMConfig = Field(default_factory=LLMConfig)
     follower: LLMConfig = Field(default_factory=LLMConfig)
+    tool_document_loading: ToolDocumentLoadingConfig = Field(default_factory=ToolDocumentLoadingConfig)
 
     # Email config
     email: EmailConfig = Field(default_factory=EmailConfig)
@@ -176,6 +245,10 @@ class CloudraConfig(BaseSettings):
     # 计算执行面开关（本地 calculator.sh 通道默认关闭）
     compute: ComputeConfig = Field(default_factory=ComputeConfig)
 
+    # 独立网页检索与正文抓取共用 DeepSeek API Key；与推理模型配置分开。
+    search_provider: Literal["deepseek", "auto", "tavily", "brave", "bing", "duckduckgo"] = "deepseek"
+    deepseek_api_key: str = Field(default="", repr=False)
+
     # OpenAlex 文献检索。空则匿名调用（额度更低）；可设 CLOUDRA_OPENALEX_API_KEY / OPENALEX_API_KEY。
     openalex_api_key: str = ""
     # 礼貌池邮箱，写入 User-Agent 的 mailto；空则只用通用 UA。可设 CLOUDRA_OPENALEX_MAILTO / OPENALEX_MAILTO。
@@ -185,11 +258,6 @@ class CloudraConfig(BaseSettings):
     # "pkg.module:attr"，attr 为插件实例或无参工厂（带 name；hooks 可选：
     # search / on_event / setup）。应用启动时加载一次；失败只记日志不阻塞。
     plugins: list[str] = Field(default_factory=list)
-
-    # 知识向量微服务（kg_vec）的解释器：指向装 torch/sentence-transformers 的
-    # .venv-trans python；空串时 web_launcher 按仓库根 .venv-trans/bin/python
-    # 自动探测。env CLOUDRA_KNOWLEDGE_VEC_PYTHON 可覆盖。
-    knowledge_vec_python: str = ""
 
     @field_validator("data_dir", "config_file", mode="before")
     @classmethod
@@ -245,11 +313,15 @@ class CloudraConfig(BaseSettings):
         清空语义要能往返）；只有 None（手写 YAML 的"留空"）才跳过。
         """
         cfg_path = self.config_file
+        selection_data = None
+        search_provider_data = None
         if not cfg_path.exists():
             return
         try:
             with open(cfg_path, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
+            selection_data = data.get('tool_document_loading')
+            search_provider_data = data.get("search_provider")
             if "llm" in data:
                 for role in ("coordinator", "follower"):
                     if role in data["llm"]:
@@ -293,12 +365,24 @@ class CloudraConfig(BaseSettings):
                 self.openalex_api_key = str(data["openalex_api_key"])
             if "openalex_mailto" in data and data["openalex_mailto"] is not None:
                 self.openalex_mailto = str(data["openalex_mailto"])
+            if "deepseek_api_key" in data and data["deepseek_api_key"] is not None:
+                self.deepseek_api_key = str(data["deepseek_api_key"])
             if "plugins" in data and data["plugins"] is not None:
                 self.plugins = [str(s) for s in data["plugins"]]
-            if "knowledge_vec_python" in data and data["knowledge_vec_python"] is not None:
-                self.knowledge_vec_python = str(data["knowledge_vec_python"])
         except Exception as e:
             logger.warning("Failed to load %s: %s", cfg_path, e)
+        if search_provider_data is not None:
+            try:
+                self.search_provider = TypeAdapter(type(self).model_fields["search_provider"].annotation).validate_python(
+                    search_provider_data
+                )
+            except ValidationError:
+                raise ValueError("Invalid search_provider configuration") from None
+        if selection_data is not None:
+            try:
+                self.tool_document_loading = ToolDocumentLoadingConfig.model_validate(selection_data)
+            except ValidationError:
+                raise ValueError('Invalid tool_document_loading configuration; check strategy and backend fields') from None
 
     def _ensure_dirs(self):
         """Create data directories if they don't exist."""
@@ -337,6 +421,9 @@ class CloudraConfig(BaseSettings):
             },
             "openalex_api_key": "***" if self.openalex_api_key else "(not set)",
             "openalex_mailto": self.openalex_mailto or "(not set)",
+            "search_provider": self.search_provider,
+            "deepseek_api_key": "***" if self.deepseek_api_key else "(not set)",
+            "tool_document_loading": self.tool_document_loading.to_display_dict(),
         }
 
 
@@ -412,6 +499,9 @@ def set_config_value(key: str, value: str) -> None:
             target, final_key = resolve_config_attr(work, f"follower.{key}")
         if target is None:
             raise ValueError(f"配置项不存在: {key}")
+        if final_key == "search_provider" and isinstance(target, CloudraConfig):
+            target.search_provider = TypeAdapter(CloudraConfig.model_fields["search_provider"].annotation).validate_python(value)
+            return
         if final_key == "provider" and isinstance(target, LLMConfig):
             from cloudra.infra.providers import apply_provider_preset, get_provider_preset
             preset = get_provider_preset(value)

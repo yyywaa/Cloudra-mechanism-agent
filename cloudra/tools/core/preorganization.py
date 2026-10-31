@@ -10,22 +10,25 @@ import json
 import math
 import os
 from collections import Counter
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 from typing import Literal, Mapping, Sequence
 
+from pydantic import BaseModel, Field
 from rdkit import Chem, DistanceGeometry
 from rdkit.Chem import AllChem, rdDistGeom, rdMolAlign
 
 from cloudra.persistence.fs_utils import atomic_write_text
 from cloudra.tools.core.complex_assembly import (
     MMFF_CONSTRAINT_FORCE_CONSTANT,
+    AssemblyCandidate,
     AssemblyParameters,
 )
 from cloudra.tools.core.crest_runner import CrestRunRequest, run_crest
 from cloudra.tools.core.geometry import kabsch_rmsd
-from cloudra.tools.core.structure_artifacts import read_trajectory, read_xyz_atoms
+from cloudra.tools.core.molecule import Molecule, copy_conformer, to_xyz
+from cloudra.tools.core.structure_artifacts import read_trajectory
 from cloudra.tools.core.structure_builder import (
     BuildStrategy,
     PreparationRequest,
@@ -64,29 +67,15 @@ def _bad(prepared: PreparedStructure, detail: str, *, index_base: int = 1) -> Va
     return ValueError(f"{detail}. Resolved atoms ({index_base}-based): {_numbering(prepared, index_base)}")
 
 
-def load_resolved_graph(prepared: PreparedStructure, *, index_base: int = 1, allow_unoptimized: bool = False) -> Chem.Mol:
+def load_resolved_graph(prepared: PreparedStructure, *, index_base: int = 1) -> Chem.Mol:
     """Load the builder's resolved, explicit-H graph without inventing coordinates."""
-    graph_only_multi = (
-        prepared.status == "assembly_failed"
-        and len(prepared.components) > 1
-        and all(not component.xyz_path for component in prepared.components)
-    )
     bad = partial(_bad, prepared, index_base=index_base)
-    explicitly_unoptimized = allow_unoptimized and all(c.embed_status in ("embedded","not_required") and c.optimization_status=="not_required" for c in prepared.components)
-    if prepared.status != "ok" and not graph_only_multi and not explicitly_unoptimized:
-        raise bad(f"builder status {prepared.status!r} has no usable resolved graph")
     if not prepared.components or not prepared.atom_identities:
         raise bad( "builder returned no components or atom identities")
 
-    graph = None
-    for component in prepared.components:
-        path = Path(component.mol_path)
-        if not path.is_file():
-            raise bad(f"component MOL file is missing: {path}")
-        fragment = Chem.MolFromMolFile(str(path), removeHs=False)
-        if fragment is None:
-            raise bad(f"component MOL file cannot be parsed: {path}")
-        graph = fragment if graph is None else Chem.CombineMols(graph, fragment)
+    if prepared.mol is None:
+        raise bad("builder returned no resolved molecule")
+    graph = Chem.Mol(prepared.mol)
 
     actual = [atom.GetSymbol() for atom in graph.GetAtoms()]
     expected = [identity.symbol for identity in prepared.atom_identities]
@@ -209,6 +198,8 @@ def measure_windows(
 def geometry_stereochemistry_errors(graph, positions) -> list[str]:
     """Compare declared stereochemistry with actual 3D geometry, without inference."""
     expected = Chem.Mol(graph)
+    # A coarse seed conformer must not redefine the declared stereochemistry.
+    expected.RemoveAllConformers()
     Chem.AssignStereochemistry(expected, cleanIt=True, force=True)
     chiral = {a.GetIdx():a.GetProp('_CIPCode') for a in expected.GetAtoms() if a.HasProp('_CIPCode')}
     bonds = {b.GetIdx():b.GetStereo() for b in expected.GetBonds()
@@ -241,15 +232,15 @@ def qualify_geometry(
     graph: Chem.Mol,
     symbols: Sequence[str],
     positions: Sequence[Sequence[float]],
-) -> tuple[bool, list[str], dict[str, float]]:
+) -> tuple[bool, list[str], dict[str, float], list[str]]:
     """Check a delivered frame, independently of restraints used to create it."""
     expected_symbols = [atom.GetSymbol() for atom in graph.GetAtoms()]
     actual_symbols = [symbol[:1].upper() + symbol[1:].lower() for symbol in symbols]
     if actual_symbols != expected_symbols or len(positions) != len(expected_symbols):
-        return False, ["atom identity/order changed"], {}
+        return False, ["atom identity/order changed"], {}, []
     if any(len(position) != 3 or not all(math.isfinite(float(v)) for v in position)
            for position in positions):
-        return False, ["nonfinite or incomplete coordinates"], {}
+        return False, ["nonfinite or incomplete coordinates"], {}, []
 
     distances = measure_windows(plan, positions)
     reasons = geometry_stereochemistry_errors(graph, positions)
@@ -269,10 +260,19 @@ def qualify_geometry(
     perceived = set(default_connectivity()(expected_symbols, positions))
     unexpected = perceived - expected_bonds - set(plan.forming_pairs)
     missing = expected_bonds - perceived
+    warnings = []
     if unexpected:
-        reasons.append(f"unexpected covalent contacts: {sorted(unexpected)}")
+        pairs = sorted((left + plan.index_base, right + plan.index_base) for left, right in unexpected)
+        warnings.append(
+            f"Warning: distance-inferred additional contacts ({plan.index_base}-based): {pairs}; "
+            "molecular graph unchanged."
+        )
     if missing:
-        reasons.append(f"input covalent bonds lost: {sorted(missing)}")
+        pairs = sorted((left + plan.index_base, right + plan.index_base) for left, right in missing)
+        warnings.append(
+            f"Warning: distance-inferred missing contacts ({plan.index_base}-based): {pairs}; "
+            "molecular graph unchanged."
+        )
 
     clash_limit = AssemblyParameters().min_interfragment_distance
     from cloudra.tools.core.complex_assembly import interfragment_clusters
@@ -287,17 +287,17 @@ def qualify_geometry(
                 continue
             if math.dist(positions[left], positions[right]) < clash_limit:
                 reasons.append(f"atomic clash {left + plan.index_base}-{right + plan.index_base}")
-    return not reasons, reasons, distances
+    return not reasons, reasons, distances, warnings
 
 
-@dataclass
-class GuidedCandidate:
+class GuidedCandidate(BaseModel):
+    mol: Molecule
     xyz_path: str
     mol_path: str
     achieved_distances: dict[str, float]
     max_deviation_ang: float
     seed_kind: str = "constrained_preorganization"
-    ring_shapes: list[dict] = field(default_factory=list)
+    ring_shapes: list[dict] = Field(default_factory=list)
 
 
 @dataclass
@@ -346,7 +346,7 @@ def _fallback_note(plan: GuidancePlan) -> str:
 
 
 def _validated_bounds(prepared: PreparedStructure, plan: GuidancePlan):
-    """Reject incompatible windows before either RDKit embedding or placement sampling."""
+    """Build distance bounds for RDKit embedding and reject incompatible windows."""
     bad = partial(_bad, prepared, index_base=plan.index_base)
     graph = load_resolved_graph(prepared, index_base=plan.index_base)
     graph_distances = Chem.GetDistanceMatrix(graph)
@@ -358,16 +358,6 @@ def _validated_bounds(prepared: PreparedStructure, plan: GuidancePlan):
     for window in plan.windows:
         left, right = window.atoms
         name = f"{left + plan.index_base}-{right + plan.index_base} ({window.source})"
-        if graph.GetBondBetweenAtoms(left, right) is not None:
-            symbols = [graph.GetAtomWithIdx(i).GetSymbol() for i in (left, right)]
-            # Qualification already requires every input bond to survive. Check
-            # that same connectivity rule at the shortest allowed distance.
-            if not default_connectivity()(symbols, [(0., 0., 0.), (window.min_ang, 0., 0.)]):
-                raise bad(
-                    f"guided window {name} cannot preserve the input covalent bond "
-                    f"({symbols[0]}-{symbols[1]}) under the existing qualification rule; "
-                    "indices refer to the full structure including H, not SMILES heavy atoms; no search was run",
-                )
         if (graph_distances[left, right] > 2
                 and window.max_ang < AssemblyParameters().min_interfragment_distance):
             raise bad(
@@ -391,16 +381,11 @@ def _save_guided_result(result: GuidedSearchResult, plan: GuidancePlan,
     from cloudra.tools.core.ring_conformation import describe_structure_rings
 
     for candidate in result.candidates:
-        graph = Chem.MolFromMolFile(candidate.mol_path, removeHs=False)
-        if graph is not None:
-            atoms = read_xyz_atoms(candidate.xyz_path)
-            candidate.ring_shapes = describe_structure_rings(graph, [pos for _, pos in atoms], plan.ring_order)
+        graph = candidate.mol
+        candidate.ring_shapes = describe_structure_rings(graph, graph.GetConformer().GetPositions(), plan.ring_order)
     if result.candidates:
         result.ensemble_path = os.path.join(output_dir, "confs.xyz")
-        with_contents = []
-        for candidate in result.candidates:
-            with open(candidate.xyz_path, encoding="utf-8") as source:
-                with_contents.append(source.read().rstrip() + "\n")
+        with_contents = [to_xyz(candidate.mol) for candidate in result.candidates]
         atomic_write_text(result.ensemble_path, "".join(with_contents))
     result.effective_windows = effective_window_rows(plan)
     result.forming_pairs = list(plan.forming_pairs)
@@ -414,7 +399,7 @@ def _save_guided_result(result: GuidedSearchResult, plan: GuidancePlan,
         "effective_windows": result.effective_windows,
         "forming_pairs": [[i + plan.index_base, j + plan.index_base] for i, j in plan.forming_pairs],
         "mmff_force_constant": MMFF_CONSTRAINT_FORCE_CONSTANT,
-        "candidates": [asdict(candidate) for candidate in result.candidates],
+        "candidates": [candidate.model_dump(mode="json") for candidate in result.candidates],
         "counts": result.counts,
         "closest_path": result.closest_path,
         "diagnostics": result.diagnostics,
@@ -459,6 +444,7 @@ def _single_component_rdkit(
     accepted: list[tuple[int, float, dict[str, float]]] = []
     closest: tuple[float, list[list[float]], dict[str, float]] | None = None
     rejected: Counter[str] = Counter()
+    contact_warnings: Counter[str] = Counter()
 
     def note_closest(conf_id: int) -> None:
         nonlocal closest
@@ -490,18 +476,19 @@ def _single_component_rdkit(
         note_closest(conf_id)
         if candidate_sink:
             from cloudra.tools.core.conformer_catalog import Qualification
-            candidate_passed, candidate_reasons, _ = qualify_geometry(plan, mol, symbols, mol.GetConformer(conf_id).GetPositions())
+            candidate_passed, candidate_reasons, _, candidate_warnings = qualify_geometry(plan, mol, symbols, mol.GetConformer(conf_id).GetPositions())
             qualified = converged and candidate_passed
             candidate_sink.capture(mol, conf_id, generator="guided_MMFF94", parent_id=parents[conf_id].candidate_id,
                 state="optimized" if qualified else "failed", qualification=Qualification(status="qualified" if qualified else "rejected",
-                reasons=candidate_reasons + ([] if converged else ["optimization_not_converged"])))
+                reasons=candidate_reasons + candidate_warnings + ([] if converged else ["optimization_not_converged"])))
         if not converged:
             rejected["optimization_not_converged"] += 1
             continue
         result.counts["optimized"] += 1
         positions = mol.GetConformer(conf_id).GetPositions()
         distances = measure_windows(plan, positions)
-        passed, reasons, distances = qualify_geometry(plan, mol, symbols, positions)
+        passed, reasons, distances, warnings = qualify_geometry(plan, mol, symbols, positions)
+        contact_warnings.update(warnings)
         if not passed:
             for reason in reasons:
                 rejected[reason.split(":", 1)[0]] += 1
@@ -517,6 +504,7 @@ def _single_component_rdkit(
 
     result.counts["rejected"] = len(conf_ids) - len(accepted)
     result.diagnostics.extend(f"{reason}: {count}" for reason, count in sorted(rejected.items()))
+    result.diagnostics.extend(f"{warning} ({count} candidate(s))" for warning, count in sorted(contact_warnings.items()))
     if closest is not None:
         _, closest_positions, closest_distances = closest
         result.closest_path = os.path.join(output_dir, "closest_attempt.xyz")
@@ -546,7 +534,8 @@ def _single_component_rdkit(
             f"constrained preorganization seed {index}",
         ))
         atomic_write_text(mol_path, Chem.MolToMolBlock(mol, confId=conf_id))
-        result.candidates.append(GuidedCandidate(xyz_path, mol_path, distances, 0.0))
+        result.candidates.append(GuidedCandidate(mol=copy_conformer(mol, conf_id), xyz_path=xyz_path,
+            mol_path=mol_path, achieved_distances=distances, max_deviation_ang=0.0))
 
     result.counts["retained"] = len(result.candidates)
     result.status = "ok" if result.candidates else "no_candidate"
@@ -566,14 +555,13 @@ def _single_component_rdkit(
 
 
 def _multi_component_rdkit(
-    structure: StructureInput, prepared: PreparedStructure, plan: GuidancePlan,
+    prepared: PreparedStructure, plan: GuidancePlan,
     output_dir: str, charge: int, multiplicity: int, random_seed: int,
     rmsd_threshold: float, candidate_sink=None,
 ) -> GuidedSearchResult:
     graph = load_resolved_graph(prepared, index_base=plan.index_base)
-    _validated_bounds(prepared, plan)
     built = prepare_structure(PreparationRequest(
-        structure=structure,
+        structure=StructureInput(kind="molecule", value=prepared.mol),
         output_dir=os.path.join(output_dir, "guided_assembly"),
         total_charge=charge,
         multiplicity=multiplicity,
@@ -626,12 +614,16 @@ def _multi_component_rdkit(
 
     closest: tuple[float, str, list[tuple[str, list[float]]], dict[str, float]] | None = None
     rejected: Counter[str] = Counter()
-    qualified: list[tuple[str, list[list[float]], dict[str, float]]] = []
-    for path in (built.assembly.candidate_paths if built.assembly else []):
-        atoms = read_xyz_atoms(path)
-        symbols = [symbol for symbol, _position in atoms]
-        positions = [position for _symbol, position in atoms]
-        passed, reasons, distances = qualify_geometry(plan, graph, symbols, positions)
+    qualified: list[tuple[AssemblyCandidate, list[list[float]], dict[str, float]]] = []
+    contact_warnings: Counter[str] = Counter()
+    assembly_candidates = built.assembly.candidates if built.assembly else []
+    for candidate in assembly_candidates:
+        path = candidate.xyz_path
+        symbols = [atom.GetSymbol() for atom in candidate.mol.GetAtoms()]
+        positions = candidate.mol.GetConformer().GetPositions().tolist()
+        atoms = list(zip(symbols, positions))
+        passed, reasons, distances, warnings = qualify_geometry(plan, graph, symbols, positions)
+        contact_warnings.update(warnings)
         if distances:
             deviation = _max_window_deviation(plan, distances)
             if closest is None or deviation < closest[0]:
@@ -640,26 +632,25 @@ def _multi_component_rdkit(
             for reason in reasons:
                 rejected[reason.split(":", 1)[0]] += 1
             continue
-        qualified.append((path, positions, distances))
+        qualified.append((candidate, positions, distances))
 
     heavy_indices = [atom.GetIdx() for atom in graph.GetAtoms() if atom.GetAtomicNum() > 1]
     selected: list[list[list[float]]] = []
-    for path, positions, distances in qualified:
+    for candidate, positions, distances in qualified:
         heavy_positions = [positions[index] for index in heavy_indices]
         if any(kabsch_rmsd(heavy_positions, prior) <= rmsd_threshold for prior in selected):
             continue
-        mol_path = str(Path(path).with_suffix(".mol"))
-        if not Path(mol_path).is_file():
-            raise ValueError(f"guided assembly did not produce matching MOL file: {mol_path}")
         selected.append(heavy_positions)
-        result.candidates.append(GuidedCandidate(path, mol_path, distances, 0.0))
+        result.candidates.append(GuidedCandidate(mol=candidate.mol, xyz_path=candidate.xyz_path,
+            mol_path=candidate.mol_path, achieved_distances=distances, max_deviation_ang=0.0))
 
-    result.counts["optimized"] = len(built.assembly.candidate_paths) if built.assembly else 0
+    result.counts["optimized"] = len(assembly_candidates)
     result.counts["retained"] = len(result.candidates)
     result.counts["rejected"] = result.counts["optimized"] - len(result.candidates)
     result.counts["qualified"] = len(qualified)
     result.counts["clustered_duplicates"] = len(qualified) - len(result.candidates)
     result.diagnostics.extend(f"{reason}: {count}" for reason, count in sorted(rejected.items()))
+    result.diagnostics.extend(f"{warning} ({count} candidate(s))" for warning, count in sorted(contact_warnings.items()))
     if closest is not None:
         _, _path, atoms, distances = closest
         result.closest_path = os.path.join(output_dir, "closest_attempt.xyz")
@@ -685,9 +676,7 @@ def _crest_guided(
     if seed_result.status != "ok":
         return seed_result
     graph = load_resolved_graph(prepared, index_base=plan.index_base)
-    seed_path = seed_result.candidates[0].xyz_path
-    seed_atoms = read_xyz_atoms(seed_path)
-    seed_positions = [position for _symbol, position in seed_atoms]
+    seed_positions = seed_result.candidates[0].mol.GetConformer().GetPositions()
     targets = []
     constrained_pairs = set()
     for window in plan.windows:
@@ -705,8 +694,7 @@ def _crest_guided(
         f"  distance: {target['atoms'][0]}, {target['atoms'][1]}, {target['target_ang']:.6f}\n"
         for target in targets
     ) + "$end\n"
-    with open(seed_path, encoding="utf-8") as handle:
-        seed_xyz = handle.read()
+    seed_xyz = to_xyz(seed_result.candidates[0].mol)
     run = run_crest(CrestRunRequest(
         xyz_text=seed_xyz, output_dir=os.path.join(output_dir, "crest"),
         charge=charge, multiplicity=multiplicity, timeout=timeout,
@@ -717,7 +705,7 @@ def _crest_guided(
     ))
     result = GuidedSearchResult(
         status="no_candidate", message="", prepared_path=seed_result.prepared_path,
-        diagnostics=list(run.diagnostics),
+        diagnostics=[*seed_result.diagnostics, *run.diagnostics],
         counts={"generated": len(run.conformers), "optimized": len(run.conformers),
                 "rejected": 0, "retained": 0},
         constraint_targets=targets, crest_run_dir=run.run_dir,
@@ -731,10 +719,12 @@ def _crest_guided(
         return _save_guided_result(result, plan, output_dir)
     closest: tuple[float, object, dict[str, float]] | None = None
     rejected: Counter[str] = Counter()
+    contact_warnings: Counter[str] = Counter()
     for frame in run.conformers:
-        passed, reasons, distances = qualify_geometry(
+        passed, reasons, distances, warnings = qualify_geometry(
             plan, graph, frame.symbols, frame.positions,
         )
+        contact_warnings.update(warnings)
         if distances:
             deviation = _max_window_deviation(plan, distances)
             if closest is None or deviation < closest[0]:
@@ -756,10 +746,12 @@ def _crest_guided(
         frame_mol.RemoveAllConformers()
         frame_mol.AddConformer(conf)
         atomic_write_text(mol_path, Chem.MolToMolBlock(frame_mol))
-        result.candidates.append(GuidedCandidate(xyz_path, mol_path, distances, 0.0))
+        result.candidates.append(GuidedCandidate(mol=frame_mol, xyz_path=xyz_path, mol_path=mol_path,
+            achieved_distances=distances, max_deviation_ang=0.0))
     result.counts["retained"] = len(result.candidates)
     result.counts["rejected"] = len(run.conformers) - len(result.candidates)
     result.diagnostics.extend(f"{reason}: {count}" for reason, count in sorted(rejected.items()))
+    result.diagnostics.extend(f"{warning} ({count} candidate(s))" for warning, count in sorted(contact_warnings.items()))
     if closest is not None:
         _, frame, distances = closest
         result.closest_path = os.path.join(output_dir, "closest_crest_attempt.xyz")
@@ -826,7 +818,7 @@ def search_guided(
     plan = resolve_guidance(prepared, ring_order, distance_filters, index_base=index_base)
     if len(prepared.components) != 1:
         seed_result = _multi_component_rdkit(
-            structure, prepared, plan, output_dir, charge, multiplicity, random_seed,
+            prepared, plan, output_dir, charge, multiplicity, random_seed,
             rmsd_threshold, candidate_sink,
         )
     else:

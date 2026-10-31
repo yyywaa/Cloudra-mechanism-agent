@@ -1,12 +1,12 @@
-"""fcntl.flock 原语：执行面唯一的进程存活/互斥判定手段（POSIX only）。
+"""fcntl.flock 原语：执行面唯一的进程存活/互斥判定手段（POSIX / Windows）。
 
 设计约定（AGENTS.md 铁律）：执行面判断"进程是否还活着"一律用锁探测，
-不读 PID、不解析 ps//proc 文本。进程死亡（含 kill -9）时内核自动放锁，
-因此锁探测不存在 PID 复用误判。guard/calculator/调度器单实例共用本模块。
+外部对账不依赖存盘 PID 或 ps//proc 文本。持锁的原执行 owner 可核对自己新建
+session 的成员，用于取消和确认其计算家族已退出；不能据此猜杀其它进程。
+进程死亡时内核自动放锁，guard/calculator/调度器单实例共用本模块。
 
-Windows 兜底：fcntl 不存在时用 msvcrt.locking 模拟同一组原语（锁文件
-offset 0 的 1 字节；进程死亡同样由内核释放锁），保证配置读-改-写等
-共享写路径在非 POSIX 平台不因 import 失败而 500。
+Windows 使用 msvcrt.locking 锁定文件 offset 0 的 1 字节；进程死亡同样释放锁。
+
 """
 
 from __future__ import annotations

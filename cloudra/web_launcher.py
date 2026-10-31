@@ -18,7 +18,13 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
+from cloudra.infra.flocks import is_lock_held
+from cloudra.persistence.paths import runtime_api_lock_path
 from cloudra.services.daemon_supervisor import ensure_daemons
+from cloudra.services.runtime_ownership import (
+    describe_store_conflict,
+    find_store_owner,
+)
 
 # 常驻 SSE 不会自己结束（SPA 一打开就挂着 EventSource，见 frontend/src/api.ts），
 # 而 uvicorn 默认（None）会**无限等待活跃连接**：`cloudra stop` 因此报「API: 已停止」
@@ -156,59 +162,39 @@ def _port_is_bindable(bind_host: str, preferred: int) -> bool:
         return True
 
 
-def _runtime_is_healthy(probe_host: str, port: int) -> bool:
-    try:
-        with urllib.request.urlopen(
-            f"http://{probe_host}:{port}/api/v2/runtime/health", timeout=1.0
-        ) as resp:
-            return 200 <= resp.status < 300
-    except Exception:
-        return False
-
-
-def _runtime_serves_spa(probe_host: str, port: int) -> bool:
-    try:
-        with urllib.request.urlopen(f"http://{probe_host}:{port}/", timeout=1.0) as resp:
-            body = resp.read(4096).decode("utf-8", "ignore")
-            return 200 <= resp.status < 300 and '<div id="root"></div>' in body
-    except Exception:
-        return False
-
-
-def _runtime_present(probe_host: str, port: int) -> bool:
-    """同端口既提供 API 又提供已构建 SPA，才算可复用的 Cloudra 实例。"""
-    return _runtime_is_healthy(probe_host, port) and _runtime_serves_spa(probe_host, port)
-
-
-def _pinned_runtime(bind_host: str, port: int) -> tuple[int, bool]:
-    """显式指定的端口：不扫描邻近端口，占用而不可复用时交给 uvicorn 在绑定
-    阶段报错（而不是悄悄换端口）。"""
-    if not _may_reuse_runtime(bind_host):
-        return port, False
-    return port, _runtime_present(_probe_host(bind_host), port)
-
-
-def _find_api_port(preferred: int, env_name: str, bind_host: str) -> tuple[int, bool]:
-    """Return (port, reused_existing_runtime).
-
-    A runtime is only reused when it both serves the API and the built SPA on
-    the same port; otherwise we start a fresh single-port runtime on a free
-    port so the frontend never points at a stale or foreign server.
-    """
-    probe_host = _probe_host(bind_host)
-    reuse = _may_reuse_runtime(bind_host)
-    env_value = os.environ.get(env_name)
-    if env_value:
-        port = int(env_value)
-        return port, reuse and _runtime_present(probe_host, port)
-    if _port_is_bindable(bind_host, preferred):
-        return preferred, False
-    if reuse and _runtime_present(probe_host, preferred):
-        return preferred, True
-    for port in range(preferred + 1, preferred + 100):
+def _find_api_port(preferred: int, bind_host: str) -> int:
+    """Choose a free port; a healthy foreign runtime is still occupied."""
+    for port in range(preferred, preferred + 100):
         if _port_is_bindable(bind_host, port):
-            return port, False
-    raise RuntimeError(f"no free port near {preferred}; set {env_name} explicitly")
+            return port
+    raise RuntimeError(f"no free port near {preferred}; set CLOUDRA_API_PORT explicitly")
+
+
+def _owned_runtime_port(
+    store_path: str, *, bind_host: str, probe_host: str, requested_port: int | None,
+) -> int | None:
+    """Reuse only the requested database's owner, or explain its conflict."""
+    lock_path = runtime_api_lock_path(store_path)
+    # 持锁者必然创建过锁文件；文件不在（含 data_dir 尚未建立）就是没人持锁，
+    # 不能顺手把 data_dir 建出来。
+    if not lock_path.is_file() or not is_lock_held(str(lock_path)):
+        return None
+    owner = find_store_owner(store_path, probe_host=probe_host)
+    if (
+        owner is not None and owner.port is not None
+        and owner.serves_spa and _may_reuse_runtime(bind_host)
+    ):
+        if requested_port is not None and requested_port != owner.port:
+            raise RuntimeError(
+                f"Requested port {requested_port} differs from this runtime database's port {owner.port}.\n"
+                + describe_store_conflict(store_path, owner)
+            )
+        return owner.port
+    raise RuntimeError(
+        describe_store_conflict(
+            store_path, owner, reuse_allowed=_may_reuse_runtime(bind_host)
+        )
+    )
 
 
 def _wait_healthy(url: str, timeout: float = 30.0) -> None:
@@ -316,10 +302,26 @@ def launch_browser(
 
     require_token_for_bind(bind_host)
     probe_host = _probe_host(bind_host)
-    if port is not None:
-        api_port, reused_runtime = _pinned_runtime(bind_host, port)
+    from cloudra.persistence import paths
+
+    store_path = str(
+        Path(os.environ.get("CLOUDRA_RUNTIME_STORE") or paths.runtime_db_path()).expanduser().resolve()
+    )
+    requested_port = port if port is not None else (
+        int(os.environ["CLOUDRA_API_PORT"]) if os.environ.get("CLOUDRA_API_PORT") else None
+    )
+    owned_port = _owned_runtime_port(
+        store_path, bind_host=bind_host, probe_host=probe_host, requested_port=requested_port,
+    )
+    reused_runtime = owned_port is not None
+    if owned_port is not None:
+        api_port = owned_port
+    elif requested_port is not None:
+        if not _port_is_bindable(bind_host, requested_port):
+            raise RuntimeError(f"Requested port {requested_port} is already in use by another service.")
+        api_port = requested_port
     else:
-        api_port, reused_runtime = _find_api_port(8000, "CLOUDRA_API_PORT", bind_host)
+        api_port = _find_api_port(8000, bind_host)
     if not _is_loopback_bind(bind_host):
         print(
             f"[cloudra] warning: binding to non-loopback address {bind_host} — the API is "
@@ -332,12 +334,6 @@ def launch_browser(
 
     clear_daemons_shutdown()
     ensure_daemons()
-    from cloudra.persistence import paths
-
-    store_path = os.environ.get(
-        "CLOUDRA_RUNTIME_STORE",
-        str(paths.runtime_db_path()),
-    )
     env = os.environ.copy()
     existing_pythonpath = env.get("PYTHONPATH", "")
     repo_root = str(Path(__file__).resolve().parents[1])

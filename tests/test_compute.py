@@ -1242,9 +1242,9 @@ _ORCA_EXTOPT_OPT_CONVERGED = (
 
 
 @pytest.mark.asyncio
-async def test_parse_orca_log_unconverged_opt_is_failed(tmp_path, monkeypatch):
+async def test_parse_orca_log_unconverged_opt_preserves_native_success(tmp_path, monkeypatch):
     """GH #21：优化跑满最大步数未收敛时 ORCA 仍打印 TERMINATED NORMALLY——
-    终止标记不构成成功判据，文本收敛标记判 failed 且错误信息指出未收敛；
+    原生正常终态与 opt_converged=False 分开记录，科学验收仍须实际收敛；
     能量取最后的 Current Energy（GH #22，起始几何的 FINAL SP 是错的）。"""
     import cclib
 
@@ -1258,10 +1258,10 @@ async def test_parse_orca_log_unconverged_opt_is_failed(tmp_path, monkeypatch):
     log = tmp_path / "job.out"
     log.write_text(_ORCA_EXTOPT_OPT_NOT_CONVERGED, encoding="utf-8")
     data, ok = await _parse_log(log, parse_timeout=60, job_type="orca")
-    assert ok is False
-    assert data["is_success"] is False
+    assert ok is True
+    assert data["is_success"] is True
+    assert data["normal_termination"] is True
     assert data["opt_converged"] is False
-    assert "未收敛" in data["error"]
     assert data["total_energy_hartree"] == pytest.approx(-383.544742265)
 
 
@@ -1288,15 +1288,15 @@ async def test_parse_orca_log_converged_opt_stays_done(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_parse_orca_log_unconverged_opt_via_cclib_optdone(tmp_path, monkeypatch):
-    """GH #21 cclib 辅助路径：文本收敛标记缺失（如版本差异）但 cclib 可解析
-    且 optdone=False 的 Opt 日志，同样判 failed。"""
+async def test_parse_orca_log_missing_native_convergence_stays_unknown(tmp_path, monkeypatch):
+    """原生收敛标记缺失时保留未知；cclib optdone不能补造科学判据。"""
+    from types import SimpleNamespace
+
+    import cclib
+
     import cloudra.runtime.monitor as monitor
 
-    async def _fake_cclib(target):
-        return {"log_file": str(target), "optdone": False}, True
-
-    monkeypatch.setattr(monitor, "_cclib_parse", _fake_cclib)
+    monkeypatch.setattr(cclib.io, 'ccread', lambda *_a, **_k: SimpleNamespace(optdone=False))
 
     log = tmp_path / "job.out"
     log.write_text(
@@ -1307,18 +1307,17 @@ async def test_parse_orca_log_unconverged_opt_via_cclib_optdone(tmp_path, monkey
         encoding="utf-8",
     )
     data, ok = await monitor._parse_log(log, parse_timeout=60, job_type="orca")
-    assert ok is False
-    assert data["is_success"] is False
-    assert data["opt_converged"] is False
-    assert "未收敛" in data["error"]
+    assert ok is True
+    assert data["is_success"] is True
+    assert data["normal_termination"] is True
+    assert data["opt_converged"] is None
 
 
 @pytest.mark.asyncio
-async def test_guard_marks_failed_for_unconverged_extopt_opt(
+async def test_guard_records_native_done_for_unconverged_extopt_opt(
     isolated_db, monkeypatch, tmp_path
 ):
-    """GH #21 端到端：guard 对未收敛的 ExtOpt Opt 落 failed，last_error 与
-    state json 明确指出未收敛（不能因 TERMINATED NORMALLY 误判 done）。"""
+    """guard 对原生正常结束的 ExtOpt Opt 落 done，独立保留优化未收敛事实。"""
     import json as _json
     import sys
 
@@ -1366,12 +1365,13 @@ async def test_guard_marks_failed_for_unconverged_extopt_opt(
         row = await (await con.execute(
             "SELECT state, last_error FROM compute_jobs WHERE id=?", (task_id,)
         )).fetchone()
-    assert row[0] == "failed"
-    assert "未收敛" in row[1]
+    assert row[0] == "done"
+    assert row[1] is None
 
     payload = _json.loads((workdir / f"state_{task_id}.json").read_text(encoding="utf-8"))
-    assert payload["is_success"] is False
-    assert "未收敛" in payload["error"]
+    assert payload["is_success"] is True
+    assert payload["normal_termination"] is True
+    assert payload["opt_converged"] is False
     assert payload["total_energy_hartree"] == pytest.approx(-383.544742265)
 
 
@@ -1527,6 +1527,38 @@ def test_log_tail_reason_falls_back_to_last_lines(tmp_path):
     reason = _log_tail_reason(log)
     assert "segfault near end" in reason
     assert _log_tail_reason(tmp_path / "missing.log") == ""
+
+
+def test_log_tail_reason_prioritizes_native_fatal_over_mpi_noise(tmp_path):
+    from cloudra.runtime.monitor import _log_tail_reason
+
+    log = tmp_path / "calc.log"
+    log.write_text("\n".join([
+        "[node] Error: vader shared memory warning " * 8,
+        "[node] Error: vader shared memory warning " * 8,
+        "mpirun noticed that process rank 1 exited on signal 9 (Killed).",
+        "ORCA finished by error termination in GUESS",
+        "Calling Command: mpirun -np 4 orca_guess input.gbw",
+        "[file orca_tools/qcmsg.cpp, line 458]: aborting the run",
+    ]))
+    reason = _log_tail_reason(log)
+    assert "ORCA finished by error termination in GUESS" in reason
+    assert "signal 9 (Killed)" in reason
+    assert "Calling Command:" in reason
+    assert "vader" not in reason
+
+
+def test_native_fatal_survives_more_than_tail_window_of_transport_noise(tmp_path):
+    from cloudra.runtime.monitor import _log_tail_reason
+    log = tmp_path/'calc.log'
+    log.write_text('ORCA finished by error termination in GUESS\n'
+                   'Calling Command: mpirun -np 4 orca_guess input.gbw\n' +
+                   ('Error: vader shared memory transport warning\n' * 400) +
+                   'mpirun noticed that process rank 1 exited on signal 9 (Killed).\n')
+    reason = _log_tail_reason(log)
+    assert 'ORCA finished by error termination in GUESS' in reason
+    assert 'Calling Command:' in reason and 'signal 9' in reason
+    assert 'vader' not in reason
 
 
 @pytest.mark.asyncio

@@ -29,7 +29,7 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         role_id="explorer",
         legacy_agent_id=legacy_agent_id_for_role("explorer"),
         display_name="Explorer",
-        description="Read-only project structure and evidence review.",
+        description="Read-only project structure and evidence review (read-only; no file writes, no script/bash execution).",
         permissions=PermissionSet(read=True),
         can_spawn=False,
     ),
@@ -37,7 +37,7 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         role_id="writer",
         legacy_agent_id=legacy_agent_id_for_role("writer"),
         display_name="Writer",
-        description="Writes documents and reports; no script execution.",
+        description="Writes documents and reports (read and write files via write/edit; bash is strictly limited to read-only inspection commands like ls, wc, grep, find, tail).",
         permissions=PermissionSet(read=True, write=True),
         can_spawn=False,
     ),
@@ -94,13 +94,13 @@ BUILTIN_ROLES: tuple[RoleProfile, ...] = (
         legacy_agent_id=legacy_agent_id_for_role("supervisor"),
         display_name="Supervisor",
         description=(
-            "Scientific supervisor in dag_guided mode: a real runtime_v2 agent "
-            "driven by the normal LLM pipeline. Each turn it reads the persisted "
-            "supervision mailbox (pending call reviews / open drafts / queued "
-            "requests) and adjudicates around the submitted claims; an empty "
-            "mailbox ends the turn. Its tool surface is the registry "
-            "supervisor_access projection (read-only on the delivery graph)."
+            "Scientific supervisor in dag_guided mode, driven by the normal LLM pipeline. "
+            "The process Supervisor reviews submitted evidence and maintains PROCESS.md. "
+            "Each final delivery request has a separate Supervisor session that reviews only "
+            "that submission against the complete human task and constraints. Tools come from "
+            "the registry supervisor_access projection (read-only on the delivery graph)."
         ),
+        # PROCESS.md uses a scoped executor capability, not general write or delegation authority.
         permissions=PermissionSet(read=True),
         can_spawn=False,
         # 裁决工具（dag_review_call/dag_accept_mechanism）的模式门要求

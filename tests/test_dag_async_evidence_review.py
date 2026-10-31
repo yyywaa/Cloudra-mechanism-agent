@@ -7,6 +7,7 @@ decision.
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -32,11 +33,13 @@ from cloudra.infra.config import get_config
 from cloudra.persistence.database import ConversationDB
 from cloudra.tools.Plantool.dag_tools.dag_delivery_report import DagDeliveryReport
 from cloudra.tools.Plantool.dag_tools.dag_propose_mechanism import DagProposeMechanism
+from cloudra.tools.Plantool.dag_tools.dag_review_evidence import DagReviewEvidence
 from cloudra.tools.Plantool.dag_tools.dag_review_species import DagReviewSpecies
 from cloudra.tools.Plantool.dag_tools.dag_review_step import DagReviewStep
 from cloudra.tools.Plantool.dag_tools.dag_submit_species_evidence import DagSubmitSpeciesEvidence
 from cloudra.tools.Plantool.dag_tools.dag_submit_step_evidence import DagSubmitStepEvidence
-from tests.dag_identity import call_dag_tool, make_coordinator, make_supervisor
+from cloudra.tools.Plantool.dag_tools.dag_view_evidence import DagViewEvidence
+from tests.dag_identity import call_dag_tool, make_actor, make_coordinator, make_supervisor
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
@@ -366,7 +369,7 @@ async def test_step_submission_binds_real_irc_file_for_review_credit(tmp_path):
     out = await call_dag_tool(
         DagSubmitStepEvidence, agent, session,
         step_name="step1",
-        ts_file=str(FIXTURES_DIR / "xtb" / "ts_hess_xtb.out"),
+        ts_file=str(FIXTURES_DIR / "benchmark_synthetic" / "ts_freq.out"),
         irc_file=str(FIXTURES_DIR / "gaussian" / "hcn_ts_irc_g16.log"),
         reaction_coordinate_description="TS and IRC for the declared step",
     )
@@ -526,7 +529,7 @@ def _save_claim(store, targets):
 
 
 def _seed_simple_complete_graph(tmp_path, conversation_id, *, pending=False):
-    """Seed a complete graph, optionally retaining machine pending contracts."""
+    """Seed a review-protocol graph with explicit TS-only stage requirements."""
     _agent, session, db = _session(tmp_path, conversation_id)
     store = DagStore(db)
     store.ensure_bundle("s1")
@@ -547,7 +550,8 @@ def _seed_simple_complete_graph(tmp_path, conversation_id, *, pending=False):
                 AddEdge(op="add_edge", graph="delivery", edge=ElementaryStepEdge(
                     edge_id="step1", name="step1", source_node_id="r", target_node_id="p",
                     evidence_level="endpoint_supported",
-                    stages=[StageState(kind="ts_opt"), StageState(kind="frequency")] if pending else [])),
+                    stages=[StageState(kind=kind, status="pending" if pending else "supported")
+                            for kind in ("ts_opt", "frequency")])),
             ],
         )
     )
@@ -623,6 +627,25 @@ def _request(store, request_id, targets, question, basis):
     )
 
 
+def test_superseded_replacement_keeps_review_debt_until_new_verdict(tmp_path):
+    _session_obj, db, store = _seed_simple_complete_graph(tmp_path, 'stale-review-debt')
+    _save_claim(store, ['step1'])
+    question = 'Does the selected saddle support this step?'
+    first_id = _request(store, 'first-accepted', ['step1'], question, 'first')
+    assert store.resolve_review(ReviewDecision(request_id=first_id, basis_fingerprint='first',
+        verdict='accept', reason='old evidence'), expected_basis='first')['accepted']
+    second_id = _request(store, 'new-stale', ['step1'], question, 'second')
+    assert not store.resolve_review(ReviewDecision(request_id=second_id, basis_fingerprint='second',
+        verdict='accept', reason='outdated material'), expected_basis='second', current_basis='third')['accepted']
+    controller = DagController(db, 's1', 'dag_guided', conversation_id=db.conversation_id)
+    assert not controller.delivery_report().complete
+    assert any(g.code == 'stale_evidence_review' for g in controller.delivery_report().unresolved)
+    third_id = _request(store, 'replacement', ['step1'], question, 'third')
+    assert store.resolve_review(ReviewDecision(request_id=third_id, basis_fingerprint='third',
+        verdict='accept', reason='new material checked'), expected_basis='third')['accepted']
+    assert not any(g.code == 'stale_evidence_review' for g in controller.delivery_report().unresolved)
+
+
 @pytest.mark.asyncio
 async def test_needs_evidence_replaced_by_new_submission_then_accept_clears_gap(tmp_path):
     _session_obj, db, store = _seed_simple_complete_graph(tmp_path, "async-review-retry")
@@ -663,6 +686,133 @@ async def test_needs_evidence_replaced_by_new_submission_then_accept_clears_gap(
     assert not any(g.code == "supervisor_review_gap" and g.target_id == "step1" for g in report.unresolved)
     assert store.get_review_decision_for_request(first_id).verdict == "needs_evidence"
     assert store.get_review_decision_for_request(second_id).verdict == "accept"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("old_verdict", ["needs_evidence", "reject"])
+@pytest.mark.parametrize("kind", ["evidence", "exception"])
+async def test_supervisor_reconsiders_resolved_consultation_with_new_evidence(tmp_path, old_verdict, kind):
+    session, db, store = await asyncio.to_thread(_seed_simple_complete_graph, tmp_path, f"reconsider-{old_verdict}")
+    await asyncio.to_thread(_save_claim, store, ["step1"])
+    question = "Does the second step need a longer IRC?"
+    first_id = await asyncio.to_thread(store.enqueue_review, ReviewRequest(
+        request_id="old-consultation", kind=kind, requester="coordinator",
+        target_ids=["step1"], question=question, basis_fingerprint="old-basis"))
+    assert (await asyncio.to_thread(store.resolve_review, ReviewDecision(
+        request_id=first_id, basis_fingerprint="old-basis", verdict=old_verdict,
+        reason="the endpoint evidence needs clarification", next_action="inspect the native endpoints"),
+        expected_basis="old-basis"))["accepted"]
+    other_id = await asyncio.to_thread(_request, store, "different-question", ["step1"], "Does the first step have the correct identity?", "other-basis")
+    assert (await asyncio.to_thread(store.resolve_review, ReviewDecision(
+        request_id=other_id, basis_fingerprint="other-basis", verdict="needs_evidence",
+        reason="the first-step assignment is still unproven", next_action="inspect the first step"),
+        expected_basis="other-basis"))["accepted"]
+    ref = await asyncio.to_thread(store.register_evidence, "s1", "endpoint inspection", {"verified": True})
+    supervisor = make_supervisor(db.conversation_id, workspace_dir=str(tmp_path))
+    out = await call_dag_tool(DagReviewEvidence, supervisor, session,
+        request_id=first_id, verdict="accept", reason="the accepted short IRC answers this question",
+        evidence_refs=[ref.model_dump(mode="json")])
+
+    assert out.is_success and out.accepted, out
+    revised = await asyncio.to_thread(store.get_review_request, out.result["request_id"])
+    assert revised.request_id != first_id
+    assert revised.question == question and revised.target_ids == ["step1"]
+    assert ref in revised.supporting_refs
+    assert (await asyncio.to_thread(store.get_review_decision_for_request, first_id)).verdict == old_verdict
+    assert (await asyncio.to_thread(store.get_review_decision_for_request, revised.request_id)).verdict == "accept"
+    report = await asyncio.to_thread(DagController(db, "s1", "dag_guided", conversation_id=db.conversation_id).delivery_report)
+    gaps = report.unresolved
+    debts = [g for g in gaps if g.code == "supervisor_review_gap"]
+    assert len(debts) == 1
+    assert other_id in debts[0].detail
+    assert "Does the first step have the correct identity?" in debts[0].detail
+
+    requests_before = await asyncio.to_thread(store.list_review_requests, state=None)
+    notifications_before = await asyncio.to_thread(store.pending_review_notifications)
+    repeated = await call_dag_tool(DagReviewEvidence, supervisor, session,
+        request_id=first_id, verdict="accept", reason="the accepted short IRC answers this question",
+        evidence_refs=[ref.model_dump(mode="json")])
+    assert not repeated.is_success
+    assert repeated.rejection_code == "duplicate_decision"
+    assert await asyncio.to_thread(store.list_review_requests, state=None) == requests_before
+    assert await asyncio.to_thread(store.pending_review_notifications) == notifications_before
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("pending", [True, False])
+async def test_reconsidering_consultation_does_not_clear_scientific_gaps_or_refutes(tmp_path, pending):
+    from cloudra.dag.evidence_facts import EvidenceFact, FactSubject
+
+    session, db, store = await asyncio.to_thread(_seed_simple_complete_graph, tmp_path,
+        "reconsider-keeps-science", pending=pending)
+    await asyncio.to_thread(store.save_draft, MechanismDraft(operations=[], state="accepted",
+        rationale="require actual identity evidence", contract_version=2,
+        claim_spec=ClaimSpec(kind="mechanism", scope={"targets": ["step1"]}, required_checks={"identity"})),
+        actor_id="test-harness")
+    ref = await asyncio.to_thread(store.register_evidence, "s1", "native evidence", {"identity": "mismatch"})
+    await asyncio.to_thread(store.record_facts, [EvidenceFact(fact_id="original-support", check="identity", outcome="supports",
+        subject=FactSubject(target_hint="step1"), source_refs=[ref], details={"identity": "match"})])
+    controller = DagController(db, "s1", "dag_guided", conversation_id=db.conversation_id)
+    before = await asyncio.to_thread(controller.delivery_report)
+    assert before.complete is not pending
+    old_id = await asyncio.to_thread(_request, store, "old-consult", ["step1"], "Is the parser failure a blocker?", "old")
+    assert (await asyncio.to_thread(store.resolve_review, ReviewDecision(request_id=old_id, basis_fingerprint="old",
+        verdict="needs_evidence", reason="read the source", next_action="inspect the source"), expected_basis="old"))["accepted"]
+    await asyncio.to_thread(store.record_facts, [EvidenceFact(fact_id="actual-counterevidence", check="identity", outcome="refutes",
+        subject=FactSubject(target_hint="step1"), source_refs=[ref], details={"identity": "mismatch"})])
+    supervisor = make_supervisor(db.conversation_id, workspace_dir=str(tmp_path))
+    out = await call_dag_tool(DagReviewEvidence, supervisor, session,
+        request_id=old_id, verdict="accept", reason="the parser itself is working",
+        evidence_refs=[ref.model_dump(mode="json")])
+    assert out.is_success, out
+    report = await asyncio.to_thread(controller.delivery_report)
+    assert not report.complete
+    if pending:
+        assert any(g.code == "missing_stage_evidence" and g.target_id == "step1" for g in report.unresolved)
+    assert any(g.code == "claim_contradiction" and g.target_id == "step1" for g in report.unresolved)
+    assert not any(g.code == "supervisor_review_gap" for g in report.unresolved)
+    exceptions = await asyncio.to_thread(store.collect_review_exceptions, ["step1"])
+    assert any(e["category"] == "contradiction" for e in exceptions)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind,proposal,verdict", [
+    ("evidence", {"element_type": "step"}, "needs_evidence"),
+    ("evidence", {"element_type": "species"}, "reject"),
+    ("draft", {}, "needs_evidence"),
+    ("exit", {}, "reject"),
+    ("evidence", {}, "accept"),
+])
+async def test_reconsideration_does_not_replace_file_reviews_or_accepted_decisions(tmp_path, kind, proposal, verdict):
+    session, db, store = await asyncio.to_thread(_seed_simple_complete_graph, tmp_path, "reconsider-protected-review")
+    request = ReviewRequest(kind=kind, requester="coordinator", target_ids=["step1"],
+        question="Review this submission", proposal=proposal, basis_fingerprint="old")
+    old_id = await asyncio.to_thread(store.enqueue_review, request)
+    assert (await asyncio.to_thread(store.resolve_review, ReviewDecision(request_id=old_id, basis_fingerprint="old",
+        verdict=verdict, reason="the original decision", next_action="submit actual evidence"), expected_basis="old"))["accepted"]
+    supervisor = make_supervisor(db.conversation_id, workspace_dir=str(tmp_path))
+    out = await call_dag_tool(DagReviewEvidence, supervisor, session,
+        request_id=old_id, verdict="accept", reason="a different statement cannot replace this submission")
+    assert not out.is_success
+    assert len(await asyncio.to_thread(store.list_review_requests, state=None)) == 1
+    assert (await asyncio.to_thread(store.get_review_decision_for_request, old_id)).verdict == verdict
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["evidence", "exception"])
+async def test_evidence_view_exposes_resolved_consultation_question_and_decision(tmp_path, kind):
+    session, db, store = await asyncio.to_thread(_seed_simple_complete_graph, tmp_path, "view-old-consultation")
+    old_id = await asyncio.to_thread(store.enqueue_review, ReviewRequest(kind=kind, requester="coordinator", target_ids=["step1"],
+        question="Does this endpoint need another optimization?", basis_fingerprint="old"))
+    assert (await asyncio.to_thread(store.resolve_review, ReviewDecision(request_id=old_id, basis_fingerprint="old", verdict="needs_evidence",
+        reason="the minimum identity is unclear", next_action="read the native endpoint"), expected_basis="old"))["accepted"]
+    supervisor = make_supervisor(db.conversation_id, workspace_dir=str(tmp_path))
+    out = await call_dag_tool(DagViewEvidence, supervisor, session, review_id=old_id)
+    assert out.is_success, out
+    assert out.result["question"] == "Does this endpoint need another optimization?"
+    assert out.result["target_ids"] == ["step1"]
+    assert out.result["decision"]["verdict"] == "needs_evidence"
+    assert out.result["decision"]["reason"] == "the minimum identity is unclear"
 
 
 @pytest.mark.asyncio
@@ -734,7 +884,7 @@ async def test_real_species_and_step_files_are_reviewed_once_for_final_delivery(
     store = DagStore(db)
     supervisor = make_supervisor(db.conversation_id, workspace_dir=str(tmp_path))
     water = FIXTURES_DIR / "gaussian" / "water_opt_freq_g16.out"
-    ts = FIXTURES_DIR / "xtb" / "ts_hess_xtb.out"
+    ts = FIXTURES_DIR / "benchmark_synthetic" / "ts_freq.out"
     if machine_unverified:
         from cloudra.dag.evidence_ingest import TSValidationResult
         from cloudra.tools.Plantool.dag_tools import dag_submit_step_evidence
@@ -743,8 +893,8 @@ async def test_real_species_and_step_files_are_reviewed_once_for_final_delivery(
             dag_submit_step_evidence,
             "validate_ts_mode",
             lambda *args, **kwargs: TSValidationResult(
-                is_valid=False,
-                verified=False,
+                frequency_count_valid=False,
+                frequency_data_present=False,
                 n_imag=0,
                 message="fixture parser is inconclusive about the TS mode",
             ),
@@ -793,7 +943,7 @@ async def test_real_species_and_step_files_are_reviewed_once_for_final_delivery(
     if machine_unverified:
         review = store.get_review_request(step.result["review_id"])
         assert review is not None
-        assert review.proposal["ts_validation"]["verified"] is False
+        assert review.proposal["ts_validation"]["frequency_data_present"] is False
     reviewed_step = await call_dag_tool(
         DagReviewStep,
         supervisor,
@@ -820,9 +970,22 @@ async def test_real_species_and_step_files_are_reviewed_once_for_final_delivery(
     assert after_stages == before_stages
     report = DagController(db, "s1", "dag_guided", conversation_id=db.conversation_id).delivery_report()
     assert report.complete
-    gate = await DagController(
-        db, "s1", "dag_guided", conversation_id=db.conversation_id
-    ).audit_stop("complete")
+    controller = DagController(db, "s1", "dag_guided", conversation_id=db.conversation_id)
+    gate = await controller.audit_stop("complete")
+    assert gate.action == "wait_review"
+    wrong_scope = await call_dag_tool(DagReviewEvidence, supervisor, session,
+        request_id=gate.request_id, verdict="accept", reason="process reviewer cannot decide final delivery")
+    assert not wrong_scope.is_success
+    pending_final = await asyncio.to_thread(store.get_review_request, gate.request_id)
+    assert pending_final.state == "queued"
+    final_supervisor = make_actor(db.conversation_id, "supervisor",
+        workspace_dir=str(tmp_path), session_id="as_final_review_test")
+    final_supervisor._runtime_agent.final_review_request_id = gate.request_id
+    final_supervisor.final_review_request_id = gate.request_id
+    reviewed_final = await call_dag_tool(DagReviewEvidence, final_supervisor, session,
+        request_id=gate.request_id, verdict="accept", reason="the whole submitted delivery is supported")
+    assert reviewed_final.is_success
+    gate = await controller.audit_stop("complete")
     assert gate.action == "allow_final"
     assert gate.basis == "supervisor_supported"
 
@@ -833,7 +996,7 @@ async def test_accepted_step_review_does_not_credit_replaced_edge_same_id(tmp_pa
     session, db, store = _seed_review_graph(tmp_path, "async-replaced-edge-credit")
     agent = _coordinator(db.conversation_id)
     supervisor = make_supervisor(db.conversation_id, workspace_dir=str(tmp_path))
-    ts = FIXTURES_DIR / "xtb" / "ts_hess_xtb.out"
+    ts = FIXTURES_DIR / "benchmark_synthetic" / "ts_freq.out"
 
     submitted = await call_dag_tool(
         DagSubmitStepEvidence,
@@ -984,7 +1147,7 @@ async def test_endpoint_identity_change_invalidates_old_step_review_credit(tmp_p
         agent,
         session,
         step_name="step1",
-        ts_file=str(FIXTURES_DIR / "xtb" / "ts_hess_xtb.out"),
+        ts_file=str(FIXTURES_DIR / "benchmark_synthetic" / "ts_freq.out"),
         reaction_coordinate_description="identity-bound transition mode",
     )
     assert submitted.is_success

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import Field
 
@@ -56,15 +56,6 @@ class DagBindEvidenceInput(input_schema):
             "Use a one-element list for a single bind."
         ),
     )
-    expected_revision: Optional[int] = Field(
-        default=None,
-        ge=0,
-        description=(
-            "Optional delivery revision expected by the caller. If provided and "
-            "the delivery graph has moved, the batch is rejected with "
-            "revision_conflict instead of being retried on a newer revision."
-        ),
-    )
 
 class DagBindEvidence(DagToolBase):
     def is_manage(self) -> bool:
@@ -103,7 +94,8 @@ class DagBindEvidence(DagToolBase):
             return self._standard_disabled()
         ctx = await self._prepare(session)
         controller = DagController(
-            ctx.db, session.id, ctx.mode, conversation_id=ctx.conversation_id
+            ctx.db, session.id, ctx.mode, conversation_id=ctx.conversation_id,
+            working_directory=getattr(self.subagent, "working_directory", None),
         )
         attachments = [item.model_dump(mode="json") for item in user_input.attachments]
         if mode is OrchestrationMode.DAG_GUIDED:
@@ -135,13 +127,11 @@ class DagBindEvidence(DagToolBase):
                     attachments[0]["tool_call_id"],
                     attachments[0]["bind_target"],
                     attachments[0]["stage_kind"],
-                    expected_revision=user_input.expected_revision,
                 )
                 results = [bound]
             else:
                 bound = await controller.bind_stage_attachments(
                     attachments,
-                    expected_revision=user_input.expected_revision,
                 )
                 results = [bound]
         except Exception as exc:

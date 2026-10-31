@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cloudra"
-version = "0.1.0rc1"
+version = "0.1.0"
 description = "Autonomous agent for organic small-molecule mechanism computation"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -80,6 +80,7 @@ dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.20",
     "pytest-cov>=4.0",
+    "jsonschema>=4.0",
     "ruff>=0.6",
 ]
 
@@ -101,6 +102,7 @@ cloudra = [
     "prompts/*.md",
     "skills/**/*",
     "calculator.sh",
+    "infra/token_data/*",
     "runtime_v2/js_host/*.mjs",
     "runtime_v2/js_host/package.json",
     "runtime_v2/js_host/package-lock.json",
@@ -119,9 +121,12 @@ markers = [
 [tool.ruff]
 line-length = 120
 target-version = "py311"
-# This dated evidence bundle pins its scripts and source snapshots by SHA-256.
-# Preserve those historical bytes; maintained code and other archives stay linted.
-extend-exclude = ["gold_compute/organized_data/hard_20261001"]
+# Frozen archives retain their original analysis scripts and source snapshots.
+# Maintained code and other result directories stay linted.
+extend-exclude = [
+    "gold_compute/organized_data/hard_20261001",
+    "gold_compute/queue_20261018/results",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]

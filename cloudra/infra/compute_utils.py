@@ -1,9 +1,12 @@
 """计算任务相关的公共工具函数。"""
 
 import asyncio
+import hashlib
+import io
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -13,6 +16,7 @@ from typing import Mapping, Optional
 
 from cloudra.infra.platform_utils import get_bash_path, is_posix
 from cloudra.persistence.database import ComputeDB
+from cloudra.persistence.fs_utils import atomic_write_json
 from cloudra.services.compute_store import aget_compute_job
 
 # 各 job_type 所需的任一外部可执行程序（通过系统 PATH 查找）。
@@ -23,10 +27,12 @@ _REQUIRED_BINS = {
     "cp2k": ["cp2k.popt", "cp2k.ssmp", "cp2k.psmp", "cp2k"],
     "xtb": ["xtb"],
     "chem_task": ["python3"],
+    "shell": ["bash"],
 }
 
 # guard 轮询间隔（秒）
 GUARD_POLL_INTERVAL = 1800
+ORCA_NEB_GEOMETRY_INPUTS = frozenset({'neb_end_xyzfile', 'neb_ts_xyzfile'})
 
 
 # ---------------------------------------------------------------------------
@@ -362,6 +368,297 @@ def get_log_path(input_file: str, job_type: str = "gaussian") -> str:
     return str(path.with_suffix(".out"))
 
 
+def _execution_receipt(input_file: str, task_id: int) -> Path:
+    return Path(input_file).parent / '.cloudra' / f'execution-{task_id}'
+
+
+def _gaussian_include_reference(line: str) -> tuple[str, int, int] | None:
+    """Read one native @include path/span; keep quotes and /N in source text.
+
+    The returned span includes path quotes, but excludes the optional /N and
+    trailing ! comment. Callers resolve the path against the execution workdir.
+    """
+    stripped = line.lstrip()
+    if not stripped.startswith('@'):
+        return None
+    start = len(line) - len(stripped) + 1
+    while start < len(line) and line[start] in ' \t':
+        start += 1
+    end = start
+    quote = line[start] if start < len(line) and line[start] in {'"', "'"} else ''
+    if quote:
+        end = line.find(quote, start + 1)
+        if end < 0:
+            raise ValueError('unterminated Gaussian include file path')
+        end += 1
+        path = line[start + 1:end - 1]
+    else:
+        while end < len(line) and not line[end].isspace() and line[end] != '!':
+            end += 1
+        if line[start:end].casefold().endswith('/n'):
+            end -= 2
+        path = line[start:end]
+    if not path:
+        raise ValueError('missing Gaussian include file path')
+    suffix = line[end:].strip()
+    if suffix.casefold().startswith('/n'):
+        suffix = suffix[2:].lstrip()
+    if suffix and not suffix.startswith('!'):
+        raise ValueError('invalid Gaussian include file path suffix')
+    return path, start, end
+
+
+def _orca_code_mask(text: str) -> str:
+    """Mask native #...# / end-of-line comments without moving source spans."""
+    masked = []
+    for line in text.splitlines(keepends=True):
+        quote, comment, escaped = '', False, False
+        for char in line:
+            if char in '\r\n':
+                masked.append(char)
+            elif comment:
+                masked.append(' ')
+                if char == '#':
+                    comment = False
+            elif escaped:
+                masked.append(char)
+                escaped = False
+            elif char == '\\' and quote != "'":
+                masked.append(char)
+                escaped = True
+            elif quote:
+                masked.append(char)
+                if char == quote:
+                    quote = ''
+            elif char in {'"', "'"}:
+                masked.append(char)
+                quote = char
+            elif char == '#':
+                masked.append(' ')
+                comment = True
+            else:
+                masked.append(char)
+    return ''.join(masked)
+
+
+def _orca_file_tokens(text: str) -> list[tuple[int, int, str | None]]:
+    """Use native shlex rules while retaining each token's original span."""
+    tokens = []
+    offset = 0
+    for line in _orca_code_mask(text).splitlines(keepends=True):
+        stream = io.StringIO(line)
+        lexer = shlex.shlex(stream, posix=True, punctuation_chars='=')
+        lexer.whitespace_split = True
+        lexer.commenters = ''
+        while True:
+            # shlex buffers punctuation lookahead outside its input stream.
+            start = stream.tell() - len(lexer._pushback_chars)
+            while start < len(line) and line[start].isspace():
+                start += 1
+            try:
+                value = lexer.get_token()
+            except ValueError:
+                # Unrelated malformed options remain the engine's input. A
+                # file directive consuming this token is diagnosed below.
+                tokens.append((offset + start, offset + len(line.rstrip('\r\n')), None))
+                break
+            if value is None:
+                break
+            end = stream.tell() - len(lexer._pushback_chars)
+            if lexer.state == ' ' and end > start and line[end - 1].isspace():
+                end -= 1
+            tokens.append((offset + start, offset + end, value))
+        offset += len(line)
+    return tokens
+
+
+def _orca_file_references(text: str) -> list[tuple[str, str, int, int]]:
+    """Return native file directives and their decoded paths/original spans."""
+    tokens = _orca_file_tokens(text)
+    code = _orca_code_mask(text)
+    references = []
+    consumed = set()
+    block = ''
+    for index, (token_start, token_end, value) in enumerate(tokens):
+        if index in consumed or value is None or text[token_start:token_end].startswith(('"', "'")):
+            continue
+        keyword = value.casefold()
+        line_start = text.rfind('\n', 0, token_start) + 1
+        starts_line = not code[line_start:token_start].strip()
+        starts_statement = starts_line or (
+            index > 0 and (tokens[index - 1][2] or '').casefold() == 'end'
+            and not text[tokens[index - 1][0]:tokens[index - 1][1]].startswith(('"', "'")))
+        if keyword.startswith('%') and starts_statement:
+            block = keyword[1:]
+        elif keyword == 'end' or (starts_line and keyword.startswith(('!', '*'))):
+            block = ''
+        target_index = None
+        if keyword in {'%base', '%moinp', '%pointcharges'} and starts_statement:
+            target_index = index + 1
+        elif keyword == 'moinp' and block == 'scf':
+            target_index = index + 1
+        elif keyword in {'hess_filename', 'inhessname'} and block in {'irc', 'geom'}:
+            target_index = index + 1
+        elif keyword in ORCA_NEB_GEOMETRY_INPUTS and block == 'neb':
+            target_index = index + 1
+        elif (keyword == '*xyzfile' and starts_line) or (
+                keyword == 'xyzfile' and index > 0 and tokens[index - 1][2] == '*'):
+            keyword, target_index = 'xyzfile', index + 3
+        if target_index is None:
+            continue
+        if target_index < len(tokens) and tokens[target_index][2] == '=':
+            target_index += 1
+        if target_index >= len(tokens):
+            raise ValueError(f'native {value} file path is missing')
+        start, end, path = tokens[target_index]
+        if path is None:
+            raise ValueError(f'unterminated native file path for {value}')
+        consumed.add(target_index)
+        references.append((keyword, path, start, end))
+    return references
+
+
+def _orca_geometry_output_paths(input_file: str, *, protect_dependencies: bool = True) -> set[Path]:
+    """Known native IRC outputs for the input stem and explicit %base prefixes."""
+    source = Path(input_file)
+    prefixes = {source.with_suffix('')}
+    dependencies = set()
+    text = source.read_text(encoding='utf-8', errors='replace') if source.is_file() else ''
+    for keyword, value, _start, _end in _orca_file_references(text):
+        if keyword == '%base':
+            prefixes.add((source.parent / value).resolve())
+        elif keyword in ORCA_NEB_GEOMETRY_INPUTS or keyword == 'xyzfile':
+            dependencies.add((source.parent / value).resolve())
+    outputs = {prefix.with_name(prefix.name + suffix)
+               for prefix in prefixes for suffix in ('_IRC_F.xyz', '_IRC_B.xyz', '_IRC_F_trj.xyz', '_IRC_B_trj.xyz', '_NEB-TS_converged.xyz')}
+    for prefix in prefixes:
+        if not prefix.parent.is_dir():
+            continue
+        for child in prefix.parent.iterdir():
+            lead = prefix.name + '_im'
+            if child.name.startswith(lead) and child.suffix == '.xyz' and child.name[len(lead):-4].isdigit():
+                outputs.add(child)
+    if protect_dependencies and any(output.resolve() in dependencies for output in outputs if output.exists()):
+        raise ValueError('native IRC output overlaps an explicit XYZ input dependency')
+    return outputs
+
+
+def prepare_execution_evidence(input_file: str, job_type: str, task_id: int, db: ComputeDB) -> None:
+    """Archive prior native output before launch; never infer ownership from mtime.
+
+    The old bytes stay in previous/. A new file at the conventional path is then
+    unambiguously this execution, even when its contents equal the previous run.
+    A recovered guard reuses the receipt instead of archiving current output.
+    """
+    if job_type not in {'gaussian', 'orca'}:
+        return
+    from cloudra.infra.flocks import is_lock_held, locked
+
+    native = Path(get_log_path(input_file, job_type))
+    receipt = _execution_receipt(input_file, task_id)
+    receipt.mkdir(parents=True, exist_ok=True)
+    if native.resolve() == Path(input_file).resolve():
+        raise ValueError('native output path is the submitted input; refusing to archive the input')
+    # One short local preparation lock also covers distinct inputs sharing an
+    # explicit external %base. Engine execution never holds this coordination lock.
+    output_lock = Path(db.path).with_suffix('.native-evidence.lock')
+    with locked(str(output_lock)):
+        metadata = receipt / 'evidence.json'
+        if metadata.exists():
+            return
+        sidecars = _orca_geometry_output_paths(input_file) if job_type == 'orca' else set()
+        own_outputs = {path.resolve() for path in sidecars}
+        with db.connect() as con:
+            rows = con.execute('SELECT id,path,jobtype,state,scheduler,scheduler_job_id FROM compute_jobs WHERE id!=?',
+                               (task_id,)).fetchall()
+        previous_jobs = []
+        for other, path, engine, state, scheduler, handle in rows:
+            if not path or engine not in {'gaussian', 'orca'}:
+                continue
+            shared_output = Path(get_log_path(path, engine)).resolve() == native.resolve()
+            workdir = str(Path(path).parent)
+            active_owner = state in {'running', 'cancel_requested'} and (
+                (Path(workdir).is_dir() and (is_lock_held(calc_lock_path(workdir, other))
+                                           or is_lock_held(guard_lock_path(workdir, other))))
+                or (_execution_receipt(path, other) / 'evidence.json').is_file()
+                or (scheduler != 'local' and handle))
+            if not shared_output and active_owner and engine == 'orca' and own_outputs:
+                other_outputs = _orca_geometry_output_paths(path, protect_dependencies=False)
+                shared_output = bool(own_outputs & {item.resolve() for item in other_outputs})
+            if not shared_output:
+                continue
+            if state in {'running', 'cancel_requested'}:
+                if active_owner:
+                    raise ValueError(f'native output is owned by active compute job {other}: {native}')
+            elif state in {'done', 'failed', 'cancelled'}:
+                previous_jobs.append((other, path, engine))
+        if native.is_symlink() or (native.exists() and not native.is_file()):
+            raise ValueError(f'native output must be a regular file before execution: {native}')
+        # Older completed rows may still point at the conventional path. Freeze
+        # that evidence before relocating it, so their queries keep the old bytes.
+        for other, path, engine in previous_jobs:
+            if Path(resolve_log_path(path, engine, other)) == native:
+                selected = complete_execution_evidence(path, engine, other)
+                state_path = Path(path).parent / f'state_{other}.json'
+                if state_path.is_file():
+                    state_record = json.loads(state_path.read_text())
+                    state_record['log_file'] = selected
+                    atomic_write_json(state_path, state_record)
+        previous = receipt / 'previous' / native.name
+        previous.parent.mkdir(parents=True, exist_ok=True)
+        if native.exists():
+            native.rename(previous)
+        if job_type == 'orca':
+            for sidecar in sidecars:
+                if not sidecar.is_file():
+                    continue
+                # Keep external %base outputs distinct without changing their bytes.
+                name = sidecar.name if sidecar.parent == native.parent else hashlib.sha256(str(sidecar).encode()).hexdigest()[:16] + '_' + sidecar.name
+                shutil.move(str(sidecar), str(previous.parent / name))
+        atomic_write_json(metadata, {'input_file': input_file, 'job_type': job_type,
+                                     'previous_log': str(previous) if previous.exists() else None,
+                                     'geometry_stems': sorted({path.name.removesuffix('_IRC_F.xyz')
+                                                               for path in sidecars if path.name.endswith('_IRC_F.xyz')})})
+
+
+def complete_execution_evidence(input_file: str, job_type: str, task_id: int) -> str:
+    """Freeze this execution's selected log and its native IRC endpoint bundle."""
+    if job_type not in {'gaussian', 'orca'}:
+        return resolve_log_path(input_file, job_type, task_id)
+    from cloudra.tools.core.irc_endpoint_artifacts import write_irc_endpoint_artifacts
+
+    receipt = _execution_receipt(input_file, task_id)
+    metadata = receipt / 'evidence.json'
+    record = json.loads(metadata.read_text()) if metadata.exists() else {}
+    if record.get('log_file'):
+        write_irc_endpoint_artifacts(record['log_file'])
+        return record['log_file']
+    native = Path(get_log_path(input_file, job_type))
+    captured = Path(input_file).parent / '.cloudra' / f'calc-{task_id}.out.log'
+    source = native if native.is_file() and native.stat().st_size else captured
+    results = receipt / 'results'
+    results.mkdir(parents=True, exist_ok=True)
+    target = results / source.name
+    if source.is_file():
+        shutil.copy2(source, target)
+        if job_type == 'orca':
+            geometries = _orca_geometry_output_paths(input_file)
+            record.update(input_file=input_file, job_type=job_type,
+                          geometry_stems=sorted({path.name.removesuffix('_IRC_F.xyz') for path in geometries
+                                                 if path.name.endswith('_IRC_F.xyz')}))
+            atomic_write_json(metadata, record)
+            for geometry in geometries:
+                if geometry.is_file():
+                    shutil.copy2(geometry, results / geometry.name)
+            from cloudra.tools.core.orca_frames import snapshot_irc_endpoints
+
+            snapshot_irc_endpoints(str(target), results)
+        write_irc_endpoint_artifacts(target)
+    record['log_file'] = str(target)
+    atomic_write_json(metadata, record)
+    return str(target)
+
+
 def resolve_log_path(input_file: str, job_type: str = "gaussian", task_id: int | None = None) -> str:
     """解析计算作业的真实日志路径——query_compute_job 与完成通知统一走这里（GH #20）。
 
@@ -369,13 +666,38 @@ def resolve_log_path(input_file: str, job_type: str = "gaussian", task_id: int |
     日志文件（如本机 ORCA 6.1.1 macOS 构建把主输出全部写 stdout、从不落 .out），
     guard 会把 calculator stdout 捕获到 ``.cloudra/calc-<id>.out.log`` 并回退解析它，
     实际解析路径记录在 guard state json 的 ``log_file`` 字段。
-    优先级：state json 记录的真实 log_file（文件仍存在）→ calc 落盘文件
-    （存在时）→ get_log_path 的纯字符串预测。
+    远端已有本轮 results 收据时只认收据内的原生日志/捕获，不读取旧本地证据。
+    有执行收据时只认其冻结日志；尚未收尾时返回本次 capture。
+    没有执行收据的已有记录仍可由其 state json 定位原来的日志。
     """
     if job_type == 'chem_task':
         return input_file
     if input_file and task_id is not None:
         workdir = Path(input_file).parent
+        receipt = _execution_receipt(input_file, task_id)
+        try:
+            evidence = json.loads((receipt / 'evidence.json').read_text(encoding='utf-8'))
+        except FileNotFoundError:
+            evidence = None
+        if evidence is not None or receipt.is_dir():
+            # An execution receipt never falls back to a later shared output.
+            if (evidence or {}).get('log_file'):
+                return evidence['log_file']
+            native = Path(get_log_path(input_file, job_type))
+            if evidence is not None and native.is_file() and native.stat().st_size:
+                return str(native)
+            return str(workdir / '.cloudra' / f'calc-{task_id}.out.log')
+        remote_results = workdir / '.cloudra' / f'remote-{task_id}' / 'results'
+        if remote_results.is_dir():
+            # A remote execution receipt must never fall back to evidence left
+            # by a previous local/remote run in the shared input directory.
+            native = remote_results / Path(get_log_path(input_file, job_type)).name
+            if native.is_file() and native.stat().st_size:
+                return str(native)
+            captured = remote_results / '.cloudra' / f'calc-{task_id}.out.log'
+            if captured.is_file():
+                return str(captured)
+            return str(native)
         try:
             recorded = json.loads(
                 (workdir / f"state_{task_id}.json").read_text(encoding="utf-8")
@@ -384,6 +706,9 @@ def resolve_log_path(input_file: str, job_type: str = "gaussian", task_id: int |
             recorded = None
         if recorded and Path(recorded).is_file():
             return str(recorded)
+        native = Path(get_log_path(input_file, job_type=job_type))
+        if job_type == 'gaussian' and native.is_file() and native.stat().st_size:
+            return str(native)
         captured = workdir / ".cloudra" / f"calc-{task_id}.out.log"
         if captured.is_file():
             return str(captured)

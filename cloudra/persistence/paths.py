@@ -52,6 +52,25 @@ def runtime_db_path(data_dir: Optional[PathLike] = None) -> Path:
     return _root(data_dir) / "runtime-v2.db"
 
 
+def mechanism_graph_path(workspace_root: PathLike) -> Path:
+    """The declared mechanism delivery file in a project workspace."""
+    return Path(workspace_root) / "mechanism_graph.json"
+
+
+def mechanism_evidence_path(workspace_root: PathLike) -> Path:
+    """Program-authored per-step endpoint bindings for the declared delivery."""
+    return Path(workspace_root) / ".cloudra" / "mechanism_evidence.json"
+
+
+def workspace_file_lock_path(workspace_root: PathLike, relative_path: str) -> Path:
+    """Stable inode for a text file's cross-process check-and-replace lock."""
+    import hashlib
+
+    target = (Path(workspace_root) / relative_path).resolve()
+    key = hashlib.sha256(str(target).encode('utf-8')).hexdigest()
+    return target.parent / '.cloudra' / 'locks' / f'workspace-{key}.lock'
+
+
 def runtime_api_lock_path(store_path: PathLike) -> Path:
     """One API state owner per canonical runtime database, independent of port."""
     database = Path(store_path).resolve()
@@ -123,6 +142,11 @@ def knowledge_dir(data_dir: Optional[PathLike] = None) -> Path:
 def knowledge_graph_db_path(data_dir: Optional[PathLike] = None) -> Path:
     """知识图谱数据库路径（kg-entities/kg-relations CSV 导入产物）。"""
     return knowledge_dir(data_dir) / "chem_kg.db"
+
+
+def knowledge_cards_path() -> Path:
+    """Repository knowledge text paired with the imported graph's source ids."""
+    return Path(__file__).resolve().parents[2] / "vector_store" / "cards.jsonl"
 
 
 def workspaces_dir(data_dir: Optional[PathLike] = None) -> Path:

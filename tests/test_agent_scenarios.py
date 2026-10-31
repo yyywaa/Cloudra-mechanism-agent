@@ -20,8 +20,158 @@ from tests.agent_scenarios import (
     ScenarioHarness,
     ScriptedProvider,
     Step,
+    confirm_partial_stop_step,
     malformed_shell_steps,
+    pending_stop_answer_step,
 )
+
+
+@pytest.mark.asyncio
+async def test_stale_file_review_retires_wakes_and_requires_real_resubmission(tmp_path):
+    from cloudra.dag.controller import DagController
+    from cloudra.dag.evidence_facts import EvidenceFact, FactSubject
+    from cloudra.dag.models import UpdateEdge
+    from cloudra.dag.store import DagStore
+    from cloudra.persistence.database import ConversationDB
+    from cloudra.runtime_v2.supervision import (
+        find_project_supervisor,
+        flush_review_notifications,
+        notify_supervisor,
+    )
+    from tests.agent_scenarios import stale_review_resubmit_steps
+    from tests.test_dag_file_review_contract import _mutate
+
+    review_old, review_new, resubmit, finish, park = [asyncio.Event() for _ in range(5)]
+    old_step, new_step = Step(wait_for=review_old), Step(wait_for=review_new)
+    fixture = Path(__file__).parent / "fixtures/benchmark_synthetic/ts_freq.out"
+    provider = ScriptedProvider(by_role={
+        "coordinator": stale_review_resubmit_steps(fixture.name, resubmit, finish, park),
+        "supervisor": [Step(stop=True)],
+    })
+    harness = await ScenarioHarness.start(tmp_path, provider=provider)
+    try:
+        await _set_supervisor_traditional(harness)
+        workspace = _workspace(harness.project.id)
+        workspace.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(fixture, workspace / fixture.name)
+        await asyncio.to_thread(_seed_guided_step_for_file_review, harness.project.id)
+        db = await asyncio.to_thread(lambda: ConversationDB(harness.project.id).init())
+        store = DagStore(db)
+        await asyncio.to_thread(_mutate, store, UpdateEdge(op="update_edge", graph="delivery", edge_id="step1",
+            changes={"stages": [{"kind": "ts_opt"}, {"kind": "frequency"}, {"kind": "short_irc"}]}))
+        coordinator = await harness.spawn("coordinator", protocol="traditional", orchestration_mode="dag_guided")
+        await harness.wait_for(lambda: any(a.role_id == 'supervisor' and a.state.value == 'succeeded'
+                                          for a in harness.core.agents.values()), 'Supervisor idle after initial submission')
+        park.set()
+        await harness.wait_for(lambda: coordinator.state.value == "waiting_approval", "Coordinator parked awaiting review")
+        await harness.wait_for(lambda: all(a.state.value == "succeeded" for a in harness.core.agents.values()
+            if a.role_id == "supervisor"), "process and final reviewers are idle")
+        process = find_project_supervisor(harness.core, harness.project.id)
+        assert process is not None and process.final_review_request_id is None
+        provider.script("supervisor", old_step, new_step, Step(wait_for=finish, text="await more evidence"))
+        submitted = next(t for t in harness.tool_events(coordinator) if t["tool_name"] == "dag_submit_step_evidence")
+        old_id = submitted["result_data"]["result"]["review_id"]
+        old_request = await asyncio.to_thread(store.get_review_request, old_id)
+        await asyncio.to_thread(store.record_facts, [EvidenceFact(fact_id="new-related-fact", check="path", outcome="refutes",
+            subject=FactSubject(target_hint="step1"), source_refs=old_request.supporting_refs, details={"missing_direction": True})])
+        await notify_supervisor(harness.core, harness.project.id,
+                                observation="A new related path fact requires process review.")
+        old_step.tools = [("dag_review_evidence", {"request_id": old_id, "verdict": "accept", "reason": "review old file snapshot"})]
+        review_old.set()
+        await harness.wait_for(lambda: any(t["tool_name"] == "dag_review_evidence" and t["status"] in {"completed", "failed"}
+            for a in harness.core.agents.values() if a.role_id == "supervisor" for t in harness.tool_events(a)), "stale review rejected")
+        old_result = next(t for a in harness.core.agents.values() if a.role_id == "supervisor"
+            for t in harness.tool_events(a) if t["tool_name"] == "dag_review_evidence")
+        assert not old_result["is_success"]
+        assert old_result["result_data"]["rejection_code"] == "stale_basis"
+        assert (await asyncio.to_thread(store.get_review_request, old_id)).state == "superseded"
+        assert await asyncio.to_thread(store.get_review_decision_for_request, old_id) is None
+        await harness.wait_for(lambda: coordinator.state.value == "running" and provider.call_count("coordinator") >= 4,
+                               "original requester wakes after stale notice")
+        def notices():
+            with db.connect() as con:
+                return con.execute("SELECT kind,request_id,recipient_session_id,state FROM dag_review_notifications WHERE request_id=?",
+                                   (old_id,)).fetchall()
+        assert await asyncio.to_thread(notices) == [("review_superseded", old_id, coordinator.id, "sent")]
+        assert await flush_review_notifications(harness.core, harness.project.id) == 0
+        assert old_id not in [r.request_id for r in await asyncio.to_thread(store.list_review_requests)]
+        controller = DagController(db, coordinator.id, "dag_guided", conversation_id=harness.project.id)
+        report = await asyncio.to_thread(controller.delivery_report)
+        assert any(g.code == "stale_evidence_review" for g in report.unresolved)
+        resubmit.set()
+        await harness.wait_for(lambda: len([t for t in harness.tool_events(coordinator)
+            if t["tool_name"] == "dag_submit_step_evidence" and t["status"] == "completed"]) == 2, "explicit resubmission")
+        submissions = [t for t in harness.tool_events(coordinator) if t["tool_name"] == "dag_submit_step_evidence"]
+        new_id = submissions[-1]["result_data"]["result"]["review_id"]
+        assert new_id != old_id
+        new_step.tools = [("dag_review_evidence", {"request_id": new_id, "verdict": "needs_evidence",
+            "reason": "IRC direction material remains missing", "next_action": "submit a two-sided IRC with verified minima"})]
+        review_new.set()
+        await harness.wait_for(lambda: len([t for a in harness.core.agents.values() if a.role_id == "supervisor"
+            for t in harness.tool_events(a) if t["tool_name"] == "dag_review_evidence" and t["status"] in {"completed", "failed"}]) == 2,
+            "new material adjudicated")
+        assert (await asyncio.to_thread(store.get_review_request, new_id)).state == "resolved"
+        report = await asyncio.to_thread(controller.delivery_report)
+        assert not report.complete
+        assert any(g.code == "supervisor_review_gap" for g in report.unresolved)
+        assert any("short_irc" in g.detail for g in report.unresolved)
+        assert not any(g.code == "stale_evidence_review" for g in report.unresolved)
+        assert len([m for m in harness.messages(coordinator) if old_id in str(m.get("content", ""))]) == 1
+    finally:
+        for event in (review_old, review_new, resubmit, finish, park):
+            event.set()
+        await harness.aclose()
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("protocol", ["traditional", "javascript"])
+async def test_stop_answer_is_emitted_only_after_final_gate_authorizes_it(tmp_path, protocol):
+    from cloudra.dag.review_requests import ReviewDecision
+    from cloudra.dag.store import DagStore
+    from cloudra.persistence.database import ConversationDB
+    from cloudra.runtime_v2.supervision import flush_review_notifications
+
+    candidate = "candidate-answer-marker"
+    release = asyncio.Event()
+    final = confirm_partial_stop_step(release)
+    provider = ScriptedProvider(by_role={
+        "coordinator": [pending_stop_answer_step(candidate) for _ in range(4)],
+        "supervisor": [Step(stop=True)],
+    })
+    harness = await ScenarioHarness.start(tmp_path, provider=provider)
+    try:
+        coordinator = await harness.spawn("coordinator", protocol=protocol, orchestration_mode="dag_guided")
+        await harness.wait_for(lambda: coordinator.state.value == "waiting_approval", "pending exit review")
+        messages = [e for e in harness.events(coordinator) if e.type == "agent.message_emitted"]
+        assert not any(candidate in e.data.get("content", "") for e in messages)
+        await harness.wait_for(lambda: all(a.state.value == "succeeded" for a in harness.core.agents.values()
+            if a.role_id == "supervisor"), "Supervisor idle while exit decision is pending")
+        provider.script("coordinator", *[final for _ in range(4)])
+
+        def approve():
+            store = DagStore(ConversationDB(harness.project.id))
+            request = next(r for r in store.list_review_requests(state="queued") if r.kind == "exit")
+            decision = ReviewDecision(request_id=request.request_id, basis_fingerprint=request.basis_fingerprint,
+                verdict="accept", reason="approved partial with all gaps retained")
+            assert store.resolve_review(decision, expected_basis=request.basis_fingerprint)["accepted"]
+
+        await asyncio.to_thread(approve)
+        await flush_review_notifications(harness.core, harness.project.id)
+        release.set()
+        await harness.wait_for(
+            lambda: coordinator.state.value == "succeeded" and any(
+                e.type == "agent.message_emitted" and e.data.get("content") == candidate
+                for e in harness.events(coordinator)), "authorized final stop and durable answer")
+        events = harness.events(coordinator)
+        gate = next(e for e in events if e.type == "agent.completion_gate" and e.data["action"] == "allow_final")
+        emitted = next(e for e in events if e.type == "agent.message_emitted" and e.data.get("content") == candidate)
+        assert gate.seq < emitted.seq
+        assert not any(candidate in e.data.get("content", "") for e in events
+            if e.type == "agent.message_emitted" and e.seq < gate.seq)
+    finally:
+        release.set()
+        await harness.aclose()
 
 
 def _todo_store_file(project_id: str, session_id: str) -> Path:
@@ -79,7 +229,7 @@ async def test_compute_result_wakes_agent_during_high_throughput_batch(tmp_path)
         assert gates[-1].data["action"] == "wait_background"
         notices = [e for e in harness.events(agent)
                    if e.type == "agent.message_injected" and (e.data.get("manifest") or {}).get("kind") == "compute_completion"]
-        assert [e.data["manifest"]["task_id"] for e in notices] == [finished]
+        assert [task_id for e in notices for task_id in e.data["manifest"]["task_ids"]] == [finished]
         async with ComputeDB().aconnect() as con:
             row = await (await con.execute("SELECT state FROM compute_jobs WHERE id=?", (running,))).fetchone()
         assert row[0] == "running"
@@ -291,7 +441,7 @@ async def test_guided_complete_waits_for_selected_step_review_and_evidence(tmp_p
             _propose_selected_ab(),
             # Drain the Supervisor's earlier draft notification in a normal turn
             # before the explicit stop is audited.
-            Step(wait_for=attempt_complete, text="review status received"),
+            Step(wait_for=attempt_complete, tools=[('dag_delivery_report', {})]),
             Step(tools=[("stop", {
                 "delivery_disposition": "complete",
             })]),
@@ -344,85 +494,81 @@ async def test_guided_complete_waits_for_selected_step_review_and_evidence(tmp_p
 
 
 def _seed_synthetic_step_science(project_id: str) -> None:
-    """Parser/gate contract data, not computed chemistry; keep all checks real.
-
-    The toy geometries match test_irc_evidence_semantics: each IRC endpoint
-    lies between the TS and its frequency-verified reference minimum.
-    """
+    """Explicit parser/runtime fixtures, not captured quantum-calculation evidence."""
     from cloudra.dag.engine import DagEngine
     from cloudra.dag.evidence_ingest import snapshot_evidence_file
-    from cloudra.dag.models import AttachRef, GraphActor, MutationBatch
+    from cloudra.dag.models import AttachRef, GraphActor, MutationBatch, UpdateNode
     from cloudra.dag.store import DagStore
     from cloudra.persistence.database import ConversationDB
+    from tests.test_irc_endpoint_optimization import write_lineage_bundle
 
     workspace = _workspace(project_id)
+    # Reuse the strict-lineage tests' synthetic IRC -> Opt -> Freq geometry
+    # chain. The captured NU3 archive has no endpoint Opt logs and cannot
+    # establish this scenario's complete-evidence branch.
+    bundle = write_lineage_bundle(workspace)
     store = DagStore(ConversationDB(project_id).init())
     operations = []
-    for name, z, frequency in [("ts", 1.0, -300.0), ("r", 0.1, 100.0), ("p", 1.9, 100.0)]:
-        path = workspace / f"{name}.out"
-        path.write_text(
-            "* O   R   C   A *\n# Synthetic scenario contract data\n"
-            "FINAL SINGLE POINT ENERGY -100.0\n"
-            "CARTESIAN COORDINATES (ANGSTROEM)\n-----------------------------\n"
-            f"C 0 0 0\nN 0 0 2\nH 0 0 {z}\n\n"
-            f"VIBRATIONAL FREQUENCIES\n0: {frequency} cm**-1\n1: 200.0 cm**-1\n"
-            "ORCA TERMINATED NORMALLY\n"
-        )
-        if name != "ts":
-            snapshot = snapshot_evidence_file(path, workspace)
-            ref = store.register_evidence(
-                "scenario-endpoints", path.name, snapshot.model_dump(mode="json"), source_type="file",
-            )
-            operations.append(AttachRef(
-                op="attach_ref", graph="delivery", target_type="node", target_id=name, ref=ref,
-            ))
+    for name, role in [('r', 'reactant'), ('p', 'product')]:
+        operations.append(UpdateNode(op="update_node", graph="delivery", node_id=name,
+            changes={"smiles": bundle[f'{role}_smiles']}))
+        for stage in ('opt', 'freq'):
+            snapshot = snapshot_evidence_file(bundle[f'{role}_{stage}'], workspace)
+            ref = store.register_evidence("scenario-endpoints", f'{role}_{stage}',
+                snapshot.model_dump(mode="json"), source_type="file")
+            operations.append(AttachRef(op="attach_ref", graph="delivery", target_type="node", target_id=name, ref=ref))
     result = DagEngine(store).apply_batch(MutationBatch(
-        session_id="scenario-endpoints", actor=GraphActor.HARNESS,
-        actor_id="scenario-endpoints", base_revisions=store.load_bundle().revisions,
-        rationale="bind synthetic reference minimum logs", operations=operations,
+        session_id="scenario-endpoints", actor=GraphActor.HARNESS, actor_id="scenario-endpoints",
+        base_revisions=store.load_bundle().revisions,
+        rationale="bind synthetic parser-fixture endpoint Opt/Freq chains", operations=operations,
     ))
     assert result.accepted
-    irc = Path(__file__).parent / "fixtures" / "orca" / "hcn_irc_orca60.out"
-    shutil.copy2(irc, workspace / "irc.out")
-    for suffix, z in [("F", 0.7), ("B", 1.3)]:
-        (workspace / f"irc_IRC_{suffix}.xyz").write_text(
-            f"3\nsynthetic scenario endpoint\nC 0 0 0\nN 0 0 2\nH 0 0 {z}\n"
-        )
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("complete_evidence", [False, True], ids=["missing-irc", "scientific-evidence"])
-async def test_guided_file_verdict_wakes_coordinator_and_enforces_scientific_completion(
+async def test_guided_file_verdict_notifies_coordinator_and_enforces_scientific_completion(
     tmp_path, monkeypatch, complete_evidence
 ):
-    """A verdict wakes once; only scientifically supported files permit complete."""
+    """A verdict notifies once; only the full native evidence chain permits complete."""
+    if complete_evidence:
+        pytest.importorskip("rdkit", reason="requires RDKit (chem extra)")
     submit_evidence = asyncio.Event()
-    attempt_partial = asyncio.Event()
     review_file = asyncio.Event()
     finish_supervisor = asyncio.Event()
     attempt_complete = asyncio.Event()
     hold_after_gate = asyncio.Event()
-    ts = Path(__file__).parent / "fixtures" / "xtb" / "ts_hess_xtb.out"
-    files = {"ts_file": "ts.out", "irc_file": "irc.out"} if complete_evidence else {"ts_file": ts.name}
-    provider = ScriptedProvider(by_role={
+    review_final = asyncio.Event()
+    final_verdict = Step(wait_for=review_final)
+    ts = Path(__file__).parent / "fixtures" / "benchmark_synthetic" / "ts_freq.out"
+    # The synthetic TS log contains both converged Opt and one-imaginary Freq
+    # blocks; the real validators must still prove their geometry association.
+    files = {"ts_file": "ts.out", "opt_file": "ts.out", "irc_file": "irc.out"} if complete_evidence else {"ts_file": ts.name}
+    final_provider = ScriptedProvider(default=[final_verdict, Step(stop=True)])
+
+    class ScopedProvider(ScriptedProvider):
+        async def complete(self, agent, messages, tools, **kwargs):
+            if agent.final_review_request_id:
+                return await final_provider.complete(agent, messages, tools, **kwargs)
+            return await super().complete(agent, messages, tools, **kwargs)
+
+    provider = ScopedProvider(by_role={
         "coordinator": [
             _propose_selected_ab(),
             Step(wait_for=submit_evidence, tools=[("dag_submit_step_evidence", {
                 "step_name": "AB", **files,
                 "reaction_coordinate_description": "selected transition",
             })]),
-            Step(wait_for=attempt_partial, tools=[("stop", {
-                "delivery_disposition": "partial",
-            })]),
             Step(wait_for=attempt_complete, tools=[("dag_delivery_report", {})]),
             Step(tools=[("stop", {"delivery_disposition": "complete"})]),
-            Step(tools=[("dag_delivery_report", {})]),
-            Step(wait_for=hold_after_gate, text="collect missing IRC direction evidence"),
+            *([Step(tools=[("stop", {"delivery_disposition": "complete"})])] if complete_evidence else [
+                Step(tools=[("dag_delivery_report", {})]),
+                Step(wait_for=hold_after_gate, text="collect missing IRC direction evidence"),
+            ]),
         ],
         "supervisor": [
             Step(tools=[("dag_accept_mechanism", {"verdict": "accept"})]),
             Step(text="draft reviewed", stop=True),
-            Step(text="file review queued", stop=True),
             Step(wait_for=review_file, tools=[("dag_review_step", {
                 "step_name": "AB", "verdict": "supported",
                 "rationale": "the submitted file supports the selected transition",
@@ -467,20 +613,19 @@ async def test_guided_file_verdict_wakes_coordinator_and_enforces_scientific_com
         assert checks["short_irc"]["status"] == ("passed" if complete_evidence else "incomplete")
         review_id = submitted["result_data"]["result"]["review_id"]
         await harness.wait_for(
-            lambda: any(a.role_id == "supervisor" and a.state.value == "succeeded"
-                        and len(harness.run_rows(a)) >= 2
+            lambda: any(a.role_id == "supervisor" and a.final_review_request_id is None
+                        and a.state.value == "running" and len(harness.run_rows(a)) >= 1
                         for a in harness.core.agents.values()),
-            "Supervisor idle after file submission",
+            "Process Supervisor awaiting the file verdict",
         )
-        attempt_partial.set()
+        # Keep the research run open while the process reviewer is working.
+        # Partial stop is not a substitute for missing mandatory IRC evidence.
         await harness.wait_for(
-            lambda: coordinator.state.value == "waiting_approval",
-            "Coordinator parked on the partial exit request",
+            lambda: coordinator.state.value == "running" and provider.call_count("coordinator") >= 3,
+            "Coordinator waiting in a non-final provider turn",
         )
-        parked = [e for e in harness.events(coordinator) if e.type == "agent.state_changed"]
-        assert parked[-1].data["reason"] == "wait_review"
         assert not any(row["outcome"] == "succeeded" for row in harness.run_rows(coordinator))
-        child_reports_at_park = len(harness.child_reports(coordinator))
+        child_reports_before_review = len(harness.child_reports(coordinator))
 
         from cloudra.runtime_v2 import supervision
 
@@ -501,8 +646,8 @@ async def test_guided_file_verdict_wakes_coordinator_and_enforces_scientific_com
             "per-file Supervisor verdict",
         )
         await harness.wait_for(
-            lambda: coordinator.state.value == "running" and provider.call_count("coordinator") >= 4,
-            "Coordinator resumed on the verdict and entered a new provider turn",
+            lambda: coordinator.state.value == "running" and provider.call_count("coordinator") >= 3,
+            "Coordinator remains active while its verdict notification is delivered",
         )
         from cloudra.dag.controller import DagController
         from cloudra.dag.store import DagStore
@@ -532,10 +677,8 @@ async def test_guided_file_verdict_wakes_coordinator_and_enforces_scientific_com
                 ).fetchall()
 
         assert await asyncio.to_thread(_notification_rows) == [(coordinator.id, "sent")]
-        assert len(harness.child_reports(coordinator)) == child_reports_at_park
-        states = [e.data.get("to") for e in harness.events(coordinator)
-                  if e.type == "agent.state_changed"]
-        assert "running" in states[states.index("waiting_approval") + 1:]
+        assert len(harness.child_reports(coordinator)) == child_reports_before_review
+        assert not any(e.type == "agent.completion_gate" for e in harness.events(coordinator))
         report = await asyncio.to_thread(
             DagController(db, coordinator.id, "dag_guided", conversation_id=harness.project.id).delivery_report
         )
@@ -563,8 +706,8 @@ async def test_guided_file_verdict_wakes_coordinator_and_enforces_scientific_com
 
         finish_supervisor.set()
         await harness.wait_for(
-            lambda: any(a.role_id == "supervisor" and a.state.value == "succeeded"
-                        and len(harness.run_rows(a)) >= 3
+            lambda: any(a.role_id == "supervisor" and a.final_review_request_id is None
+                        and a.state.value == "succeeded" and len(harness.run_rows(a)) >= 2
                         for a in harness.core.agents.values()),
             "Supervisor idle before the final delivery attempt",
         )
@@ -572,10 +715,17 @@ async def test_guided_file_verdict_wakes_coordinator_and_enforces_scientific_com
         from cloudra.runtime_v2.completion import completion_summary
 
         if complete_evidence:
+            await harness.wait_for(lambda: coordinator.state.value == "waiting_approval",
+                                   "whole complete delivery awaits final review")
+            final_request = next(r for r in await asyncio.to_thread(store.list_review_requests, "queued")
+                                 if r.kind == "exit" and r.proposal["disposition"] == "complete")
+            final_verdict.tools = [("dag_review_evidence", {"request_id": final_request.request_id,
+                "verdict": "accept", "reason": "the whole proposed complete delivery is supported"})]
+            review_final.set()
             await harness.wait_terminal(coordinator)
             completion = completion_summary(harness.events(coordinator))
-            assert completion["completion_basis"] == "supervisor_supported"
-            assert completion["verification_label"] == "supervisor_reviewed"
+            assert completion["completion_basis"] == "scope_completed"
+            assert completion["verification_label"] == "scope_completed"
         else:
             await harness.wait_for(
                 lambda: any(e.type == "agent.completion_gate" and e.data.get("explicit_stop")
@@ -605,11 +755,11 @@ async def test_guided_file_verdict_wakes_coordinator_and_enforces_scientific_com
             assert completion_summary(harness.events(coordinator)) is None
     finally:
         submit_evidence.set()
-        attempt_partial.set()
         review_file.set()
         finish_supervisor.set()
         attempt_complete.set()
         hold_after_gate.set()
+        review_final.set()
         await harness.aclose()
 
 
@@ -798,12 +948,13 @@ async def test_guided_expanded_scope_is_a_real_completion_debt(tmp_path):
 
         supervisor_finish.set()
         await harness.wait_for(
-            lambda: bool(harness.child_reports(agent)) and any(
+            lambda: any(
                 a.role_id == "supervisor" and a.state.value == "succeeded"
                 for a in harness.core.agents.values()
             ),
-            "Supervisor idle and its child report delivered before complete attempt",
+            "Supervisor idle before complete attempt",
         )
+        assert not harness.child_reports(agent)
         finish.set()
         await harness.wait_for(
             lambda: any(e.type == "agent.completion_gate" and e.data.get("explicit_stop")
@@ -839,7 +990,9 @@ async def test_guided_real_file_review_finishes_with_supervisor_basis(tmp_path):
     """真实 runtime、逐文件工具和事件：接受只给 Supervisor 依据，不改机器阶段。"""
     review = asyncio.Event()
     finish = asyncio.Event()
-    ts = Path(__file__).parent / "fixtures" / "xtb" / "ts_hess_xtb.out"
+    review_final = asyncio.Event()
+    final_verdict = Step(wait_for=review_final)
+    ts = Path(__file__).parent / "fixtures" / "benchmark_synthetic" / "ts_freq.out"
     provider = ScriptedProvider(by_role={
         "coordinator": [
             Step(tools=[("dag_submit_step_evidence", {
@@ -855,6 +1008,7 @@ async def test_guided_real_file_review_finishes_with_supervisor_basis(tmp_path):
                 "rationale": "the submitted TS file supports the selected step",
             })]),
             Step(text="review complete", stop=True),
+            final_verdict, Step(stop=True),
         ],
     })
     harness = await ScenarioHarness.start(tmp_path, provider=provider)
@@ -909,15 +1063,22 @@ async def test_guided_real_file_review_finishes_with_supervisor_basis(tmp_path):
             ("ts_opt", "pending"), ("frequency", "pending"),
         ]
         finish.set()
+        await harness.wait_for(lambda: agent.state.value == "waiting_approval",
+                               "whole final delivery awaits review")
+        final_request = next(r for r in await asyncio.to_thread(store.list_review_requests, "queued") if r.kind == "exit")
+        final_verdict.tools = [("dag_review_evidence", {"request_id": final_request.request_id,
+            "verdict": "accept", "reason": "the whole proposed scoped delivery is supported"})]
+        review_final.set()
         await harness.wait_terminal(agent)
         from cloudra.runtime_v2.completion import completion_summary
 
         completion = completion_summary(harness.events(agent))
-        assert completion["completion_basis"] == "supervisor_supported"
-        assert completion["verification_label"] == "supervisor_reviewed"
+        assert completion["completion_basis"] == "scope_completed"
+        assert completion["verification_label"] == "scope_completed"
     finally:
         review.set()
         finish.set()
+        review_final.set()
         await harness.aclose()
 
 
@@ -1011,18 +1172,23 @@ async def test_async_subagent_reports_once_and_wakes_parent(tmp_path):
 
     杠杆：消息投递/唤醒语义（dispatcher 的 WakePolicy）+ 子 Agent 回报 manifest。
     """
+    release_child = asyncio.Event()
     provider = ScriptedProvider(
         by_role={
             "coordinator": [
                 Step(tools=[("subagent_launcher", {"role_id": "explorer", "query": "look around", "is_wait": False})]),
                 Step(text="continuing on the main line", stop=True),
             ],
-            "explorer": [Step(text="explored the workspace", stop=True)],
+            "explorer": [Step(text="explored the workspace", stop=True, wait_for=release_child)],
         }
     )
     harness = await ScenarioHarness.start(tmp_path, provider=provider)
     try:
         parent = await harness.spawn("coordinator", protocol="traditional")
+        # 本场景验证停下后的唤醒；若 child 提前回报，parent 可在同一 run
+        # 正常消费，不能依赖两次模型调用的相对速度来强求第二个 run。
+        await harness.wait_terminal(parent)
+        release_child.set()
         await harness.wait_for(
             lambda: len(harness.child_reports(parent)) == 1,
             "exactly one child completion report",
@@ -1135,6 +1301,81 @@ async def test_unattended_never_enters_waiting_input(tmp_path):
 
 
 # --------------------------------------------------------------- 8. 重启语义
+
+
+@pytest.mark.asyncio
+async def test_restart_closes_old_local_lifecycles_when_user_message_resumes_agent(tmp_path):
+    """恢复只终结旧 run；用户发消息后才收口旧工具/程序，且新回复正常完成。
+
+    杠杆：持久化恢复、CommandBus 消息唤醒、旧工具/程序收口、真实 runner。
+    """
+    from cloudra.runtime_v2.schemas import AgentState, Command
+    from tests.agent_scenarios import interrupted_program_fixture
+
+    release_original_reply = asyncio.Event()
+    harness = await ScenarioHarness.start(
+        tmp_path, provider=ScriptedProvider(default=[Step(wait_for=release_original_reply, stop=True)]),
+    )
+    crash_store_name = "restart-crash.db"
+    try:
+        agent = await harness.spawn("coordinator")
+        await harness.wait_for(lambda: harness.provider.call_count() == 1, "original run enters provider")
+        old_run_id = agent.current_run.run_id
+        for draft in interrupted_program_fixture(agent):
+            await harness.core.event_writer.commit(draft)
+        before_crash = await asyncio.to_thread(harness.events, agent)
+        old_tool = next(e for e in before_crash if e.type == "tool.started")
+        old_program = next(e for e in before_crash if e.type == "program.started")
+        assert not any(e.type in {"tool.finished", "program.finished"} for e in before_crash)
+        # Each event has finished its store write. Copy before graceful local
+        # teardown, whose cancellation terminals must not repair the crash fixture.
+        await harness.core.event_writer.flush()
+        await asyncio.to_thread(shutil.copyfile, harness.store.path, tmp_path / crash_store_name)
+    finally:
+        await harness.aclose()
+
+    reply_started = asyncio.Event()
+    provider = ScriptedProvider(default=[Step(wait_for=reply_started, stop=True)])
+    restored = await ScenarioHarness.restore(tmp_path, store_name=crash_store_name, provider=provider)
+    try:
+        agent = restored.core.agents[agent.id]
+        assert agent.state == AgentState.FAILED
+        assert await asyncio.to_thread(restored.run_rows, agent) == [{
+            "run_id": old_run_id, "outcome": "failed", "basis": None,
+            "failure_kind": "runtime_interrupted",
+        }]
+        assert not any(e.type in {"tool.finished", "program.finished"} for e in await asyncio.to_thread(restored.events, agent))
+        assert provider.call_count() == 0
+
+        await restored.bus.execute(Command(
+            type="agent.message", target={"session_id": agent.id},
+            payload={"content": "Continue with a reply."},
+        ))
+        await restored.wait_for(lambda: provider.call_count() == 1, "provider enters resumed reply")
+        assert agent.state == AgentState.RUNNING
+        events = await asyncio.to_thread(restored.events, agent)
+        new_run = next(e for e in events if e.type == "run.started" and e.run_id != old_run_id)
+        tool_finished = next(e for e in events if e.type == "tool.finished")
+        program_finished = next(e for e in events if e.type == "program.finished")
+        assert tool_finished.run_id == program_finished.run_id == old_run_id
+        assert tool_finished.data["tool_call_id"] == old_tool.data["tool_call_id"]
+        assert program_finished.data["execution_id"] == old_program.data["execution_id"]
+        assert tool_finished.data["status"] == program_finished.data["status"] == "interrupted"
+        assert tool_finished.data["effect_state"] == "unknown"
+        assert tool_finished.seq < program_finished.seq < new_run.seq
+
+        reply_started.set()
+        await restored.wait_terminal(agent)
+        assert agent.state == AgentState.SUCCEEDED
+        rows = await asyncio.to_thread(restored.run_rows, agent)
+        assert [row["outcome"] for row in rows] == ["failed", "succeeded"]
+        types = await asyncio.to_thread(restored.types, agent)
+        assert types.count("tool.finished") == 1
+        assert types.count("program.finished") == 1
+        assert provider.call_count() == 1
+    finally:
+        reply_started.set()
+        await restored.aclose()
 
 
 @pytest.mark.asyncio
@@ -1258,7 +1499,7 @@ async def test_context_budget_compacts_once_then_short_turns_continue(tmp_path, 
     provider = ScriptedProvider(
         default=[
             Step(
-                text="first turn with a long observation " + ("padding " * 300),
+                text="first turn with a long observation " + ("padding " * 4000),
                 tools=[("todo_write", {"todos": [{"content": "keep going", "status": "in_progress"}]})],
             ),
             Step(
@@ -1284,7 +1525,7 @@ async def test_context_budget_compacts_once_then_short_turns_continue(tmp_path, 
         agent = await harness.spawn(
             "coordinator",
             protocol="traditional",
-            context_window=300,
+            context_window=4000,
             max_tokens=32,
         )
         await harness.wait_terminal(agent)
@@ -1306,9 +1547,9 @@ async def test_context_budget_compacts_once_then_short_turns_continue(tmp_path, 
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures('ts_producer_authority')
+@pytest.mark.usefixtures('ts_producer_authority', 'rdkit_chemistry')
 async def test_failed_ts_scan_unchanged_resume_keeps_failure_without_budget_exhaustion(tmp_path, monkeypatch):
-    """Real grouped resume preserves a fixture-driven failed scan and its budget."""
+    """Failed scans retry once; active retries retain that job and failed evidence."""
     from cloudra.services.compute_admission import AdmissionOutcome
     from cloudra.tools.core.ts_process import load_record
     from tests.test_ts_fixture_pipeline import finish, install_log, job_count, waiting_fixture_stage
@@ -1321,23 +1562,187 @@ async def test_failed_ts_scan_unchanged_resume_keeps_failure_without_budget_exha
     try:
         agent=await harness.spawn('small_mol',protocol='traditional')
         db,record,step=await asyncio.to_thread(waiting_fixture_stage,tmp_path,purpose='scan',project_id=harness.project.id,owner_id=agent.id)
-        await asyncio.to_thread(install_log,record,step,'orca/segfault_mid_opt/dvb_opt_truncated_no_termination.out')
+        log=await asyncio.to_thread(install_log,record,step,'orca/segfault_mid_opt/dvb_opt_truncated_no_termination.out')
+        evidence=await asyncio.to_thread(log.read_bytes)
         await asyncio.to_thread(finish,db,step.job_id,'failed')
         before=await asyncio.to_thread(load_record,str(tmp_path),record.run_id)
-        for index,item in enumerate(steps):
-            item.tools=[('ts_resume',{'run_id':record.run_id,'changes':{'guess':before.input.guess.model_dump()},'reason':'retain accepted scan','expected_revision':before.revision})]
+        changes={'guess':before.input.guess.model_dump()}
+        for item in steps:
+            item.tools=[('ts_resume',{'run_id':record.run_id,'changes':changes,'reason':'retry accepted scan'})]
         ready.set()
         await harness.wait_terminal(agent)
         calls=harness.tool_events(agent)
         assert [call['tool_name'] for call in calls]==['ts_resume']*3
         assert all(call['is_success'] for call in calls),harness.describe(agent)
+        new_job=calls[0]['result_data']['waiting_for'][0]['job_id']
+        assert new_job!=step.job_id
         for call in calls:
             result=call['result_data']
-            assert result['blocked']['failure_class']=='scan_job_failed'
-            assert result['usage']['interventions']==0 and result['result'] is None
+            assert result['status']=='waiting' and result['blocked'] is None
+            assert result['waiting_for'][0]['job_id']==new_job
+            assert result['usage']['interventions']==before.intervention_count+1 and result['result'] is None
         after=await asyncio.to_thread(load_record,str(tmp_path),record.run_id)
-        assert after.model_dump()==before.model_dump()
-        assert await asyncio.to_thread(job_count,db)==1
+        assert after.input.model_dump()==before.input.model_dump()
+        assert after.declaration_revision==before.declaration_revision+1
+        assert after.intervention_count==before.intervention_count+1
+        assert len(after.attempt_history)==len(before.attempt_history)+1
+        assert after.attempt_history[-1].blocked.model_dump()==before.blocked.model_dump()
+        assert await asyncio.to_thread(log.read_bytes)==evidence
+        assert await asyncio.to_thread(job_count,db)==2
+    finally:
+        ready.set()
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("ts_producer_authority", "rdkit_chemistry")
+async def test_ts_resume_repeated_irc_repairs_preserve_scientific_failure(tmp_path, monkeypatch):
+    """Real Agent revisions keep one run, immutable failed evidence and one job per new input."""
+    from cloudra.services.compute_admission import AdmissionOutcome
+    from cloudra.tools.core.ts_inputs import TsExecutionLimits
+    from cloudra.tools.core.ts_process import load_record
+    from tests.agent_scenarios import queued_native_ts_optimization, ts_repeated_irc_input_repair_steps
+    from tests.test_ts_fixture_pipeline import finish, install_log, job_count
+
+    monkeypatch.setattr("cloudra.services.compute_admission.admit_job",
+        lambda **_: AdmissionOutcome(ok=True, node_id="fixture", scheduler="local"))
+    frequency_ready, irc_ready = asyncio.Event(), asyncio.Event()
+    provider = ScriptedProvider(by_role={"small_mol": ts_repeated_irc_input_repair_steps(
+        "ts_0001", frequency_ready, irc_ready)})
+    harness = await ScenarioHarness.start(tmp_path, workspace_dir=tmp_path, provider=provider)
+    seed = (
+        "5\nNative optimization seed\n"
+        "C -0.423530 -0.004703 0.002036\n"
+        "O 0.591597 -0.682213 -0.372134\n"
+        "O 1.476819 0.188463 0.229121\n"
+        "H -1.261767 -0.509001 0.485509\n"
+        "H -0.434262 1.076129 -0.083405\n"
+    )
+    try:
+        agent = await harness.spawn("small_mol", protocol="traditional")
+        db, record, optimization = await asyncio.to_thread(queued_native_ts_optimization,
+            tmp_path, seed, harness.project.id, agent.id)
+        await asyncio.to_thread(install_log, record, optimization, "orca/ch2oo_optts_gfn2_orca611.out")
+        await asyncio.to_thread(finish, db, optimization.job_id)
+        current = await asyncio.to_thread(load_record, str(tmp_path), record.run_id)
+        failed_frequency = current.job_steps[-1]
+        failed_log = await asyncio.to_thread(install_log, current, failed_frequency, "orca/co2_freq_orca42.out")
+        failed_bytes = await asyncio.to_thread(failed_log.read_bytes)
+        await asyncio.to_thread(finish, db, failed_frequency.job_id)
+        failed = await asyncio.to_thread(load_record, str(tmp_path), record.run_id)
+        assert failed.blocked.failure_class == "wrong_mode"
+        assert failed.terminal is None
+
+        frequency_ready.set()
+        await harness.wait_for(lambda: len(harness.tool_events(agent)) == 1
+            and harness.tool_events(agent)[0]["status"] == "completed", "frequency repair accepted")
+        repaired = await asyncio.to_thread(load_record, str(tmp_path), record.run_id)
+        frequency = repaired.job_steps[-1]
+        assert frequency.purpose == "frequency" and frequency.job_id != failed_frequency.job_id
+        # This is contract data for the single-mode gate, never a claimed real saddle.
+        await asyncio.to_thread(install_log, repaired, frequency, "benchmark_synthetic/ts_freq.out")
+        await asyncio.to_thread(finish, db, frequency.job_id)
+        before = await asyncio.to_thread(load_record, str(tmp_path), record.run_id)
+        assert before.job_steps[-1].purpose == "irc"
+        first_irc_job = before.job_steps[-1].job_id
+        irc_ready.set()
+        await harness.wait_terminal(agent)
+
+        calls = harness.tool_events(agent)
+        assert [call["tool_name"] for call in calls] == ["ts_resume"] * 5
+        assert all(call["is_success"] for call in calls), harness.describe(agent)
+        repairs = [call["result_data"] for call in calls[1:]]
+        job_ids = [result["waiting_for"][0]["job_id"] for result in repairs]
+        assert len(set([first_irc_job, *job_ids[:3]])) == 4
+        assert job_ids[3] == job_ids[2]
+        assert [result["usage"]["interventions"] for result in repairs] == [2, 3, 4, 4]
+        for result in repairs:
+            assert result["run_id"] == record.run_id
+            assert result["status"] == "waiting" and result["stage"] == "refine"
+            assert result["blocked"] is None and result["result"] is None
+        saved = await asyncio.to_thread(load_record, str(tmp_path), record.run_id)
+        assert saved.pipeline_id == record.pipeline_id and saved.terminal is None
+        assert saved.declaration_revision == 5 and saved.intervention_count == 4
+        assert len(saved.attempt_history) == 4
+        assert saved.attempt_history[0].blocked.model_dump() == failed.blocked.model_dump()
+        assert saved.attempt_history[0].job_steps[-1].job_id == failed_frequency.job_id
+        assert saved.job_steps[0].job_id == optimization.job_id
+        assert saved.job_steps[1].job_id == frequency.job_id
+        assert await asyncio.to_thread(failed_log.read_bytes) == failed_bytes
+        assert await asyncio.to_thread(job_count, db) == 7
+        assert "max_interventions" not in TsExecutionLimits.model_json_schema()["properties"]
+    finally:
+        frequency_ready.set()
+        irc_ready.set()
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("ts_producer_authority", "rdkit_chemistry")
+async def test_ts_resume_native_cclib_assertion_keeps_completed_ts(tmp_path, monkeypatch):
+    """IA8 native ORCA log: real Agent/resume/parser/writer/ledger, no QM process."""
+    from cloudra.services.compute_admission import AdmissionOutcome
+    from cloudra.tools.core.ts_pipeline_driver import handle_process_job_terminal
+    from cloudra.tools.core.ts_process import load_record
+    from tests.agent_scenarios import queued_native_ts_optimization, ts_completed_optimization_frequency_resume_steps
+    from tests.test_ts_fixture_pipeline import install_log, job_count
+
+    monkeypatch.setattr("cloudra.services.compute_admission.admit_job",
+        lambda **_: AdmissionOutcome(ok=True, node_id="fixture", scheduler="local"))
+    ready = asyncio.Event()
+    provider = ScriptedProvider(by_role={"small_mol": ts_completed_optimization_frequency_resume_steps("ts_0001", ready)})
+    harness = await ScenarioHarness.start(tmp_path, workspace_dir=tmp_path, provider=provider)
+    seed = (
+        "5\nCandidate differs from the native optimized geometry\n"
+        "C -0.500000 -0.004703 0.002036\n"
+        "O 0.591597 -0.682213 -0.372134\n"
+        "O 1.476819 0.188463 0.229121\n"
+        "H -1.261767 -0.509001 0.485509\n"
+        "H -0.434262 1.076129 -0.083405\n"
+    )
+    try:
+        agent = await harness.spawn("small_mol", protocol="traditional")
+        db, record, step = await asyncio.to_thread(queued_native_ts_optimization, tmp_path,
+            seed, harness.project.id, agent.id)
+        log = await asyncio.to_thread(install_log, record, step, "orca/ch2oo_optts_gfn2_orca611.out")
+        native_log = await asyncio.to_thread(log.read_bytes)
+        async with db.aconnect() as con:
+            await con.execute("UPDATE compute_jobs SET state='done' WHERE id=?", (step.job_id,))
+            await con.commit()
+        ready.set()
+        await harness.wait_terminal(agent)
+        calls = harness.tool_events(agent)
+        assert [call["tool_name"] for call in calls] == ["ts_resume"]
+        assert calls[0]["is_success"], harness.describe(agent)
+        result = calls[0]["result_data"]
+        assert result["receipt"] is not None
+        assert result["status"] == "waiting" and result["stage"] == "refine"
+        assert result["blocked"] is None and result["result"] is None
+        saved = await asyncio.to_thread(load_record, str(tmp_path), record.run_id)
+        assert [job.purpose for job in saved.job_steps] == ["ts_opt", "frequency"]
+        assert saved.job_steps[0].job_id == step.job_id and saved.job_steps[0].state == "done"
+        assert saved.terminal is None
+        frequency = saved.job_steps[-1]
+        frequency_input = await asyncio.to_thread(Path(frequency.input_path).read_text)
+        assert "NumFreq" in frequency_input and "TightSCF" in frequency_input
+        optimized_xyz = await asyncio.to_thread(Path(frequency.input_path).with_name("optimized.xyz").read_text)
+        expected_geometry = [
+            "C -0.423530 -0.004703 0.002036",
+            "O 0.591597 -0.682213 -0.372134",
+            "O 1.476819 0.188463 0.229121",
+            "H -1.261767 -0.509001 0.485509",
+            "H -0.434262 1.076129 -0.083405",
+        ]
+        actual_atoms = [line.split() for line in optimized_xyz.splitlines()[2:]]
+        expected_atoms = [line.split() for line in expected_geometry]
+        assert [atom[0] for atom in actual_atoms] == [atom[0] for atom in expected_atoms]
+        assert [float(x) for atom in actual_atoms for x in atom[1:]] == pytest.approx(
+            [float(x) for atom in expected_atoms for x in atom[1:]], abs=1e-8)
+        assert await asyncio.to_thread(job_count, db) == 2
+        for _ in range(2):
+            await asyncio.to_thread(handle_process_job_terminal, db, step.job_id)
+        assert await asyncio.to_thread(job_count, db) == 2
+        assert await asyncio.to_thread(log.read_bytes) == native_log
     finally:
         ready.set()
         await harness.aclose()
@@ -1371,6 +1776,45 @@ async def test_yolo_invalid_boolean_never_applies_agent_file_write(tmp_path, mon
         assert client.create.call_count == 3
         target = _workspace(harness.project.id) / "blocked.txt"
         assert not await asyncio.to_thread(target.exists)
+    finally:
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+async def test_yolo_reviews_ts_submission_and_python_switch_but_allows_diagnosis(tmp_path, monkeypatch):
+    """真实工具链中，拒绝提交、拒绝 Python 换路、允许诊断，均在副作用之前裁决。"""
+    from unittest.mock import AsyncMock
+
+    from cloudra.infra.yolo_guard import YoloGuard
+    from tests.agent_scenarios import ts_bypass_then_diagnostic_steps
+    from tests.test_yolo_guard import _approval_response
+
+    monkeypatch.setenv('CLOUDRA_YOLO_MODE', 'true')
+    client = SimpleNamespace(create=AsyncMock(side_effect=[
+        _approval_response({'approved': False, 'reason': 'Repair the existing TS workflow.'}),
+        _approval_response({'approved': False, 'reason': 'Changing execution tools does not repair the missing verification.'}),
+        _approval_response({'approved': True, 'reason': 'Diagnostic observation is allowed.'}),
+    ]))
+    monkeypatch.setattr(YoloGuard, '_client', lambda _: client)
+    harness = await ScenarioHarness.start(tmp_path, provider=ScriptedProvider(default=ts_bypass_then_diagnostic_steps()))
+    try:
+        workspace = _workspace(harness.project.id)
+        await asyncio.to_thread(workspace.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread((workspace / 'ts.inp').write_text, '! HF STO-3G OptTS Freq\n')
+        task = 'Find and rigorously verify this reaction TS.'
+        agent = await harness.spawn('coordinator', protocol='traditional', query=task)
+        await harness.wait_terminal(agent)
+        calls = harness.tool_events(agent)
+        assert [call['tool_name'] for call in calls] == ['submit_compute_job', 'bash', 'write'], harness.describe(agent)
+        assert calls[0]['status'] == 'blocked'
+        assert calls[1]['result_data']['exit_code'] == 126
+        assert calls[2]['result_data']['is_written'] is True
+        assert client.create.call_count == 3
+        assert not await asyncio.to_thread((workspace / 'bypassed.txt').exists)
+        assert await asyncio.to_thread((workspace / 'diagnostic.txt').read_text) == 'diagnostic observation'
+        reviewed = [''.join(part['text'] for part in call.kwargs['messages'][1]['content'])
+                    for call in client.create.call_args_list]
+        assert all(task in content for content in reviewed), reviewed
     finally:
         await harness.aclose()
 
@@ -1418,6 +1862,19 @@ async def test_scope_only_reapproval_clears_stale_completion_debt(tmp_path):
     try:
         await asyncio.to_thread(seed)
         agent = await harness.spawn("coordinator", protocol="traditional", orchestration_mode="dag_guided")
+        await harness.wait_for(lambda: agent.state.value == "waiting_approval", "scope final review")
+        # This regression isolates cleared scope debt; final review is covered by the full tool scenario.
+        from cloudra.dag.review_requests import ReviewDecision
+        from cloudra.dag.store import DagStore
+        from cloudra.persistence.database import ConversationDB
+        from cloudra.runtime_v2.supervision import flush_review_notifications
+        store = DagStore(ConversationDB(harness.project.id))
+        request = next(r for r in await asyncio.to_thread(store.list_review_requests, "queued") if r.kind == "exit")
+        assert (await asyncio.to_thread(store.resolve_review, ReviewDecision(
+            request_id=request.request_id, basis_fingerprint=request.basis_fingerprint,
+            verdict="accept", reason="the revised scope final delivery is acceptable"),
+            expected_basis=request.basis_fingerprint))["accepted"]
+        await flush_review_notifications(harness.core, harness.project.id)
         await harness.wait_terminal(agent)
         reports = [call for call in harness.tool_events(agent) if call["tool_name"] == "dag_delivery_report"]
         assert reports and reports[0]["result_data"]["result"]["complete"] is True
@@ -1476,4 +1933,517 @@ async def test_supervisor_feedback_resumes_background_waiting_coordinator(tmp_pa
         assert any(e["event_id"] == injected.event_id for e in saved)
     finally:
         release.set()
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+async def test_reused_child_completes_new_task_after_compute_notice_and_wakes_parent(tmp_path):
+    from cloudra.runtime_v2.hub_bridge import handle_hub_tool
+    from cloudra.runtime_v2.policies.base import ToolCall
+
+    calculation_done = asyncio.Event()
+    provider = ScriptedProvider(by_role={
+        "coordinator": [Step(stop=True)],
+        "explorer": [Step(stop=True), Step(stop=True, wait_for=calculation_done)],
+    })
+    harness = await ScenarioHarness.start(tmp_path, provider=provider)
+    try:
+        parent = await harness.spawn("coordinator", protocol="traditional")
+        await harness.wait_terminal(parent)
+        child = await harness.spawn("explorer", query="task A", parent=parent, protocol="traditional")
+        await harness.wait_for(lambda: len(harness.child_reports(parent)) == 1, "task A report")
+        await harness.wait_terminal(parent)
+        first_terminal = harness.child_reports(parent)[0]["manifest"]["terminal_event_id"]
+        parent_runs = len(harness.run_rows(parent))
+        called = await handle_hub_tool(harness.core, parent, ToolCall(
+            id="assign-B", name="agent_hub", arguments={"action": "call", "to": child.id, "message": "task B"},
+        ))
+        assert called.is_success
+        await harness.wait_for(lambda: provider.call_count("explorer") >= 2, "task B waiting for calculation")
+        assert len(harness.child_reports(parent)) == 1
+        await harness.core.dispatcher.commit_and_deliver(
+            to_session_id=child.id, project_id=harness.project.id, sender="system", content="[Compute job] done",
+        )
+        calculation_done.set()
+        await harness.wait_for(lambda: len(harness.child_reports(parent)) == 2, "task B report")
+        await harness.wait_for(lambda: len(harness.run_rows(parent)) > parent_runs, "parent resumed for task B")
+        await harness.wait_terminal(parent)
+        reports = harness.child_reports(parent)
+        assert reports[1]["manifest"]["terminal_event_id"] != first_terminal
+        assert reports[1]["manifest"]["session_id"] == child.id
+        assert reports[1]["manifest"]["last_run"]["run_id"] == harness.run_rows(child)[-1]["run_id"]
+    finally:
+        calculation_done.set()
+        await harness.aclose()
+    restored = await ScenarioHarness.restore(tmp_path)
+    try:
+        assert len(restored.child_reports(restored.core.agents[parent.id])) == 2
+    finally:
+        await restored.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("ts_producer_authority", "rdkit_chemistry")
+async def test_budgeted_ts_terminal_notice_resumes_background_wait_and_persists(tmp_path, monkeypatch):
+    """Real budget + native frequency gate + notification + runner; no engine or API."""
+    from cloudra.runtime_v2.compute_notify import ComputeNotifyBroker
+    from cloudra.services.compute_admission import AdmissionOutcome
+    from tests.agent_scenarios import budgeted_ts_result_recovery_steps
+    from tests.test_ts_fixture_pipeline import install_log, waiting_fixture_stage
+
+    monkeypatch.setattr("cloudra.services.compute_admission.admit_job",
+        lambda **_: AdmissionOutcome(ok=True, node_id="fixture", scheduler="local"))
+    release = asyncio.Event()
+    provider = ScriptedProvider(default=[Step(wait_for=release, stop=True)])
+    harness = await ScenarioHarness.start(tmp_path, workspace_dir=tmp_path, provider=provider)
+    try:
+        agent = await harness.spawn("small_mol", protocol="traditional")
+        db, record, step = await asyncio.to_thread(waiting_fixture_stage, tmp_path,
+            project_id=harness.project.id, owner_id=agent.id,
+            limits={"source": "explicit_user", "max_compute_actions": 4, "max_model_calls": 4})
+        await asyncio.to_thread(install_log, record, step, "orca/co2_freq_orca42.out")
+        release.set()
+        await harness.wait_terminal(agent)
+        gates = [event for event in harness.events(agent) if event.type == "agent.completion_gate"]
+        assert gates[-1].data["action"] == "wait_background"
+        provider.script_default(*budgeted_ts_result_recovery_steps(record.run_id))
+        async with db.aconnect() as con:
+            await con.execute("UPDATE compute_jobs SET state='done' WHERE id=?", (step.job_id,))
+            await con.commit()
+        broker = ComputeNotifyBroker(harness.core)
+        await broker._poll_project(harness.project.id)
+        assert await asyncio.to_thread(broker._pending_terminal_jobs, harness.project.id) == []
+        await harness.wait_for(lambda: len(harness.run_rows(agent)) == 2, "TS result processing run")
+        await harness.wait_terminal(agent)
+        calls = [call for call in harness.tool_events(agent) if call["tool_name"] == "ts_inspect"]
+        assert len(calls) == 1 and calls[0]["is_success"], harness.describe(agent)
+        usage = calls[0]["result_data"]["usage"]
+        assert usage["model_calls"] == 0 and usage["reserved_compute_actions"] == 1
+        assert calls[0]["result_data"]["blocked"]["failure_class"] == "wrong_mode"
+        notices = [event for event in harness.events(agent) if event.type == "agent.message_injected"
+            and (event.data.get("manifest") or {}).get("kind") == "compute_completion"]
+        assert [task_id for event in notices for task_id in event.data["manifest"]["task_ids"]] == [step.job_id]
+        saved = await asyncio.to_thread(harness.store.events_after, {})
+        assert any(row["event_id"] == notices[0].event_id for row in saved)
+        resumed = [event for event in harness.events(agent) if event.type == "run.started"][-1]
+        assert notices[0].seq < resumed.seq
+        async with db.aconnect() as con:
+            row = await (await con.execute("SELECT notified_at FROM compute_jobs WHERE id=?", (step.job_id,))).fetchone()
+        assert row[0] is not None
+    finally:
+        release.set()
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("verdict", ["accept", "reject", "needs_evidence"])
+async def test_complete_final_supervisor_review_controls_delivery(tmp_path, verdict):
+    """真实工具/默认策略/持久化：完整覆盖仍须审稿，非接受裁决阻止交付。"""
+    from cloudra.dag.store import DagStore
+    from cloudra.persistence.database import ConversationDB
+    from tests.agent_scenarios import final_delivery_review_steps
+    from tests.test_runtime_v2_completion_gate import _seed_complete_delivery
+
+    review_ready, resume, park = [asyncio.Event() for _ in range(3)]
+    review = Step(wait_for=review_ready)
+    provider = ScriptedProvider(by_role=final_delivery_review_steps(review, resume, park))
+    harness = await ScenarioHarness.start(tmp_path, provider=provider, workspace_dir=tmp_path)
+    try:
+        await _set_supervisor_traditional(harness)
+        await _seed_complete_delivery(harness.project.id)
+        agent = await harness.spawn("coordinator", protocol="traditional", orchestration_mode="dag_guided")
+        await harness.wait_for(lambda: agent.state.value in {"waiting_approval", "succeeded"},
+                               "first final-delivery attempt")
+        assert agent.state.value == "waiting_approval"
+        db = await asyncio.to_thread(lambda: ConversationDB(harness.project.id).init())
+        store = DagStore(db)
+        requests = await asyncio.to_thread(store.list_review_requests, None)
+        assert len(requests) == 1
+        request = requests[0]
+        assert request.kind == "exit" and request.proposal["disposition"] == "complete"
+        args = {"request_id": request.request_id, "verdict": verdict,
+                "reason": "independent review of the original submitted evidence"}
+        if verdict != "accept":
+            args["next_action"] = "Inspect the original IRC endpoint geometry"
+        review.tools = [("dag_view_evidence", {"review_id": request.request_id}),
+                        ("dag_review_evidence", args)]
+        review_ready.set()
+        await harness.wait_for(lambda: any(t["tool_name"] == "dag_review_evidence" and t["status"] == "completed"
+            for a in harness.core.agents.values() if a.role_id == "supervisor"
+            for t in harness.tool_events(a)), "real Supervisor final verdict")
+        supervisor = next(a for a in harness.core.agents.values() if a.role_id == "supervisor")
+        await harness.wait_terminal(supervisor)
+        tools = harness.tool_events(supervisor)
+        viewed = next(t for t in tools if t["tool_name"] == "dag_view_evidence")
+        assert viewed["is_success"] and viewed["result_data"]["result"]["proposal"] == request.proposal
+        decision = await asyncio.to_thread(store.get_review_decision_for_request, request.request_id)
+        assert decision.verdict == verdict
+        resume.set()
+        await harness.wait_for(lambda: len([e for e in harness.events(agent)
+            if e.type == "agent.completion_gate" and e.data.get("explicit_stop")]) == 2,
+            "same complete declaration after the final verdict")
+        gates = [e for e in harness.events(agent) if e.type == "agent.completion_gate" and e.data.get("explicit_stop")]
+        assert gates[0].data["action"] == "wait_review"
+        assert gates[1].data["action"] == ("allow_final" if verdict == "accept" else "continue_work")
+        assert len(await asyncio.to_thread(store.list_review_requests, None)) == 1
+        assert await asyncio.to_thread(store.list_review_requests, "queued") == []
+        def dispositions():
+            with db.connect() as con:
+                return con.execute("SELECT disposition FROM dag_delivery_dispositions").fetchall()
+        if verdict == "accept":
+            await harness.wait_terminal(agent)
+            assert agent.state.value == "succeeded"
+            assert provider.call_count("coordinator") == 1
+            assert gates[1].data["basis"] == "supervisor_supported"
+            assert await asyncio.to_thread(dispositions) == [("complete",)]
+        else:
+            assert agent.state.value == "running"
+            assert provider.call_count("coordinator") >= 2
+            assert await asyncio.to_thread(dispositions) == []
+            assert not any(e.type == "agent.message_emitted" for e in harness.events(agent))
+        assert not any(t["tool_name"] == "submit_compute_job" for a in harness.core.agents.values()
+                       for t in harness.tool_events(a))
+    finally:
+        for event in (review_ready, resume, park):
+            event.set()
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+async def test_named_agent_communication_addresses_only_the_launched_instance(tmp_path):
+    """Launcher names survive storage and Hub addressing with another same-role peer present."""
+    from tests.agent_scenarios import named_agent_communication_steps
+
+    release_child = asyncio.Event()
+    provider = ScriptedProvider(by_role={
+        "coordinator": named_agent_communication_steps(),
+        "explorer": [Step(stop=True), Step(wait_for=release_child, stop=True)],
+    })
+    harness = await ScenarioHarness.start(tmp_path, provider=provider)
+    try:
+        other = await harness.spawn("explorer", protocol="traditional")
+        await harness.wait_terminal(other)
+        parent = await harness.spawn("coordinator", protocol="traditional")
+        await harness.wait_terminal(parent)
+        calls = harness.tool_events(parent)
+        assert [call["tool_name"] for call in calls] == ["subagent_launcher", "agent_hub"]
+        assert all(call["is_success"] for call in calls), harness.describe(parent)
+        child = harness.core.agents[calls[0]["result_data"]["session_id"]]
+        assert child.parent_session_id == parent.id
+        assert child.display_name == "lane_ts_scout"
+        assert {agent.id for agent in harness.core.agents.values() if agent.role_id == "explorer"} == {
+            other.id, child.id,
+        }
+        result = calls[1]["result_data"]
+        assert result["session_id"] == child.id
+        assert [notice["session_id"] for notice in result["notifications"]] == [child.id]
+        message_id = result["notifications"][0]["message_event_id"]
+        deliveries = await asyncio.to_thread(
+            harness.store.read_events, project_id=harness.project.id, types={"agent.message_injected"},
+        )
+        assert [event.session_id for event in deliveries if event.event_id == message_id] == [child.id]
+        assert not any(event.event_id == message_id for event in harness.events(other))
+        spawned = await asyncio.to_thread(
+            harness.store.read_events, session_id=child.id, types={"agent.spawned"},
+        )
+        assert len(spawned) == 1
+        assert spawned[0].data["display_name"] == "lane_ts_scout"
+    finally:
+        release_child.set()
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('ts_producer_authority', 'rdkit_chemistry')
+async def test_ts_separated_product_component_evidence_recovers_candidate_without_new_jobs(tmp_path):
+    """Real Agent/resume/ledger/classifier replay; native NU3 artifacts, no QM launch.
+
+    The fixture starts at the completed-output import boundary. Independent
+    component frequency logs exercise the native parser contract; the scientific
+    direction classifier and source-side interval proof are not substituted.
+    """
+    from cloudra.persistence.database import ComputeDB
+    from cloudra.services.ts_pipeline_context import use_pipeline_database
+    from cloudra.services.ts_pipeline_store import bind_stage_job, create_process
+    from cloudra.tools.Chemtool.qm_input_writer import QmInputWriter, QmInputWriter_input_schema
+    from cloudra.tools.core import ts_process
+    from cloudra.tools.core.molecule import read_molecule
+    from tests.agent_scenarios import ts_separated_product_recovery_steps
+    from tests.test_ts_separated_products import separated_record
+
+    ready = asyncio.Event()
+    component_logs = [str(tmp_path / 'native' / f'component_{index}.out') for index in range(2)]
+    provider = ScriptedProvider(by_role={'small_mol': ts_separated_product_recovery_steps(
+        'separated', component_logs, ready,
+    )})
+    harness = await ScenarioHarness.start(tmp_path, workspace_dir=tmp_path, provider=provider)
+
+    def seed_completed_outputs(owner_id):
+        db = ComputeDB().init()
+        record = separated_record(tmp_path)
+        record.input.verification.product_endpoint.component_logs = []
+        record.owner_conversation_id = harness.project.id
+        record.owner_session_id = owner_id
+        record.run_dir = str(tmp_path / 'ts' / record.run_id)
+        Path(record.run_dir).mkdir(parents=True)
+        state = create_process(db, request_key='separated-product-recovery', payload={
+            'project_id': harness.project.id, 'owner_id': owner_id,
+            'workspace_dir': str(tmp_path), 'input': record.input.model_dump(mode='json'),
+        })
+        record.pipeline_id = state['process_id']
+        for step in record.job_steps:
+            source = Path(step.input_path)
+            calculation = step.actual_calculation
+            task = 'irc' if step.purpose == 'irc' else 'opt' if step.purpose.endswith('_opt') else 'freq'
+            request = QmInputWriter_input_schema(
+                engine='orca', method=calculation.method, basis_set=calculation.basis_set,
+                keywords=calculation.keywords, task_type=[{task: None}],
+                source_type='xyz_file', source_value=str(source.with_name('optimized.xyz')),
+                output_path=str(source),
+            )
+            molecule = read_molecule(str(source.with_name('optimized.xyz')))
+            source.write_text(QmInputWriter._build_orca_input(request, molecule))
+            step.stage_key = step.purpose
+            step.job_id = bind_stage_job(db, process_id=record.pipeline_id, declaration_revision=1,
+                stage_key=step.stage_key, attempt=1, job_payload={
+                    'conversation_id': harness.project.id, 'session_id': owner_id,
+                    'path': str(source), 'jobtype': 'orca', 'node_id': 'offline-fixture',
+                })
+            step.external_source['source_job_id'] = step.job_id
+            with db.connect() as con:
+                con.execute("UPDATE compute_jobs SET state='done' WHERE id=?", (step.job_id,))
+        with use_pipeline_database(db):
+            record = ts_process._verdict(record)
+            assert record.terminal == 'candidate_only'
+            ts_process.save_record(record)
+        return db, record
+
+    def job_ids(db):
+        with db.connect() as con:
+            return [row[0] for row in con.execute('SELECT id FROM compute_jobs ORDER BY id')]
+
+    try:
+        agent = await harness.spawn('small_mol', protocol='traditional')
+        db, initial = await asyncio.to_thread(seed_completed_outputs, agent.id)
+        original_jobs = {step.purpose: step.job_id for step in initial.job_steps}
+        before = await asyncio.to_thread(job_ids, db)
+        ready.set()
+        await harness.wait_terminal(agent)
+
+        calls = harness.tool_events(agent)
+        assert [call['tool_name'] for call in calls] == ['ts_inspect', 'ts_resume', 'ts_inspect']
+        assert all(call['is_success'] for call in calls), harness.describe(agent)
+        assert calls[0]['result_data']['result']['outcome'] == 'candidate_only'
+        for call in calls[1:]:
+            assert call['result_data']['result']['outcome'] == 'verified'
+            assert call['result_data']['result']['verified'] is True
+        receipt = calls[1]['result_data']['receipt']
+        assert receipt['invalidated'] == []
+        assert {ref['job_id'] for ref in receipt['retained']} == set(before)
+        saved = await asyncio.to_thread(ts_process.load_record, str(tmp_path), initial.run_id)
+        assert saved.pipeline_id == initial.pipeline_id
+        assert saved.terminal == 'verified'
+        assert saved.input.verification.product_endpoint.component_logs == component_logs
+        assert {step.purpose: step.job_id for step in saved.job_steps} == original_jobs
+        assert not any(step.purpose.startswith('product_') for step in saved.job_steps)
+        assert saved.attempt_history[-1].terminal == 'candidate_only'
+        assert await asyncio.to_thread(job_ids, db) == before
+        assert (await asyncio.to_thread(ts_process._validated_endpoint_minimum, saved, 'product'))[0] is None
+    finally:
+        ready.set()
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('job_type', [[], {}, 'orca'])
+async def test_compute_job_type_feedback_without_runtime_retry(tmp_path, job_type):
+    from tests.agent_scenarios import invalid_compute_job_type_steps
+
+    harness = await ScenarioHarness.start(tmp_path, provider=ScriptedProvider(
+        default=invalid_compute_job_type_steps(job_type)))
+    try:
+        agent = await harness.spawn('small_mol', protocol='traditional')
+        await harness.wait_terminal(agent)
+        calls = harness.tool_events(agent)
+        assert len(calls) == 1, harness.describe(agent)
+        assert calls[0]['is_success'] is False
+        assert calls[0]['status'] == 'failed'
+        if not isinstance(job_type, str):
+            assert 'Invalid tool arguments' in calls[0]['result_summary']
+        assert not any(event.type == 'run.retry' for event in harness.events(agent))
+        assert agent.state.value == 'succeeded', harness.describe(agent)
+    finally:
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+async def test_public_js_failure_bookkeeping_preserves_live_compute_and_review(tmp_path):
+    """真实公共工具必须拒绝持锁作业，不改变账本，也不伪造失败审阅。"""
+    from cloudra.dag.store import DagStore
+    from cloudra.infra.compute_utils import calc_lock_path, guard_lock_path
+    from cloudra.infra.flocks import try_acquire_lock
+    from cloudra.persistence.database import ComputeDB, ConversationDB
+    from cloudra.services import session_store
+    from tests.agent_scenarios import live_compute_failure_steps
+
+    ready = asyncio.Event()
+    provider = ScriptedProvider()
+    harness = await ScenarioHarness.start(tmp_path, provider=provider)
+    lock_fds = []
+    try:
+        def create_job():
+            db = ComputeDB().init()
+            workdir = _workspace(harness.project.id) / "live-job"
+            workdir.mkdir(parents=True)
+            path = workdir / "job.inp"
+            path.write_text("! HF STO-3G\n* xyz 0 1\nHe 0 0 0\n*\n")
+            with db.connect() as con:
+                cursor = con.execute(
+                    "INSERT INTO compute_jobs(conversation_id, session_id, state, path, jobtype, "
+                    "scheduler, lease_expires_at, last_error) VALUES (?, '', 'running', ?, 'orca', "
+                    "'local', 12345, 'original execution state')",
+                    (harness.project.id, str(path)),
+                )
+                con.commit()
+                return db, workdir, int(cursor.lastrowid)
+
+        db, workdir, job_id = await asyncio.to_thread(create_job)
+        provider.script("small_mol", *live_compute_failure_steps(job_id, ready))
+        agent = await harness.spawn("small_mol", protocol="javascript", orchestration_mode="dag_record")
+
+        def bind_session_and_hold_locks():
+            conv_db = ConversationDB(harness.project.id).init()
+            session_store.create_session_record(
+                conv_db, session_id=agent.id, agent_id="small_mol", agent_type="small_mol",
+                parent_session_id=None, query="inspect existing calculation",
+                created_at="2026-10-21T00:00:00+00:00", orchestration_mode="dag_record",
+            )
+            with db.connect() as con:
+                con.execute("UPDATE compute_jobs SET session_id=? WHERE id=?", (agent.id, job_id))
+                con.commit()
+            for path in (calc_lock_path(str(workdir), job_id), guard_lock_path(str(workdir), job_id)):
+                fd = try_acquire_lock(path)
+                assert fd is not None
+                lock_fds.append(fd)
+            return conv_db
+
+        conv_db = await asyncio.to_thread(bind_session_and_hold_locks)
+        ready.set()
+        await harness.wait_terminal(agent)
+        calls = harness.tool_events(agent)
+        business = [call for call in calls if call["tool_name"] == "mark_compute_job_failed"]
+        assert len(business) == 1, harness.describe(agent)
+        assert business[0]["started"] and not business[0]["blocked"], harness.describe(agent)
+        assert business[0]["is_success"] is False
+        assert business[0]["status"] == "failed"
+        assert business[0]["result_data"]["job_id"] == job_id
+        assert business[0]["result_data"]["previous_state"] == "running"
+        programs = [event for event in harness.events(agent) if event.type == "program.finished"]
+        assert len(programs) == 1 and programs[0].data["status"] == "completed"
+
+        def read_bookkeeping():
+            with db.connect() as con:
+                row = con.execute("SELECT state, lease_expires_at, last_error, end_timestamp "
+                                  "FROM compute_jobs WHERE id=?", (job_id,)).fetchone()
+            return row, DagStore(conv_db).list_call_reviews(state=None)
+
+        row, reviews = await asyncio.to_thread(read_bookkeeping)
+        assert row[:3] == ("running", 12345, "original execution state")
+        assert row[3] in (None, -1)
+        assert not [review for review in reviews if review.compute_job_id == str(job_id)]
+    finally:
+        ready.set()
+        for fd in lock_fds:
+            await asyncio.to_thread(os.close, fd)
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+async def test_public_js_cancellation_is_project_scoped_and_preserves_live_execution(tmp_path):
+    """同一公开调用链分别撤回队列、请求执行端取消，并拒绝外项目作业。"""
+    from cloudra.dag.store import DagStore
+    from cloudra.infra.compute_utils import calc_lock_path, guard_lock_path
+    from cloudra.infra.flocks import is_lock_held, try_acquire_lock
+    from cloudra.persistence.database import ComputeDB, ConversationDB
+    from cloudra.services import session_store
+    from tests.agent_scenarios import scoped_compute_cancellation_steps
+
+    ready = asyncio.Event()
+    provider = ScriptedProvider()
+    harness = await ScenarioHarness.start(tmp_path, provider=provider)
+    lock_fds = []
+    try:
+        def create_jobs():
+            db = ComputeDB().init()
+            workdir = _workspace(harness.project.id) / "cancel-trials"
+            workdir.mkdir(parents=True)
+            ids = []
+            with db.connect() as con:
+                for project_id, state in ((harness.project.id, "ready"),
+                                          (harness.project.id, "running"),
+                                          ("foreign-project", "running")):
+                    cursor = con.execute(
+                        "INSERT INTO compute_jobs(conversation_id, session_id, state, path, jobtype, "
+                        "scheduler, lease_expires_at, last_error) VALUES (?, '', ?, ?, 'orca', "
+                        "'local', 12345, 'original execution state')",
+                        (project_id, state, str(workdir / f"trial-{len(ids)}.inp")),
+                    )
+                    ids.append(int(cursor.lastrowid))
+                con.commit()
+            return db, workdir, ids
+
+        db, workdir, job_ids = await asyncio.to_thread(create_jobs)
+        ready_job, live_job, foreign_job = job_ids
+        provider.script("small_mol", *scoped_compute_cancellation_steps(job_ids, ready))
+        agent = await harness.spawn("small_mol", protocol="javascript", orchestration_mode="dag_record")
+
+        def bind_session_and_hold_live_locks():
+            conv_db = ConversationDB(harness.project.id).init()
+            session_store.create_session_record(
+                conv_db, session_id=agent.id, agent_id="small_mol", agent_type="small_mol",
+                parent_session_id=None, query="withdraw superseded trials",
+                created_at="2026-10-21T00:00:00+00:00", orchestration_mode="dag_record",
+            )
+            with db.connect() as con:
+                con.execute("UPDATE compute_jobs SET session_id=? WHERE conversation_id=?",
+                            (agent.id, harness.project.id))
+                con.commit()
+            paths = [helper(str(workdir), live_job) for helper in (calc_lock_path, guard_lock_path)]
+            for path in paths:
+                fd = try_acquire_lock(path)
+                assert fd is not None
+                lock_fds.append(fd)
+            return conv_db, paths
+
+        conv_db, lock_paths = await asyncio.to_thread(bind_session_and_hold_live_locks)
+        ready.set()
+        await harness.wait_terminal(agent)
+        calls = [call for call in harness.tool_events(agent) if call["tool_name"] == "cancel_compute_job"]
+        assert len(calls) == 3, harness.describe(agent)
+        assert all(call["started"] and not call["blocked"] for call in calls), harness.describe(agent)
+        results = {call["result_data"]["job_id"]: call for call in calls}
+        assert results[ready_job]["is_success"] is True
+        assert results[ready_job]["result_data"]["state"] == "cancelled"
+        assert results[live_job]["is_success"] is True
+        assert results[live_job]["result_data"]["state"] == "cancel_requested"
+        assert results[foreign_job]["is_success"] is False
+        programs = [event for event in harness.events(agent) if event.type == "program.finished"]
+        assert len(programs) == 1 and programs[0].data["status"] == "completed"
+
+        def read_bookkeeping():
+            with db.connect() as con:
+                rows = dict(con.execute("SELECT id,state FROM compute_jobs"))
+                live = con.execute("SELECT lease_expires_at,end_timestamp FROM compute_jobs WHERE id=?",
+                                   (live_job,)).fetchone()
+            return rows, live, [is_lock_held(path) for path in lock_paths], DagStore(conv_db).list_call_reviews(state=None)
+
+        rows, live, held, reviews = await asyncio.to_thread(read_bookkeeping)
+        assert rows == {ready_job: "cancelled", live_job: "cancel_requested", foreign_job: "running"}
+        assert live[0] == 12345 and live[1] in (None, -1)
+        assert held == [True, True]
+        assert not [review for review in reviews if review.compute_job_id in {str(ready_job), str(live_job)}]
+    finally:
+        ready.set()
+        for fd in lock_fds:
+            await asyncio.to_thread(os.close, fd)
         await harness.aclose()

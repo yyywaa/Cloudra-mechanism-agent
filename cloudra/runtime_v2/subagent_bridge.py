@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from pydantic import ValidationError
@@ -32,76 +32,94 @@ _CHILD_REPORT_KIND = "child_completion"
 
 @dataclass(slots=True)
 class ChildCompletionIndex:
-    """First final transition and durable delivery markers, built in one log pass."""
+    """Current assignment's first final state, without retaining its history."""
 
-    terminal_by_session: dict[str, EventEnvelope]
-    events_by_session: dict[str, list[EventEnvelope]]
-    reported: set[tuple[str, str]]
+    terminal_by_session: dict[str, EventEnvelope] = field(default_factory=dict)
+    reported_by_session: dict[str, str] = field(default_factory=dict)
+    latest_gate_by_session: dict[str, tuple[str | None, str]] = field(default_factory=dict)
+    watermarks: dict[str, int] = field(default_factory=dict)
 
-
-def build_child_completion_index(core) -> ChildCompletionIndex:
-    """A background wait is a parked run, even though its state is SUCCEEDED.
-
-    The parent's first durable ``agent.message_injected`` manifest is the
-    one-shot marker.  A later unrelated run cannot generate another report.
-    """
-    child_ids = {
-        agent.id for agent in core.agents.values() if agent.parent_session_id
-    }
-    terminal_by_session: dict[str, EventEnvelope] = {}
-    events_by_session: dict[str, list[EventEnvelope]] = {}
-    reported: set[tuple[str, str]] = set()
-    legacy_reports: set[tuple[str, str, str]] = set()
-    latest_gate_by_run: dict[tuple[str, str], str] = {}
-    relevant = {
-        "run.started", "run.finished", "agent.message_emitted",
-        "agent.completion_gate", "agent.state_changed", "agent.cancelled",
-    }
-    if not child_ids:
-        return ChildCompletionIndex(terminal_by_session, events_by_session, reported)
-    for event in core.event_log.iter_events(types=relevant | {"agent.message_injected"}):
+    def apply(self, event: EventEnvelope, core) -> None:
+        if event.seq <= self.watermarks.get(event.project_id, 0):
+            return
+        self.watermarks[event.project_id] = event.seq
         session_id = event.session_id
         if event.type == "agent.message_injected" and session_id:
             manifest = event.data.get("manifest")
             if isinstance(manifest, dict):
                 child_id = manifest.get("session_id")
                 child = core.agents.get(child_id) if isinstance(child_id, str) else None
-                if child is not None and child.parent_session_id == session_id:
-                    if manifest.get("kind") == _CHILD_REPORT_KIND:
-                        reported.add((session_id, child_id))
-                    elif manifest.get("parent_session_id") == session_id:
-                        # Reports written before the marker was added still
-                        # count if they describe the first genuine final run.
-                        # An old false report for a parked run must not erase
-                        # the obligation for a later final run.
-                        run = manifest.get("last_run")
-                        run_id = run.get("run_id") if isinstance(run, dict) else None
-                        if isinstance(run_id, str) and run_id:
-                            legacy_reports.add((session_id, child_id, run_id))
-        if session_id not in child_ids or event.type not in relevant:
-            continue
-        events_by_session.setdefault(session_id, []).append(event)
-        run_key = (session_id, event.run_id or "")
-        if event.type == "agent.completion_gate":
-            latest_gate_by_run[run_key] = str(event.data.get("action") or "")
-        elif event.type == "agent.state_changed" and session_id not in terminal_by_session:
+                if (
+                    child is not None
+                    and child.id == session_id
+                    and (
+                        manifest.get("kind") == "task_assignment"
+                        and child.parent_session_id == manifest.get("parent_session_id")
+                        and child.project_id == event.project_id
+                    )
+                ):
+                    self.terminal_by_session.pop(child.id, None)
+                    self.reported_by_session.pop(child.id, None)
+                    self.latest_gate_by_session.pop(child.id, None)
+                elif (
+                    child is not None
+                    and child.parent_session_id == session_id
+                    and (manifest.get("kind") == _CHILD_REPORT_KIND)
+                ):
+                    terminal = self.terminal_by_session.get(child.id)
+                    if terminal is not None and manifest.get("terminal_event_id") == terminal.event_id:
+                        self.reported_by_session[child.id] = terminal.event_id
+        child = core.agents.get(session_id)
+        if child is None or not child.parent_session_id:
+            return
+        if event.type == "run.started":
+            self.latest_gate_by_session.pop(child.id, None)
+        elif event.type == "agent.completion_gate":
+            self.latest_gate_by_session[child.id] = (event.run_id, str(event.data.get("action") or ""))
+        elif event.type == "agent.state_changed" and child.id not in self.terminal_by_session:
             state = event.data.get("to")
             if state not in {s.value for s in _TERMINAL_STATES}:
-                continue
-            if state == AgentState.SUCCEEDED.value and latest_gate_by_run.get(run_key) == "wait_background":
-                continue
-            terminal_by_session[session_id] = event
-    for child_id, terminal in terminal_by_session.items():
-        parent_id = core.agents[child_id].parent_session_id
-        if parent_id and (parent_id, child_id, terminal.run_id or "") in legacy_reports:
-            reported.add((parent_id, child_id))
-    return ChildCompletionIndex(terminal_by_session, events_by_session, reported)
+                return
+            if state == "succeeded" and self.latest_gate_by_session.get(child.id) == (event.run_id, "wait_background"):
+                return
+            self.terminal_by_session[child.id] = event
+            self.latest_gate_by_session.pop(child.id, None)
+
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "terminal_by_session": {
+                sid: event.model_dump(mode="json") for sid, event in self.terminal_by_session.items()
+            },
+            "reported_by_session": dict(self.reported_by_session),
+            "latest_gate_by_session": {sid: list(gate) for sid, gate in self.latest_gate_by_session.items()},
+            "watermarks": dict(self.watermarks),
+        }
+
+    def restore(self, payload: dict[str, Any]) -> None:
+        self.terminal_by_session = {
+            sid: EventEnvelope.model_validate(event) for sid, event in payload.get("terminal_by_session", {}).items()
+        }
+        self.reported_by_session = dict(payload.get("reported_by_session", {}))
+        self.latest_gate_by_session = {
+            sid: tuple(gate) for sid, gate in payload.get("latest_gate_by_session", {}).items()
+        }
+        self.watermarks = dict(payload.get("watermarks", {}))
+
+    def prune(self, session_ids: set[str]) -> None:
+        for mapping in (self.terminal_by_session, self.reported_by_session, self.latest_gate_by_session):
+            for session_id in mapping.keys() - session_ids:
+                mapping.pop(session_id)
+
+
+def build_child_completion_index(core) -> ChildCompletionIndex:
+    """Reuse the index fed by the common persist/replay path."""
+    return core.child_completions
 
 
 def child_final_event(
     core, child: AgentSession, *, index: ChildCompletionIndex | None = None
 ) -> EventEnvelope | None:
-    """The child's first genuine result, irrespective of later wakeups."""
+    """The current task's first genuine result; background wakeups do not reset it."""
     if not child.parent_session_id:
         return None
     index = index or build_child_completion_index(core)
@@ -140,7 +158,7 @@ def _require_spawn_role(core, parent: AgentSession, role_id: str) -> RoleProfile
 
 async def _spawn_child(
     bus: CommandBus, parent: AgentSession, *, role_id: str, query: str,
-    context: list[Any], defer_schedule: bool = False,
+    context: list[Any], defer_schedule: bool = False, display_name: str | None = None,
 ) -> tuple[AgentSession, dict[str, Any]]:
     role = _require_spawn_role(bus.core, parent, role_id)
     # 空任务字段绝不发送：空 query 的 spawn 只会产出永不调度的僵尸子 agent
@@ -164,6 +182,7 @@ async def _spawn_child(
             target={"project_id": parent.project_id},
             payload={
                 "role_id": role_id,
+                "display_name": display_name.strip() if display_name is not None else None,
                 "parent_session_id": parent.id,
                 "query": query,
                 "settings": plan.spawn_payload_settings(),
@@ -177,7 +196,7 @@ async def _spawn_child(
 
 async def _await_terminal(core, session_id: str) -> AgentSession:
     agent = core.require_agent(session_id)
-    if await asyncio.to_thread(child_final_event, core, agent) is not None:
+    if child_final_event(core, agent) is not None:
         return agent
     done = asyncio.Event()
 
@@ -186,14 +205,14 @@ async def _await_terminal(core, session_id: str) -> AgentSession:
             envelope.type == "agent.state_changed"
             and envelope.session_id == session_id
             and envelope.data.get("to") in {s.value for s in _TERMINAL_STATES}
-            and await asyncio.to_thread(child_final_event, core, core.require_agent(session_id)) is not None
+            and child_final_event(core, core.require_agent(session_id)) is not None
         ):
             done.set()
 
     core.event_hub.subscribe(on_event)
     try:
         # The transition may have landed between the first check and subscribe.
-        if await asyncio.to_thread(child_final_event, core, core.require_agent(session_id)) is not None:
+        if child_final_event(core, core.require_agent(session_id)) is not None:
             return core.require_agent(session_id)
         await done.wait()
     finally:
@@ -215,6 +234,10 @@ def child_completion_message(
     经 ``persistence`` 先落库再入队——两处共用同一份载荷构造，避免第二套报文。
     None = 没有父或父已不在内存。
     """
+    if child.role_id == 'supervisor':
+        # Scientific verdicts have their durable review notification channel.
+        # Finishing notebook maintenance must not reopen a delivered research task.
+        return None
     parent_id = child.parent_session_id
     if not parent_id:
         return None
@@ -222,11 +245,10 @@ def child_completion_message(
         return None
     index = index or build_child_completion_index(core)
     terminal = child_final_event(core, child, index=index)
-    if terminal is None or (parent_id, child.id) in index.reported:
+    if terminal is None or index.reported_by_session.get(child.id) == terminal.event_id:
         return None
     manifest = build_child_manifest(
         core, child, terminal_event=terminal,
-        session_events=index.events_by_session.get(child.id, []),
     )
     manifest["kind"] = _CHILD_REPORT_KIND
     manifest["terminal_event_id"] = terminal.event_id
@@ -290,7 +312,8 @@ async def _handle_launcher(core, parent: AgentSession, args: dict[str, Any]) -> 
     bus = CommandBus(core)
     role_id = args["role_id"]
     child, settings_receipt = await _spawn_child(
-        bus, parent, role_id=role_id, query=args["query"], context=args["context"]
+        bus, parent, role_id=role_id, query=args["query"], context=args["context"],
+        display_name=args.get("display_name"),
     )
     data = {"session_id": child.id, "act_agent": child.role_id, "settings": settings_receipt}
     if not args.get("is_wait"):
@@ -466,7 +489,7 @@ async def _handle_report(core, args: dict[str, Any]) -> ToolResult:
             is_success=False,
             summary=f"Unknown v2 session {session_id!r}. Sessions dispatched before this migration live in the legacy store and are not queryable here.",
         )
-    terminal = await asyncio.to_thread(child_final_event, core, agent)
+    terminal = child_final_event(core, agent)
     if terminal is None:
         return ToolResult(
             is_success=True,
@@ -492,18 +515,21 @@ async def handle_native_tool(core, parent: AgentSession, call: ToolCall) -> Tool
         if call.name == _LAUNCHER:
             from cloudra.tools.Managetool.subagent_launcher import SubAgentLauncher_input_schema
 
-            args = SubAgentLauncher_input_schema.model_validate(call.arguments)
+            schema = SubAgentLauncher_input_schema
+            args = schema.model_validate(call.arguments)
             return await _handle_launcher(core, parent, args.model_dump())
         if call.name == _SWARM:
             from cloudra.tools.Managetool.subagent_swarm import SubAgentSwarm_input_schema
 
-            args = SubAgentSwarm_input_schema.model_validate(call.arguments)
+            schema = SubAgentSwarm_input_schema
+            args = schema.model_validate(call.arguments)
             return await _handle_swarm(core, parent, args.model_dump())
         from cloudra.tools.Managetool.get_subagent_report import GetSubAgentReport_input_schema
 
-        args = GetSubAgentReport_input_schema.model_validate(call.arguments)
+        schema = GetSubAgentReport_input_schema
+        args = schema.model_validate(call.arguments)
         return await _handle_report(core, args.model_dump())
     except ValidationError as exc:
-        return ToolResult(is_success=False, summary=validation_feedback(exc))
+        return ToolResult(is_success=False, summary=validation_feedback(exc, schema=schema))
     except CommandRejected as exc:
         return ToolResult(is_success=False, summary=f"[dispatch rejected] {exc.message}")

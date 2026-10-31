@@ -1,4 +1,4 @@
-"""GuidanceStage：行为引导经 pin 常驻上下文通知（永不阻拦、按键幂等去重）。
+"""GuidanceStage：行为警告经 pin 通知；YOLO 可按意图拒绝单次提交。
 
 通道纪律的回归守卫：行为引导（TS 走 ts_prepare、Coordinator 派单、bash
 手写文件/坐标）不再进工具返回结果，而是 pin 进上下文；本文件同时钉住
@@ -8,6 +8,7 @@ TS/IRC 输入嗅探的 fail-soft 语义（读不出/不声明就不提示）。
 from __future__ import annotations
 
 import asyncio
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -15,8 +16,10 @@ import pytest
 from cloudra.runtime_v2.events import EventLog
 from cloudra.runtime_v2.notices import NoticeManager
 from cloudra.runtime_v2.policies.base import PipelineContext, ToolCall, ToolResult
-from cloudra.runtime_v2.policies.guidance import GuidanceStage, sniff_ts_or_irc_input
+from cloudra.runtime_v2.policies.guidance import GuidanceStage
 from cloudra.runtime_v2.schemas import AgentCapabilities, PermissionSet, RuntimeSettings
+from cloudra.tools.core.ts_workflow_guard import native_ts_tasks
+from tests.test_manual_ts_submission import TS_INPUTS
 
 
 def _ctx(role_id: str, notices, workspace_dir: str | None = None) -> PipelineContext:
@@ -36,8 +39,8 @@ def _run(stage, ctx, call):
     return asyncio.run(stage.before_tool(ctx, call))
 
 
-def _submit(path: str) -> ToolCall:
-    return ToolCall(id="t1", name="submit_compute_job", arguments={"input_file": path})
+def _submit(path: str, engine: str = 'orca') -> ToolCall:
+    return ToolCall(id="t1", name="submit_compute_job", arguments={"input_file": path, "job_type": engine})
 
 
 def _bash(command: str) -> ToolCall:
@@ -48,19 +51,19 @@ def _bash(command: str) -> ToolCall:
 
 
 def test_sniff_detects_ts_irc_qst_routes():
-    assert sniff_ts_or_irc_input("! B3LYP def2-SVP OptTS Freq\n")
-    assert sniff_ts_or_irc_input("# opt=(ts,calcfc,noeigentest) b3lyp/def2svp\n")
-    assert sniff_ts_or_irc_input("# qst2 b3lyp/def2svp\n")
-    assert sniff_ts_or_irc_input("! IRC\n%irc MaxIter 50 end\n")
-    assert sniff_ts_or_irc_input("# irc=calcfC\n")
+    assert native_ts_tasks("! B3LYP def2-SVP OptTS Freq\n", engine='orca')
+    assert native_ts_tasks("# opt=(ts,calcfc,noeigentest) b3lyp/def2svp\n", engine='gaussian')
+    assert native_ts_tasks("# opt=qst2 b3lyp/def2svp\n", engine='gaussian')
+    assert native_ts_tasks("! IRC\n%irc MaxIter 50 end\n", engine='orca')
+    assert native_ts_tasks("# irc=calcfC\n", engine='gaussian')
 
 
 def test_sniff_ignores_plain_and_scan_jobs():
-    assert not sniff_ts_or_irc_input("! B3LYP def2-SVP Opt Freq\n")
-    assert not sniff_ts_or_irc_input("# opt b3lyp/def2svp\n")
+    assert not native_ts_tasks("! B3LYP def2-SVP Opt Freq\n", engine='orca')
+    assert not native_ts_tasks("# opt b3lyp/def2svp\n", engine='gaussian')
     # 松弛扫描是 agent 侧正当手段，不触发 TS 引导
-    assert not sniff_ts_or_irc_input("# opt=modredundant b3lyp/def2svp\nB 1 2 S 10 0.1\n")
-    assert not sniff_ts_or_irc_input("")
+    assert not native_ts_tasks("# opt=modredundant b3lyp/def2svp\nB 1 2 S 10 0.1\n", engine='gaussian')
+    assert not native_ts_tasks("", engine='gaussian')
 
 
 # ---------------------------------------------------------------- submit 引导
@@ -71,9 +74,112 @@ def test_ts_submission_pins_sop_guidance(tmp_path):
     inp.write_text("! OptTS B3LYP def2-SVP\n* xyz 0 1\nC 0 0 0\n*\n", encoding="utf-8")
     notices = NoticeManager()
     result = _run(GuidanceStage(), _ctx("small_mol", notices, str(tmp_path)), _submit("ts.inp"))
-    assert result.outcome == "allow"
+    assert result.outcome == "warn"
     pin = notices.pin_content("as_g", "guidance-ts-sop")
     assert pin is not None and "ts_prepare" in pin and "QST2/QST3" in pin
+
+
+@pytest.mark.parametrize('engine,content', [
+    *TS_INPUTS,
+    ('gaussian', '#p B3LYP/def2SVP Opt=TS\n\n'),
+    ('gaussian', '#p B3LYP/def2SVP Opt=(CalcFC,TS)\n\n'),
+    ('gaussian', '#p HF/Gen Opt=(TS,CalcFC)\n\ntrial\n\n0 1\nH 0 0 0\n\n'
+                 '! basis selection (previous run\nH 0\nSTO-3G\n****\n'),
+    ('gaussian', '#p HF/STO-3G Opt=(TS,ModRedundant)\n\ntrial\n\n0 1\nH 0 0 0\n\n'
+                 '! exploratory constraint "from previous run\nB 1 2 F\n'),
+])
+def test_native_ts_submission_variants_pin_the_workflow_without_blocking(tmp_path, engine, content):
+    path = tmp_path / 'prepared_input.txt'
+    path.write_text(content)
+    notices = NoticeManager()
+
+    result = _run(GuidanceStage(), _ctx('small_mol', notices, str(tmp_path)), _submit(str(path), engine))
+
+    assert result.outcome == 'warn'
+    pin = notices.pin_content('as_g', 'guidance-ts-sop')
+    assert pin and 'ts_prepare' in pin and 'exploratory trials' in pin
+    assert {'role': 'system', 'content': pin} in notices.collect_batch('as_g', fresh=False)
+
+
+@pytest.mark.parametrize('engine,content', [
+    ('gaussian', '#p HF/STO-3G Opt Freq\n\nIRC OptTS QST2\n\n0 1\nH 0 0 0\n\n'),
+    ('gaussian', '#p HF/STO-3G Opt\n\n! OptTS and # IRC are title text\n\n'),
+    ('gaussian', '#p HF/STO-3G External="/tmp/irc/driver" Opt\n\n'),
+    ('gaussian', '#p HF/STO-3G Opt ! IRC and Opt=TS are a comment\n\n'),
+    ('gaussian', '#p HF/STO-3G Opt\n! Opt=TS is a comment\n Freq\n\n'),
+    ('gaussian', '#p HF/STO-3G Opt=(ModRedundant)\n\nscan\n\n'),
+    ('orca', '# OptTS IRC NEB-TS are comments\n! HF STO-3G Opt Freq\n'),
+    ('orca', '! HF STO-3G Opt # IRC OptTS are comments\n'),
+    ('orca', '! HF STO-3G NEB\n%neb NEB_TS false end\n'),
+    ('orca', '! HF STO-3G NEB\n%neb NEB_TS true NEB_TS = false end\n'),
+    ('orca', '! HF STO-3G NEB\n%neb\n# NEB_TS true\nNEB_TS false\nend\n'),
+    ('orca', '! HF STO-3G\n%geom Scan\nB 0 1 = 1.5, 2.5, 5\nend\nend\n'),
+    ('gaussian', '#p HF/STO-3G Opt=(TS\n\n'),
+])
+def test_native_non_ts_submission_does_not_pin_workflow(tmp_path, engine, content):
+    path = tmp_path / 'irc_optts_neb_ts_input.txt'
+    path.write_text(content)
+    notices = NoticeManager()
+
+    result = _run(GuidanceStage(), _ctx('small_mol', notices, str(tmp_path)), _submit(str(path), engine))
+
+    assert result.outcome == 'allow'
+    assert notices.pin_content('as_g', 'guidance-ts-sop') is None
+
+
+@pytest.mark.parametrize('engine', ['xtb', 'vasp', 'cp2k'])
+def test_non_qm_submission_does_not_sniff_script_contents(tmp_path, monkeypatch, engine):
+    def unexpected(*_args):
+        pytest.fail('Native TS input inspection must only read Gaussian/ORCA jobs')
+
+    monkeypatch.setattr('cloudra.runtime_v2.policies.guidance.inspect_ts_operation', unexpected)
+    notices = NoticeManager()
+    result = _run(GuidanceStage(), _ctx('small_mol', notices, str(tmp_path)), _submit('script.sh', engine))
+    assert result.outcome == 'allow'
+    assert notices.pin_content('as_g', 'guidance-ts-sop') is None
+
+
+def test_omitted_submit_engine_uses_the_gaussian_schema_default(tmp_path):
+    path = tmp_path / 'input_without_engine.txt'
+    path.write_text('#p HF/STO-3G Opt=TS\n\n')
+    notices = NoticeManager()
+    call = ToolCall(id='default-engine', name='submit_compute_job', arguments={'input_file': str(path)})
+    assert _run(GuidanceStage(), _ctx('small_mol', notices, str(tmp_path)), call).outcome == 'warn'
+    assert notices.pin_content('as_g', 'guidance-ts-sop') is not None
+
+
+@pytest.mark.asyncio
+async def test_native_submit_guidance_reads_input_off_the_event_loop(tmp_path, monkeypatch):
+    from cloudra.runtime_v2.policies import guidance
+
+    path = tmp_path / 'prepared.inp'
+    path.write_text('! HF STO-3G NEB-TS\n')
+    inspect = guidance.inspect_ts_operation
+    loop_thread = threading.get_ident()
+    threads = []
+
+    def recording_read(*args):
+        threads.append(threading.get_ident())
+        return inspect(*args)
+
+    monkeypatch.setattr(guidance, 'inspect_ts_operation', recording_read)
+    notices = NoticeManager()
+    result = await GuidanceStage().before_tool(_ctx('small_mol', notices, str(tmp_path)), _submit(str(path)))
+    assert result.outcome == 'warn'
+    assert threads and all(thread != loop_thread for thread in threads)
+    assert notices.pin_content('as_g', 'guidance-ts-sop') is not None
+
+
+def test_submit_guidance_reads_ts_link_after_large_first_geometry(tmp_path):
+    first = '#p HF/STO-3G Opt\n\nlarge first molecule\n\n0 1\n' + ''.join(
+        f'H {index}.0 0.0 0.0\n' for index in range(7000)) + '\n'
+    assert len(first.encode()) > 65536
+    path = tmp_path / 'linked.gjf'
+    path.write_text(first + '--Link1--\n#p HF/STO-3G Opt=TS\n\n')
+    notices = NoticeManager()
+    result = _run(GuidanceStage(), _ctx('small_mol', notices, str(tmp_path)), _submit(str(path), 'gaussian'))
+    assert result.outcome == 'warn'
+    assert notices.pin_content('as_g', 'guidance-ts-sop') is not None
 
 
 def test_plain_opt_submission_no_pin(tmp_path):
@@ -117,10 +223,13 @@ def test_pin_is_idempotent_across_calls(tmp_path):
     stage = GuidanceStage()
     ctx = _ctx("small_mol", notices, str(tmp_path))
     _run(stage, ctx, _submit("ts.inp"))
+    pins = notices.render_current("as_g")
+    sequence = notices._local_seqs['as_g']
     _run(stage, ctx, _submit("ts.inp"))
     # 幂等：重复 pin 同内容不产生新事件（NoticeManager 按键去重）
-    pins = notices.render_current("as_g")
-    assert len(pins) == 1
+    assert notices.render_current("as_g") == pins
+    assert notices._local_seqs['as_g'] == sequence
+    assert notices.pin_content('as_g', 'guidance-ts-sop') is not None
 
 
 # ---------------------------------------------------------------- bash 引导
@@ -243,6 +352,170 @@ def _reflection_pins(notices, agent_id="as_g"):
     }
 
 
+def _process_view(tmp_path):
+    return {
+        "run_id": "ts_observed", "run_dir": str(tmp_path / "attempt"),
+        "status": "ended", "stage": "verdict",
+        "result": {
+            "outcome": "candidate_only", "verified": False,
+            "reason": "Recorded endpoint connection was not established",
+            "evidence_refs": [str(tmp_path / "attempt/irc.out")],
+        },
+    }
+
+
+@pytest.mark.parametrize("tool", ["ts_prepare", "ts_resume", "ts_inspect"])
+@pytest.mark.parametrize("outcome", ["candidate_only", "search_failed"])
+def test_process_candidate_pins_evidence_guidance_without_altering_result(tmp_path, tool, outcome):
+    notices = NoticeManager()
+    data = _process_view(tmp_path)
+    data["result"]["outcome"] = outcome
+    result = ToolResult(is_success=True, data=data)
+    _after(GuidanceStage(), _ctx("small_mol", notices),
+           ToolCall(id="current", name=tool, arguments={"run_id": data["run_id"]}), result)
+    pins = _reflection_pins(notices)
+    assert len(pins) == 1
+    content = next(iter(pins.values()))
+    assert data["result"]["reason"] not in content
+    assert "PROCESS.md" in content
+    assert data["result"]["evidence_refs"][0] in content
+    assert data["run_dir"] in content
+    assert result.is_success and result.data == data
+
+
+def test_process_reflection_updates_one_run_and_ignores_inspection_metadata(tmp_path):
+    notices = NoticeManager()
+    ctx = _ctx("small_mol", notices)
+    stage = GuidanceStage()
+    data = _process_view(tmp_path)
+    _after(stage, ctx, ToolCall(id="first", name="ts_inspect", arguments={}),
+           ToolResult(is_success=True, data=data))
+    before = notices._local_seqs["as_g"]
+    _after(stage, ctx, ToolCall(id="again", name="ts_inspect", arguments={}),
+           ToolResult(is_success=True, data={**data, "revision": 42, "usage": {"wall_time_seconds": 99}}))
+    assert notices._local_seqs["as_g"] == before
+    _after(stage, ctx, ToolCall(id="new-evidence", name="ts_inspect", arguments={}),
+           ToolResult(is_success=True, data={**data, "result": {
+               **data["result"], "reason": "New recorded frequency evidence",
+               "evidence_refs": [str(tmp_path / "attempt/frequency.out")],
+           }}))
+    assert len(_reflection_pins(notices)) == 1
+    assert notices._local_seqs["as_g"] == before + 1
+    assert str(tmp_path / "attempt/frequency.out") in next(iter(_reflection_pins(notices).values()))
+
+
+@pytest.mark.parametrize("status,result", [
+    ("waiting", None),
+    ("running", None),
+    ("stopped", None),
+    ("ended", {"outcome": "verified", "verified": True, "reason": "Verified", "evidence_refs": []}),
+])
+def test_process_reflection_is_cleared_when_attempt_resumes_or_is_verified(tmp_path, status, result):
+    notices = NoticeManager()
+    stage = GuidanceStage()
+    ctx = _ctx("small_mol", notices)
+    data = _process_view(tmp_path)
+    call = ToolCall(id="inspect", name="ts_inspect", arguments={})
+    _after(stage, ctx, call, ToolResult(is_success=True, data=data))
+    _after(stage, ctx, call, ToolResult(is_success=True, data={**data, "status": status, "result": result}))
+    assert _reflection_pins(notices) == {}
+    assert notices._local_seqs["as_g"] == 3  # SOP pin, reflection pin, reflection cleared.
+
+
+def test_stop_retracts_the_previous_hint_to_repair_that_pipeline(tmp_path):
+    notices = NoticeManager()
+    stage = GuidanceStage()
+    ctx = _ctx('small_mol', notices)
+    data = _process_view(tmp_path)
+    _after(stage, ctx, ToolCall(id='old-candidate', name='ts_inspect', arguments={}),
+           ToolResult(is_success=True, data=data))
+    assert _reflection_pins(notices)
+    _after(stage, ctx, ToolCall(id='stop', name='ts_stop', arguments={}),
+           ToolResult(is_success=True, data={**data, 'status': 'stopped', 'result': None}))
+    assert not _reflection_pins(notices)
+
+
+@pytest.mark.parametrize("failure_class", [
+    "canonical_structure_unavailable", "canonical_source_recovery_blocked",
+])
+def test_engineering_overlay_keeps_the_recorded_scientific_reflection(tmp_path, failure_class):
+    from cloudra.tools.core.ts_state_view import build_process_view
+
+    state = {
+        "run_id": "ts_observed", "run_dir": str(tmp_path / "attempt"), "revision": 1,
+        "format_version": 7, "stage": "verdict", "terminal": "candidate_only",
+        "stage_records": [{"stage": "verdict", "status": "done", "detail": "Recorded TS outcome"}],
+        "evidence_candidates": [str(tmp_path / "attempt/irc.out")],
+    }
+    notices = NoticeManager()
+    stage, ctx = GuidanceStage(), _ctx("small_mol", notices)
+    call = ToolCall(id="inspect", name="ts_inspect", arguments={})
+    view = build_process_view(state, [], can_write=True)
+    _after(stage, ctx, call, ToolResult(is_success=True, data=view.model_dump()))
+    recorded = _reflection_pins(notices)
+    sequence = notices._local_seqs["as_g"]
+    assert recorded
+
+    # Current views project the recorded engineering checkpoint. Legacy file
+    # normalization is no longer the source of owned molecular structures.
+    state.update(
+        terminal=None,
+        blocked={"failure_class": failure_class, "stage": "verdict", "message": "Repair current source"},
+    )
+    overlay = build_process_view(state, [], can_write=True)
+    assert overlay.status == "blocked" and overlay.result is None
+    assert overlay.blocked["failure_class"] == failure_class
+
+    _after(stage, ctx, call, ToolResult(is_success=True, data=overlay.model_dump()))
+
+    assert _reflection_pins(notices) == recorded
+    assert notices._local_seqs["as_g"] == sequence
+
+
+@pytest.mark.parametrize("failure_class", [
+    "frequency_evidence_missing", "canonical_structure_unavailable", "compute_admission_rejected",
+    "canonical_source_recovery_blocked",
+])
+def test_process_engineering_block_does_not_pin_scientific_reflection(tmp_path, failure_class):
+    data = {**_process_view(tmp_path), "status": "blocked", "result": None,
+            "blocked": {"failure_class": failure_class, "message": "Repair the named input"}}
+    notices = NoticeManager()
+    _after(GuidanceStage(), _ctx("small_mol", notices),
+           ToolCall(id="inspect", name="ts_inspect", arguments={}),
+           ToolResult(is_success=True, data=data))
+    assert _reflection_pins(notices) == {}
+
+
+def test_process_wrong_mode_pins_recorded_failure_and_log(tmp_path):
+    data = {**_process_view(tmp_path), "status": "blocked", "result": None,
+            "blocked": {"failure_class": "wrong_mode", "message": "No first-order saddle found"},
+            "failed_attempt": {"log_path": str(tmp_path / "attempt/frequency.out")}}
+    notices = NoticeManager()
+    _after(GuidanceStage(), _ctx("small_mol", notices),
+           ToolCall(id="inspect", name="ts_inspect", arguments={}),
+           ToolResult(is_success=True, data=data))
+    content = next(iter(_reflection_pins(notices).values()))
+    assert "target TS step" in content
+    assert data["failed_attempt"]["log_path"] in content
+
+
+def test_process_reflection_is_not_reinjected_after_notice_restore(tmp_path):
+    log = EventLog(strict=True)
+    notices = NoticeManager()
+    notices.attach(log, lambda _agent_id: "project")
+    data = _process_view(tmp_path)
+    stage = GuidanceStage()
+    call = ToolCall(id="first", name="ts_inspect", arguments={})
+    _after(stage, _ctx("small_mol", notices), call, ToolResult(is_success=True, data=data))
+    restored = NoticeManager()
+    restored.attach(log, lambda _agent_id: "project")
+    restored.restore_from(log)
+    _after(stage, _ctx("small_mol", restored), call, ToolResult(is_success=True, data=data))
+    assert len(_reflection_pins(restored)) == 1
+    assert sum(event.type == "context.pin_set" and event.data['key'].startswith('guidance-scientific-reflection:')
+               for event in log) == 1
+
+
 @pytest.mark.parametrize(
     ("mode", "arguments", "success", "data"),
     [
@@ -338,10 +611,11 @@ def test_reflection_deduplicates_reparse_across_sources_and_call_ids(tmp_path):
     _after(stage, ctx, a, result)
     _after(stage, ctx, b, result)
     before = notices._local_seqs["as_g"]
-    _after(stage, ctx, ToolCall(id="a2", name="ts_guess", arguments={
-        "mode": "scan_parse", "log_path": str(tmp_path / "a.log"),
+    _after(stage, ctx, ToolCall(id="b2", name="ts_guess", arguments={
+        "mode": "scan_parse", "log_path": str(tmp_path / "b.log"),
     }), result)
-    assert len(_reflection_pins(notices)) == 2
+    assert len(_reflection_pins(notices)) == 1
+    assert str(tmp_path / "b.log") in next(iter(_reflection_pins(notices).values()))
     assert notices._local_seqs["as_g"] == before
 
 
@@ -360,13 +634,11 @@ def test_xtb_reflection_uses_actual_run_directory_for_attempt_identity(tmp_path)
         })
         _after(stage, ctx, call, result)
     pins = _reflection_pins(notices)
-    assert len(pins) == 2
-    assert any(str(tmp_path / "path-search/run-1") in content for content in pins.values())
-    assert any(str(tmp_path / "path-search/run-2") in content for content in pins.values())
-    assert notices._local_seqs["as_g"] == 2
+    assert len(pins) == 1
+    assert str(tmp_path / "path-search/run-1") in next(iter(pins.values()))
 
 
-def test_changed_profile_updates_same_source_reflection(tmp_path):
+def test_changed_profile_does_not_repeat_same_observation_or_print_evidence_hash(tmp_path):
     notices = NoticeManager()
     ctx = _ctx("small_mol", notices, str(tmp_path))
     call = ToolCall(id="a", name="ts_guess", arguments={
@@ -379,7 +651,8 @@ def test_changed_profile_updates_same_source_reflection(tmp_path):
     _after(stage, ctx, call, ToolResult(is_success=True, data={**data, "profile_table": "0 0\n1 3"}))
     second = _reflection_pins(notices)
     assert len(first) == len(second) == 1
-    assert first != second
+    assert first == second
+    assert "Evidence revision" not in next(iter(second.values()))
 
 
 def test_reflection_is_agent_scoped_and_missing_sink_is_noop(tmp_path):
@@ -448,12 +721,13 @@ def test_ts_notice_uses_inspection_and_grouped_explicit_inputs(tmp_path):
     assert 'ts_resume(run_id) without adjustments' not in pin
 
 
-def test_ts_notice_requires_bound_scan_recovery_and_explicit_calculation_replacement():
+def test_ts_notice_allows_retry_and_preserves_explicit_calculation_replacement():
     notices = NoticeManager()
     _run(GuidanceStage(), _ctx('small_mol', notices),
          ToolCall(id='prepare-contract', name='ts_guess', arguments={'mode': 'scan_prepare'}))
     pin = notices.pin_content('as_g', 'guidance-ts-sop')
-    assert 'scan_recovery' in pin
+    assert 'scan_recovery' not in pin
+    assert 'changes={}' in pin
     assert 'basis_set' in pin
     assert 'replace' in pin
     assert 'without recovery evidence' not in pin
@@ -517,3 +791,127 @@ def test_before_llm_static_guidance_refresh_without_notice_sink_is_noop():
     messages = [{'role': 'user', 'content': 'Continue the current task'}]
     assert asyncio.run(GuidanceStage().before_llm(_ctx('small_mol', None), messages)) is None
     assert messages == [{'role': 'user', 'content': 'Continue the current task'}]
+
+
+def test_scientific_reflection_is_one_slot_across_tools_and_process_runs(tmp_path):
+    notices = NoticeManager()
+    notices.pin('as_g', 'guidance-delegate-compute', 'Keep delegation')
+    stage, ctx = GuidanceStage(), _ctx('small_mol', notices, str(tmp_path))
+    for number in range(12):
+        _after(stage, ctx, ToolCall(id=str(number), name='ts_guess', arguments={
+            'mode': 'scan_parse', 'log_path': f'scan-{number}.out'}),
+            ToolResult(is_success=True, data={'scan_has_internal_peak': False, 'candidate_unavailable': False}))
+        data = {**_process_view(tmp_path), 'run_id': f'ts_{number}'}
+        _after(stage, ctx, ToolCall(id=str(number), name='ts_inspect', arguments={}),
+               ToolResult(is_success=True, data=data))
+        pins = _reflection_pins(notices)
+        assert list(pins) == [f'guidance-scientific-reflection:ts-process:ts_{number}']
+    assert notices.pin_content('as_g', 'guidance-delegate-compute') == 'Keep delegation'
+
+
+@pytest.mark.parametrize('status,result', [
+    ('running', None), ('waiting', None),
+    ('ended', {'outcome': 'verified', 'verified': True, 'evidence_refs': []}),
+])
+def test_old_process_progress_cannot_clear_current_other_process_reflection(tmp_path, status, result):
+    notices = NoticeManager()
+    stage, ctx = GuidanceStage(), _ctx('small_mol', notices)
+    data = _process_view(tmp_path)
+    for run in ('ts_old', 'ts_current'):
+        _after(stage, ctx, ToolCall(id=run, name='ts_inspect', arguments={}),
+               ToolResult(is_success=True, data={**data, 'run_id': run}))
+    _after(stage, ctx, ToolCall(id='old-event', name='ts_inspect', arguments={}),
+           ToolResult(is_success=True, data={**data, 'run_id': 'ts_old', 'status': status, 'result': result}))
+    assert list(_reflection_pins(notices)) == ['guidance-scientific-reflection:ts-process:ts_current']
+
+
+@pytest.mark.parametrize('mode,source,failure,confirmed', [
+    ('scan_parse', {'log_path': 'scan.out'}, {'scan_has_internal_peak': False, 'candidate_unavailable': False},
+        {'scan_has_internal_peak': True, 'candidate_unavailable': False}),
+    ('verify', {'freq_log': 'frequency.out'}, {'verification_status': 'fail'}, {'verification_status': 'pass'}),
+    ('xtb_path', {'output_dir': 'path', 'images_dir': 'path/run'},
+        {'refinement_termination': 'cycles_exhausted', 'path_termination_reason': 'path_not_converged', 'images_dir': 'path/run'},
+        {'refinement_termination': 'converged', 'images_dir': 'path/run'}),
+])
+def test_confirmed_tool_evidence_clears_only_its_current_source(tmp_path, mode, source, failure, confirmed):
+    notices = NoticeManager()
+    stage, ctx = GuidanceStage(), _ctx('small_mol', notices, str(tmp_path))
+    call = ToolCall(id='source', name='ts_guess', arguments={'mode': mode, **source})
+    _after(stage, ctx, call, ToolResult(is_success=mode != 'xtb_path', data=failure))
+    _after(stage, ctx, call, ToolResult(is_success=True, data=confirmed))
+    assert _reflection_pins(notices) == {}
+    _after(stage, ctx, call, ToolResult(is_success=mode != 'xtb_path', data=failure))
+    _after(stage, ctx, ToolCall(id='other', name='ts_inspect', arguments={}),
+           ToolResult(is_success=True, data=_process_view(tmp_path)))
+    _after(stage, ctx, call, ToolResult(is_success=True, data=confirmed))
+    assert list(_reflection_pins(notices)) == ['guidance-scientific-reflection:ts-process:ts_observed']
+
+
+@pytest.mark.parametrize('already_consumed', [False, True])
+def test_before_llm_collapses_restored_reflections_by_last_update_and_is_agent_scoped(tmp_path, already_consumed):
+    log = EventLog(strict=True)
+    old = NoticeManager()
+    old.attach(log, lambda _agent: 'project')
+    prefix = 'guidance-scientific-reflection:'
+    old.pin('as_g', prefix + 'first', 'First old observation')
+    old.pin('as_g', prefix + 'second', 'Second old observation')
+    old.pin('as_g', prefix + 'first', 'Latest updated observation')
+    old.pin('as_g', 'task-goal', 'Keep task goal')
+    old.pin('as_other', prefix + 'other', 'Other agent observation')
+    restored = NoticeManager()
+    restored.restore_from(log)
+    restored.attach(log, lambda _agent: 'project')
+    if already_consumed:
+        restored.collect_batch('as_g', fresh=True)
+        restored.confirm_consumed('as_g')
+    stage, ctx = GuidanceStage(), _ctx('small_mol', restored)
+    asyncio.run(stage.before_llm(ctx, []))
+    assert _reflection_pins(restored) == {prefix + 'first': 'Latest updated observation'}
+    assert restored.pin_content('as_g', 'task-goal') == 'Keep task goal'
+    assert _reflection_pins(restored, 'as_other') == {prefix + 'other': 'Other agent observation'}
+    assert not any('Second old observation' in row['content'] for row in restored.collect_batch('as_g', fresh=True))
+    restored.confirm_consumed('as_g')
+    before = len(log)
+    asyncio.run(stage.before_llm(ctx, []))
+    assert len(log) == before
+    assert restored.collect_batch('as_g', fresh=False) == []
+
+
+def test_process_hint_does_not_expand_with_reason_or_evidence_history(tmp_path):
+    stage = GuidanceStage()
+    data = _process_view(tmp_path)
+    one = NoticeManager()
+    _after(stage, _ctx('small_mol', one), ToolCall(id='one', name='ts_inspect', arguments={}),
+           ToolResult(is_success=True, data=data))
+    data['result']['reason'] = 'large-log-sentinel' * 1000
+    data['result']['evidence_refs'].extend(str(tmp_path / f'old-{n}.out') for n in range(2000))
+    many = NoticeManager()
+    _after(stage, _ctx('small_mol', many), ToolCall(id='many', name='ts_inspect', arguments={}),
+           ToolResult(is_success=True, data=data))
+    assert next(iter(_reflection_pins(one).values())) == next(iter(_reflection_pins(many).values()))
+    assert 'large-log-sentinel' not in next(iter(_reflection_pins(many).values()))
+
+
+def test_ts_nonconvergence_gets_one_short_current_hint_without_history(tmp_path):
+    notices = NoticeManager()
+    ctx = _ctx('small_mol', notices, str(tmp_path))
+    data = {'run_id': 'ts_attempt', 'status': 'blocked', 'stage': 'refine',
+        'blocked': {'failure_class': 'job_failed'},
+        'failed_attempt': {'purpose': 'ts_opt', 'failure_class': 'nonconvergence',
+            'log_path': str(tmp_path / 'native.out'),
+            'diagnostics': ['Never inject this diagnostic history'] * 1000}}
+    call = ToolCall(id='failed', name='ts_inspect', arguments={'run_id': 'ts_attempt'})
+
+    _after(GuidanceStage(), ctx, call, ToolResult(is_success=True, data=data))
+
+    pins = _reflection_pins(notices)
+    assert len(pins) == 1
+    content = next(iter(pins.values()))
+    assert str(tmp_path / 'native.out') in content
+    assert 'does not prove' in content
+    assert 'geometry' in content
+    assert 'Never inject' not in content
+    assert len(content) < 600
+    _after(GuidanceStage(), ctx, call, ToolResult(is_success=True,
+        data={'run_id': 'ts_attempt', 'status': 'waiting', 'result': None}))
+    assert _reflection_pins(notices) == {}

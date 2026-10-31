@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from pathlib import Path
 
 import pytest
 
@@ -109,6 +110,60 @@ def _notified_at(job_id: int):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('native_failure', [None, 'Native optimization did not converge'])
+async def test_ts_completion_reports_program_preparation_with_scientific_or_native_failure(tmp_path, native_failure):
+    """准备摘要要进真实结束通知，不能被科学结论或原生失败原因遮住。"""
+    from cloudra.tools.core.ts_state_view import build_process_view
+    from tests.test_ts_state_view import state_input
+
+    core, project, coordinator = await _setup_core()
+    path = tmp_path / 'ts.inp'
+    await asyncio.to_thread(path.write_text, '! HF STO-3G OptTS\n')
+    job_state = 'failed' if native_failure else 'done'
+    job = await asyncio.to_thread(_insert_terminal_job, project.id, session_id=coordinator.id,
+        path=str(path), jobtype='orca', state=job_state, last_error=native_failure)
+    details = ['Generated both endpoints from SMILES with ETKDGv3, seed=42.',
+               'Automatically mapped and numbered the endpoint atoms.',
+               'Derived reaction centers: [[1, 3]].']
+    state = dict(format_version=7, run_id='ts_auto', revision=2, declaration_revision=2,
+        run_dir=str(tmp_path), stage='verdict', terminal='candidate_only', input=state_input(),
+        stage_records=[*[
+            dict(stage=stage, status='done', detail=detail, source_input_revision=1)
+            for stage, detail in zip(('build', 'map', 'assemble'), details, strict=True)],
+            dict(stage='verdict', status='done', detail='Frequency did not establish a first-order saddle.')])
+    view = build_process_view(state, [], can_write=False).model_dump(mode='json')
+
+    content = await ComputeNotifyBroker(core)._content_for(job, job_state, view=view)
+
+    assert all(detail in content for detail in details)
+    assert 'verified=false' in content
+    assert (native_failure or view['result']['reason']) in content
+    assert view['result']['verified'] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('rdkit_chemistry')
+async def test_ts_notice_reports_generated_side_when_build_has_no_completed_record(tmp_path):
+    from cloudra.tools.core.ts_state_view import build_process_view
+    from tests.test_ts_state_view import partial_preparation_state
+
+    core, project, coordinator = await _setup_core()
+    path = tmp_path / 'preopt.inp'
+    await asyncio.to_thread(path.write_text, '! HF STO-3G Opt\n')
+    job = await asyncio.to_thread(_insert_terminal_job, project.id, session_id=coordinator.id,
+        path=str(path), jobtype='orca', state='failed', last_error='Preoptimization did not converge')
+    state = await asyncio.to_thread(partial_preparation_state, tmp_path)
+    view = build_process_view(state, [], can_write=False).model_dump(mode='json')
+
+    content = await ComputeNotifyBroker(core)._content_for(job, 'failed', view=view)
+
+    assert 'Preoptimization did not converge' in content
+    assert 'reactant' in content and 'ETKDGv3' in content and 'seed=42' in content
+    assert 'product generated' not in content
+    assert 'verified=false' in content
+
+
+@pytest.mark.asyncio
 async def test_poll_delivers_agent_message_and_marks_notified():
     core, project, coordinator = await _setup_core()
     job_id = _insert_terminal_job(project.id, session_id=coordinator.id)
@@ -120,10 +175,10 @@ async def test_poll_delivers_agent_message_and_marks_notified():
         coordinator.id, types={"agent.message_injected"}
     )
     assert len(events) == 1
-    assert f"task_id={job_id}" in events[0].data["content"]
+    assert f"Job {job_id}," in events[0].data["content"]
     assert "agent_hub" not in events[0].data["content"]
     texts = _inbox_texts(core, coordinator.id)
-    assert any(f"task_id={job_id}" in t for t in texts)
+    assert any(f"Job {job_id}," in t for t in texts)
     assert _notified_at(job_id) is not None
 
     # notified_at 去重：再扫一轮不再投递
@@ -134,7 +189,7 @@ async def test_poll_delivers_agent_message_and_marks_notified():
 
 
 @pytest.mark.asyncio
-async def test_failed_job_notice_directs_blocker_to_agent_hub():
+async def test_failed_job_notice_keeps_failure_and_next_without_repeating_workflow_instructions():
     core, project, coordinator = await _setup_core()
     job_id = _insert_terminal_job(
         project.id, session_id=coordinator.id, state="failed",
@@ -149,11 +204,10 @@ async def test_failed_job_notice_directs_blocker_to_agent_hub():
     )
     assert len(notices) == 1
     content = notices[0].data["content"]
-    assert f"task_id={job_id}" in content
+    assert f"Job {job_id}," in content
     assert "SCF did not converge" in content
-    assert "agent_hub" in content
-    assert "search" in content
-    assert "to_agent" in content
+    assert "NEXT:" in content and "query_compute_job" in content
+    assert "agent_hub" not in content
     assert "email the user" not in content
 
 
@@ -172,7 +226,7 @@ async def test_cancelled_job_notice_requires_new_user_request_before_resubmissio
     )
     assert len(notices) == 1
     content = notices[0].data["content"]
-    assert f"task_id={job_id}" in content
+    assert f"Job {job_id}," in content
     assert "state=cancelled" in content
     assert "Do not resubmit" in content
     assert "new explicit user request" in content
@@ -192,7 +246,7 @@ async def test_poll_falls_back_to_coordinator_for_unknown_session():
         coordinator.id, types={"agent.message_injected"}
     )
     assert len(events) == 1
-    assert f"task_id={job_id}" in events[0].data["content"]
+    assert f"Job {job_id}," in events[0].data["content"]
 
 
 @pytest.mark.asyncio
@@ -229,13 +283,13 @@ async def test_poll_all_skips_unloaded_projects():
 
 
 @pytest.mark.asyncio
-async def test_ensure_project_scans_immediately():
-    """项目打开时 ensure_project 立即扫该项目，不等下个 tick。"""
+async def test_poll_project_delivers_immediately():
+    """项目级投递不必等待下一次后台 tick。"""
     core, project, coordinator = await _setup_core()
     job_id = _insert_terminal_job(project.id, session_id=coordinator.id)
     broker = ComputeNotifyBroker(core, poll_interval=999.0)
 
-    await broker.ensure_project(project.id)
+    await broker._poll_project(project.id)
 
     assert _notified_at(job_id) is not None
     assert (
@@ -251,8 +305,8 @@ def _delivered_content(core, session_id: str) -> str:
 
 
 @pytest.mark.asyncio
-async def test_failed_job_delivers_knowledge_suggestions():
-    """失败终态自动检索知识库，命中建议拼进 agent.message。"""
+async def test_failed_job_does_not_expand_notice_with_automatic_knowledge_suggestions():
+    """失败原因和下一步足够；知识检索保留为按需工具。"""
     register_knowledge_provider(_KBProvider())
     core, project, coordinator = await _setup_core()
     _insert_terminal_job(
@@ -263,13 +317,14 @@ async def test_failed_job_delivers_knowledge_suggestions():
     await broker._poll_project(project.id)
 
     content = _delivered_content(core, coordinator.id)
-    assert "SCF convergence fix" in content
-    assert "Knowledge base suggestions" in content
+    assert "SCF did not converge" in content and "NEXT:" in content
+    assert "SCF convergence fix" not in content
+    assert "Knowledge base suggestions" not in content
 
 
 @pytest.mark.asyncio
-async def test_done_job_delivers_knowledge_suggestions():
-    """成功终态同样自动检索（engine + input stem 作为 query）。"""
+async def test_done_job_does_not_expand_notice_with_automatic_knowledge_suggestions():
+    """成功通知保留证据入口，避免无关知识卡塞进收件箱。"""
     register_knowledge_provider(_KBProvider())
     core, project, coordinator = await _setup_core()
     _insert_terminal_job(project.id, session_id=coordinator.id, state="done")
@@ -278,8 +333,9 @@ async def test_done_job_delivers_knowledge_suggestions():
     await broker._poll_project(project.id)
 
     content = _delivered_content(core, coordinator.id)
-    assert "SCF convergence fix" in content
-    assert "Knowledge base suggestions" in content
+    assert "log_parser" in content and "NEXT:" in content
+    assert "SCF convergence fix" not in content
+    assert "Knowledge base suggestions" not in content
 
 
 @pytest.mark.asyncio
@@ -330,7 +386,7 @@ async def test_notification_log_path_prefers_guard_state_json(tmp_path):
 
 @pytest.mark.asyncio
 async def test_terminal_job_snapshots_core_evidence_before_notify(tmp_path):
-    """终态通知前登记核心文件的 Artifact 快照；通知文本带快照引用。"""
+    """内部照常登记快照；通知只给证据入口，不展示内部artifact/hash。"""
     core, project, coordinator = await _setup_core()
 
     workdir = tmp_path / "calc_snap"
@@ -343,10 +399,10 @@ async def test_terminal_job_snapshots_core_evidence_before_notify(tmp_path):
     await broker._poll_project(project.id)
 
     content = _delivered_content(core, coordinator.id)
-    assert "[Evidence snapshot]" in content
-    assert "opt.gjf" in content and "registered" in content
+    assert "opt.gjf" in content
+    assert "[Evidence snapshot]" not in content and "sha256" not in content
     # 惯例预测的日志未落盘：标注但不误报 unavailable、不进重试
-    assert "log_not_collected" in content
+    assert "Native output is not available yet" in content
     assert job_id not in broker._snapshot_retries
 
     from cloudra.persistence.artifacts import ArtifactService
@@ -359,6 +415,72 @@ async def test_terminal_job_snapshots_core_evidence_before_notify(tmp_path):
     await broker._poll_project(project.id)
     artifacts_after = ArtifactService().list(project.id)
     assert len(artifacts_after) == len(artifacts)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('engine', ['gaussian', 'orca'])
+async def test_independent_irc_notice_delivers_query_endpoints_and_snapshots_them(tmp_path, monkeypatch, engine):
+    import threading
+    from types import SimpleNamespace
+
+    from cloudra.persistence.artifacts import ArtifactService
+    from cloudra.tools.Chemtool.query_compute_job import QueryComputeJob, QueryComputeJob_input_schema
+    from cloudra.tools.core import irc_endpoint_artifacts
+    from tests.test_query_compute_job import _freeze_native_irc
+
+    core, project, coordinator = await _setup_core()
+    path = tmp_path / ('irc.gjf' if engine == 'gaussian' else 'irc.inp')
+    path.write_text('#p hf/3-21g IRC\n' if engine == 'gaussian' else '! HF STO-3G IRC\n')
+    job = await asyncio.to_thread(_insert_terminal_job, project.id,
+        session_id=coordinator.id, path=str(path), jobtype=engine)
+    await asyncio.to_thread(_freeze_native_irc, path, engine, job)
+
+    loop_thread = threading.get_ident()
+    reader_threads = []
+    original_read = irc_endpoint_artifacts.read_irc_endpoint_artifacts
+
+    def tracked_read(log_path):
+        reader_threads.append(threading.get_ident())
+        return original_read(log_path)
+
+    monkeypatch.setattr(irc_endpoint_artifacts, 'read_irc_endpoint_artifacts', tracked_read)
+    query = QueryComputeJob(subagent=SimpleNamespace(conversation_id=project.id))
+    result = await query.tool_call(QueryComputeJob_input_schema(job_id=job), None)
+    assert result.is_success, result.message
+    endpoints = {result.jobs[0]['irc_end_a_path'], result.jobs[0]['irc_end_b_path']}
+
+    await ComputeNotifyBroker(core)._poll_project(project.id)
+    content = _delivered_content(core, coordinator.id)
+    assert all(path in content for path in endpoints)
+    assert 'Opt' in content and 'Freq' in content
+    assert 'A/B' in content and 'reactant/product' in content
+    assert 'scientific verification is not implied' in content
+    snapshots = await asyncio.to_thread(ArtifactService().list, project.id)
+    assert endpoints <= {artifact.source_path for artifact in snapshots}
+    assert reader_threads and all(thread != loop_thread for thread in reader_threads)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('state', ['failed', 'cancelled'])
+async def test_non_done_native_notice_does_not_offer_irc_continuation(tmp_path, monkeypatch, state):
+    from cloudra.tools.core import irc_endpoint_artifacts
+
+    def unexpected_read(_):
+        pytest.fail('Failed or cancelled jobs must not advertise continuation artifacts')
+
+    monkeypatch.setattr(irc_endpoint_artifacts, 'read_irc_endpoint_artifacts', unexpected_read)
+    core, project, coordinator = await _setup_core()
+    path = tmp_path / 'irc.gjf'
+    path.write_text('#p hf/3-21g IRC\n')
+    path.with_suffix('.log').write_text('Abnormal native IRC output\n')
+    await asyncio.to_thread(_insert_terminal_job, project.id, session_id=coordinator.id,
+        path=str(path), state=state)
+    broker = ComputeNotifyBroker(core)
+    await broker._poll_project(project.id)
+    content = _delivered_content(core, coordinator.id)
+    assert f'state={state}' in content
+    assert 'IRC endpoint A:' not in content and 'IRC endpoint B:' not in content
+    assert 'Run unconstrained Opt' not in content
 
 
 @pytest.mark.asyncio
@@ -378,7 +500,7 @@ async def test_unavailable_evidence_retried_without_resending(tmp_path):
     await broker._poll_project(project.id)
 
     content = _delivered_content(core, coordinator.id)
-    assert "evidence_unavailable" in content
+    assert "Evidence could not be recorded: late.inp" in content
     assert _notified_at(job_id) is not None  # 消息不丢
     assert job_id in broker._snapshot_retries
 
@@ -415,7 +537,7 @@ async def test_subagent_compute_job_does_not_notify_or_wake_coordinator():
     # 子 Agent 收到通知
     sub_events = core.event_log.query_session(subagent.id, types={"agent.message_injected"})
     assert len(sub_events) == 1
-    assert f"task_id={job_id}" in sub_events[0].data["content"]
+    assert f"Job {job_id}," in sub_events[0].data["content"]
 
     # Coordinator 绝不收到该通知
     coord_events = core.event_log.query_session(coordinator.id, types={"agent.message_injected"})
@@ -461,7 +583,7 @@ async def test_subagent_receives_results_while_other_owned_jobs_run(state):
     assert child.state.value == "running"
     assert wakes == [child.id]
     assert all(_notified_at(job_id) is not None for job_id in finished)
-    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 2
+    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 1
 
     _inbox_texts(core, child.id)
     await core.agent_host.finish_run(child, outcome="succeeded")
@@ -474,7 +596,7 @@ async def test_subagent_receives_results_while_other_owned_jobs_run(state):
     assert wakes == [child.id, child.id]
     assert child.state.value == "running"
     assert _notified_at(pending) is not None
-    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 3
+    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 2
 
 
 @pytest.mark.asyncio
@@ -508,7 +630,9 @@ async def test_same_poll_batch_wakes_subagent_once():
 
     assert wakes == [child.id]
     assert all(_notified_at(job_id) is not None for job_id in job_ids)
-    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 2
+    notices = core.event_log.query_session(child.id, types={"agent.message_injected"})
+    assert len(notices) == 1
+    assert all(f"Job {job_id}," in notices[0].data["content"] for job_id in job_ids)
 
 
 @pytest.mark.asyncio
@@ -550,7 +674,7 @@ async def test_subagent_processes_results_before_terminal_backlog_is_drained():
 
     assert wakes == [child.id]
     assert _notified_at(job_ids[-1]) is not None
-    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 51
+    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 2
 
 
 @pytest.mark.asyncio
@@ -594,14 +718,14 @@ async def test_project_scan_and_periodic_scan_deliver_each_job_once(monkeypatch)
     broker = ComputeNotifyBroker(core)
     entered = asyncio.Event()
     release = asyncio.Event()
-    original_deliver = broker._deliver
+    original_deliver = broker._prepare_notice
 
     async def delayed_deliver(*args, **kwargs):
         entered.set()
         await release.wait()
         return await original_deliver(*args, **kwargs)
 
-    monkeypatch.setattr(broker, "_deliver", delayed_deliver)
+    monkeypatch.setattr(broker, "_prepare_notice", delayed_deliver)
     project_scan = asyncio.create_task(broker._poll_project(project.id))
     try:
         await asyncio.wait_for(entered.wait(), timeout=2)
@@ -699,7 +823,7 @@ async def test_notified_mark_failure_holds_later_notice_and_wake(monkeypatch):
     assert wakes == [child.id]
     assert all(_notified_at(job_id) is not None for job_id in job_ids)
     # Retrying the DB ack reuses the already durable message.
-    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 2
+    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 1
 
 
 @pytest.mark.asyncio
@@ -768,8 +892,8 @@ async def test_coordinator_compute_job_delivered_silently_without_wake():
     # 存入信箱和事件日志
     events = core.event_log.query_session(coordinator.id, types={"agent.message_injected"})
     assert len(events) == 1
-    assert f"task_id={job_id}" in events[0].data["content"]
-    assert any(f"task_id={job_id}" in t for t in _inbox_texts(core, coordinator.id))
+    assert f"Job {job_id}," in events[0].data["content"]
+    assert any(f"Job {job_id}," in t for t in _inbox_texts(core, coordinator.id))
 
     # 绝不唤醒 Coordinator
     assert coordinator.id not in scheduled_sessions
@@ -802,9 +926,9 @@ async def test_coordinator_notify_is_durable_before_notified_at(tmp_path):
     restored_events = restored.event_log.query_session(
         coordinator.id, types={"agent.message_injected"}
     )
-    assert any(f"task_id={job_id}" in e.data["content"] for e in restored_events)
+    assert any(f"Job {job_id}," in e.data["content"] for e in restored_events)
     assert any(
-        f"task_id={job_id}" in t for t in _inbox_texts(restored, coordinator.id)
+        f"Job {job_id}," in t for t in _inbox_texts(restored, coordinator.id)
     )
 
 
@@ -842,9 +966,9 @@ async def test_unacked_terminal_notice_is_not_duplicated_after_restore(tmp_path,
     )
     assert len(events) == 1
     assert events[0].data["manifest"] == {
-        "kind": "compute_completion", "task_id": job_id,
+        "kind": "compute_completion", "task_ids": [job_id],
     }
-    assert sum(f"task_id={job_id}" in text for text in _inbox_texts(
+    assert sum(f"Job {job_id}," in text for text in _inbox_texts(
         restored, coordinator.id
     )) == 1
 
@@ -885,17 +1009,19 @@ async def test_system_compute_notify_does_not_wake_cancelled_subagent():
     assert subagent.state is AgentState.CANCELLED
     assert subagent.id not in scheduled_sessions
     events = core.event_log.query_session(subagent.id, types={"agent.message_injected"})
-    assert any(f"task_id={job_id}" in e.data["content"] for e in events)
+    assert any(f"Job {job_id}," in e.data["content"] for e in events)
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("recover_acknowledged", [False, True])
 @pytest.mark.parametrize("ordinary_result", [False, True])
+@pytest.mark.usefixtures("rdkit_chemistry")
 async def test_pipeline_intermediate_job_advances_without_agent_message(tmp_path, monkeypatch, recover_acknowledged, ordinary_result):
     from cloudra.services.compute_admission import AdmissionOutcome
-    from cloudra.services.ts_pipeline_store import bind_stage_job, create_process, save_process_record
-    from cloudra.tools.core.ts_process import TsJobStep, TsProcessRecord
+    from cloudra.services.ts_pipeline_store import bind_stage_job, create_process
+    from cloudra.tools.core.ts_process import TsJobStep, TsProcessRecord, save_record
     core, project, coordinator = await _setup_core()
+    project.workspace_dir = str(tmp_path)
     child = (await CommandBus(core).execute(Command(
         type="agent.spawn", target={"project_id": project.id},
         payload={"role_id": "small_mol", "parent_session_id": coordinator.id},
@@ -920,7 +1046,8 @@ async def test_pipeline_intermediate_job_advances_without_agent_message(tmp_path
     record = TsProcessRecord(run_id='notify',run_dir=str(tmp_path/'ts'/'notify'),workspace_dir=str(tmp_path),
         owner_conversation_id=project.id,owner_session_id=child.id,pipeline_id=process['process_id'],
         input=declaration,stage='refine',waiting_for=f'job:{job}',job_steps=[TsJobStep(purpose='ts_opt',job_id=job)])
-    await asyncio.to_thread(save_process_record,db,process_id=process['process_id'],record=record.model_dump(mode='json'))
+    await asyncio.to_thread(Path(record.run_dir).mkdir, parents=True)
+    await asyncio.to_thread(save_record, record)
     def complete():
         with db.connect() as con:
             con.execute("UPDATE compute_jobs SET state='done' WHERE id=?",(job,))
@@ -935,7 +1062,7 @@ async def test_pipeline_intermediate_job_advances_without_agent_message(tmp_path
     broker=ComputeNotifyBroker(core)
     if recover_acknowledged:
         await asyncio.to_thread(broker._mark_notified,job)
-        await broker.ensure_project(project.id)
+        await broker._poll_all()
     else:
         await broker._poll_project(project.id)
     messages = _inbox_texts(core, child.id)
@@ -953,12 +1080,17 @@ async def test_pipeline_intermediate_job_advances_without_agent_message(tmp_path
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("outcome,verified", [("verified", True), ("candidate_only", False), ("blocked", None)])
-async def test_ts_outcome_wakes_owner_while_high_throughput_jobs_run(tmp_path, outcome, verified):
+@pytest.mark.parametrize("model_calls", [0, 2])
+async def test_ts_outcome_wakes_owner_while_high_throughput_jobs_run(tmp_path, outcome, verified, model_calls):
+    from cloudra.runtime_v2.persistence import RuntimeStore
     from cloudra.services.ts_pipeline_store import bind_stage_job, create_process, save_process_record
     from cloudra.tools.core.ts_process import TsJobStep, _block, _terminal
     from tests.test_ts_stage_inputs import record_fixture
 
     core, project, coordinator = await _setup_core()
+    store = await asyncio.to_thread(RuntimeStore, tmp_path / "ts-notice.db")
+    core.store = store
+    await core.event_writer.flush()
     child = (await CommandBus(core).execute(Command(
         type="agent.spawn", target={"project_id": project.id},
         payload={"role_id": "small_mol", "parent_session_id": coordinator.id},
@@ -968,10 +1100,23 @@ async def test_ts_outcome_wakes_owner_while_high_throughput_jobs_run(tmp_path, o
     await asyncio.to_thread(_insert_terminal_job, project.id, session_id=child.id, state="running", path="")
 
     def completed_pipeline():
+        from cloudra.services.exploration_budget_store import (
+            CostEstimate,
+            ExplorationBudget,
+            configure_budget,
+            reserve_actions,
+        )
+
         db = ComputeDB().init()
         record = record_fixture(tmp_path, owner_conversation_id=project.id, owner_session_id=child.id)
         process = create_process(db, request_key="verdict-notice", payload=dict(project_id=project.id,
             owner_id=child.id, workspace_dir=str(tmp_path), input=record.input.model_dump(mode="json")))
+        configure_budget(db, process_id=process["process_id"], project_id=project.id,
+            owner_id=child.id, budget=ExplorationBudget(source="explicit_user", max_compute_actions=2, max_model_calls=4))
+        if model_calls:
+            reserve_actions(db, process_id=process["process_id"], decision_id="fixture-model-usage", estimates=[
+                CostEstimate(action_key=f"model:{i}", action_kind="model", source="fixture")
+                for i in range(model_calls)])
         source = tmp_path / "frequency.inp"
         source.write_text("Recorded native input")
         job = bind_stage_job(db, process_id=process["process_id"], declaration_revision=1,
@@ -994,16 +1139,119 @@ async def test_ts_outcome_wakes_owner_while_high_throughput_jobs_run(tmp_path, o
     assert child.state.value == "running"
     assert _inbox_texts(core, coordinator.id) == []
     assert len(messages) == 1
-    _, separator, content = messages[0].partition("\nTS state: ")
-    assert separator
-    view, _ = json.JSONDecoder().raw_decode(content)
-    if outcome == "blocked":
-        assert view["status"] == "blocked"
-        assert view["blocked"]["failure_class"] == "wrong_mode"
+    content = messages[0]
+    assert "TS state:" not in content
+    if outcome != "blocked":
+        assert f"outcome={outcome}" in content
     else:
-        assert view["status"] == "ended"
-        assert view["result"]["outcome"] == outcome
-        assert view["result"]["verified"] is verified
-        assert view["result"]["reason"] == "Recorded endpoint direction judgement"
-    assert view["message"] == "Recorded endpoint direction judgement"
+        assert "state=done" in content and "outcome=blocked" not in content
+    assert f"verified={str(verified is True).lower()}" in content
+    assert content.count("Recorded endpoint direction judgement") == 1
+    assert "NEXT:" in content
+    if outcome != "verified":
+        assert "ts_inspect" in content
+    assert await asyncio.to_thread(_notified_at, job) is not None
+    assert await asyncio.to_thread(broker._pending_terminal_jobs, project.id) == []
+    notices = core.event_log.query_session(child.id, types={"agent.message_injected"})
+    assert [task_id for event in notices for task_id in event.data["manifest"]["task_ids"]] == [job]
+    persisted = await asyncio.to_thread(store.events_after, {})
+    assert any(row["event_id"] == notices[0].event_id for row in persisted)
+    await broker._poll_project(project.id)
+    assert len(core.event_log.query_session(child.id, types={"agent.message_injected"})) == 1
+    reflections = [event for event in core.event_log.query_session(child.id, types={"context.pin_set"})
+                   if event.data["key"].startswith("guidance-scientific-reflection:")]
+    assert len(reflections) == int(outcome != "verified")
+    if reflections:
+        assert str(tmp_path) in reflections[0].data["content"]
+        persisted = await asyncio.to_thread(store.events_after, {})
+        pin_index = next(index for index, row in enumerate(persisted)
+                         if row["type"] == "context.pin_set" and row["session_id"] == child.id
+                         and row['data']['key'].startswith('guidance-scientific-reflection:'))
+        message_index = next(index for index, row in enumerate(persisted)
+                             if row["type"] == "agent.message_injected" and row["session_id"] == child.id)
+        assert pin_index < message_index
+        await broker._poll_project(project.id)
+        assert sum(event.data['key'].startswith('guidance-scientific-reflection:')
+                   for event in core.event_log.query_session(child.id, types={"context.pin_set"})) == 1
+    assert not core.event_log.query_session(coordinator.id, types={"context.pin_set"})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("restore", [False, True])
+async def test_consumed_unacked_notice_reuses_indexed_receipt_without_history_scan(tmp_path, monkeypatch, restore):
+    from cloudra.runtime_v2.effects import EventDraft
+    from cloudra.runtime_v2.persistence import RuntimeStore, restore_core
+
+    core, project, coordinator = await _setup_core()
+    core.store = RuntimeStore(tmp_path / "indexed-notice.db")
+    await core.event_writer.flush()
+    job_id = await asyncio.to_thread(_insert_terminal_job, project.id, session_id=coordinator.id, path="")
+    broker = ComputeNotifyBroker(core)
+
+    def failed_ack(_job_id):
+        raise OSError("ack interrupted after delivery")
+
+    with monkeypatch.context() as patcher:
+        patcher.setattr(broker, "_mark_notified", failed_ack)
+        await broker._poll_project(project.id)
+    notice = core.event_log.query_session(coordinator.id, types={"agent.message_injected"})[-1]
+    await core.event_writer.commit(EventDraft(
+        "context.appended", stream="agent", project_id=project.id, session_id=coordinator.id,
+        data={"messages": [{"role": "user", "message_id": notice.data["message_id"], "content": notice.data["content"]}]},
+    ))
+    assert core.mailbox.unread() == []
+    if restore:
+        restored = RuntimeCore(strict_events=True)
+        restore_core(restored, core.store)
+        core = restored
+
+    def reject_scan(*args, **kwargs):
+        raise AssertionError("compute receipt lookup must not replay event history")
+
+    monkeypatch.setattr(core.event_log, "iter_events", reject_scan)
+    await ComputeNotifyBroker(core)._poll_project(project.id)
+    assert await asyncio.to_thread(_notified_at, job_id) is not None
+    notices = core.event_log.query_session(coordinator.id, types={"agent.message_injected"})
+    assert len(notices) == 1
+
+
+def test_compute_delivery_lookup_is_scoped_to_project_and_manifest(tmp_path):
+    from cloudra.runtime_v2.events import EventLog
+    from cloudra.runtime_v2.persistence import RuntimeStore
+
+    log = EventLog(strict=True)
+    store = RuntimeStore(tmp_path / "receipt-scope.db")
+    assert store.compute_delivery_target("p", 7) is None
+    for project, target, kind, task in [
+        ("p", "first", "compute_completion", 7),
+        ("p", "second", "compute_completion", 7),
+        ("other", "foreign", "compute_completion", 7),
+        ("p", "other-job", "compute_completion", 8),
+        ("p", "other-kind", "child_completion", 7),
+        ("p", "string-id", "compute_completion", "7"),
+        ("p", None, "compute_completion", 7),
+    ]:
+        store.append_event(log.append(
+            "agent.message_injected", stream="project", project_id=project, session_id=target,
+            data={"manifest": {"kind": kind, "task_id": task}},
+        ))
+    assert store.compute_delivery_target("p", 7) == "second"
+    assert store.compute_delivery_target("other", 7) == "foreign"
+
+
+@pytest.mark.asyncio
+async def test_deleted_project_ack_uses_existing_tombstone_projection(monkeypatch):
+    from cloudra.runtime_v2.apply import apply_event
+
+    core, project, coordinator = await _setup_core()
+    job = await asyncio.to_thread(_insert_terminal_job, project.id, session_id=coordinator.id, path="")
+    deleted = core.event_log.append("project.deleted", stream="project", project_id=project.id)
+    apply_event(core, deleted)
+    assert project.id in core.deleted_project_ids
+
+    def reject_scan(*args, **kwargs):
+        raise AssertionError("deleted projects are already projected; no history replay is needed")
+
+    monkeypatch.setattr(core.event_log, "iter_events", reject_scan)
+    await ComputeNotifyBroker(core)._poll_all()
     assert await asyncio.to_thread(_notified_at, job) is not None

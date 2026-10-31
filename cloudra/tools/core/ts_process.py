@@ -10,38 +10,56 @@
 - **只推两类事件**：阻塞与终态。阶段推进不推（避免污染上下文）。
 - **四态终态**：``verified`` / ``candidate_only`` / ``search_failed`` / ``invalid_input``，
   且搜索失败 ≠ 反应不可能。
-- **有界推进**：预算来自声明；干预次数耗尽即落终态，不无限续。
+- **资源预算**：计算动作和模型请求预算来自声明；流程修订不设次数上限。
 - **目录约定**：``ts/<run_id>/``，逐迭代帧只允许出现在 ``build/trajectories/``。
 - **统一账本**：系统拥有的流水线使用既有 ComputeDB 阶段/作业事务；运行目录的
   ``process.json`` 是可读检查点，干预仍可通过 ``event_sink`` 记录。
 - **阶段诚实**：尚未接线的阶段标 ``not_implemented`` 并**停下**，绝不假装跑过。
 
 **本模块当前实现到哪**：declare → build → map → assemble → guess → validate →
-submit → refine → verdict 已接线；两端的路径种子须另经同方法 Opt/Freq 验证为极小值，
-才能作为 IRC 连通性判断的参考几何。
+submit → refine → verdict 已接线；完整物种须有频率确证的极小值参考。
+分离产物可用实际 IRC 端点身份及各组分独立零虚频证据验收，络合物极小值仍待验证。
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
 from typing import Callable, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from cloudra.persistence.fs_utils import atomic_write_text
+from cloudra.persistence.fs_utils import atomic_write_bytes, atomic_write_text
 from cloudra.tools.core.conformer_cards import AttemptEvidence
 from cloudra.tools.core.geometry_inputs import atom_index_base
 from cloudra.tools.core.geometry_optimization import OptimizationCheckpoint
+from cloudra.tools.core.molecule import (
+    read_molecule,
+    renumber_atoms,
+    to_xyz,
+    with_positions,
+)
 from cloudra.tools.core.qm_calculation import QmCalculation
+from cloudra.tools.core.reaction_state import (
+    ReactionStructures,
+    export_structure,
+    heavy_binding,
+    import_file_structure,
+    mapped_reaction_center,
+    path_endpoints,
+    set_heavy_binding,
+    source_snapshot,
+)
+from cloudra.tools.core.species_identity import chemical_smiles
 from cloudra.tools.core.structure_builder import (
     BuildStrategy,
     PreparationRequest,
     StructureInput,
     prepare_structure,
 )
-from cloudra.tools.core.ts_inputs import TsInput, TsResumeRequest, resolve_calculation
+from cloudra.tools.core.ts_inputs import GeneratedConformer, TsInput, TsResumeRequest, resolve_calculation
 
 #: 运行目录名（工作区下）。与 SOP §7 一致。
 TS_ROOT_NAME = "ts"
@@ -69,11 +87,6 @@ PathKind = Literal["", "xtb_path", "xtb_path_failed", "not_attempted", "scan", "
 #: 尚未接线的阶段（保留机制：新增阶段若还没实现，必须标 not_implemented 并停下，不假装跑过）
 _NOT_IMPLEMENTED_STAGES: dict[str, str] = {}
 
-
-class EndpointGeometryError(ValueError):
-    def __init__(self, role: str, details: str):
-        self.role = role
-        super().__init__(details)
 
 #: 精修输入的文件名（放在 jobs/<job_dir>/ 下，与作业现场同处）
 REFINEMENT_INPUT_NAMES = {"orca": "refine.inp", "gaussian": "refine.gjf"}
@@ -103,6 +116,18 @@ class TsStageRecord(BaseModel):
     artifacts: list[str] = Field(default_factory=list)
     source_input_revision: int = 1
 
+
+class TsArtifactBinding(BaseModel):
+    source_path: str
+    snapshot_path: str
+    sha256: str
+
+
+class TsProvidedGuessBinding(BaseModel):
+    xyz: TsArtifactBinding
+    evidence: list[TsArtifactBinding]
+
+
 class TsAttemptHistory(BaseModel):
     declaration_revision: int
     selected_candidate_id: str | None = None
@@ -110,17 +135,19 @@ class TsAttemptHistory(BaseModel):
     stage_records: list[TsStageRecord]
     reason: str
     input: TsInput | None = None
+    structures: ReactionStructures | None = None
+    provided_guess_binding: TsProvidedGuessBinding | None = None
     terminal: TsTerminal | None = None
     blocked: TsBlocked | None = None
     failed_attempt: dict | None = None
-    recovery_evidence: dict | None = None
+    stop_reason: str | None = None
 
 
 class TsProcessRecord(BaseModel):
     """持久运行记录（``ts/<run_id>/process.json``）。"""
 
     model_config = ConfigDict(extra='forbid')
-    format_version: Literal[5] = 5
+    format_version: Literal[7] = 7
     run_id: str
     pipeline_id: str = ""
     declaration_revision: int = 1
@@ -133,8 +160,6 @@ class TsProcessRecord(BaseModel):
     candidate_attempts: list[AttemptEvidence] = Field(default_factory=list)
     cards_path: str = ""
     product_seed_candidate_id: str | None = None
-    product_seed_xyz_path: str = ""
-    product_seed_mol_path: str = ""
     selected_candidate_id: str | None = None
     run_dir: str
     workspace_dir: str = Field(default="", description="工作区根（证据快照的沙箱边界）")
@@ -145,24 +170,21 @@ class TsProcessRecord(BaseModel):
         default=None, description="发起 agent 的 session_id（作业终态推送收件人）"
     )
     input: TsInput
-    input_binding: dict = Field(default_factory=dict)
-    structures: dict[str, dict] = Field(default_factory=dict)
+    structures: ReactionStructures = Field(default_factory=ReactionStructures)
+    provided_guess_binding: TsProvidedGuessBinding | None = None
     failed_attempt: dict | None = None
     method_checks: dict[str, dict] = Field(default_factory=dict)
+    warnings: list[dict] = Field(default_factory=list)
     stage: TsStage = "declare"
     stage_records: list[TsStageRecord] = Field(default_factory=list)
     terminal: Optional[TsTerminal] = None
+    stop_reason: str | None = None
     blocked: Optional[TsBlocked] = None
     intervention_count: int = 0
     path_kind: PathKind = "not_attempted"
     guidance_attempt: int = 0
     active_attempt_dir: str = ""
-    current_seed_xyz_path: str = ""
-    current_seed_mol_path: str = ""
-    current_reactant_prepared_path: str = ""
-    current_ts_guess_path: str = ""
     guidance_manifest_path: str = ""
-    effective_reaction_center: list[tuple[int, int]] = Field(default_factory=list)
     job_id: Optional[int] = Field(
         default=None, description="提交后的 compute_jobs 作业号（精修作业）"
     )
@@ -249,14 +271,57 @@ def _make_stage_dirs(run_dir: str) -> None:
     for name in (BUILD_STAGE_DIR, PATH_STAGE_DIR, JOBS_STAGE_DIR, VERDICT_STAGE_DIR):
         os.makedirs(os.path.join(run_dir, name), exist_ok=True)
 
-def _write_immutable_input(path: str, content: str) -> None:
+def _write_immutable_input(path: str, content: str | bytes) -> None:
     """A bound engine input may be retried, never silently overwritten."""
+    data = content.encode('utf-8') if isinstance(content, str) else content
     existing = Path(path)
     if existing.exists():
-        if existing.read_bytes() != content.encode('utf-8'):
+        if existing.read_bytes() != data:
             raise ValueError('immutable stage input conflict')
         return
-    atomic_write_text(path, content)
+    atomic_write_bytes(path, data)
+
+
+def _bind_provided_artifact(record, source: str, target: Path) -> TsArtifactBinding:
+    path = _workspace_input_path(record, source)
+    data = path.read_bytes()
+    _write_immutable_input(str(target), data)
+    return TsArtifactBinding(source_path=str(path), snapshot_path=str(target),
+                             sha256=hashlib.sha256(data).hexdigest())
+
+
+def _product_component_logs(record: TsProcessRecord) -> list[str]:
+    """Bind component evidence once per input revision, using existing artifacts."""
+    sources = record.input.verification.product_endpoint.component_logs
+    if not sources:
+        return []
+    directory = Path(record.run_dir) / VERDICT_STAGE_DIR / f'components_{record.declaration_revision:04d}'
+    manifest = directory / 'manifest.json'
+    if manifest.is_file():
+        bindings = [TsArtifactBinding.model_validate(item) for item in json.loads(manifest.read_text())]
+    else:
+        directory.mkdir(parents=True, exist_ok=True)
+        bindings = [_bind_provided_artifact(record, source, directory / f'component_{index:04d}.log')
+                    for index, source in enumerate(sources)]
+        _write_immutable_input(str(manifest), json.dumps([item.model_dump() for item in bindings]))
+    logs = []
+    for item in bindings:
+        path = _workspace_input_path(record, item.snapshot_path)
+        if hashlib.sha256(path.read_bytes()).hexdigest() != item.sha256:
+            raise ValueError(f'Bound component evidence changed: {path}')
+        logs.append(str(path))
+        if str(path) not in record.evidence_candidates:
+            record.evidence_candidates.append(str(path))
+    return logs
+
+
+def _verify_provided_guess_binding(record) -> None:
+    binding = record.provided_guess_binding
+    if binding is not None:
+        for artifact in (binding.xyz, *binding.evidence):
+            path = _workspace_input_path(record, artifact.snapshot_path)
+            if hashlib.sha256(path.read_bytes()).hexdigest() != artifact.sha256:
+                raise ValueError(f'Bound provided guess artifact changed: {path}')
 
 def save_record(record: TsProcessRecord) -> str:
     """落 ``process.json``；同时刷新 ``declare.json``（声明单独可读，便于人核对）。"""
@@ -286,7 +351,7 @@ def save_record(record: TsProcessRecord) -> str:
 def load_record(workspace_dir: str, run_id: str) -> TsProcessRecord:
     path = os.path.join(workspace_dir, TS_ROOT_NAME, run_id, PROCESS_JSON_NAME)
     data = json.loads(Path(path).read_text(encoding="utf-8"))
-    if data.get("format_version") != 5:
+    if data.get("format_version") != 7:
         raise ValueError("Unsupported TS input format; existing compute jobs remain intact.")
     return TsProcessRecord.model_validate(data)
 
@@ -410,7 +475,7 @@ def _open_shell_singlet(record) -> bool:
 
     reaction = record.input.reaction
     for smiles in (reaction.reactant_smiles, reaction.product_smiles):
-        graph = Chem.MolFromSmiles(smiles)
+        graph = Chem.MolFromSmiles(chemical_smiles(smiles))
         if graph is not None and electronic_state_details(
             graph, charge=reaction.charge, multiplicity=reaction.multiplicity,
             electronic_character=reaction.electronic_character,
@@ -459,13 +524,13 @@ def _declare(record: TsProcessRecord) -> TsProcessRecord:
     problems: list[str] = []
     if not declaration.reactant_smiles.strip():
         problems.append("reactant_smiles is empty")
-    if not declaration.product_smiles.strip():
+    if not chemical_smiles(declaration.product_smiles).strip():
         problems.append("product_smiles is empty")
     if declaration.multiplicity < 1:
         problems.append(f"multiplicity must be >= 1 (2S+1), got {declaration.multiplicity}")
     from rdkit import Chem
     reactant_graph = Chem.MolFromSmiles(declaration.reactant_smiles)
-    product_graph = Chem.MolFromSmiles(declaration.product_smiles)
+    product_graph = Chem.MolFromSmiles(chemical_smiles(declaration.product_smiles))
     if reactant_graph is None or product_graph is None:
         problems.append('Reaction species must have parseable SMILES')
     else:
@@ -479,7 +544,7 @@ def _declare(record: TsProcessRecord) -> TsProcessRecord:
         from rdkit import Chem
 
         reactant_graph = Chem.MolFromSmiles(declaration.reactant_smiles)
-        product_graph = Chem.MolFromSmiles(declaration.product_smiles)
+        product_graph = Chem.MolFromSmiles(chemical_smiles(declaration.product_smiles))
         if reactant_graph is None or product_graph is None:
             problems.append("product_geometry requires parseable reactant and product SMILES")
         else:
@@ -508,87 +573,49 @@ def _build(record: TsProcessRecord) -> TsProcessRecord:
         )
     endpoints = [("reactant", declaration.reactant_smiles)]
     if _rotated_product(record) is None:
-        endpoints.append(("product", declaration.product_smiles))
+        endpoints.append(("product", chemical_smiles(declaration.product_smiles)))
     # 第二端几何由声明派生（绕键旋转）时**不单独建**：那一端就是第一端的一个刚体旋转，
     # 另外建一个构象既浪费又可能被误当成"产物"（两端 SMILES 相同的题型必然踩这个坑）
     for role, smiles in endpoints:
         source = getattr(record.input.conformers, role)
         if source is None:
-            return _block(record, 'build', 'missing_input', f'Explicit conformer source required for {role}', needs=[f'conformers.{role}'])
+            # 缺省来源直接生成；保留原声明，把实际算法和种子记在生成的分子上。
+            source = GeneratedConformer(kind='generate')
+        # 已导入的分子是当前事实；推进、改设置和读取状态不重读源文件。
         if source.kind == 'file':
-            try:
-                import hashlib
-
-                from cloudra.services.ts_pipeline_context import pipeline_database
-                from cloudra.services.ts_pipeline_store import _rewrite_lock
-                from cloudra.tools.core.structure_artifacts import read_xyz_atoms
-
-                # Paired reads serialize with current-source canonical overwrites.
-                with _rewrite_lock(pipeline_database()):
-                    path = _workspace_input_path(record, source.xyz_path)
-                    if not path.is_file():
-                        return _block(record, 'build', 'conformer_source_invalid',
-                            f'{role} XYZ source is missing: {path}', needs=[f'conformers.{role}.xyz_path'],
-                            issues=[dict(code='source_missing', role=role, field=f'conformers.{role}.xyz_path', path=str(path))])
-                    # Capture once: the hash must cover the exact bytes copied,
-                    # rather than an earlier read of this mutable workspace source.
-                    source_bytes = {'xyz': path.read_bytes()}
-                    if source.mol_path:
-                        mol = _workspace_input_path(record, source.mol_path)
-                        if not mol.is_file():
-                            return _block(record, 'build', 'conformer_source_invalid',
-                                f'{role} MOL source is missing: {mol}', needs=[f'conformers.{role}.mol_path'],
-                                issues=[dict(code='source_missing', role=role, field=f'conformers.{role}.mol_path', path=str(mol))])
-                        source_bytes['mol'] = mol.read_bytes()
-                    pins = record.input_binding.get('revision_source_hashes', {})
-                    if role in pins and pins[role] != {name: hashlib.sha256(data).hexdigest() for name, data in source_bytes.items()}:
-                        raise ValueError(f'{role} source changed since atom identity was proved; redeclare conformers.{role}')
-                target = Path(record.run_dir) / BUILD_STAGE_DIR / f'input_{record.declaration_revision:04d}' / role
-                target.mkdir(parents=True, exist_ok=True)
-                _write_immutable_input(str(target / 'seed.xyz'), source_bytes['xyz'].decode('utf-8'))
-                atoms = read_xyz_atoms(str(target / 'seed.xyz'))
-                mol_path = ''
-                if source.mol_path:
-                    mol_path = str(target / 'seed.mol')
-                    _write_immutable_input(mol_path, source_bytes['mol'].decode('utf-8'))
-                pins.pop(role, None)
-                if not pins:
-                    record.input_binding.pop('revision_source_hashes', None)
-                if role == 'reactant':
-                    record.current_seed_xyz_path = str(target / 'seed.xyz')
-                    record.current_seed_mol_path = mol_path
-                    metadata = dict(atom_identities=[dict(index=i, symbol=s) for i, (s, _) in enumerate(atoms)], components=[])
-                    record.current_reactant_prepared_path = str(target / 'atom_table.json')
-                    _write_immutable_input(record.current_reactant_prepared_path, json.dumps(metadata))
-                else:
-                    record.product_seed_xyz_path = str(target / 'seed.xyz')
-                    record.product_seed_mol_path = mol_path
-                record.evidence_candidates.append(str(target / 'seed.xyz'))
-                _store_structure_table(record, role)
-            except (ValueError, OSError) as exc:
-                return _block(record, 'build', 'conformer_source_invalid', str(exc), needs=[f'conformers.{role}'])
+            if getattr(record.structures, role) is None:
+                try:
+                    setattr(record.structures, role, import_file_structure(record, role, source))
+                except (ValueError, OSError) as exc:
+                    return _block(record, 'build', 'conformer_source_invalid', str(exc), needs=[f'conformers.{role}'],
+                        issues=[dict(code='source_missing' if isinstance(exc, FileNotFoundError) else 'source_invalid',
+                            field=f'conformers.{role}', role=role, path=getattr(exc, 'filename', None))])
             if source.optimization is not None:
                 record = _optimize_conformer_source(record, role)
                 if record.blocked or record.waiting_for:
                     return record
-                _store_structure_table(record, role)
             continue
         if source.kind == 'catalog':
             from cloudra.tools.core.ts_candidate_pipeline import use_catalog_source
-            record = use_catalog_source(record, source, role)
+            if getattr(record.structures, role) is None:
+                record = use_catalog_source(record, source, role)
             if record.blocked:
                 return record
-            _store_structure_table(record, role)
             if source.optimization is not None:
                 record = _optimize_conformer_source(record, role)
                 if record.blocked or record.waiting_for:
                     return record
-                _store_structure_table(record, role)
             continue
         if source.kind != 'generate':
             return _block(record, 'build', 'conformer_source_invalid', f'Unsupported {role} source {source.kind}', needs=[f'conformers.{role}'])
         if role == 'reactant' and (guidance.ring_order or guidance.distance_filters) and source.optimization is None:
             return _block(record, 'build', 'missing_input', 'Guided generation requires an explicitly declared conformer optimization calculation.', needs=['conformers.reactant.optimization'])
+        if getattr(record.structures, role) is not None:
+            if source.optimization is not None:
+                record = _optimize_conformer_source(record, role)
+                if record.blocked or record.waiting_for:
+                    return record
+            continue
         target_dir = (
             os.path.join(record.active_attempt_dir, role)
             if record.active_attempt_dir else os.path.join(out_dir, f'input_{record.declaration_revision:04d}', role)
@@ -626,7 +653,7 @@ def _build(record: TsProcessRecord) -> TsProcessRecord:
             )
         if prepared.components and prepared.status in ('ok', 'assembly_failed'):
             try:
-                seed_path, mol_path = _bind_generated_seed(prepared, target_dir, source.seed)
+                seed_path, mol_path, seed_mol = _bind_generated_seed(prepared, target_dir, source.seed)
             except (ValueError, OSError) as exc:
                 return _block(record, 'build', 'conformer_generation_failed', str(exc), needs=[f'conformers.{role}'])
         else:
@@ -636,32 +663,47 @@ def _build(record: TsProcessRecord) -> TsProcessRecord:
                 atom_details=list(prepared.diagnostics),
                 needs=[f"reaction.{role}_smiles"],
             )
-        if role == "reactant":
-            record.current_reactant_prepared_path = prepared.artifact_path
-            record.current_seed_xyz_path, record.current_seed_mol_path = seed_path, mol_path
-        else:
-            record.product_seed_xyz_path, record.product_seed_mol_path = seed_path, mol_path
+        # 将构建身份直接带入分子；绑定时不再回读 prepared_structure.json。
+        from rdkit import Chem
+        heavy = [a.GetIdx() for a in Chem.MolFromSmiles(smiles).GetAtoms() if a.GetAtomicNum() != 1]
+        for identity in prepared.atom_identities:
+            value = identity.model_dump() if hasattr(identity, 'model_dump') else identity
+            atom = seed_mol.GetAtomWithIdx(value['index'])
+            identity = (f"in:{value['input_atom_index']}" if value['origin'] == 'input_atom' else f"in:{value['parent_input_atom_index']}#H{value['hydrogen_ordinal']}")
+            atom.SetProp('cloudra_atom_id', identity)
+            atom.SetProp('cloudra_component_id', value['component_id'])
+            if value.get('origin') == 'input_atom' and value.get('symbol') != 'H':
+                atom.SetIntProp('cloudra_smiles_heavy_index', heavy.index(value['input_atom_index']))
+        setattr(record.structures, role, seed_mol)
+        seed_mol.SetProp('cloudra_import_source', json.dumps(dict(kind='generate',
+            generation=source.generation, seed=source.seed, input_revision=record.declaration_revision)))
         record.evidence_candidates.extend([seed_path, mol_path, prepared.artifact_path])
-        _store_structure_table(record, role)
         if source.optimization is not None:
             record = _optimize_conformer_source(record, role)
             if record.blocked or record.waiting_for:
                 return record
-            _store_structure_table(record, role)
+    guidance_warnings = []
     if guidance.ring_order or guidance.distance_filters:
         try:
             from cloudra.tools.core.preorganization import qualify_geometry
             plan, graph = _seed_guidance_plan(record)
             built = _read_built_xyz(record, 'reactant')
-            passed, reasons, _ = qualify_geometry(plan, graph, built[0], built[1])
+            passed, reasons, _, guidance_warnings = qualify_geometry(plan, graph, built[0], built[1])
             if not passed:
-                raise ValueError('; '.join(reasons))
-            record.effective_reaction_center = list(dict.fromkeys([*record.input.reaction.reaction_center, *plan.forming_pairs]))
+                raise ValueError('; '.join([*reasons, *guidance_warnings]))
         except (ValueError, OSError) as exc:
             return _block(record, 'build', 'seed_guidance_failed', str(exc), needs=['conformers.reactant', 'conformers.guidance'])
     detail = "both endpoints built" if len(endpoints) == 2 else (
         "first endpoint built; the second endpoint is derived from it by the declared rotation"
     )
+    if guidance_warnings:
+        detail += '\n' + '\n'.join(guidance_warnings)
+    for role, _ in endpoints:
+        actual_source = source_snapshot(getattr(record.structures, role))
+        if actual_source.get('kind') == 'generate':
+            detail += (f"; {role} generated from SMILES with {actual_source['generation']} "
+                       f"(seed={actual_source['seed']})")
+    detail += '; atom numbering maintained automatically in the owned structures'
     _record_stage(record, "build", "done", detail, record.evidence_candidates)
     return record
 
@@ -675,7 +717,7 @@ def _bind_generated_seed(prepared, directory, seed):
         combine_components,
         sample_independent_placements,
     )
-    components = [Chem.MolFromMolFile(component.mol_path, removeHs=False) for component in prepared.components]
+    components = [Chem.Mol(component.mol) for component in prepared.components]
     if any(mol is None for mol in components):
         raise ValueError('Prepared component graph missing')
     for mol in components:
@@ -694,29 +736,24 @@ def _bind_generated_seed(prepared, directory, seed):
             groups.append(list(range(offset, offset + mol.GetNumAtoms())))
             offset += mol.GetNumAtoms()
         placement = sample_independent_placements(graph, groups, seed=seed, count=1, parameters=AssemblyParameters())[0]
-        for index, point in enumerate(placement.positions):
-            graph.GetConformer().SetAtomPosition(index, point)
+        graph = with_positions(graph, placement.positions)
     symbols = [atom.GetSymbol() for atom in graph.GetAtoms()]
     if symbols != prepared.symbols:
         raise ValueError('Generated seed changed the prepared atom identity order')
-    xyz = '\n'.join([str(len(symbols)), 'ETKDGv3 seed; unoptimized',
-        *[symbol + ' ' + ' '.join(repr(float(v)) for v in graph.GetConformer().GetAtomPosition(index))
-          for index, symbol in enumerate(symbols)]]) + '\n'
+    xyz = to_xyz(graph)
     xyz_path, mol_path = str(Path(directory) / 'generated_seed.xyz'), str(Path(directory) / 'generated_seed.mol')
     _write_immutable_input(xyz_path, xyz)
     _write_immutable_input(mol_path, Chem.MolToMolBlock(graph))
-    return xyz_path, mol_path
+    return xyz_path, mol_path, graph
 
 def _seed_guidance_plan(record):
     """Use existing qualification and ring fallback on the actual bound graph."""
-    from rdkit import Chem
-
     from cloudra.tools.core.complex_assembly import AssemblyParameters
     from cloudra.tools.core.preorganization import DistanceWindow, GuidancePlan
     built = _read_built_xyz(record, 'reactant')
-    if built is None or not built[3]:
+    if built is None:
         raise ValueError('Guidance requires the bound reactant MOL graph; supply conformers.reactant.mol_path')
-    graph = Chem.MolFromMolFile(built[3], removeHs=False)
+    graph = _bound_input_structure(record, 'reactant', require_identity=False)[1]
     if graph is None or [atom.GetSymbol() for atom in graph.GetAtoms()] != built[0]:
         raise ValueError('Guidance MOL graph does not match the bound XYZ atom order')
     guidance = record.input.conformers.guidance
@@ -783,7 +820,7 @@ def _optimize_conformer_source(record, role):
             *[symbol + ' ' + ' '.join(repr(v) for v in point) for symbol, point in zip(result['symbols'], result['positions'])]]) + '\n'
         target = str(directory / 'optimized_seed.xyz')
         _write_immutable_input(target, xyz)
-        record.current_seed_xyz_path = target
+        setattr(record.structures, role, with_positions(getattr(record.structures, role), result['positions']))
         return record
     if step is None:
         if calculation.engine == 'xtb':
@@ -796,102 +833,80 @@ def _optimize_conformer_source(record, role):
             _write_immutable_input(str(manifest), task.model_dump_json())
             job_type = 'chem_task'
         else:
+            calc_copy, task_type = _stage_writer_tasks(calculation, [{'opt': None}])
             manifest = directory / ('seed-opt.inp' if calculation.engine == 'orca' else 'seed-opt.gjf')
-            request = QmInputWriter_input_schema(**calculation.model_dump(mode='json'),
-                source_type='xyz_file', source_value=built[2], task_type=[{'opt': None}],
+            request = QmInputWriter_input_schema(**calc_copy.model_dump(mode='json'),
+                source_type='xyz_file', source_value=built[2], task_type=task_type,
                 nproc=record.compute_cpus, mem=f'{record.compute_memory_mb}MB', output_path=str(manifest),
-                charge=record.input.reaction.charge, multiplicity=record.input.reaction.multiplicity)
-            from cloudra.tools.core.calculation_intent import validate_writer_request
-            conflicts = validate_writer_request(request.model_dump())
+                charge=record.input.reaction.charge, multiplicity=record.input.reaction.multiplicity,
+                electronic_character=record.input.reaction.electronic_character)
+            conflicts = _writer_request_errors(record, purpose, request)
             if conflicts:
                 return _block(record, 'build', 'conformer_input_invalid', str(conflicts), needs=[f'conformers.{role}.optimization'])
-            content = QmInputWriter._build_orca_input(request, _xyz_coords(built[2])) if calculation.engine == 'orca' else QmInputWriter._build_gjf(request, _xyz_coords(built[2]))
+            molecule = getattr(record.structures, role)
+            content = QmInputWriter.render_input(request, molecule)
+            error = _writer_render_error(record, purpose, request, content)
+            if error:
+                return _block(record, 'build', 'conformer_input_invalid', error, needs=[f'conformers.{role}.optimization'])
             _write_immutable_input(str(manifest), content)
             job_type = calculation.engine
         error, job = _submit_step(record, purpose, str(manifest), job_type)
         if error:
             return _block(record, 'build', 'conformer_admission_failed', error, needs=[f'conformers.{role}.optimization'])
-        step = TsJobStep(purpose=purpose, job_id=job, input_path=str(manifest), state='ready', actual_calculation=calculation, source_input_revision=record.declaration_revision)
+        step = TsJobStep(purpose=purpose, job_id=job, input_path=str(manifest), state='ready', actual_calculation=calculation, source_input_revision=record.declaration_revision, atom_binding=_direction_atom_binding(record))
         record.job_steps.append(step)
     step.state = _step_state(record, step)
     if step.state not in TERMINAL_STATES:
         record.waiting_for = f'job:{step.job_id}'
         return record
     record.waiting_for = ''
+    recovery = (
+        f'Use ts_resume to revise changes.conformers.{role}, or retry the same requested optimization with changes={{}}. '
+        f'To keep the imported seed without build pre-optimization, submit changes.conformers.{role} '
+        'with {"optimization": null}; the existing source and proven identity are retained. '
+        'Later TS/IRC and endpoint verification remain required.'
+    )
     if step.state != 'done':
         _record_candidate_failure(record, 'conformer_optimization_failed', step, _refinement_log_path(record, step))
-        return _block(record, 'build', 'conformer_optimization_failed', f'{purpose} job {step.job_id} failed; revise or retry through ts_resume.', needs=[f'conformers.{role}'])
+        return _block(record, 'build', 'conformer_optimization_failed', f'{purpose} job {step.job_id} failed. {recovery}', needs=[f'conformers.{role}'])
     if calculation.engine == 'xtb':
         data, _ = read_task_result(step.input_path)
         result = data['result']
         if not (result.get('normal_termination') is True and result.get('optimization_converged') is True):
             _record_candidate_failure(record, 'nonconvergence', step, step.input_path)
-            return _block(record, 'build', 'conformer_optimization_failed', 'Seed optimization has no converged native evidence.', needs=[f'conformers.{role}'])
+            return _block(record, 'build', 'conformer_optimization_failed', f'Seed optimization has no converged native evidence. {recovery}', needs=[f'conformers.{role}'])
         xyz = Path(result['optimized_xyz']).read_text()
     else:
         xyz, error = _endpoint_opt_frame(record, step)
         if error:
             _record_candidate_failure(record, 'nonconvergence', step, _refinement_log_path(record, step))
-            return _block(record, 'build', 'conformer_optimization_failed', error, needs=[f'conformers.{role}'])
+            return _block(record, 'build', 'conformer_optimization_failed', f'{error} {recovery}', needs=[f'conformers.{role}'])
     target = str(directory / 'optimized_seed.xyz')
     _write_immutable_input(target, xyz)
     from cloudra.tools.core.structure_artifacts import read_xyz_atoms
-    if [s for s, _ in read_xyz_atoms(target)] != built[0]:
+    optimized_atoms = read_xyz_atoms(target)
+    if [s for s, _ in optimized_atoms] != built[0]:
         return _block(record, 'build', 'conformer_identity_mismatch', 'Optimized seed changed the atom order.', needs=[f'conformers.{role}'])
-    if role == 'reactant':
-        record.current_seed_xyz_path = target
-    else:
-        record.product_seed_xyz_path = target
+    setattr(record.structures, role, with_positions(getattr(record.structures, role), [point for _, point in optimized_atoms]))
     return record
 
 def _active_reaction_center(record: TsProcessRecord) -> list[tuple[int, int]]:
-    return (record.effective_reaction_center if (record.input.conformers.guidance.ring_order or record.input.conformers.guidance.distance_filters)
-            else record.input.reaction.reaction_center)
+    center = list(record.input.reaction.reaction_center) or mapped_reaction_center(record.structures)
+    guidance = record.input.conformers.guidance
+    if guidance.ring_order or guidance.distance_filters:
+        plan, _ = _seed_guidance_plan(record)
+        center = list(dict.fromkeys([*center, *plan.forming_pairs]))
+    return center
+
 
 def _read_built_xyz(record: TsProcessRecord, role: str):
-    """读回某端已构建的几何，返回 ``(symbols, positions, xyz_path, mol_path)``；
-    找不到返回 ``None``。
-
-    多组分输入建出来的是**组装候选**（已按能量排序，取第一个）；单组分是 ``prepared.xyz``。
-    """
-    from cloudra.tools.core.structure_artifacts import read_xyz_atoms
-
-    if role=='product' and record.product_seed_xyz_path:
-        if not Path(record.product_seed_xyz_path).is_file():
-            return None
-        atoms=read_xyz_atoms(record.product_seed_xyz_path)
-        return ([s for s,_ in atoms],[p for _,p in atoms],record.product_seed_xyz_path,record.product_seed_mol_path)
-    if role == "reactant" and record.current_seed_xyz_path:
-        path = record.current_seed_xyz_path
-        if not os.path.isfile(path):
-            return None
-        atoms = read_xyz_atoms(path)
-        return ([symbol for symbol, _ in atoms], [position for _, position in atoms],
-                path, record.current_seed_mol_path)
-    base = (
-        os.path.join(record.active_attempt_dir, role)
-        if record.active_attempt_dir else
-        os.path.join(record.run_dir, BUILD_STAGE_DIR, role)
-    )
-    candidates = [os.path.join(base, "prepared.xyz")]
-    assembly_dir = os.path.join(base, "assembly")
-    if os.path.isdir(assembly_dir):
-        candidates.extend(sorted(
-            os.path.join(assembly_dir, name)
-            for name in os.listdir(assembly_dir)
-            if name.startswith("complex_candidate_") and name.endswith(".xyz")
-        ))
-    for path in candidates:
-        if os.path.isfile(path):
-            atoms = read_xyz_atoms(path)
-            mol_path = os.path.splitext(path)[0] + ".mol"
-            return (
-                [symbol for symbol, _ in atoms],
-                [position for _, position in atoms],
-                path,
-                mol_path if os.path.isfile(mol_path) else "",
-            )
-    return None
+    """执行边界的文件视图；没有目录猜测、原始文件回读或平行结构缓存。"""
+    mol = getattr(record.structures, role)
+    if mol is None:
+        return None
+    xyz, graph = export_structure(record, role)
+    return ([atom.GetSymbol() for atom in mol.GetAtoms()],
+            mol.GetConformer().GetPositions().tolist(), xyz, graph)
 
 def _derive_product_geometry(record: TsProcessRecord, built):
     """按声明的旋转从第一端几何生成第二端几何；返回 ``(错误, positions)``。
@@ -908,13 +923,15 @@ def _derive_product_geometry(record: TsProcessRecord, built):
     if geometry is None:
         return "", []
     symbols, positions, _xyz_path, mol_path = built
-    if not mol_path:
+    mol = record.structures.reactant
+    if mol is None and not mol_path:
         return (
             "the built endpoint's MOL file is missing, so the bond to rotate about cannot be "
             "identified from the real bond graph",
             [],
         )
-    mol = Chem.MolFromMolBlock(Path(mol_path).read_text(encoding="utf-8"), removeHs=False)
+    if mol is None:
+        mol = read_molecule(mol_path, input_format='mol')
     if mol is None:
         return f"the built endpoint's MOL file could not be parsed: {mol_path}", []
     left, right = int(geometry.atoms[0]), int(geometry.atoms[1])
@@ -966,400 +983,143 @@ def _endpoint_numbering(record: TsProcessRecord) -> list[str]:
     return lines
 
 
-def _store_structure_table(record: TsProcessRecord, role: str) -> None:
-    """Record the actual, full XYZ order before mapping can block progress."""
-    import hashlib
-
-    from rdkit import Chem
-
-    from cloudra.tools.Chemtool.reaction_mapping import _read_structure, concrete_structure_digest
-
-    built = _read_built_xyz(record, role)
-    if built is None:
-        return
-    symbols, positions, xyz_path, mol_path = built
-    source = getattr(record.input.conformers, role)
-    smiles = getattr(record.input.reaction, role + '_smiles')
-    identity_rows = []
-    metadata_path = (record.current_reactant_prepared_path if role == 'reactant'
-                     else str(Path(mol_path).parent / 'prepared_structure.json') if mol_path else '')
-    if metadata_path and Path(metadata_path).is_file():
-        identity_rows = json.loads(Path(metadata_path).read_text()).get('atom_identities', [])
-    rows = []
-    for index, symbol in enumerate(symbols):
-        origin = identity_rows[index] if index < len(identity_rows) and identity_rows[index].get('symbol') == symbol else {}
-        rows.append(dict(number=index + 1, symbol=symbol, isotope=origin.get('isotope'),
-                         component=origin.get('component_index'), origin=origin.get('origin'),
-                         input_atom_number=(origin.get('input_atom_index') + 1 if origin.get('input_atom_index') is not None else None)))
-    declared = Chem.MolFromSmiles(smiles)
-    declared_heavy = [atom for atom in declared.GetAtoms() if atom.GetAtomicNum() != 1] if declared else []
-    smiles_heavy_atoms = [dict(position=index + 1, symbol=atom.GetSymbol(), isotope=atom.GetIsotope(),
-                               atom_map_label=atom.GetAtomMapNum())
-                          for index, atom in enumerate(declared_heavy)]
-    digest = ''
-    components = None
-    graph_error = ''
-    electronic = None
-    try:
-        from cloudra.tools.core.electronic_state import electronic_state_details, electronic_state_issue
-        arguments = dict(charge=record.input.reaction.charge, multiplicity=record.input.reaction.multiplicity,
-                         electronic_character=record.input.reaction.electronic_character)
-        declared_state = electronic_state_details(declared, **arguments) if declared is not None else None
-        mol = _read_structure(mol_path or xyz_path, None, 'mol' if mol_path else 'xyz',
-                              record.input.reaction.charge, role,
-                              multiplicity=record.input.reaction.multiplicity,
-                              electronic_character=record.input.reaction.electronic_character,
-                              require_declared_identity=bool(declared_state and declared_state['requires_spin_aware_geometry']))
-        if [atom.GetSymbol() for atom in mol.GetAtoms()] != symbols:
-            raise ValueError('MOL and XYZ atom order differ')
-        conf = Chem.Conformer(len(symbols))
-        for index, point in enumerate(positions):
-            conf.SetAtomPosition(index, point)
-        mol.RemoveAllConformers()
-        mol.AddConformer(conf)
-        components = len(Chem.GetMolFrags(mol))
-        issue = electronic_state_issue(mol, **arguments)
-        if issue:
-            raise ValueError(issue[1])
-        electronic = electronic_state_details(mol, **arguments)
-        for index, atom in enumerate(mol.GetAtoms()):
-            rows[index]['isotope'] = atom.GetIsotope()
-        digest = concrete_structure_digest(role, smiles, record.input.reaction.charge,
-                                           record.input.reaction.multiplicity, mol,
-                                           electronic_character=record.input.reaction.electronic_character)
-    except (ValueError, OSError) as exc:
-        graph_error = str(exc)
-    table = dict(role=role, source_kind=source.kind if source else None,
-                 input_revision=record.declaration_revision, xyz_path=xyz_path,
-                 xyz_sha256=hashlib.sha256(Path(xyz_path).read_bytes()).hexdigest(),
-                 mol_path=mol_path or None,
-                 mol_sha256=hashlib.sha256(Path(mol_path).read_bytes()).hexdigest() if mol_path else None,
-                 structure_digest=digest, atom_count=len(rows), components=components,
-                 index_base=1, atoms=rows, smiles_heavy_atoms=smiles_heavy_atoms,
-                 binding_status='unverified', graph_error=graph_error)
-    if electronic and electronic['requires_spin_aware_geometry']:
-        table['electronic_state'] = dict(**electronic, status='declared_seed_state')
-        table['connectivity_validation'] = dict(bond_pairs='rdDetermineConnectivity',
-                                              bond_orders='declared_molecular_identity')
-    normalization = record.structures.get(role, {}).get('normalization')
-    if normalization:
-        table['normalization'] = normalization
-    artifact = {key: value for key, value in table.items() if key != 'binding_status'}
-    artifact_text = json.dumps(artifact, ensure_ascii=False, sort_keys=True)
-    artifact_digest = hashlib.sha256(artifact_text.encode('utf-8')).hexdigest()
-    path = Path(record.run_dir) / BUILD_STAGE_DIR / 'atom_tables' / f'{role}_{record.declaration_revision}_{artifact_digest[:12]}.json'
-    path.parent.mkdir(parents=True, exist_ok=True)
-    _write_immutable_input(str(path), artifact_text)
-    table['table_path'] = str(path)
-    record.structures[role] = table
-
-def _bound_input_structure(record, role, *, require_identity=True, persist_artifact=True):
-    """Check one concrete source before spending compute, retaining its graph."""
-    import hashlib
-
-    from rdkit import Chem
-
-    from cloudra.tools.Chemtool.reaction_mapping import _identity_and_binding, _read_structure
-    built = _read_built_xyz(record, role)
-    if built is None:
+def _bound_input_structure(record, role, *, require_identity=True):
+    """读取当前分子，必要时确认声明身份；不再从导出文件重建状态。"""
+    from cloudra.tools.Chemtool.reaction_mapping import _identity_and_binding
+    mol = getattr(record.structures, role)
+    if mol is None:
         raise ValueError(f'{role} concrete geometry is missing')
-    symbols, positions, xyz_path, mol_path = built
-    hashes = {role + '_xyz': hashlib.sha256(Path(xyz_path).read_bytes()).hexdigest()}
-    expected_smiles = getattr(record.input.reaction, role + '_smiles')
-    from cloudra.tools.core.electronic_state import electronic_state_details, electronic_state_issue
-    arguments = dict(charge=record.input.reaction.charge, multiplicity=record.input.reaction.multiplicity,
-                     electronic_character=record.input.reaction.electronic_character)
-    declared = Chem.MolFromSmiles(expected_smiles)
-    if declared is None:
-        raise ValueError(f'{role}: declared SMILES cannot be parsed')
-    issue = electronic_state_issue(declared, **arguments)
-    if issue:
-        raise ValueError(f'{role}: {issue[1]}')
-    declared_state = electronic_state_details(declared, **arguments)
-    mol = _read_structure(mol_path or xyz_path, None, 'mol' if mol_path else 'xyz', record.input.reaction.charge, role,
-        multiplicity=record.input.reaction.multiplicity,
-        electronic_character=record.input.reaction.electronic_character,
-        require_declared_identity=declared_state['requires_spin_aware_geometry'])
-    issue = electronic_state_issue(mol, **arguments)
-    if issue:
-        raise ValueError(f'{role}: {issue[1]}')
-    electronic = electronic_state_details(mol, **arguments)
-    if [a.GetSymbol() for a in mol.GetAtoms()] != symbols:
-        raise ValueError(f'{role} MOL and XYZ atom orders differ')
-    conf = Chem.Conformer(len(symbols))
-    for i, point in enumerate(positions):
-        conf.SetAtomPosition(i, point)
-    mol.RemoveAllConformers()
-    mol.AddConformer(conf)
-    connectivity = _geometry_connectivity_error(mol, (symbols, positions), record.input.reaction.charge, role,
-        multiplicity=record.input.reaction.multiplicity, electronic_character=record.input.reaction.electronic_character)
-    if connectivity:
-        raise EndpointGeometryError(role, connectivity)
-    source = getattr(record.input.conformers, role)
-    constructed_role = 'reactant' if source and source.kind == 'rotate_about_bond' else role
-    original_source = getattr(record.input.conformers, constructed_role)
-    if original_source and original_source.kind == 'generate':
-        metadata_path = record.current_reactant_prepared_path if constructed_role == 'reactant' else str(Path(mol_path).parent / 'prepared_structure.json')
-        identities = json.loads(Path(metadata_path).read_text())['atom_identities']
-        expected = Chem.MolFromSmiles(expected_smiles)
-        for atom in expected.GetAtoms():
-            if atom.GetAtomicNum() != 1:
-                atom.SetAtomMapNum(atom.GetIdx() + 1)
-        for identity in identities:
-            if identity['symbol'] != 'H' and identity['origin'] == 'input_atom':
-                mol.GetAtomWithIdx(identity['index']).SetAtomMapNum(identity['input_atom_index'] + 1)
-        expected_smiles = Chem.MolToSmiles(expected, canonical=False)
-        hashes[role + '_construction'] = hashlib.sha256(Path(metadata_path).read_bytes()).hexdigest()
-    explicit_indices = None
-    if source and source.kind == 'file' and source.heavy_atom_binding:
-        from cloudra.tools.Chemtool.reaction_mapping import concrete_structure_digest
-
-        actual_digest = concrete_structure_digest(role, expected_smiles,
-            record.input.reaction.charge, record.input.reaction.multiplicity, mol,
-            electronic_character=record.input.reaction.electronic_character)
-        if source.heavy_atom_binding.structure_digest != actual_digest:
-            raise ValueError(f'{role}: heavy_atom_binding structure digest is stale')
-        explicit_indices = [index - 1 for index in source.heavy_atom_binding.indices]
-    annotated_source = any(token.startswith('in:') for row in Path(xyz_path).read_text().splitlines()[2:]
-                           for token in row.split()[4:])
-    identity, binding, diagnostic = _identity_and_binding(expected_smiles, mol, explicit_indices,
-        allow_symmetric_representative=electronic['is_open_shell'] and not annotated_source)
-    if electronic['is_open_shell'] and annotated_source and identity == 'match' and not binding:
-        raise ValueError(f'{role}: source atom identity annotations cannot be replaced by a symmetric representative; supply an explicit heavy_atom_binding.')
-    if require_identity and (identity != 'match' or (any(a.GetAtomicNum() != 1 for a in mol.GetAtoms()) and not binding)):
-        raise ValueError(f'{role}: {diagnostic or identity}')
-    from cloudra.tools.core.preorganization import geometry_stereochemistry_errors
-    stereo = geometry_stereochemistry_errors(mol, positions)
-    if require_identity and stereo:
-        raise EndpointGeometryError(role, f'{role}: {stereo}')
-    if not mol_path and not persist_artifact:
-        return expected_smiles, mol, hashes
-    if not mol_path:
-        mol_path = str(Path(xyz_path).with_suffix('.bound.mol'))
-        _write_immutable_input(mol_path, Chem.MolToMolBlock(mol))
-        if role == 'reactant':
-            record.current_seed_mol_path = mol_path
-        else:
-            record.product_seed_mol_path = mol_path
-    hashes[role + '_mol'] = hashlib.sha256(Path(mol_path).read_bytes()).hexdigest()
-    return expected_smiles, mol, hashes
-
-def _check_input_binding(record: TsProcessRecord) -> dict:
+    smiles = chemical_smiles(getattr(record.input.reaction, role + '_smiles'))
     from rdkit import Chem
 
-    from cloudra.tools.Chemtool.reaction_mapping import (
-        ReactionMapping_input_schema,
-        check_concrete_binding,
-        concrete_structure_digest,
-    )
-    request = dict(reactant_charge=record.input.reaction.charge, product_charge=record.input.reaction.charge,
-                   reactant_multiplicity=record.input.reaction.multiplicity,
-                   product_multiplicity=record.input.reaction.multiplicity,
-                   reactant_electronic_character=record.input.reaction.electronic_character,
-                   product_electronic_character=record.input.reaction.electronic_character)
-    hashes = {}
-    digests = {}
-    for role in ('reactant', 'product'):
-        expected, mol, artifacts = _bound_input_structure(record, role, require_identity=False)
-        source = getattr(record.input.conformers, role)
-        request.update({role + '_smiles': expected, role + '_text': Chem.MolToMolBlock(mol), role + '_format': 'mol',
-                        role + '_binding': source.heavy_atom_binding if source and source.kind == 'file' else None})
-        digests[role] = concrete_structure_digest(role, expected, record.input.reaction.charge,
-                                                   record.input.reaction.multiplicity, mol,
-                                                   electronic_character=record.input.reaction.electronic_character)
-        hashes.update(artifacts)
-    result = check_concrete_binding(ReactionMapping_input_schema(**request),
-        dict(atom_map=list(range(1, mol.GetNumAtoms() + 1)) if _rotated_product(record) else [i + 1 for i in record.input.reaction.atom_map], watch_pairs=[]),
-        known_digests=digests)
-    if any(table.get('electronic_state', {}).get('requires_spin_aware_geometry') for table in record.structures.values()):
-        result['connectivity_validation'] = dict(bond_pairs='rdDetermineConnectivity',
-                                                bond_orders='declared_molecular_identity')
-    return dict(input_revision=record.declaration_revision, hashes=hashes, **result)
+    from cloudra.tools.core.electronic_state import electronic_state_issue
+    reaction = record.input.reaction
+    for graph in (Chem.MolFromSmiles(chemical_smiles(smiles)), mol):
+        if graph is None:
+            raise ValueError(f'{role}: declared SMILES cannot be parsed')
+        issue = electronic_state_issue(graph, charge=reaction.charge, multiplicity=reaction.multiplicity,
+            electronic_character=reaction.electronic_character)
+        if issue:
+            raise ValueError(f'{role}: {issue[1]}')
+    if require_identity:
+        identity, binding, diagnostic = _identity_and_binding(smiles, mol,
+            [i - 1 for i in heavy_binding(mol)] or None)
+        if identity != 'match':
+            raise ValueError(f'{role}: {diagnostic or identity}')
+    return smiles, mol, {}
 
-def _validate_input_binding(record: TsProcessRecord) -> TsProcessRecord:
+
+def _direction_atom_binding(record: TsProcessRecord) -> dict | None:
+    """把当前结构和对应冻结到作业证据；历史不依赖以后修改的状态。"""
+    import hashlib
+
+    from rdkit import Chem
+    if record.structures.product_to_reactant is None:
+        return None
+    record.structures.complete_correspondence()
+    frequency = next((step for step in reversed(record.job_steps) if step.purpose == 'frequency'), None)
+    log = Path(_refinement_log_path(record, frequency)) if frequency else None
+    return dict(process_id=record.pipeline_id, declaration_revision=record.declaration_revision,
+        atom_map=[i + 1 for i in record.structures.product_to_reactant], charge=record.input.reaction.charge,
+        ts_log_sha256=hashlib.sha256(log.read_bytes()).hexdigest() if log and log.is_file() else None,
+        reactant_mol=Chem.MolToMolBlock(record.structures.reactant),
+        product_mol=Chem.MolToMolBlock(record.structures.product))
+
+
+def _bind_structures(record: TsProcessRecord) -> TsProcessRecord:
+    from cloudra.tools.Chemtool.reaction_mapping import bind_reaction_structures
     try:
-        record.input_binding = _check_input_binding(record)
-    except EndpointGeometryError as exc:
-        record.input_binding = dict(input_revision=record.declaration_revision, binding_status='inconclusive',
-                                    binding_diagnostics=[str(exc)])
-        return _block(record, 'map', 'input_identity_unconfirmed', str(exc),
-            needs=[f'conformers.{exc.role}'], issues=[dict(code='endpoint_geometry_invalid',
-                field=f'conformers.{exc.role}', role=exc.role,
-                structure_digest=record.structures.get(exc.role, {}).get('structure_digest'),
-                details=str(exc))])
+        if record.structures.product_to_reactant is not None:
+            record.structures.complete_correspondence()
+            _record_stage(record, 'map', 'done', 'Full atom correspondence reused; atom numbering maintained automatically.')
+            return record
+        result = bind_reaction_structures(record.input, record.structures.reactant, record.structures.product)
+        if result.get('binding_status') != 'complete':
+            diagnostics = result.get('binding_diagnostics', [])
+            candidates = result.get('candidates', [])
+            issues, needs = [], []
+            if candidates:
+                needs = ['reaction.selected_candidate']
+                issues.append(dict(code='concrete_mapping_ambiguous', field=needs[0], candidates=candidates))
+            else:
+                for role in ('reactant', 'product'):
+                    identity = result.get(role + '_identity')
+                    details = [item for item in diagnostics if item.startswith(role + ':')]
+                    if identity == 'match' and not details:
+                        continue
+                    if identity == 'match' and result.get('heavy_atom_bindings', {}).get(role):
+                        continue
+                    # 结构错误应要求替换该端来源；不能让模型拿映射数组修补错误物种。
+                    field = f'conformers.{role}'
+                    needs.append(field)
+                    if identity == 'mismatch':
+                        needs.append(f'reaction.{role}_smiles')
+                    issues.append(dict(code='endpoint_identity_mismatch' if identity == 'mismatch' else 'endpoint_binding_unconfirmed',
+                        field=field, role=role, details=details))
+            return _block(record, 'map', 'input_identity_unconfirmed',
+                '; '.join(diagnostics) or 'Concrete endpoint correspondence requires a candidate selection.',
+                atom_details=_endpoint_numbering(record), needs=needs or ['conformers'], issues=issues)
+        for role, indices in result.get('heavy_atom_bindings', {}).items():
+            molecule = getattr(record.structures, role)
+            derived = not heavy_binding(molecule) or (molecule.HasProp('cloudra_mapping_binding_derived') and molecule.GetBoolProp('cloudra_mapping_binding_derived'))
+            bound = set_heavy_binding(molecule, indices)
+            # 记录来源，不把上一次选择反过来当作分子固有身份，缩窄下次候选。
+            if derived:
+                bound.SetBoolProp('cloudra_mapping_binding_derived', True)
+            setattr(record.structures, role, bound)
+        record.structures.product_to_reactant = tuple(index - 1 for index in result['atom_map'])
+        record.structures.complete_correspondence()
+        _record_stage(record, 'map', 'done', result['message'] + ' Full atom numbering maintained automatically.')
     except (ValueError, OSError) as exc:
-        record.input_binding = dict(input_revision=record.declaration_revision, binding_status="inconclusive", binding_diagnostics=[str(exc)])
-    if record.input_binding["binding_status"] != "complete":
-        diagnostics = record.input_binding.get('binding_diagnostics', [])
-        issues = []
-        for role in ('reactant', 'product'):
-            if any(role in detail.lower() for detail in diagnostics):
-                source = getattr(record.input.conformers, role)
-                issues.append(dict(code='endpoint_binding_invalid' if source and source.kind == 'file' and source.heavy_atom_binding else 'endpoint_binding_ambiguous',
-                    field=f'conformers.{role}.heavy_atom_binding', role=role,
-                    structure_digest=record.structures.get(role, {}).get('structure_digest'),
-                    details=diagnostics))
-        return _block(record, "map", "input_identity_unconfirmed", "; ".join(diagnostics) or "Concrete endpoint identity or atom binding is inconclusive.",
-            needs=[issue['field'] for issue in issues] or ["reaction", "conformers"], issues=issues)
-    for role, indices in record.input_binding.get('heavy_atom_bindings', {}).items():
-        if role in record.structures:
-            record.structures[role]['binding_status'] = 'complete'
-            record.structures[role]['heavy_atom_indices'] = indices
+        return _block(record, 'map', 'input_identity_unconfirmed', str(exc), needs=['conformers', 'reaction.selected_candidate'])
     return record
 
-def _map(record: TsProcessRecord) -> TsProcessRecord:
-    """原子映射：校验声明的映射能把产物重排到**与反应物同一原子序列**。
 
-    这一步是必需的，不是形式：构建器按连通分量拼装两端，两端的原子顺序**本来就不一样**
-    （实测 ``[F-].CCl`` → ``[F,C,Cl,H,H,H]``，``CF.[Cl-]`` → ``[C,F,H,H,H,Cl]``），而
-    路径搜索要求两端是同一套、同序的原子。歧义与错映射必须**点名到原子**地报出来。
-    """
-    declaration = record.input.reaction
-    base = 1
-    geometry = _rotated_product(record)
-    if geometry is not None:
-        # 第二端几何由第一端绕键旋转而来 -> 原子对应关系是**恒等**（构造保证），不需要 atom_map
-        built = _read_built_xyz(record, "reactant")
+def _map(record: TsProcessRecord) -> TsProcessRecord:
+    """程序维护具体原子对应；只有真实歧义才要求研究选择。"""
+    if _rotated_product(record) is not None:
+        built = _read_built_xyz(record, 'reactant')
         if built is None:
-            return _block(
-                record, "map", "missing_built_geometry",
-                "the first endpoint has no built geometry, so the declared rotation cannot be "
-                "applied",
-                needs=["reaction.reactant_smiles"],
-            )
+            return _block(record, 'map', 'missing_built_geometry', 'The first endpoint is missing.', needs=['conformers.reactant'])
         error, positions = _derive_product_geometry(record, built)
         if error:
-            return _block(
-                record, "map", "product_geometry_failed", error, needs=["conformers.product"],
-            )
-        if len(positions) != len(built[0]):
-            return _block(
-                record, "map", "product_geometry_failed",
-                f"the derived second endpoint has {len(positions)} atoms but the first endpoint has "
-                f"{len(built[0])}",
-                needs=["conformers.product"],
-            )
-        directory = Path(record.run_dir) / BUILD_STAGE_DIR / f"input_{record.declaration_revision:04d}" / "product"
-        directory.mkdir(parents=True, exist_ok=True)
-        xyz = "\n".join([str(len(built[0])), "Declared bond rotation",
-            *[symbol + " " + " ".join(repr(float(v)) for v in point) for symbol, point in zip(built[0], positions)]]) + "\n"
-        record.product_seed_xyz_path = str(directory / "rotated_seed.xyz")
-        _write_immutable_input(record.product_seed_xyz_path, xyz)
-        record.product_seed_mol_path = built[3]
-        _validate_input_binding(record)
-        if record.blocked:
-            return record
-        _record_stage(
-            record, "map", "done",
-            "the second endpoint is the first endpoint rotated about the declared bond "
-            f"({geometry.atoms}, {geometry.degrees} deg), so "
-            "the atom correspondence is the identity by construction; no atom_map is needed",
-        )
-        return record
-    if not declaration.atom_map:
-        return _block(
-            record, "map", "atom_map_missing",
-            "no atom_map was declared: the reactant→product atom correspondence is ambiguous, and "
-            "an ambiguous mapping must be declared rather than guessed (a wrong mapping produces a "
-            "non-physical path no matter how good the path search is). To fix: declare the FULL "
-            "1-based structure map, in product atom order for every engine, "
-            "covering EVERY atom including hydrogens (a heavy-atom-only map is rejected). Atom "
-            "numbers refer to the built endpoint XYZs listed in atom_details (component-wise "
-            "assembly order, NOT raw SMILES order): read them, or call reaction_mapping on the "
-            "built structures for a draft and verify it element-wise before ts_resume.",
-            atom_details=_endpoint_numbering(record),
-            needs=["reaction.atom_map"],
-            issues=[dict(code='atom_map_missing', field='reaction.atom_map', index_base=1,
-                         structure_digests={role: table.get('structure_digest') for role, table in record.structures.items()})],
-        )
-
-    reactant = _read_built_xyz(record, "reactant")
-    product = _read_built_xyz(record, "product")
-    if reactant is None or product is None:
-        return _block(
-            record, "map", "missing_built_geometry",
-            "the built endpoint geometries are missing from the run directory, so the atom map "
-            "could not be checked",
-            needs=["reaction.reactant_smiles", "reaction.product_smiles"],
-        )
-    r_symbols = reactant[0]
-    p_symbols = product[0]
-    n = len(r_symbols)
-    if len(p_symbols) != n:
-        return _block(
-            record, "map", "atom_count_mismatch",
-            f"the reactant has {n} atoms but the product has {len(p_symbols)}; a path search needs "
-            "one consistent atom set",
-            atom_details=[f"reactant: {r_symbols}", f"product: {p_symbols}"],
-            needs=["reaction.reactant_smiles", "reaction.product_smiles"],
-        )
-    if sorted(declaration.atom_map) != list(range(n)):
-        got = declaration.atom_map
-        diagnosis = ""
-        if got and min(got) < 0:
-            diagnosis = (" The map contains negative internal indices.")
-        elif 0 < len(got) < n and sorted(got) == list(range(len(got))):
-            heavy = sum(1 for s in p_symbols if s != "H")
-            if len(got) == heavy:
-                diagnosis = (f" The map has {len(got)} entries, exactly the heavy-atom count — "
-                             "this is a heavy-atom map (e.g. reaction_mapping's heavy_atom_map); "
-                             "atom_map must cover EVERY atom including hydrogens.")
-        return _block(
-            record, "map", "atom_map_not_a_permutation",
-            f"atom_map must cover every atom once ({base}..{n-1+base}); got "
-            f"{[i+base for i in got]}.{diagnosis} Atom numbering refers to the built endpoint XYZs listed in "
-            "atom_details.",
-            atom_details=_endpoint_numbering(record),
-            needs=["reaction.atom_map"],
-            issues=[dict(code='atom_reference_invalid', field='reaction.atom_map', index_base=1,
-                         valid_range=[1, n], supplied=[i + 1 for i in got],
-                         structure_digests={role: table.get('structure_digest') for role, table in record.structures.items()})],
-        )
-
-    mismatches: list[str] = []
-    for product_index, target in enumerate(declaration.atom_map):
-        if p_symbols[product_index] != r_symbols[target]:
-            mismatches.append(
-                f"product atom {product_index + base} is {p_symbols[product_index]} but the map points it "
-                f"at reactant atom {target + base} which is {r_symbols[target]}"
-            )
-    if mismatches:
-        return _block(
-            record, "map", "atom_map_element_mismatch",
-            "the declared atom_map does not line up the two endpoints element-wise; reordering the "
-            "product by it would put the wrong element on the wrong atom. The full software-native element "
-            "sequences of both built endpoints are in atom_details — rebuild the whole map against "
-            "them (do not patch single entries by trial and error).",
-            atom_details=mismatches[:10] + _endpoint_numbering(record),
-            needs=["reaction.atom_map"],
-            issues=[dict(code='atom_reference_invalid', field='reaction.atom_map', index_base=1,
-                         details=mismatches[:10], structure_digests={role: table.get('structure_digest') for role, table in record.structures.items()})],
-        )
-    _validate_input_binding(record)
-    if record.blocked:
-        return record
-    _record_stage(record, "map", "done", f"{n} atoms mapped; concrete endpoint identities bound to input revision {record.declaration_revision}")
+            return _block(record, 'map', 'product_geometry_failed', error, needs=['conformers.product'])
+        record.structures.product = with_positions(record.structures.reactant, positions)
+        try:
+            # 构造保证同序，仍须证明实际分子确实是声明的物种和电子态。
+            for role in ('reactant', 'product'):
+                _bound_input_structure(record, role)
+        except (ValueError, OSError) as exc:
+            record.structures.product_to_reactant = None
+            return _block(record, 'map', 'input_identity_unconfirmed', str(exc),
+                needs=['conformers.reactant', 'reaction.reactant_smiles', 'reaction.product_smiles'])
+        # 同一个分子经过显式旋转，原子身份由构造保证。
+        record.structures.product_to_reactant = tuple(range(record.structures.reactant.GetNumAtoms()))
+    left, right = record.structures.reactant, record.structures.product
+    if left is not None and right is not None and left.GetNumAtoms() != right.GetNumAtoms():
+        return _block(record, 'map', 'atom_count_mismatch', 'Endpoint atom counts differ; a path requires the same atom set.',
+            atom_details=[f"reactant: {[a.GetSymbol() for a in left.GetAtoms()]}",
+                          f"product: {[a.GetSymbol() for a in right.GetAtoms()]}"],
+            needs=['reaction.reactant_smiles', 'reaction.product_smiles'])
+    record = _bind_structures(record)
     return record
 
 def _assemble(record: TsProcessRecord) -> TsProcessRecord:
     """反应中心引导的组装。组装本身在 build 阶段由 structure_builder 完成，这里只核对声明。"""
     # 组装只对**多组分**体系有意义：单组分（分子内重排、阻转异构、环翻转）没有片间取向可采样，
     # 因此不要求 reaction_center——这是"反应中心"这个概念本身不适用，不是调用方漏填
-    import json as _json
-
-    prepared_path = (record.current_reactant_prepared_path or
-                     os.path.join(record.run_dir, BUILD_STAGE_DIR, "reactant", "prepared_structure.json"))
-    components = record.structures.get("reactant", {}).get("components")
-    prepared_data: dict = {}
-    if os.path.isfile(prepared_path):
-        with open(prepared_path, encoding="utf-8") as handle:
-            prepared_data = _json.load(handle)
-    if not isinstance(components, int) or components < 1:
-        return _block(record, "assemble", "missing_component_identity",
-                      "Reactant component count is unavailable; repair the concrete structure binding.",
-                      needs=["conformers.reactant"])
-    identities = prepared_data.get("atom_identities", [])
+    from rdkit import Chem
+    mol = record.structures.reactant
+    if mol is None:
+        return _block(record, 'assemble', 'missing_component_identity',
+            'Reactant molecular identity is unavailable.', needs=['conformers.reactant'])
+    components = len(Chem.GetMolFrags(mol))
+    identities = [dict(index=atom.GetIdx(), symbol=atom.GetSymbol()) for atom in mol.GetAtoms()]
     active_center = _active_reaction_center(record)
+    center_note = (
+        f"; automatically derived from the bound atom map (1-based): {[(a + 1, b + 1) for a, b in active_center]}"
+        if active_center and not record.input.reaction.reaction_center else ''
+    )
     if active_center and not identities:
         return _block(
             record, "assemble", "missing_built_atom_numbering",
@@ -1389,14 +1149,14 @@ def _assemble(record: TsProcessRecord) -> TsProcessRecord:
             record, "assemble", "done",
             "single-component process whose second endpoint is a declared rotation of the first: "
             "there is no inter-fragment orientation to sample, so no reaction_center applies — the "
-            "declared rotation is the reaction coordinate",
+            "declared rotation is the reaction coordinate" + center_note,
         )
         return record
     if components <= 1:
         _record_stage(
             record, "assemble", "done",
             "single component: nothing to assemble (no inter-fragment orientation). The reaction "
-            "coordinate is whatever the path guess explores",
+            "coordinate is whatever the path guess explores" + center_note,
         )
         return record
     if not active_center:
@@ -1409,9 +1169,18 @@ def _assemble(record: TsProcessRecord) -> TsProcessRecord:
         )
     _record_stage(
         record, "assemble", "done",
-        f"{len(active_center)} reaction-centre pair(s) guide the assembly",
+        f"{len(active_center)} reaction-centre pair(s) guide the assembly" + center_note,
     )
     return record
+
+def _accept_candidate(record, path):
+    from cloudra.tools.core.structure_artifacts import read_xyz_atoms
+    atoms = read_xyz_atoms(path)
+    reference = record.structures.reactant
+    if reference is None or [a.GetSymbol() for a in reference.GetAtoms()] != [symbol for symbol, _ in atoms]:
+        raise ValueError('Candidate atom identity/order differs from the owned reactant')
+    record.structures.candidate = with_positions(reference, [point for _, point in atoms])
+
 
 def _guess_scan(record: TsProcessRecord) -> TsProcessRecord:
     """Advance a declared scan via the same job ledger and parser as manual scans."""
@@ -1447,10 +1216,11 @@ def _guess_scan(record: TsProcessRecord) -> TsProcessRecord:
                 return [dict(row.model_dump(), atoms=[i + base for i in row.atoms]) for row in rows]
             request = TsGuess_input_schema(
                 mode="scan_prepare", input_path=built[2], **calculation.model_dump(mode='json'),
-                charge=declaration.charge, spin=declaration.multiplicity,
-                scans=public_rows(plan.scans), freeze=public_rows(plan.freeze),
+                charge=declaration.charge, multiplicity=declaration.multiplicity,
+                electronic_character=declaration.electronic_character,
+                scans=public_rows(plan.scans), freeze=public_rows(plan.freeze), scan_mode=plan.mode,
                 output_path=str(folder / ("scan.inp" if calculation.engine == "orca" else "scan.gjf")),
-                nprocs=record.compute_cpus,
+                nproc=record.compute_cpus, mem=f'{record.compute_memory_mb}MB',
             )
             try:
                 prepared = TsGuess()._scan_prepare(request)
@@ -1459,11 +1229,12 @@ def _guess_scan(record: TsProcessRecord) -> TsProcessRecord:
             if not prepared.is_success:
                 return _block(record, "guess", "invalid_scan", prepared.message, needs=["guess"])
             input_path = prepared.input_file_path
+            _record_calculation_warnings(record, 'scan', input_path, prepared.warnings, source='writer')
             job_type = calculation.engine
         error, job_id = _submit_step(record, "scan", input_path, job_type)
         if error:
             return _block(record, "guess", "compute_admission_rejected", error, needs=["guess"])
-        record.scan_step = TsJobStep(purpose="scan", job_id=job_id, input_path=input_path, state="ready", actual_calculation=calculation, source_input_revision=record.declaration_revision)
+        record.scan_step = TsJobStep(purpose="scan", job_id=job_id, input_path=input_path, state="ready", actual_calculation=calculation, source_input_revision=record.declaration_revision, atom_binding=_direction_atom_binding(record))
         record.waiting_for = f"job:{job_id}"
         _record_stage(record, "guess", "waiting", f"Scan job {job_id} submitted; compute completion advances the system driver.", [input_path])
         return record
@@ -1479,10 +1250,8 @@ def _guess_scan(record: TsProcessRecord) -> TsProcessRecord:
         _record_candidate_failure(record, failure, step, log_path, details)
         return _block(
             record, "guess", "scan_job_failed",
-            f"Scan job {step.job_id}: {step.state}. Inspect the native log and execution artifacts "
-            "to identify the cause before proposing a correction. An unchanged adjustment does "
-            "not retry the job; a point-count change alone does not resolve an unexplained engine "
-            "failure. A retry requires scan_recovery bound to this failure and actual repair artifacts.",
+            f"Scan job {step.job_id}: {step.state}. Inspect the native log, then revise "
+            "the scan inputs or retry with ts_resume; the previous attempt remains recorded.",
             atom_details=details, needs=["compute_artifacts"],
         )
     target = str(Path(step.input_path).parent / "scan_peak.xyz")
@@ -1497,6 +1266,13 @@ def _guess_scan(record: TsProcessRecord) -> TsProcessRecord:
             return _block(record, 'guess', 'scan_artifacts_incomplete',
                 'Native xTB scan has incomplete point convergence or artifacts.',
                 atom_details=result.get('issues', []), needs=['compute_artifacts'])
+        if len(result.get('candidates', [])) > 1:
+            points = {point['index']: point for point in result['points']}
+            details = [f"Candidate point {candidate['point_index']}: energy={points[candidate['point_index']]['energy_hartree']:.12f} Hartree; XYZ={candidate['frame_path']}"
+                       for candidate in result['candidates']]
+            return _block(record, 'guess', 'scan_choice_required',
+                f"Multiple internal local-peak candidates. Choose one with guess.kind=provided; formal validation remains required. Native log: {result['log_file']}",
+                atom_details=details, needs=['guess'])
         if not result['usable_as_guess'] or not result.get('candidate_path'):
             _record_candidate_failure(record, 'scan_no_candidate', step, result['log_file'])
             return _block(record, 'guess', 'scan_no_candidate',
@@ -1512,6 +1288,11 @@ def _guess_scan(record: TsProcessRecord) -> TsProcessRecord:
         except (ValueError, OSError) as exc:
             _record_candidate_failure(record, "scan_parse_failed", step, _refinement_log_path(record, step))
             return _block(record, "guess", "scan_parse_failed", str(exc), needs=["guess"])
+        if (parsed.scan_has_internal_peak is True and not parsed.candidate_unavailable
+                and not parsed.ts_candidate_path):
+            return _block(record, 'guess', 'scan_choice_required',
+                parsed.message + f" Native log: {_refinement_log_path(record, step)}",
+                atom_details=parsed.verdicts, needs=['guess'])
         if (not parsed.is_success or parsed.scan_has_internal_peak is not True
                 or parsed.candidate_unavailable or not parsed.ts_candidate_path
                 or not Path(parsed.ts_candidate_path).is_file()):
@@ -1532,7 +1313,7 @@ def _guess_scan(record: TsProcessRecord) -> TsProcessRecord:
     except (ValueError, OSError) as exc:
         _record_candidate_failure(record, "scan_invalid_geometry", step, _refinement_log_path(record, step))
         return _block(record, "guess", "scan_invalid_geometry", str(exc), needs=["guess"])
-    record.current_ts_guess_path = target
+    _accept_candidate(record, target)
     record.path_kind = "scan"
     record.evidence_candidates.extend([_refinement_log_path(record, step), target])
     _record_stage(record, "guess", "done", "Scan internal peak extracted; unconstrained refinement still required.", [target])
@@ -1556,7 +1337,7 @@ def _queued_path(record: TsProcessRecord, reactant_xyz: str, product_xyz: str):
         error,job = _submit_step(record, 'path', path, 'chem_task')
         if error:
             return None,_block(record,'guess','path_admission_failed',error,needs=['execution.compute_node','execution.limits'])
-        step = TsJobStep(purpose='path',job_id=job,input_path=path,state='ready', actual_calculation=stage_calculation(record, 'path'), source_input_revision=record.declaration_revision)
+        step = TsJobStep(purpose='path',job_id=job,input_path=path,state='ready', actual_calculation=stage_calculation(record, 'path'), source_input_revision=record.declaration_revision, atom_binding=_direction_atom_binding(record))
         record.job_steps.append(step)
         record.waiting_for=f'job:{job}'
         return None,record
@@ -1578,8 +1359,8 @@ def _guess(record: TsProcessRecord) -> TsProcessRecord:
     Scientific search choices are explicit; failure never switches methods.
     """
     record.stage = "guess"
-    if record.input_binding:
-        _validate_input_binding(record)
+    if record.structures.product_to_reactant is None:
+        _bind_structures(record)
         if record.blocked:
             return record
     guess = record.input.guess
@@ -1589,37 +1370,36 @@ def _guess(record: TsProcessRecord) -> TsProcessRecord:
         return record
     if guess.kind == 'provided':
         try:
+            _verify_provided_guess_binding(record)
+        except (OSError, ValueError) as exc:
+            return _block(record, 'guess', 'provided_guess_artifact_changed', str(exc), needs=['guess'])
+        try:
             import math
 
             from cloudra.tools.core.structure_artifacts import read_xyz_atoms
-            candidate = _workspace_input_path(record, guess.xyz_path)
+            binding = record.provided_guess_binding
+            if binding is None:
+                target = Path(record.run_dir) / PATH_STAGE_DIR / f'input_{record.declaration_revision:04d}'
+                target.mkdir(parents=True, exist_ok=True)
+                binding = TsProvidedGuessBinding(
+                    xyz=_bind_provided_artifact(record, guess.xyz_path, target / 'provided.xyz'),
+                    evidence=[_bind_provided_artifact(record, reference,
+                        target / f'provenance_{index:04d}{Path(reference).suffix}')
+                        for index, reference in enumerate(guess.evidence_refs)])
+            candidate = Path(binding.xyz.snapshot_path)
             atoms = read_xyz_atoms(str(candidate))
             reactant = _read_built_xyz(record, 'reactant')
             if reactant is None or [s for s, _ in atoms] != reactant[0]:
                 raise ValueError('Provided candidate atom identity/order differs from the bound reactant')
             if not all(math.isfinite(v) for _, point in atoms for v in point):
                 raise ValueError('Provided candidate contains nonfinite coordinates')
-            for reference in guess.evidence_refs:
-                artifact = _workspace_input_path(record, reference)
-                if not artifact.is_file():
-                    raise ValueError(f'Provided candidate provenance artifact missing: {reference}')
         except (OSError, ValueError) as exc:
             return _block(record, 'guess', 'provided_guess_invalid', str(exc), needs=['guess'])
-        target = Path(record.run_dir) / PATH_STAGE_DIR / f'input_{record.declaration_revision:04d}'
-        target.mkdir(parents=True, exist_ok=True)
-        bound_candidate = target / 'provided.xyz'
-        try:
-            _write_immutable_input(str(bound_candidate), candidate.read_text())
-            bound_refs = []
-            for index, reference in enumerate(guess.evidence_refs):
-                artifact = target / f'provenance_{index:04d}{Path(reference).suffix}'
-                _write_immutable_input(str(artifact), _workspace_input_path(record, reference).read_text())
-                bound_refs.append(str(artifact))
-        except (OSError, ValueError) as exc:
-            return _block(record, 'guess', 'provided_guess_invalid', str(exc), needs=['guess'])
-        record.current_ts_guess_path = str(bound_candidate)
+        _accept_candidate(record, str(candidate))
+        record.provided_guess_binding = binding
         record.path_kind = 'provided'
-        _record_stage(record, 'guess', 'done', 'Provided candidate bound; formal optimization and verification remain required.', [str(bound_candidate), *bound_refs])
+        _record_stage(record, 'guess', 'done', 'Provided candidate bound; formal optimization and verification remain required.',
+            [str(candidate), *[artifact.snapshot_path for artifact in binding.evidence]])
         return record
     if guess.kind == 'scan':
         return _guess_scan(record)
@@ -1637,52 +1417,16 @@ def _guess(record: TsProcessRecord) -> TsProcessRecord:
                             f"guided_attempt_{record.guidance_attempt:04d}")
                if record.active_attempt_dir else
                os.path.join(record.run_dir, PATH_STAGE_DIR))
-    record.current_ts_guess_path = ""
+    record.structures.candidate = None
     os.makedirs(out_dir, exist_ok=True)
 
-    reactant = _read_built_xyz(record, "reactant")
-    if reactant is None:
-        return _block(
-            record, "guess", "missing_built_geometry",
-            "the built first endpoint geometry is missing from the run directory, so no path guess "
-            "could be constructed",
-            needs=["reaction.reactant_smiles"],
-        )
-    r_symbols, r_pos = reactant[0], reactant[1]
-    if _rotated_product(record) is not None:
-        # 第二端 = 第一端绕声明的键旋转（阻转异构等"两端同一分子"的题型走这条）
-        error, reordered = _derive_product_geometry(record, reactant)
-        if error:
-            return _block(
-                record, "guess", "product_geometry_failed", error, needs=["conformers.product"],
-            )
-    else:
-        product = _read_built_xyz(record, "product")
-        if product is None:
-            return _block(
-                record, "guess", "missing_built_geometry",
-                "the built second endpoint geometry is missing from the run directory, so no path "
-                "guess could be constructed",
-                needs=["reaction.product_smiles"],
-            )
-        p_pos = product[1]
-        atom_map = record.input.reaction.atom_map
-        if len(atom_map) != len(r_symbols):
-            return _block(
-                record, "guess", "atom_map_length_mismatch",
-                f"atom_map has {len(atom_map)} entries for {len(r_symbols)} atoms",
-                needs=["reaction.atom_map"],
-            )
-        # 产物第 k 个原子 → 反应物第 atom_map[k]-1 个位置
-        reordered = [None] * len(r_symbols)
-        for product_index, target in enumerate(atom_map):
-            reordered[target] = list(p_pos[product_index])
-        if any(position is None for position in reordered):
-            return _block(
-                record, "guess", "atom_map_not_a_permutation",
-                "the atom_map does not cover every reordered position; reordering would leave holes",
-                needs=["reaction.atom_map"],
-            )
+    try:
+        reactant_mol, product_mol = path_endpoints(record.structures)
+    except ValueError as exc:
+        return _block(record, 'guess', 'input_identity_unconfirmed', str(exc), needs=['reaction.selected_candidate'])
+    r_symbols = [a.GetSymbol() for a in reactant_mol.GetAtoms()]
+    r_pos = reactant_mol.GetConformer().GetPositions().tolist()
+    reordered = product_mol.GetConformer().GetPositions().tolist()
 
     def xyz_block(symbols, positions, comment: str) -> str:
         lines = [str(len(symbols)), comment]
@@ -1750,17 +1494,17 @@ def _guess(record: TsProcessRecord) -> TsProcessRecord:
             record, "guess", run.termination_reason,
             f"the xTB path search did not produce a usable guess ({run.termination_reason}, "
             f"returncode={run.returncode}).{partial} Persistent run directory: {run.run_dir}. "
-            f"Next step: ts_resume with adjustment.scan (method, scans, optional freeze) when one "
+            f"Next step: ts_resume with changes.guess (kind=scan, calculation, scans, optional freeze) when one "
             f"forming/breaking bond or angle is clear (take the atom indices from "
             f"internal_coordinates first); (b) ts_guess mode='interpolate' (IDPP) — only when both "
-            f"endpoint geometries and the all-atom map are already trustworthy. Either way the "
+            f"endpoint geometries and their internally confirmed correspondence are available. Either way the "
             f"result is a path/guess, not a saddle: an unconstrained OptTS with frequency and IRC "
             f"is still required.",
             atom_details=list(run.diagnostics),
-            needs=["guess", "reaction.reaction_center", "reaction.atom_map", "reaction.reactant_smiles", "reaction.product_smiles"],
+            needs=["guess", "reaction.reaction_center", "reaction.selected_candidate", "reaction.reactant_smiles", "reaction.product_smiles"],
         )
     record.path_kind = "xtb_path"
-    record.current_ts_guess_path = run.ts_xyz_path
+    _accept_candidate(record, run.ts_xyz_path)
     record.evidence_candidates.extend([reordered_path, run.path_xyz_path, run.ts_xyz_path])
     _record_stage(
         record, "guess", "done",
@@ -1774,46 +1518,81 @@ def _validate(record: TsProcessRecord) -> TsProcessRecord:
     import numpy as np
 
     params = _active_reaction_center(record)
-    guess_dir = os.path.join(record.run_dir, PATH_STAGE_DIR)
-    run_dirs = sorted(
-        Path(guess_dir).glob("xtb_path_runs/*")
-    ) if os.path.isdir(guess_dir) else []
-    if record.path_kind in ("xtb_path", "scan", "provided") and (record.current_ts_guess_path or run_dirs):
-        ts_path = (record.current_ts_guess_path if (record.active_attempt_dir or record.current_ts_guess_path or record.path_kind == "scan") else
-                   os.path.join(str(run_dirs[-1]), "xtbpath_ts.xyz"))
-        if os.path.isfile(ts_path):
-            lines = Path(ts_path).read_text(encoding="utf-8").splitlines()
-            count = int(lines[0].strip())
-            positions = np.asarray(
-                [[float(v) for v in line.split()[1:4]] for line in lines[2: 2 + count]],
-                dtype=float,
-            )
-            # 反应中心距离：超出合理区间就是可执行的、点名到原子的反馈
-            detail: list[str] = []
-            base = 1
-            for left, right in params:
-                distance = float(np.linalg.norm(positions[left] - positions[right]))
-                if distance < 0.5:
-                    detail.append(
-                        f"reaction-centre pair ({left + base}, {right + base}) is {distance:.3f} A apart in the "
-                        "TS candidate — below 0.5 A, which is not a chemically meaningful saddle "
-                        "region"
-                    )
-                elif distance > 4.0:
-                    detail.append(
-                        f"reaction-centre pair ({left + base}, {right + base}) is {distance:.3f} A apart in the "
-                        "TS candidate — the path never brought them together"
-                    )
-            if detail:
-                return _block(
-                    record, "validate", "reaction_center_distance_out_of_range",
-                    "the TS candidate does not place the declared reaction centre in a plausible "
-                    "range; adjust the declaration and resume",
-                    atom_details=detail,
-                    needs=["reaction.reaction_center", "reaction.atom_map"],
+    if record.structures.candidate is not None:
+        positions = np.asarray(record.structures.candidate.GetConformer().GetPositions())
+        # 反应中心距离：超出合理区间就是可执行的、点名到原子的反馈
+        detail: list[str] = []
+        base = 1
+        for left, right in params:
+            distance = float(np.linalg.norm(positions[left] - positions[right]))
+            if distance < 0.5:
+                detail.append(
+                    f"reaction-centre pair ({left + base}, {right + base}) is {distance:.3f} A apart in the "
+                    "TS candidate — below 0.5 A, which is not a chemically meaningful saddle "
+                    "region"
                 )
+            elif distance > 4.0:
+                detail.append(
+                    f"reaction-centre pair ({left + base}, {right + base}) is {distance:.3f} A apart in the "
+                    "TS candidate — the path never brought them together"
+                )
+        if detail:
+            return _block(
+                record, "validate", "reaction_center_distance_out_of_range",
+                "the TS candidate does not place the declared reaction centre in a plausible "
+                "range; adjust the declaration and resume",
+                atom_details=detail,
+                needs=["reaction.reaction_center", "reaction.selected_candidate"],
+            )
     _record_stage(record, "validate", "done", "internal validation passed")
     return record
+
+def _record_calculation_warnings(record, purpose, input_path, issues, *, source):
+    """Replace current advice per stage/source; preserve it in the durable model receipt."""
+    record.warnings = [item for item in record.warnings
+        if item.get('input_revision') == record.declaration_revision
+        and (item.get('purpose'), item.get('source')) != (purpose, source)]
+    for issue in issues:
+        item = dict(issue, severity='warning', purpose=purpose, input_path=str(input_path),
+            input_revision=record.declaration_revision, source=source)
+        if item not in record.warnings:
+            record.warnings.append(item)
+    record.warnings = record.warnings[-100:]
+
+
+def _writer_request_errors(record, purpose, request):
+    from cloudra.tools.core.calculation_intent import validate_writer_request
+    issues = validate_writer_request(request.model_dump())
+    _record_calculation_warnings(record, purpose, request.output_path,
+        [item for item in issues if item['severity'] == 'warning'], source='writer')
+    return [item for item in issues if item['severity'] == 'error']
+
+
+def _writer_render_error(record, purpose, request, content):
+    """Expose native uncertainty while preserving the shared renderer-integrity check."""
+    from cloudra.tools.Chemtool.qm_input_writer import QmInputWriter
+    from cloudra.tools.core.calculation_intent import inspect_input
+    issues = []
+    if inspect_input(content, engine=request.engine).certainty == 'unknown':
+        issues.append(dict(code='native_task_uncertain', field='keywords',
+            message='The preserved native parameters could not be classified; inspect native engine diagnostics before accepting scientific evidence.'))
+    _record_calculation_warnings(record, purpose, request.output_path, issues, source='inspection')
+    errors = QmInputWriter.validate_rendered_input(request, content, charge=request.charge)
+    return 'input internal mismatch: ' + ' | '.join(errors) if errors else ''
+
+
+def _stage_writer_tasks(calculation, default_tasks):
+    """Only an empty native declaration receives the stage's basic task.
+
+    Native text belongs to the declaring agent, including unclassified tasks and
+    case-sensitive values. Classification supplies advice, never a replacement
+    task or a rewritten keyword string.
+    """
+    if any((getattr(calculation, field) or '').strip()
+           for field in ('keywords', 'orca_blocks', 'end_setting')):
+        return calculation, []
+    return calculation, default_tasks
+
 
 def _write_refinement_input(record: TsProcessRecord, job_dir: str) -> tuple[str, str]:
     """把 TS 候选写成精修作业的引擎输入；返回 ``(错误, 输入路径)``。
@@ -1822,58 +1601,20 @@ def _write_refinement_input(record: TsProcessRecord, job_dir: str) -> tuple[str,
     只能有一份实现，否则同一份作业会在两条入口下写出不同的文件、走不同的校验。
     """
     from cloudra.tools.Chemtool.qm_input_writer import QmInputWriter, QmInputWriter_input_schema
-    from cloudra.tools.core.calculation_intent import (
-        inspect_input,
-        intent_from_writer,
-        validate_writer_request,
-    )
-    from cloudra.tools.core.structure_artifacts import read_xyz_atoms
-
     declaration = record.input.reaction
     calculation = stage_calculation(record, 'ts_opt')
     if calculation is None:
         return 'Explicit ts_optimization calculation required', ''
-    guess_dir = os.path.join(record.run_dir, PATH_STAGE_DIR)
-    source = ""
-    if record.active_attempt_dir or record.current_ts_guess_path or record.path_kind == "scan":
-        source = record.current_ts_guess_path
-        if source and not os.path.isfile(source):
-            source = ""
-    else:
-        run_dirs = sorted(Path(guess_dir).glob("xtb_path_runs/*")) if os.path.isdir(guess_dir) else []
-        for run_dir in reversed(run_dirs):
-            candidate = os.path.join(str(run_dir), "xtbpath_ts.xyz")
-            if os.path.isfile(candidate):
-                source = candidate
-                break
-    if not source:
-        # 降级路线（IDPP）下没有 MTD 的 TS 候选：如实报出，不去拿别的帧冒充
-        return (
-            "no TS candidate was produced by the guess stage, so there is nothing to refine "
-            f"(looked for xtbpath_ts.xyz under {guess_dir})",
-            "",
-        )
-
-    atoms = read_xyz_atoms(source)
-    coords = "\n".join(
-        f"{symbol:<4} {position[0]:>14.8f} {position[1]:>14.8f} {position[2]:>14.8f}"
-        for symbol, position in atoms
-    )
+    if record.structures.candidate is None:
+        return 'no TS candidate was produced by the guess stage', ''
+    source, _ = export_structure(record, 'candidate')
 
     input_name = REFINEMENT_INPUT_NAMES[calculation.engine]
     input_path = os.path.join(job_dir, input_name)
-    # 引擎各自的原生 TS 写法由项目的 skill 规定（references/orca-inputs.md /
-    # gaussian-inputs.md）。ORCA 用 `! OptTS`，初始 Hessian 走原生 %geom 块；
-    # **频率是后续独立作业**（skill 的"Frequency and IRC follow-ups"），因此这里只写 TS 优化，
-    # 频率/IRC 归 refine 阶段。若 skill 里的配方变了，改这里一处即可。
-    if calculation.engine == "orca":
-        task_type: list[dict] = [{"opt": "ts"}]
-        orca_blocks: Optional[str] = "%geom\n  Calc_Hess true\nend"
-    else:
-        task_type = [{"opt": "TS,calcfc,noeigen"}]
-        orca_blocks = None
+    calc_copy, task_type = _stage_writer_tasks(calculation,
+        [{'opt': 'ts' if calculation.engine == 'orca' else 'TS'}])
     request = QmInputWriter_input_schema(
-        **calculation.model_copy(update={'orca_blocks': '\n'.join(filter(None, [orca_blocks, calculation.orca_blocks])) or None}).model_dump(mode='json'),
+        **calc_copy.model_dump(mode='json'),
         nproc=record.compute_cpus,
         mem=f"{record.compute_memory_mb}MB",
         source_type="xyz_file",
@@ -1881,30 +1622,22 @@ def _write_refinement_input(record: TsProcessRecord, job_dir: str) -> tuple[str,
         task_type=task_type,
         charge=declaration.charge,
         multiplicity=declaration.multiplicity,
+        electronic_character=declaration.electronic_character,
         title=f"TS refinement: {declaration.reactant_smiles} -> {declaration.product_smiles} | smiles: {declaration.reactant_smiles}",
         output_path=input_path,
     )
     # 输入冲突前置校验（与 qm_input_writer 同一份）
-    conflicts = validate_writer_request(request.model_dump())
+    conflicts = _writer_request_errors(record, 'ts_opt', request)
     if conflicts:
         return "refinement input refused: " + " | ".join(
             f"[{c['code']}] {c['message']}" for c in conflicts
         ), ""
 
-    content = (
-        QmInputWriter._build_orca_input(request, coords)
-        if calculation.engine == "orca"
-        else QmInputWriter._build_gjf(request, coords)
-    )
-    # 不信 writer 自述：从生成文本重新 inspect，任务集合不一致即失败（同一份纪律）
-    inspected = inspect_input(content, engine=calculation.engine)
-    requested = intent_from_writer(request.model_dump())
-    if inspected.tasks != requested.tasks:
-        return (
-            "refinement input internal mismatch: the generated file encodes tasks "
-            f"{sorted(inspected.tasks)} but {sorted(requested.tasks)} were requested",
-            "",
-        )
+    content = QmInputWriter.render_input(request, record.structures.candidate)
+    # Inspect the generated input independently; native uncertainty is advice, lost settings are errors.
+    error = _writer_render_error(record, 'ts_opt', request, content)
+    if error:
+        return error, ''
     _write_immutable_input(input_path, content)
     return "", input_path
 
@@ -1921,8 +1654,8 @@ def _submit(record: TsProcessRecord) -> TsProcessRecord:
     ``submit_compute_job`` 共用 ``services/compute_admission.admit_job``——**没有第二套**，
     否则同一份作业会在两条入口下得出不同的准入结论。
     """
-    if record.input_binding:
-        _validate_input_binding(record)
+    if record.structures.product_to_reactant is None:
+        _bind_structures(record)
         if record.blocked:
             return record
     if _require_calculation(record, 'ts_opt', 'submit'):
@@ -1961,7 +1694,7 @@ def _submit(record: TsProcessRecord) -> TsProcessRecord:
     record.job_steps.append(TsJobStep(
         purpose="ts_opt", job_id=job_id, input_path=input_path, state="ready",
         actual_calculation=calculation, source_input_revision=record.declaration_revision,
-    ))
+    atom_binding=_direction_atom_binding(record)))
     _record_stage(
         record, "submit", "done",
         f"refinement job {job_id} submitted as 'ready' ({job_type}, {calculation.method}); the "
@@ -1970,6 +1703,24 @@ def _submit(record: TsProcessRecord) -> TsProcessRecord:
         [input_path],
     )
     return record
+
+class EndpointSource(BaseModel):
+    model_config = ConfigDict(extra='forbid', frozen=True)
+    kind: Literal['species_reference', 'irc_outer_frame']
+    label: Literal['reactant', 'product', 'A', 'B']
+    source_path: str
+    sha256: str
+    irc_job_id: int | None = None
+    irc_log_sha256: str | None = None
+
+    @model_validator(mode='after')
+    def source_contract(self):
+        if self.kind == 'species_reference' and self.label not in {'reactant', 'product'}:
+            raise ValueError('Species reference requires its declared species role.')
+        if self.kind == 'irc_outer_frame' and (self.label not in {'A', 'B'} or
+            self.irc_job_id is None or not self.irc_log_sha256):
+            raise ValueError('IRC outer-frame source requires side, accepted job and log digest.')
+        return self
 
 class TsJobStep(BaseModel):
     """精修作业序列里的一步（TS、IRC 与两端极小值验证）。"""
@@ -1986,6 +1737,40 @@ class TsJobStep(BaseModel):
     method_contract: dict | None = None
     stage_key: str | None = None
     external_source: dict | None = None
+    endpoint_source: EndpointSource | None = None
+    atom_binding: dict | None = None
+    frequency_analysis: dict | None = None
+
+
+def _record_frequency_analysis(record, step, log_path, snapshot):
+    """记录虚频的运动组成，供 Agent 判断；不另设科学合格阈值。"""
+    from cloudra.tools.Chemtool.ts_guess import _assess_imag_mode_alignment, _parse_freq_log
+    from cloudra.tools.core.mode_analysis import imaginary_mode_summaries_from_text
+
+    if step.frequency_analysis is not None:
+        return
+    path = Path(log_path)
+    pairs = [[left + 1, right + 1] for left, right in _active_reaction_center(record)]
+    frequencies = snapshot.frequencies or snapshot.imaginary_frequencies or []
+    engine = _step_calculation(record, step).engine
+    try:
+        parsed = _parse_freq_log(str(path), engine)
+    except ValueError as exc:
+        alignment = dict(status='missing', aligned=None, message=str(exc), details=[])
+    else:
+        alignment = _assess_imag_mode_alignment(
+            parsed['vibfreqs'], parsed['vibdisps'], pairs,
+            symbols=parsed.get('symbols'), positions=parsed.get('positions'),
+            charge=(step.atom_binding or {}).get('charge', record.input.reaction.charge),
+            index_base=1,
+        )
+    step.frequency_analysis = dict(
+        log_path=str(path), log_sha256=_artifact_sha256(path), reaction_center_pairs=pairs,
+        fraction_basis='unweighted_squared_displacement',
+        modes=imaginary_mode_summaries_from_text(
+            engine, path.read_text(errors='replace'), frequencies, pairs),
+        mode_alignment=alignment,
+    )
 
 def _read_job_state(record: TsProcessRecord, job_id: Optional[int]) -> str:
     """读作业当前状态；读不到返回 ``"missing"``（不猜成成功）。"""
@@ -2059,18 +1844,32 @@ def _reuse_existing_irc(record):
     native_path = str(directory / ('existing.inp' if engine == 'orca' else 'existing.gjf'))
     log_path = str(directory / 'existing.log')
     _write_immutable_input(native_path, text)
-    _write_immutable_input(log_path, source_log.read_text())
+    _write_immutable_input(log_path, log_text)
+    artifacts = [native_path, log_path]
+    if engine == 'orca':
+        manifest = dict(log_sha256=_artifact_sha256(Path(log_path)),
+            atom_binding=_direction_atom_binding(record), endpoints={})
+        for direction, side in [('forward', 'a'), ('backward', 'b')]:
+            endpoint_path = directory / f'irc_{direction}.xyz'
+            _write_immutable_input(str(endpoint_path), Path(info['path_' + side]).read_text())
+            manifest['endpoints'][direction] = dict(filename=endpoint_path.name,
+                sha256=_artifact_sha256(endpoint_path), origin='final_endpoint_snapshot',
+                converged=(info.get('meta') or {}).get(direction + '_converged'))
+            artifacts.append(str(endpoint_path))
+        manifest_path = directory / 'irc_endpoints.json'
+        _write_immutable_input(str(manifest_path), json.dumps(manifest, ensure_ascii=False))
+        artifacts.append(str(manifest_path))
     facts = dict(source_job_id=job, source_input=str(source_input), source_log=str(source_log),
-        log_path=log_path, frequency_input=frequency.input_path, input_binding=record.input_binding,
-        artifact_hashes={p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in (native_path, log_path)})
+        log_path=log_path, frequency_input=frequency.input_path, atom_binding=_direction_atom_binding(record),
+        artifact_hashes={p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in artifacts})
     record.method_checks[native_path] = record.method_checks[str(source_input)]
     return TsJobStep(purpose='irc', state='done', input_path=native_path, actual_calculation=stage_calculation(record, 'irc'),
-        source_input_revision=record.declaration_revision, stage_key='external:irc', external_source=facts)
+        source_input_revision=record.declaration_revision, stage_key='external:irc', external_source=facts, atom_binding=_direction_atom_binding(record))
 
 def _check_calculation_submission(record, purpose, input_path, job_type):
     from cloudra.runtime_v2.method_policy import check_input_content, check_method
     from cloudra.services.ts_pipeline_context import require_pipeline_authority
-    from cloudra.tools.core.calculation_intent import compare_calculation_input
+    from cloudra.tools.core.calculation_intent import MethodDifference, compare_calculation_input
     policy = require_pipeline_authority(record.owner_conversation_id, record.owner_session_id)
     calculation = stage_calculation(record, purpose)
     if calculation is None:
@@ -2081,6 +1880,8 @@ def _check_calculation_submission(record, purpose, input_path, job_type):
             check_input_content(content, policy, filename=input_path, strict=True))
         if not verdict.allowed:
             raise ValueError(verdict.reason)
+    issues = []
+    trusted_differences = []
     if job_type == 'chem_task':
         from cloudra.runtime.chem_task import ChemTask
         task = ChemTask.model_validate_json(content)
@@ -2122,18 +1923,45 @@ def _check_calculation_submission(record, purpose, input_path, job_type):
             'reactant_frequency': {'frequency'}, 'product_frequency': {'frequency'},
             'candidate_opt': {'minimum_opt'}, 'product_seed_opt': {'minimum_opt'}}
         if actual_intent.tasks != expected_tasks.get(purpose, set()):
-            raise ValueError(f'Actual task {actual_intent.tasks} differs from accepted purpose {purpose}')
+            issues.append(dict(code='purpose_task_mismatch', field='task_type',
+                message=f'Actual task {sorted(actual_intent.tasks)} differs from accepted purpose {purpose}; the native declaration was preserved.'))
         differences = compare_calculation_input(content, calculation.model_dump(), charge=record.input.reaction.charge, multiplicity=record.input.reaction.multiplicity)
         # Complete task/user contracts, when present, come from project settings.
         contract = policy.calculation_contracts.get(purpose) if policy is not None else None
         if contract:
-            differences += compare_calculation_input(content, contract, charge=contract.get('charge', record.input.reaction.charge), multiplicity=contract.get('multiplicity', record.input.reaction.multiplicity))
+            from cloudra.tools.Chemtool.qm_input_writer import QmInputWriter, QmInputWriter_input_schema
+            from cloudra.tools.core.calculation_intent import declared_native_tasks
+            expected_contract = contract
+            if 'task_type' in contract:
+                template = {key: value for key, value in contract.items()
+                    if key in QmInputWriter_input_schema.model_fields}
+                template.update(source_type='xyz_file', source_value=input_path, output_path=input_path)
+                template.setdefault('charge', record.input.reaction.charge)
+                template.setdefault('multiplicity', record.input.reaction.multiplicity)
+                written = QmInputWriter._written_calculation(QmInputWriter_input_schema.model_validate(template))
+                expected_contract = {**contract, 'keywords': written.keywords,
+                    'orca_blocks': written.orca_blocks, 'end_setting': written.end_setting}
+            trusted_differences = compare_calculation_input(content, expected_contract,
+                charge=contract.get('charge', record.input.reaction.charge),
+                multiplicity=contract.get('multiplicity', record.input.reaction.multiplicity))
+            contract_tasks, _ = declared_native_tasks(contract)
+            if contract_tasks and actual_intent.tasks != contract_tasks:
+                trusted_differences.append(MethodDifference(field='task_type', expected=sorted(contract_tasks),
+                    actual=sorted(actual_intent.tasks), message='Native task differs from the trusted calculation contract.'))
+            differences += trusted_differences
     result = dict(input_revision=record.declaration_revision, purpose=purpose, actual=calculation.model_dump(),
         source='project_method_policy' if policy is not None else 'stage_declaration',
-        differences=[d.model_dump() for d in differences], matched=not differences)
+        differences=[d.model_dump() for d in differences], matched=not differences and not issues)
     record.method_checks[input_path] = result
-    if differences:
-        raise ValueError('; '.join(d.message for d in differences))
+    issues += [dict(code='native_calculation_difference', field=item.field, message=item.message)
+        for item in differences]
+    _record_calculation_warnings(record, purpose, input_path, issues, source='submission')
+    if trusted_differences:
+        raise ValueError(f'Native input differs from trusted {purpose} calculation contract: ' +
+            '; '.join(item.message for item in trusted_differences))
+    structural = [item for item in differences if item.field in {'engine', 'charge', 'multiplicity'}]
+    if structural:
+        raise ValueError('; '.join(item.message for item in structural))
 
 def _submit_step(record: TsProcessRecord, purpose: str, input_path: str,
                  job_type: str, *, stage_key: str | None = None, action_kind: str | None = None,
@@ -2225,7 +2053,11 @@ def _refinement_log_path(record: TsProcessRecord, step: TsJobStep) -> str:
         try:
             return read_task_result(step.input_path)[0]['result']['log_file']
         except (KeyError, OSError, ValueError):
-            return step.input_path
+            resolved = resolve_log_path(step.input_path, job_type='xtb', task_id=step.job_id)
+            if Path(resolved).is_file() and Path(resolved).resolve() != Path(step.input_path).resolve():
+                return resolved
+            captured = Path(step.input_path).parent / '.cloudra' / f'calc-{step.job_id}.out.log'
+            return str(captured) if captured.is_file() else ''
     job_type = _step_calculation(record, step).engine
     return resolve_log_path(step.input_path, job_type=job_type, task_id=step.job_id)
 
@@ -2236,14 +2068,6 @@ def _write_frequency_input(record: TsProcessRecord, job_dir: str) -> tuple[str, 
     几何必须取优化后的末帧，不是当初的 TS 候选——否则频率描述的不是收敛到的那个驻点。
     """
     from cloudra.tools.Chemtool.qm_input_writer import QmInputWriter, QmInputWriter_input_schema
-    from cloudra.tools.core import gaussian_frames, orca_frames
-    from cloudra.tools.core.calculation_intent import (
-        inspect_input,
-        intent_from_writer,
-        validate_writer_request,
-    )
-    from cloudra.tools.core.structure_artifacts import read_xyz_atoms
-
     if not record.job_steps:
         return "no TS-optimisation job was submitted, so there is no optimised geometry", ""
     step = next(step for step in reversed(record.job_steps) if step.purpose == 'ts_opt')
@@ -2254,76 +2078,48 @@ def _write_frequency_input(record: TsProcessRecord, job_dir: str) -> tuple[str, 
             "refusing to run frequencies on an unverified geometry",
             "",
         )
-    frames_mod = orca_frames if _step_calculation(record, step).engine == "orca" else gaussian_frames
-    frames = frames_mod.extract_frames(log_path)
-    if not frames:
-        return f"no optimised frame could be extracted from {log_path}", ""
+    xyz, error = _native_optimization_xyz(log_path, _step_calculation(record, step).engine)
+    if error:
+        return f"TS optimization cannot support a frequency follow-up: {error}", ""
 
     # 优化末帧落在作业目录里（不是临时文件）：频率作业用的几何要能复查
     optimized_xyz = os.path.join(job_dir, "optimized.xyz")
-    atomic_write_text(optimized_xyz, frames[-1].xyz)
-    atoms = read_xyz_atoms(optimized_xyz)
-    coords = "\n".join(
-        f"{symbol:<4} {position[0]:>14.8f} {position[1]:>14.8f} {position[2]:>14.8f}"
-        for symbol, position in atoms
-    )
-
+    atomic_write_text(optimized_xyz, xyz)
     declaration = record.input.reaction
     calculation = stage_calculation(record, 'frequency')
     if calculation is None:
         return 'Explicit verification.frequency required', ''
     input_path = os.path.join(job_dir, f"frequency.{'inp' if calculation.engine == 'orca' else 'gjf'}")
+    calc_copy, task_type = _stage_writer_tasks(calculation, [{'freq': None}])
     request = QmInputWriter_input_schema(
-        **calculation.model_dump(mode='json'),
+        **calc_copy.model_dump(mode='json'),
         nproc=record.compute_cpus,
         mem=f"{record.compute_memory_mb}MB",
         source_type="xyz_file",
         source_value=optimized_xyz,
-        task_type=[{"freq": None}],
+        task_type=task_type,
         charge=declaration.charge,
         multiplicity=declaration.multiplicity,
+        electronic_character=declaration.electronic_character,
         title=f"frequency at the refined stationary point: {declaration.reactant_smiles} | smiles: {declaration.reactant_smiles}",
         output_path=input_path,
     )
-    conflicts = validate_writer_request(request.model_dump())
+    conflicts = _writer_request_errors(record, 'frequency', request)
     if conflicts:
         return "frequency input refused: " + " | ".join(
             f"[{c['code']}] {c['message']}" for c in conflicts
         ), ""
-    content = (
-        QmInputWriter._build_orca_input(request, coords)
-        if calculation.engine == "orca"
-        else QmInputWriter._build_gjf(request, coords)
-    )
-    inspected = inspect_input(content, engine=calculation.engine)
-    requested = intent_from_writer(request.model_dump())
-    if inspected.tasks != requested.tasks:
-        return (
-            "frequency input internal mismatch: generated "
-            f"{sorted(inspected.tasks)} but {sorted(requested.tasks)} were requested",
-            "",
-        )
+    content = QmInputWriter.render_input(request, read_molecule(optimized_xyz, charge=declaration.charge))
+    error = _writer_render_error(record, 'frequency', request, content)
+    if error:
+        return error, ''
     _write_immutable_input(input_path, content)
     return "", input_path
 
+
 def _write_irc_input(record: TsProcessRecord, job_dir: str) -> tuple[str, str]:
-    """写 IRC 作业输入；返回 ``(错误, 输入路径)``。
-
-    几何与频率作业**同一帧**（TS 优化末帧）——skill 要求"reuse its same-geometry frequency
-    Hessian for both IRC directions"。两个引擎的原生写法照
-    ``references/{orca,gaussian}-inputs.md``：
-
-    - Gaussian：``task_type=[{"irc":"calcfc"}]``（默认双向，不加自定义步数上限）。
-    - ORCA：``task_type=[{"irc": None}]`` + 原生 ``%irc`` 块。Hessian 走哪个分支由**证据**决定，
-      不是偏好：频率作业真的落下了同名 ``.hess`` 就用 ``InitHess read`` + ``Hess_Filename``；
-      没有就按 skill 说的 ``InitHess calc_numfreq``（数值评估），绝不默认请求解析外部 Hessian。
-    """
+    """Write the declared IRC using the accepted frequency geometry."""
     from cloudra.tools.Chemtool.qm_input_writer import QmInputWriter, QmInputWriter_input_schema
-    from cloudra.tools.core.calculation_intent import (
-        inspect_input,
-        intent_from_writer,
-        validate_writer_request,
-    )
 
     declaration = record.input.reaction
     calculation = stage_calculation(record, 'irc')
@@ -2344,26 +2140,9 @@ def _write_irc_input(record: TsProcessRecord, job_dir: str) -> tuple[str, str]:
 
     input_path = os.path.join(job_dir, f"irc.{'inp' if calculation.engine == 'orca' else 'gjf'}")
 
-    if calculation.engine == "orca":
-        task_type: list[dict] = [{"irc": None}]
-        hess_path = os.path.splitext(frequency_step.input_path)[0] + ".hess"
-        previous_calculation = _step_calculation(record, frequency_step)
-        same_theory = previous_calculation.model_dump(exclude={'frequency_mode'}) == calculation.model_dump(exclude={'frequency_mode'})
-        if os.path.isfile(hess_path) and same_theory:
-            # 频率作业真的落下了 Hessian：复用同一几何的 Hessian（skill 的首选做法）
-            irca = (
-                "%irc\n  Direction both\n  InitHess read\n"
-                f'  Hess_Filename "{hess_path}"\nend'
-            )
-        else:
-            irca = "%irc\n  Direction both\n  InitHess calc_numfreq\nend"
-        orca_blocks: Optional[str] = irca
-    else:
-        task_type = [{"irc": "calcfc"}]
-        orca_blocks = None
-
+    calc_copy, task_type = _stage_writer_tasks(calculation, [{'irc': None}])
     request = QmInputWriter_input_schema(
-        **calculation.model_copy(update={'orca_blocks': '\n'.join(filter(None, [orca_blocks, calculation.orca_blocks])) or None}).model_dump(mode='json'),
+        **calc_copy.model_dump(mode='json'),
         nproc=record.compute_cpus,
         mem=f"{record.compute_memory_mb}MB",
         source_type="xyz_file",
@@ -2371,38 +2150,37 @@ def _write_irc_input(record: TsProcessRecord, job_dir: str) -> tuple[str, str]:
         task_type=task_type,
         charge=declaration.charge,
         multiplicity=declaration.multiplicity,
-        title=f"IRC both directions from the refined saddle: {declaration.reactant_smiles} | smiles: {declaration.reactant_smiles}",
+        electronic_character=declaration.electronic_character,
+        title=f"IRC from the refined saddle: {declaration.reactant_smiles} | smiles: {declaration.reactant_smiles}",
         output_path=input_path,
     )
-    conflicts = validate_writer_request(request.model_dump())
+    conflicts = _writer_request_errors(record, 'irc', request)
     if conflicts:
         return "IRC input refused: " + " | ".join(
             f"[{c['code']}] {c['message']}" for c in conflicts
         ), ""
-    content = (
-        QmInputWriter._build_orca_input(request, _xyz_coords(geometry))
-        if calculation.engine == "orca"
-        else QmInputWriter._build_gjf(request, _xyz_coords(geometry))
-    )
-    inspected = inspect_input(content, engine=calculation.engine)
-    requested = intent_from_writer(request.model_dump())
-    if inspected.tasks != requested.tasks:
-        return (
-            f"IRC input internal mismatch: generated {sorted(inspected.tasks)} but "
-            f"{sorted(requested.tasks)} were requested",
-            "",
-        )
+    content = QmInputWriter.render_input(request, read_molecule(geometry, charge=declaration.charge))
+    error = _writer_render_error(record, 'irc', request, content)
+    if error:
+        return error, ''
+    if calculation.engine == 'gaussian':
+        from cloudra.tools.core.native_input_sections import gaussian_option, gaussian_sections
+
+        section = gaussian_sections(content)[0]
+        checkpoint_reads = {option
+            for key, options in map(gaussian_option, section.route) if key == 'irc'
+            for option in options & {'readfc', 'rcfc', 'readcartesianfc'}}
+        checkpoint = Path(input_path).resolve().with_suffix('.chk')
+        if checkpoint_reads and not checkpoint.is_file():
+            return (
+                f"Missing Gaussian IRC checkpoint dependency: {checkpoint}. "
+                f"The declared {', '.join(sorted(checkpoint_reads))} requests checkpoint force constants. "
+                "Pre-stage the explicitly sourced compatible checkpoint at this path; "
+                "the workflow does not select or copy a neighboring checkpoint.",
+                '',
+            )
     _write_immutable_input(input_path, content)
     return "", input_path
-
-def _xyz_coords(path: str) -> str:
-    """把单帧 xyz 渲染成引擎坐标块（与精修/频率输入同一格式）。"""
-    from cloudra.tools.core.structure_artifacts import read_xyz_atoms
-
-    return "\n".join(
-        f"{symbol:<4} {position[0]:>14.8f} {position[1]:>14.8f} {position[2]:>14.8f}"
-        for symbol, position in read_xyz_atoms(path)
-    )
 
 def _product_reordered_path(record: TsProcessRecord) -> str:
     return os.path.join(
@@ -2411,50 +2189,212 @@ def _product_reordered_path(record: TsProcessRecord) -> str:
         "product_reordered.xyz",
     )
 
+def _native_optimization_xyz(log_path: str, engine: str) -> tuple[str, str]:
+    """Use independent native convergence and geometry facts for Opt follow-ups."""
+    from cloudra.tools.core.qm_log_facts import read_qm_log
+
+    try:
+        facts = read_qm_log(log_path)
+    except (OSError, ValueError) as exc:
+        return '', f'optimization geometry is unreadable: {exc}'
+    if facts.engine != engine:
+        return '', f'optimization log engine {facts.engine} differs from the bound {engine} job'
+    if not facts.normal_termination or facts.opt_converged is not True or facts.geometry is None:
+        return "", (
+            "optimization did not prove normal termination, convergence and a final geometry; "
+            "normal job termination alone is insufficient"
+        )
+    symbols, positions = facts.geometry
+    xyz = '\n'.join([str(len(symbols)), 'Native converged optimization geometry',
+        *[f'{symbol} {point[0]:.8f} {point[1]:.8f} {point[2]:.8f}'
+          for symbol, point in zip(symbols, positions, strict=True)]]) + '\n'
+    return xyz, ""
+
+
 def _endpoint_opt_frame(record: TsProcessRecord, step: TsJobStep) -> tuple[str, str]:
     """Extract the final geometry only when the endpoint optimization converged."""
-    from cloudra.tools.core import gaussian_frames, orca_frames
-
     log_path = _refinement_log_path(record, step)
     if not os.path.isfile(log_path):
         return "", f"endpoint optimization log is missing at {log_path}"
-    if _step_calculation(record, step).engine == "orca":
-        log_text = Path(log_path).read_text(encoding="utf-8", errors="replace")
-        converged = orca_frames.opt_converged(log_text)
-        xyz = orca_frames.final_xyz_from_text(log_text)
-    else:
-        try:
-            frames = gaussian_frames.extract_frames(log_path)
-        except Exception as exc:
-            return "", f"endpoint optimization geometry is unreadable: {exc}"
-        converged = frames[-1].converged if frames else None
-        xyz = frames[-1].xyz if frames else ""
-    if converged is not True or not xyz.strip():
-        return "", (
-            "endpoint optimization did not prove convergence and a final geometry; "
-            "normal job termination alone is insufficient"
-        )
-    return xyz, ""
+    return _native_optimization_xyz(log_path, _step_calculation(record, step).engine)
+
+
+def _endpoint_seed_atoms(record: TsProcessRecord, role: str, seed):
+    """Normalize a species-order seed; native IRC files already use TS order."""
+    from rdkit import Chem
+
+    from cloudra.tools.core import gaussian_frames, orca_frames
+    from cloudra.tools.core.structure_artifacts import read_xyz_atoms
+
+    path = _workspace_input_path(record, seed.xyz_path)
+    atoms = read_xyz_atoms(path)
+
+    for step in reversed(record.job_steps):
+        if step.purpose != 'irc' or step.state != 'done':
+            continue
+        log = _refinement_log_path(record, step)
+        if _step_calculation(record, step).engine == 'orca':
+            endpoints = orca_frames.extract_irc_endpoints(log)
+            for item in endpoints.values():
+                if item.get('geometry_ref') and Path(item['geometry_ref']).resolve() == path:
+                    from cloudra.tools.core.irc_path import parse_xyz
+                    geometry = parse_xyz(orca_frames.read_endpoint_geometry(item) or '')
+                    if geometry is None:
+                        raise ValueError('native IRC endpoint geometry is unreadable')
+                    return list(zip(*geometry))
+        else:
+            from cloudra.tools.core.irc_path import parse_xyz
+            frames, _ = gaussian_frames.extract_irc(log)
+            valid = [frame for frame in frames if frame.xyz and frame.reaction_coordinate is not None]
+            for side in ([f for f in valid if f.reaction_coordinate < 0],
+                         [f for f in valid if f.reaction_coordinate > 0]):
+                if not side:
+                    continue
+                outer = max(side, key=lambda frame: abs(frame.reaction_coordinate))
+                symbols, positions = parse_xyz(outer.xyz)
+                if atoms == list(zip(symbols, positions)):
+                    return atoms
+
+    if role != 'product' or _rotated_product(record) is not None:
+        return atoms
+    mapping = record.structures.product_to_reactant
+    if len(atoms) != len(mapping) or sorted(mapping) != list(range(len(atoms))):
+        raise ValueError('product endpoint seed and bound atom map differ in atom count')
+
+    if seed.mol_path:
+        supplied = Chem.MolFromMolFile(str(_workspace_input_path(record, seed.mol_path)), removeHs=False)
+        built = _read_built_xyz(record, 'product')
+        reference = record.structures.product
+        if reference is None and built and built[3]:
+            reference = read_molecule(built[3], input_format='mol')
+        if supplied is None or reference is None:
+            raise ValueError('product endpoint seed MOL is missing or unreadable')
+
+        supplied_smiles = Chem.MolToSmiles(Chem.RemoveHs(supplied))
+        if supplied_smiles != Chem.MolToSmiles(Chem.RemoveHs(reference)):
+            reactant = Chem.MolFromSmiles(record.input.reaction.reactant_smiles)
+            repair = (
+                ' Use verification.reactant_endpoint.seed for the declared reactant.'
+                if reactant is not None and supplied_smiles == Chem.MolToSmiles(reactant)
+                else ''
+            )
+            raise ValueError(
+                f'Endpoint seed MOL represents {supplied_smiles}, not the declared product '
+                f'{record.input.reaction.product_smiles}.{repair}'
+            )
+
+        def indexed_graph(mol):
+            return ([(a.GetSymbol(), a.GetFormalCharge(), a.GetIsotope()) for a in mol.GetAtoms()],
+                sorted((min(b.GetBeginAtomIdx(), b.GetEndAtomIdx()), max(b.GetBeginAtomIdx(), b.GetEndAtomIdx()),
+                        b.GetBondTypeAsDouble()) for b in mol.GetBonds()))
+
+        if [a.GetSymbol() for a in supplied.GetAtoms()] != [s for s, _ in atoms]:
+            raise ValueError('product endpoint seed XYZ and MOL atom orders differ')
+        inverse = [mapping.index(i) for i in range(len(mapping))]
+        working = renumber_atoms(reference, inverse)
+        native_order = indexed_graph(supplied) == indexed_graph(reference)
+        working_order = indexed_graph(supplied) == indexed_graph(working)
+        if native_order and working_order and inverse != list(range(len(mapping))):
+            # A symmetric graph cannot identify rows. Retain the bound MOL's concrete row identities.
+            supplied_positions = supplied.GetConformer().GetPositions().tolist()
+            # MOL 序列化仅保留四位小数；比较同一文件表示，不给分子坐标降精度。
+            def file_rows(points):
+                return [tuple(format(float(value), '.4f') for value in row) for row in points]
+            native_order = file_rows(supplied_positions) == file_rows(reference.GetConformer().GetPositions())
+            working_order = file_rows(supplied_positions) == file_rows(working.GetConformer().GetPositions())
+        if working_order and not native_order:
+            return atoms
+        if not native_order:
+            raise ValueError(f'product endpoint MOL does not establish the bound atom order; reuse {built[3]} or an accepted native IRC endpoint')
+    reordered = [None] * len(atoms)
+    for source, target in enumerate(mapping):
+        reordered[target] = atoms[source]
+    return reordered
+
+
+def _irc_side_for_role(record: TsProcessRecord, info: dict, role: str) -> str:
+    """Choose an optimization source, never certify a species or IRC direction.
+
+    A/B are native direction labels. Compare both pairings with the declared
+    geometries in the frozen TS atom order; rough or undecidable frames still
+    proceed to Opt/Freq and the final source/identity checks, with interval diagnostics.
+    """
+    from cloudra.tools.core.irc_path import evaluate_endpoint_between, parse_xyz
+    from cloudra.tools.core.structure_artifacts import read_xyz_atoms
+
+    other = 'product' if role == 'reactant' else 'reactant'
+    retained = next((step for step in reversed(record.job_steps)
+                     if step.purpose == other + '_opt'), None)
+    if retained and retained.endpoint_source and retained.endpoint_source.kind == 'irc_outer_frame':
+        return 'B' if retained.endpoint_source.label == 'A' else 'A'
+
+    fallback = 'A' if role == 'reactant' else 'B'
+    frequency = next((step for step in reversed(record.job_steps)
+                      if step.purpose == 'frequency'), None)
+    if frequency is None:
+        return fallback
+    ts_path = Path(frequency.input_path).parent / 'optimized.xyz'
+    if not ts_path.is_file():
+        return fallback
+    ts_atoms = read_xyz_atoms(ts_path)
+    symbols = [symbol for symbol, _ in ts_atoms]
+    ts_positions = [point for _, point in ts_atoms]
+    ends = [read_xyz_atoms(info['path_' + side]) for side in ('a', 'b')]
+    if any([symbol for symbol, _ in atoms] != symbols for atoms in ends):
+        return fallback
+    watch_pairs = [[left + 1, right + 1] for left, right in _active_reaction_center(record)]
+    # An explicit opposite species that has already optimized is the useful
+    # anchor. Do not discard it in favor of an older, rough search geometry.
+    if retained and retained.state == 'done' and retained.endpoint_source:
+        xyz, error = _endpoint_opt_frame(record, retained)
+        anchor = parse_xyz(xyz) if not error else None
+        if anchor and anchor[0] == symbols:
+            preferred = 'A' if other == 'reactant' else 'B'
+            choices = []
+            for side, atoms in zip(('A', 'B'), ends, strict=True):
+                result = evaluate_endpoint_between(symbols, ts_positions,
+                    [point for _, point in atoms], anchor[1], watch_pairs, record.input.reaction.charge)
+                choices.append((not result['is_between'], result['score'], side != preferred, side))
+            return 'B' if min(choices)[3] == 'A' else 'A'
+    reactant = _read_built_xyz(record, 'reactant')
+    if reactant is None or reactant[0] != symbols:
+        return fallback
+    try:
+        references = list(path_endpoints(record.structures))
+    except ValueError:
+        return fallback
+    product_positions = references[1].GetConformer().GetPositions().tolist()
+    references = [with_positions(mol, positions) if mol is not None else None
+                  for mol, positions in zip(references, (reactant[1], product_positions), strict=True)]
+    choices = []
+    for swapped, targets in ((False, (reactant[1], product_positions)),
+                             (True, (product_positions, reactant[1]))):
+        results = [evaluate_endpoint_between(reactant[0], ts_positions,
+            [point for _, point in endpoint], target, watch_pairs, record.input.reaction.charge,
+            intermediate_molecule=molecule)
+            for endpoint, target, molecule in zip(ends, targets, reversed(references) if swapped else references, strict=True)]
+        choices.append((not all(item['is_between'] for item in results),
+                        sum(item['score'] for item in results), swapped))
+    swapped = min(choices)[2]
+    return ('B' if fallback == 'A' else 'A') if swapped else fallback
+
 
 def _write_endpoint_input(record: TsProcessRecord, job_dir: str,
                           role: Literal["reactant", "product"],
                           task: Literal["opt", "frequency"]) -> tuple[str, str]:
-    """Write an unconstrained IRC-side Opt or a Freq at its converged Opt frame.
+    """Write endpoint Opt from a declared species seed or native IRC outer frame.
 
-    The historic reactant/product step names are side A/B slots. Species identity is
-    assigned only after both sides have optimized and passed frequency checks.
+    Record the actual source when writing; a Freq inherits its accepted Opt
+    provenance and uses that converged geometry. Roles and IRC A/B are distinct.
     """
     from cloudra.tools.Chemtool.qm_input_writer import QmInputWriter, QmInputWriter_input_schema
-    from cloudra.tools.core.calculation_intent import (
-        inspect_input,
-        intent_from_writer,
-        validate_writer_request,
-    )
 
     calculation = stage_calculation(record, f'{role}_{task}')
     if calculation is None:
         return f'Explicit {_calculation_field(f"{role}_{task}")} required', ''
     endpoint = getattr(record.input.verification, role + '_endpoint')
+    provenance = None
+    normalized_source = None
     if task == 'opt' and endpoint.seed is not None:
         path = _workspace_input_path(record, endpoint.seed.xyz_path)
         source = str(path)
@@ -2464,11 +2404,13 @@ def _write_endpoint_input(record: TsProcessRecord, job_dir: str,
                 return 'Endpoint replacement source/evidence missing', ''
         if not path.is_file():
             return 'Endpoint replacement source/evidence missing', ''
-        from cloudra.tools.core.structure_artifacts import read_xyz_atoms
-        atoms = read_xyz_atoms(path)
-        error = _endpoint_identity_error(record, role, ([s for s, _ in atoms], [point for _, point in atoms]))
-        if error:
-            return error, ''
+        try:
+            atoms = _endpoint_seed_atoms(record, role, endpoint.seed)
+        except (OSError, ValueError) as exc:
+            return str(exc), ''
+        normalized_source = '\n'.join([str(len(atoms)), 'Endpoint seed in TS working atom order',
+            *[symbol + ' ' + ' '.join(repr(float(value)) for value in point) for symbol, point in atoms]]) + '\n'
+        provenance = dict(kind='species_reference', label=role)
     elif task == "opt":
         irc_step = next(
             (step for step in reversed(record.job_steps) if step.purpose == "irc"), None,
@@ -2490,9 +2432,16 @@ def _write_endpoint_input(record: TsProcessRecord, job_dir: str,
             return f"IRC outer-frame extraction failed: {exc}", ""
         if info is None:
             return "IRC has no usable outer geometry on both sides: " + "; ".join(checks), ""
-        source = info["path_a" if role == "reactant" else "path_b"]
-        if not source or not os.path.isfile(source):
-            return f"IRC side {'A' if role == 'reactant' else 'B'} outer frame is missing", ""
+        for side in ('A', 'B'):
+            source = info['path_' + side.lower()]
+            if not source or not os.path.isfile(source):
+                return f"IRC side {side} outer frame is missing", ""
+        side = _irc_side_for_role(record, info, role)
+        source = info['path_' + side.lower()]
+        import hashlib
+        provenance = dict(kind='irc_outer_frame', label=side,
+            irc_job_id=irc_step.external_source['source_job_id'] if irc_step.external_source else irc_step.job_id,
+            irc_log_sha256=hashlib.sha256(Path(irc_log).read_bytes()).hexdigest())
     else:
         opt_step = next(
             (step for step in reversed(record.job_steps) if step.purpose == f"{role}_opt"),
@@ -2503,51 +2452,65 @@ def _write_endpoint_input(record: TsProcessRecord, job_dir: str,
         xyz, error = _endpoint_opt_frame(record, opt_step)
         if error:
             return f"{role} {error}", ""
+        if opt_step.endpoint_source is None:
+            return f'{role} accepted optimization has no endpoint source provenance', ''
+        provenance = opt_step.endpoint_source.model_dump()
         source = os.path.join(job_dir, "optimized.xyz")
         atomic_write_text(source, xyz.rstrip() + "\n")
 
     source_copy=os.path.join(job_dir,f'{role}_source.xyz')
-    _write_immutable_input(source_copy,Path(source).read_text())
+    _write_immutable_input(source_copy, normalized_source if normalized_source is not None else Path(source).read_text())
     source=source_copy
+    import hashlib
+    if task == 'opt':
+        provenance.update(source_path=source_copy, sha256=hashlib.sha256(Path(source_copy).read_bytes()).hexdigest())
+    _write_immutable_input(os.path.join(job_dir, 'endpoint_source.json'),
+        EndpointSource.model_validate(provenance).model_dump_json())
     declaration = record.input.reaction
-    task_type = [{"opt": None}] if task == "opt" else [{"freq": None}]
+    origin_label = (
+        'IRC side ' + provenance['label']
+        if provenance['kind'] == 'irc_outer_frame' else 'explicit species seed'
+    )
+    calc_copy, task_type = _stage_writer_tasks(calculation,
+        [{'opt': None}] if task == 'opt' else [{'freq': None}])
     name = f"{role}_{task}.{'inp' if calculation.engine == 'orca' else 'gjf'}"
     input_path = os.path.join(job_dir, name)
     request = QmInputWriter_input_schema(
-        **calculation.model_dump(mode='json'),
+        **calc_copy.model_dump(mode='json'),
         nproc=record.compute_cpus,
         mem=f"{record.compute_memory_mb}MB",
         source_type="xyz_file", source_value=source,
         task_type=task_type,
         charge=declaration.charge, multiplicity=declaration.multiplicity,
-        title=f"IRC side {'A' if role == 'reactant' else 'B'} endpoint {task} | smiles: {getattr(declaration, role + '_smiles')}",
+        electronic_character=declaration.electronic_character,
+        title=f"Endpoint {role} {task} from {origin_label}; identity unverified | declared_species: {getattr(declaration, role + '_smiles')}",
         output_path=input_path,
     )
-    conflicts = validate_writer_request(request.model_dump())
+    conflicts = _writer_request_errors(record, f'{role}_{task}', request)
     if conflicts:
         return f"{role} {task} input refused: " + " | ".join(
             f"[{item['code']}] {item['message']}" for item in conflicts
         ), ""
-    content = (
-        QmInputWriter._build_orca_input(request, _xyz_coords(source))
-        if calculation.engine == "orca"
-        else QmInputWriter._build_gjf(request, _xyz_coords(source))
-    )
-    if inspect_input(content, engine=calculation.engine).tasks != intent_from_writer(
-        request.model_dump()
-    ).tasks:
-        return f"{role} {task} input task mismatch", ""
+    frame = read_molecule(source, charge=declaration.charge)
+    reference = path_endpoints(record.structures)[0 if role == 'reactant' else 1]
+    if [a.GetSymbol() for a in reference.GetAtoms()] != [a.GetSymbol() for a in frame.GetAtoms()]:
+        return f'{role} endpoint frame differs from the owned atom identities', ''
+    molecule = with_positions(reference, frame.GetConformer().GetPositions())
+    content = QmInputWriter.render_input(request, molecule)
+    error = _writer_render_error(record, f'{role}_{task}', request, content)
+    if error:
+        return error, ''
     _write_immutable_input(input_path, content)
     return "", input_path
 
 
 
 def _refine(record: TsProcessRecord) -> TsProcessRecord:
-    """推进 TS Opt/Freq → IRC → 两端 Opt/Freq 作业序列。**从不轮询**。
+    """推进 TS Opt/Freq → IRC → 端点验证；分离产物复用独立组分日志。**从不轮询**。
 
     还没到终态时本阶段置 ``waiting`` 并**不推事件**：等计算不算"阻塞"，agent 不该被叫醒。
     作业终态由既有的 compute 通知路径交给系统 driver，
-    系统 driver 重新读账本并推进；agent 只处理受阻后的显式调整。
+    系统 driver 重新读账本并推进；agent 可在任务尚未启动时主动修订输入。
     """
     from cloudra.services.compute_store import TERMINAL_STATES
 
@@ -2562,7 +2525,11 @@ def _refine(record: TsProcessRecord) -> TsProcessRecord:
     # the last contiguous predecessor, rather than whichever job was appended
     # last in an earlier input revision.
     current = None
-    formal_order = ('ts_opt', 'frequency', 'irc', 'reactant_opt', 'reactant_frequency', 'product_opt', 'product_frequency')
+    separated_products = bool(record.input.verification.product_endpoint.component_logs) or (
+        isinstance(record.input.reaction.product_smiles, list) and len(record.input.reaction.product_smiles) > 1)
+    formal_order = ('ts_opt', 'frequency', 'irc', 'reactant_opt', 'reactant_frequency')
+    if not separated_products:
+        formal_order += ('product_opt', 'product_frequency')
     first = next((i for i, purpose in enumerate(formal_order) if any(s.purpose == purpose for s in record.job_steps)), len(formal_order))
     for purpose in formal_order[first:]:
         step = next((s for s in reversed(record.job_steps) if s.purpose == purpose), None)
@@ -2620,7 +2587,7 @@ def _refine(record: TsProcessRecord) -> TsProcessRecord:
         record.job_steps.append(TsJobStep(
             purpose="frequency", job_id=job_id, input_path=input_path, state="ready",
             actual_calculation=stage_calculation(record, 'frequency'), source_input_revision=record.declaration_revision,
-        ))
+        atom_binding=_direction_atom_binding(record)))
         record.waiting_for = f"job:{job_id}"
         _record_stage(
             record, "refine", "waiting",
@@ -2632,9 +2599,7 @@ def _refine(record: TsProcessRecord) -> TsProcessRecord:
         return record
 
     if current.purpose == "frequency":
-        if _require_calculation(record, 'irc', 'refine'):
-            return record
-        # 频率完成：TS 已由频率数据支持，接着跑 IRC（第二道闸），复用同一几何的 Hessian
+        # The frequency-verified TS geometry anchors the declared IRC calculation.
         from cloudra.dag.evidence_ingest import snapshot_evidence_file
         log_path = _refinement_log_path(record, current)
         if not Path(log_path).is_file():
@@ -2644,11 +2609,14 @@ def _refine(record: TsProcessRecord) -> TsProcessRecord:
         if snapshot.frequencies is None and snapshot.imaginary_frequencies is None:
             return _block(record, 'refine', 'frequency_evidence_missing',
                           'TS frequency data is unavailable; IRC cannot be admitted.', needs=['compute_artifacts'])
+        _record_frequency_analysis(record, current, log_path, snapshot)
         imaginary = snapshot.imaginary_frequencies if snapshot.imaginary_frequencies is not None else [f for f in snapshot.frequencies if f < 0]
         if len(imaginary) != 1:
             _record_candidate_failure(record, 'wrong_mode', current, log_path)
             return _block(record, 'refine', 'wrong_mode',
                           f'TS frequency evidence has {len(imaginary)} imaginary modes; exactly one is required before IRC.', needs=['conformers', 'guess', 'verification.frequency'])
+        if _require_calculation(record, 'irc', 'refine'):
+            return record
         if record.input.verification.irc_log:
             try:
                 record.job_steps.append(_reuse_existing_irc(record))
@@ -2670,12 +2638,12 @@ def _refine(record: TsProcessRecord) -> TsProcessRecord:
         record.job_steps.append(TsJobStep(
             purpose="irc", job_id=job_id, input_path=input_path, state="ready",
             actual_calculation=stage_calculation(record, 'irc'), source_input_revision=record.declaration_revision,
-        ))
+        atom_binding=_direction_atom_binding(record)))
         record.waiting_for = f"job:{job_id}"
         _record_stage(
             record, "refine", "waiting",
-            f"frequency job {current.job_id} finished; IRC job {job_id} submitted (both "
-            "directions) from the same optimised geometry. Waiting for its terminal state via the "
+            f"frequency job {current.job_id} finished; IRC job {job_id} submitted "
+            "from the same optimised geometry. Waiting for its terminal state via the "
             "existing notification path",
             [input_path],
         )
@@ -2686,10 +2654,14 @@ def _refine(record: TsProcessRecord) -> TsProcessRecord:
         _minimum, reason = _validated_endpoint_minimum(record, role)
         if _minimum is None:
             _record_candidate_failure(record, 'endpoint_unconfirmed', current, _refinement_log_path(record, current))
+            origin = current.endpoint_source
+            source = f'IRC side {origin.label}' if origin and origin.kind == 'irc_outer_frame' else 'explicit species seed'
             return _terminal(
                 record, "verdict", "candidate_only",
-                f"IRC side {'A' if role == 'reactant' else 'B'} did not qualify as an "
-                f"optimized minimum: {reason}",
+                f"The {role} endpoint candidate from {source} did not qualify as an "
+                f"optimized minimum: {reason}. Repair verification.{role}_endpoint.seed "
+                f"for the declared {role} {getattr(record.input.reaction, role + '_smiles')}; "
+                "IRC A/B labels do not declare species identity.",
             )
 
     endpoint_next = {
@@ -2698,6 +2670,8 @@ def _refine(record: TsProcessRecord) -> TsProcessRecord:
         "reactant_frequency": ("product", "opt"),
         "product_opt": ("product", "frequency"),
     }.get(current.purpose)
+    if separated_products and current.purpose == 'reactant_frequency':
+        endpoint_next = None
     while endpoint_next is not None:
         role, task=endpoint_next
         purpose=role+'_'+task
@@ -2743,11 +2717,12 @@ def _refine(record: TsProcessRecord) -> TsProcessRecord:
         record.job_steps.append(TsJobStep(
             purpose=purpose, job_id=job_id, input_path=input_path, state="ready",
             actual_calculation=stage_calculation(record, purpose), source_input_revision=record.declaration_revision,
-        ))
+            endpoint_source=EndpointSource.model_validate_json(Path(job_dir, 'endpoint_source.json').read_text()),
+        atom_binding=_direction_atom_binding(record)))
         record.waiting_for = f"job:{job_id}"
         _record_stage(
             record, "refine", "waiting",
-            f"IRC side {'A' if role == 'reactant' else 'B'} endpoint {task} job {job_id} "
+            f"Endpoint {role} {task} job {job_id} "
             "submitted; awaiting its compute notification",
             [input_path],
         )
@@ -2763,11 +2738,9 @@ def _validated_endpoint_minimum(
     record: TsProcessRecord, role: Literal["reactant", "product"],
 ) -> tuple[tuple[list[str], list[list[float]]] | None, str]:
     """Return a converged, zero-imaginary QM endpoint; identity is checked at verdict."""
-    import math
-
     from cloudra.dag.evidence_ingest import snapshot_evidence_file, validate_species_minimum
-    from cloudra.tools.core import gaussian_frames, orca_frames
-    from cloudra.tools.core.irc_path import parse_xyz
+    from cloudra.tools.core.irc_path import parse_xyz, same_geometry
+    from cloudra.tools.core.qm_log_facts import read_qm_log
 
     opt_step = next(
         (step for step in reversed(record.job_steps) if step.purpose == f"{role}_opt"), None,
@@ -2786,39 +2759,25 @@ def _validated_endpoint_minimum(
     freq_log = _refinement_log_path(record, freq_step)
     if not os.path.isfile(freq_log):
         return None, f"{role} endpoint frequency log is missing"
+    try:
+        frequency_facts = read_qm_log(freq_log)
+    except (OSError, ValueError) as exc:
+        return None, f'{role} endpoint frequency geometry is unreadable: {exc}'
+    if (frequency_facts.engine != _step_calculation(record, freq_step).engine
+            or not frequency_facts.normal_termination or frequency_facts.opt_converged is False):
+        return None, f'{role} endpoint frequency log lacks normal termination or reports unconverged optimization'
     snapshot = snapshot_evidence_file(freq_log, workspace_root=record.workspace_dir)
     minimum = validate_species_minimum(
         snapshot.frequencies, snapshot.imaginary_frequencies,
     )
-    if not (minimum.verified and minimum.is_valid):
+    if not (minimum.frequency_data_present and minimum.frequency_count_valid):
         return None, f"{role} endpoint minimum is unverified: {minimum.message}"
     xyz_path = os.path.join(os.path.dirname(freq_step.input_path), "optimized.xyz")
     if not os.path.isfile(xyz_path):
         return None, f"{role} optimized endpoint geometry is missing at {xyz_path}"
     optimized = parse_xyz(opt_xyz)
     saved = parse_xyz(Path(xyz_path).read_text(encoding="utf-8"))
-    if _step_calculation(record, freq_step).engine == "orca":
-        freq_xyz = orca_frames.final_xyz_from_text(
-            Path(freq_log).read_text(encoding="utf-8", errors="replace")
-        )
-    else:
-        try:
-            frames = gaussian_frames.extract_frames(freq_log)
-        except Exception as exc:
-            return None, f"{role} endpoint frequency geometry is unreadable: {exc}"
-        freq_xyz = frames[-1].xyz if frames else ""
-    measured = parse_xyz(freq_xyz) if freq_xyz else None
-
-    def same_geometry(left, right) -> bool:
-        return bool(
-            left is not None and right is not None
-            and left[0] == right[0]
-            and len(left[1]) == len(right[1])
-            and all(
-                math.dist(a, b) <= 1e-4
-                for a, b in zip(left[1], right[1], strict=True)
-            )
-        )
+    measured = frequency_facts.geometry
 
     if not same_geometry(optimized, saved) or not same_geometry(optimized, measured):
         return None, (
@@ -2838,22 +2797,19 @@ def _endpoint_identity_error(
         "reactant" if role == "product" and _rotated_product(record) is not None
         else role
     )
-    built = _read_built_xyz(record, source_role)
-    if built is None or not built[3] or not os.path.isfile(built[3]):
-        return f"{role} declared endpoint MOL is missing; connectivity is unverified"
-    mol = Chem.MolFromMolBlock(Path(built[3]).read_text(encoding="utf-8"), removeHs=False)
+    mol = getattr(record.structures, source_role)
     if mol is None:
-        return f"{role} declared endpoint MOL cannot be parsed; connectivity is unverified"
+        return f"{role} declared molecular identity is missing; connectivity is unverified"
     expected_smiles = (
         record.input.reaction.reactant_smiles if source_role == "reactant"
         else record.input.reaction.product_smiles
     )
-    declared = Chem.MolFromSmiles(expected_smiles)
+    declared = Chem.MolFromSmiles(chemical_smiles(expected_smiles))
     if declared is None or Chem.MolToSmiles(Chem.RemoveHs(mol)) != Chem.MolToSmiles(declared):
         return f"{role} built MOL does not match its declared SMILES; connectivity is unverified"
     n = mol.GetNumAtoms()
     if role == "product" and _rotated_product(record) is None:
-        remap = list(record.input.reaction.atom_map)
+        remap = list(record.structures.product_to_reactant)
     else:
         remap = list(range(n))
     if sorted(remap) != list(range(n)) or len(optimized[0]) != n:
@@ -2869,6 +2825,18 @@ def _endpoint_identity_error(
     )
     if stereo_errors:
         return f"{role} " + "; ".join(stereo_errors)
+    from cloudra.tools.Chemtool.reaction_mapping import _axis_config_consistency
+    observed = Chem.Mol(mol)
+    observed.RemoveAllConformers()
+    conformer = Chem.Conformer(n)
+    for index in range(n):
+        conformer.SetAtomPosition(index, optimized[1][remap[index]])
+    observed.AddConformer(conformer)
+    binding = heavy_binding(mol)
+    matches = [tuple(index - 1 for index in binding)] if binding else observed.GetSubstructMatches(declared, useChirality=True)
+    axis_error = _axis_config_consistency(declared, observed, matches)
+    if axis_error:
+        return f'{role} {axis_error}'
     from cloudra.tools.core.electronic_state import electronic_state_issue
     issue = electronic_state_issue(mol, charge=record.input.reaction.charge,
         multiplicity=record.input.reaction.multiplicity, electronic_character=record.input.reaction.electronic_character)
@@ -2891,6 +2859,23 @@ def _geometry_bond_pairs(symbols, positions):
     except (RuntimeError, ValueError):
         return None
     return {tuple(sorted((bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()))) for bond in probe.GetBonds()}
+
+
+def _endpoint_geometry_note(record, label, geometry):
+    """Describe observed geometry without changing any acceptance criterion."""
+    from rdkit import Chem
+    from rdkit.Chem import rdDetermineBonds
+
+    from cloudra.tools.core.irc_path import xyz_block
+
+    try:
+        mol = Chem.MolFromXYZBlock(xyz_block(*geometry))
+        if mol is None:
+            raise ValueError('unreadable geometry')
+        rdDetermineBonds.DetermineBonds(mol, charge=record.input.reaction.charge)
+        return f'Optimized endpoint in {label} slot, geometry-perceived SMILES: {Chem.MolToSmiles(Chem.RemoveHs(mol))}'
+    except (RuntimeError, ValueError) as exc:
+        return f'Optimized endpoint in {label} slot, molecular identity could not be perceived: {exc}'
 
 
 def _geometry_connectivity_error(mol, optimized, charge, role, remap=None, *, multiplicity=1, electronic_character=None):
@@ -2992,9 +2977,11 @@ def _geometry_connectivity_error(mol, optimized, charge, role, remap=None, *, mu
         )
     }
     if missing or extra:
+        missing_1based = sorted((left + 1, right + 1) for left, right in missing)
+        extra_1based = sorted((left + 1, right + 1) for left, right in extra)
         return (
-            f"{role} optimized connectivity differs from the declared species: "
-            f"missing bonds={sorted(missing)}, extra bonds={sorted(extra)}"
+            f"{role} optimized connectivity differs from the declared species (atom pairs 1-based): "
+            f"missing bonds={missing_1based}, extra bonds={extra_1based}"
         )
     if not spin_aware_geometry:
         different_orders = [
@@ -3002,23 +2989,58 @@ def _geometry_connectivity_error(mol, optimized, charge, role, remap=None, *, mu
             if abs(expected_bonds[pair] - actual_bonds[pair]) > 0.1
         ]
         if different_orders:
-            return f"{role} optimized bond order differs from the declared species at {different_orders}"
+            pairs_1based = sorted((left + 1, right + 1) for left, right in different_orders)
+            return f"{role} optimized bond order differs from the declared species (atom pairs 1-based) at {pairs_1based}"
     return ""
+
+def _irc_endpoint_lineage_error(record, irc_log, freq_step, sources) -> str:
+    """Bind both optimized minima to the real outer frames of the same TS IRC."""
+    from cloudra.tools.Chemtool.ts_guess import TsGuess
+    from cloudra.tools.core.irc_evidence import _optimization_geometries, irc_start_geometry, probe_log
+    from cloudra.tools.core.irc_path import parse_xyz, same_geometry
+
+    if any(origin.kind != 'irc_outer_frame' for origin in sources.values()):
+        return 'Both declared minima require actual IRC outer-frame optimization evidence; independent species seeds do not establish this lineage.'
+    ts_path = Path(freq_step.input_path).parent / 'optimized.xyz'
+    n_imag, ts = probe_log(_refinement_log_path(record, freq_step))
+    if (n_imag != 1 or ts is None or not ts_path.is_file()
+            or not same_geometry(ts, parse_xyz(ts_path.read_text()))
+            or not same_geometry(ts, irc_start_geometry(irc_log))):
+        return 'The native IRC starting geometry must match the same frequency-verified TS and saved geometry.'
+    checks = []
+    info = TsGuess._extract_irc_endpoints(
+        irc_log, checks, engine=stage_calculation(record, 'irc').engine,
+        output_dir=os.path.join(record.run_dir, VERDICT_STAGE_DIR), require_two_sides=True,
+    )
+    if info is None:
+        return 'No usable bidirectional IRC outer-frame geometries: ' + '; '.join(checks)
+    ends = {side: parse_xyz(info['end_' + side.lower()].xyz) for side in ('A', 'B')}
+    if any(end is None for end in ends.values()):
+        return 'The real bidirectional IRC outer-frame geometries could not be parsed.'
+    for role, origin in sources.items():
+        saved = parse_xyz(Path(origin.source_path).read_text())
+        if not same_geometry(saved, ends[origin.label]):
+            return f'{role} source provenance is not the accepted IRC {origin.label} outer-frame geometry'
+        opt = next(step for step in reversed(record.job_steps) if step.purpose == role + '_opt')
+        native = _optimization_geometries(_refinement_log_path(record, opt))
+        if native is None or not same_geometry(native[0], saved):
+            return f'{role} native optimization did not start from the accepted IRC {origin.label} outer-frame geometry'
+    return ''
+
 
 def _irc_interval_proof(
     record: TsProcessRecord, irc_log: str, freq_step: "TsJobStep",
     reactant: tuple[list[str], list[list[float]]],
     product: tuple[list[str], list[list[float]]],
-    expected_assignment: Literal["direct", "swapped"],
+    expected_origins: dict[str, str],
 ) -> tuple[bool, str]:
-    """verified 的区间证明：每个 IRC 双侧端点几何上位于 TS 与对应声明极小值之间。
+    """Advisory pair-distance intervals; actual outer-frame optimizations decide acceptance.
 
     材料：TS 几何（频率作业旁的 ``optimized.xyz``）、两端经 Opt 收敛且 Freq
     零虚频的极小值、IRC 双侧端点（复用 ts_guess 的引擎分发提取，
     原子对齐用 irc_path.align_atom_order）。证明本体是
     irc_path.assign_irc_endpoints（与 ts_guess strict / benchmark selfconsistency
-    同一实现）。任何材料缺失、对齐不可判或证明不成立都返回 ``(False, 原因)``——
-    调用方落 candidate_only，绝不升格 verified。
+    同一实现）。材料缺失、对齐不可判或区间不成立只返回建议，不否定已验证来源链。
     """
     from cloudra.tools.Chemtool.ts_guess import TsGuess
     from cloudra.tools.core.irc_path import (
@@ -3051,14 +3073,17 @@ def _irc_interval_proof(
     end_b = parse_xyz(info["end_b"].xyz)
     if end_a is None or end_b is None:
         return False, "the extracted IRC endpoint geometries could not be parsed"
-
+    try:
+        references = list(path_endpoints(record.structures))
+    except ValueError:
+        references = [None, None]
     aligned: list[list] = []
-    for label, symbols, positions in (
+    for slot, (label, symbols, positions) in enumerate((
         ("IRC endpoint A", end_a[0], end_a[1]),
         ("IRC endpoint B", end_b[0], end_b[1]),
         ("reactant minimum", reactant[0], reactant[1]),
         ("product minimum", product[0], product[1]),
-    ):
+    )):
         result = align_atom_order(ts_symbols, ts_pos, list(symbols), positions)
         if result is None:
             return False, (
@@ -3067,6 +3092,12 @@ def _irc_interval_proof(
                 "this combination is undecidable"
             )
         aligned.append([list(positions[k]) for k in result[0]])
+        if slot >= 2 and references[slot - 2] is not None:
+            reference = references[slot - 2]
+            if [atom.GetSymbol() for atom in reference.GetAtoms()] != list(symbols):
+                references[slot - 2] = None
+            else:
+                references[slot - 2] = with_positions(renumber_atoms(reference, result[0]), aligned[-1])
 
     watch_pairs = [
         [int(left) + 1, int(right) + 1] for left, right in _active_reaction_center(record)
@@ -3074,6 +3105,7 @@ def _irc_interval_proof(
     proof = assign_irc_endpoints(
         ts_symbols, ts_pos, aligned[0], aligned[1], aligned[2], aligned[3],
         watch_pairs, record.input.reaction.charge,
+        reference_molecules=tuple(references),
     )
     if not proof["is_decidable"]:
         return False, (
@@ -3082,26 +3114,80 @@ def _irc_interval_proof(
         )
     if not proof["is_match"]:
         return False, (
-            "at least one IRC endpoint does not lie between the TS and any declared minimum; "
-            "the path does not demonstrably connect the declared minima"
+            "at least one IRC endpoint does not lie within the pair-distance interval "
+            "between the TS and either declared minimum"
         )
-    if proof["assignment"] != expected_assignment:
+    actual = {'A': 'reactant', 'B': 'product'} if proof['assignment'] == 'direct' else {'A': 'product', 'B': 'reactant'}
+    if any(actual[side] != species for side, species in expected_origins.items()):
         return False, (
             "the interval pairing contradicts the provenance of the optimized IRC outer "
-            f"frames (proof={proof['assignment']}, source={expected_assignment})"
+            f"frames (proof={proof['assignment']}, source={expected_origins})"
         )
     return True, (
         "each IRC endpoint lies between the TS and the corresponding declared minimum "
         f"({proof['assignment']} pairing; interval proof per irc_path.assign_irc_endpoints)"
     )
 
+def _separated_product_proof(record, irc_log, freq_step, reactant, expected_origins):
+    """Prove the separated product channel without asserting a complex minimum."""
+    from cloudra.tools.Chemtool.ts_guess import TsGuess
+    from cloudra.tools.core.irc_evidence import (
+        _usable_minimum_geometries,
+        irc_start_geometry,
+        probe_log,
+        verify_separated_product_direction,
+    )
+    from cloudra.tools.core.irc_path import parse_xyz, same_geometry
+
+    details = []
+    try:
+        component_logs = _product_component_logs(record)
+    except (OSError, ValueError) as exc:
+        return False, f'Component evidence could not be bound: {exc}'
+    minima = _usable_minimum_geometries(component_logs, side='separated products',
+        details=details)
+    if not minima:
+        return False, ('Supply verification.product_endpoint.component_logs with normally terminated '
+                       'zero-imaginary-frequency logs for every separated product. ' + '; '.join(details))
+    ts_log = _refinement_log_path(record, freq_step)
+    n_imag, ts = probe_log(ts_log)
+    saved = Path(freq_step.input_path).parent / 'optimized.xyz'
+    if (n_imag != 1 or ts is None or not saved.is_file()
+            or not same_geometry(ts, parse_xyz(saved.read_text()))
+            or not same_geometry(ts, irc_start_geometry(irc_log))):
+        return False, 'The native IRC starting geometry must match the same frequency-verified TS and saved geometry.'
+    info = TsGuess._extract_irc_endpoints(irc_log, details,
+        engine=stage_calculation(record, 'irc').engine,
+        output_dir=os.path.join(record.run_dir, VERDICT_STAGE_DIR), require_two_sides=True)
+    if info is None:
+        return False, 'Both real IRC endpoint geometries are required. ' + '; '.join(details)
+    ends = (parse_xyz(info['end_a'].xyz), parse_xyz(info['end_b'].xyz))
+    if any(end is None for end in ends):
+        return False, 'The real IRC endpoint geometries could not be parsed.'
+    origin = next(step.endpoint_source for step in reversed(record.job_steps) if step.purpose == 'reactant_opt')
+    if origin.kind == 'irc_outer_frame' and not same_geometry(
+            parse_xyz(Path(origin.source_path).read_text()), ends[0 if origin.label == 'A' else 1]):
+        return False, 'Reactant source provenance differs from the accepted IRC outer frame.'
+    product = record.input.reaction.product_smiles
+    if isinstance(product, list) and len(product) == 1:
+        product = product[0]
+    verdict = verify_separated_product_direction(ends, ts, [reactant], product, minima,
+        charge=record.input.reaction.charge, atom_binding=_direction_atom_binding(record))
+    if verdict['is_match']:
+        actual = {'A': 'reactant', 'B': 'product'} if verdict['assignment'] == 'direct' else {'A': 'product', 'B': 'reactant'}
+        if any(actual[side] != role for side, role in expected_origins.items()):
+            return False, 'The separated-product assignment contradicts the accepted reactant source provenance.'
+    return bool(verdict['is_match']), '; '.join([*details, *verdict['details']])
+
+
 def _verdict(record: TsProcessRecord) -> TsProcessRecord:
-    """判定四态终态：TS 一虚频、IRC 双侧可用几何、两端 Opt/Freq 证实为极小值，
-    且各 IRC 端点位于 TS 与对应极小值之间，才算 ``verified``。
+    """判定四态终态：TS 一虚频、真实双向 IRC 外帧各自优化为正确的零虚频极小值；
+    或反应物区间证明、实际产物端点身份及各分离产物独立零虚频证据。
+    分离产物通过不代表络合物极小值通过。
 
     判定只读**交付物**（频率作业的日志），缺失频率数据一律算"未验证"——
     "没做频率分析"绝不能被当成"已验证的鞍点"（与 `dag/evidence_ingest` 同一套三态语义）。
-    IRC 的引擎收敛标志不证明连通，也不是区间证明的前置条件；两侧几何或
+    IRC 的引擎收敛标志不证明连通；几何区间只作建议，两侧几何或
     端点证据不足时仍只能到 candidate_only。
     """
     from cloudra.dag.evidence_ingest import snapshot_evidence_file
@@ -3130,6 +3216,7 @@ def _verdict(record: TsProcessRecord) -> TsProcessRecord:
             record, "verdict", "candidate_only",
             "the frequency job produced no frequency data, so the stationary point is UNVERIFIED",
         )
+    _record_frequency_analysis(record, freq_step, log_path, snapshot)
     imag = imaginary if imaginary is not None else [f for f in (freqs or []) if f < 0]
     if len(imag) != 1:
         _record_candidate_failure(record,'wrong_mode',freq_step,log_path)
@@ -3158,40 +3245,84 @@ def _verdict(record: TsProcessRecord) -> TsProcessRecord:
             record, "verdict", "candidate_only",
             f"the declared IRC log does not exist at {irc_log}; the candidate stays unverified",
         )
-    side_a, reason = _validated_endpoint_minimum(record, "reactant")
-    if side_a is None:
-        return _terminal(record, "verdict", "candidate_only", f"IRC side A minimum is unverified: {reason}")
-    side_b, reason = _validated_endpoint_minimum(record, "product")
-    if side_b is None:
-        return _terminal(record, "verdict", "candidate_only", f"IRC side B minimum is unverified: {reason}")
+    reactant, reason = _validated_endpoint_minimum(record, "reactant")
+    if reactant is None:
+        return _terminal(record, "verdict", "candidate_only", f"Declared reactant minimum is unverified: {reason}")
+    product, reason = _validated_endpoint_minimum(record, "product")
+    separated_products = (product is None and bool(record.input.verification.product_endpoint.component_logs)) or (
+        isinstance(record.input.reaction.product_smiles, list) and len(record.input.reaction.product_smiles) > 1)
+    if product is None and not separated_products:
+        return _terminal(record, "verdict", "candidate_only", f"Declared product minimum is unverified: {reason}. "
+            "For separated products, supply verification.product_endpoint.component_logs; the complex remains unverified.")
 
     failures: list[str] = []
-    for assignment, reactant, product in (
-        ("direct", side_a, side_b), ("swapped", side_b, side_a),
-    ):
-        identity_errors = [
-            _endpoint_identity_error(record, "reactant", reactant),
-            _endpoint_identity_error(record, "product", product),
-        ]
-        if any(identity_errors):
-            failures.append(f"{assignment} identity: {'; '.join(error for error in identity_errors if error)}")
-            continue
-        passed, detail = _irc_interval_proof(
-            record, irc_log, freq_step, reactant, product, assignment,
-        )
-        if passed:
+    import hashlib
+    sources = {}
+    for slot in (('reactant',) if separated_products else ('reactant', 'product')):
+        opt = next((s for s in reversed(record.job_steps) if s.purpose == slot + '_opt'), None)
+        freq = next((s for s in reversed(record.job_steps) if s.purpose == slot + '_frequency'), None)
+        origin = opt.endpoint_source if opt else None
+        if origin is None or freq is None or freq.endpoint_source != origin:
+            return _terminal(record, 'verdict', 'candidate_only', f'{slot} endpoint source provenance is missing or differs between Opt and Freq')
+        if not Path(origin.source_path).is_file() or hashlib.sha256(Path(origin.source_path).read_bytes()).hexdigest() != origin.sha256:
+            return _terminal(record, 'verdict', 'candidate_only', f'{slot} endpoint source provenance changed')
+        if origin.kind == 'irc_outer_frame' and (origin.label not in {'A', 'B'} or
+            origin.irc_job_id != (irc_step.external_source['source_job_id'] if irc_step.external_source else irc_step.job_id) or
+            origin.irc_log_sha256 != hashlib.sha256(Path(irc_log).read_bytes()).hexdigest()):
+            return _terminal(record, 'verdict', 'candidate_only', f'{slot} endpoint IRC source provenance does not match the accepted IRC')
+        if origin.kind == 'species_reference' and origin.label != slot:
+            return _terminal(record, 'verdict', 'candidate_only', f'{slot} explicit seed declared a different species role')
+        sources[slot] = origin
+    sides = [origin.label for origin in sources.values() if origin.kind == 'irc_outer_frame']
+    if len(sides) != len(set(sides)):
+        return _terminal(record, 'verdict', 'candidate_only', 'Endpoint source provenance repeats an IRC side; both origins must be checked independently.')
+    expected_origins = {origin.label: role for role, origin in sources.items()
+                        if origin.kind == 'irc_outer_frame'}
+    identity_errors = [
+        _endpoint_identity_error(record, "reactant", reactant),
+    ]
+    if not separated_products:
+        identity_errors.append(_endpoint_identity_error(record, "product", product))
+    if any(identity_errors):
+        failures.append(f"Declared species identity: {'; '.join(error for error in identity_errors if error)}")
+    else:
+        if separated_products:
+            passed, detail = _separated_product_proof(record, irc_log, freq_step, reactant, expected_origins)
+            if passed:
+                product_smiles = record.input.reaction.product_smiles
+                label = ' + '.join(product_smiles if isinstance(product_smiles, list) else product_smiles.split('.'))
+                return _terminal(record, 'verdict', 'verified',
+                    f'Verified TS connectivity to separated products {label}: {detail}. '
+                    f'The bound complex {chemical_smiles(record.input.reaction.product_smiles)} minimum remains UNVERIFIED.')
+            return _terminal(record, 'verdict', 'candidate_only', 'Separated-product IRC proof is incomplete: ' + detail)
+        error = _irc_endpoint_lineage_error(record, irc_log, freq_step, sources)
+        if not error:
+            try:
+                interval_passed, advisory = _irc_interval_proof(
+                    record, irc_log, freq_step, reactant, product, expected_origins,
+                )
+            except Exception as exc:
+                interval_passed = False
+                advisory = f'pair-distance interval analysis unavailable: {exc}'
+            if not interval_passed:
+                advisory = ('Warning: endpoint optimization establishes the two path directions, '
+                    'but the geometric interval is unusual or could not be judged; inspect the trajectory. '
+                    + advisory)
             return _terminal(
                 record, "verdict", "verified",
                 f"verified transition state: exactly one imaginary mode ({imag[0]:.1f} cm^-1), "
-                f"usable IRC geometries from both directions, and {detail}; "
-                f"optimized side-to-species assignment is {assignment}",
+                "both actual IRC outer frames from the same TS optimized independently to zero-imaginary-frequency minima "
+                f"with the declared reactant and product identities (origins={expected_origins}). "
+                f"Geometry interval advisory: {advisory}",
             )
-        failures.append(f"{assignment} interval proof: {detail}")
+        failures.append(f"IRC endpoint lineage: {error}")
     return _terminal(
         record, "verdict", "candidate_only",
         "The optimized IRC outer frames did not establish one consistent species identity, "
-        "source provenance, and endpoint interval proof: " + "; ".join(failures)
-        + ". The candidate stays UNVERIFIED",
+        "source provenance, and actual outer-frame optimization lineage: " + "; ".join(failures)
+        + ". " + _endpoint_geometry_note(record, 'reactant', reactant)
+        + "; " + _endpoint_geometry_note(record, 'product', product)
+        + ". These observations do not override the failed checks. The candidate stays UNVERIFIED",
     )
 
 def _stop_at_unimplemented(record: TsProcessRecord, stage: TsStage) -> TsProcessRecord:
@@ -3222,19 +3353,15 @@ _STAGE_FUNCS: dict[str, Callable[[TsProcessRecord], TsProcessRecord]] = {
 def advance(record: TsProcessRecord) -> TsProcessRecord:
     """从当前阶段沿顺序推进，直到阻塞、落终态，或撞上未接线的阶段。
 
-    **有界**：``max_interventions`` 限制 agent 介入次数，耗尽即落终态（``search_failed``），
-    不无限续；路径精修的轮数上限由 ``path_refinement_runs`` 声明，未声明时用 runner 默认。
+    流程修订不设次数上限；计算动作和模型请求仍遵守已声明的资源预算。
+    路径精修的轮数上限由 ``path_refinement_runs`` 声明，未声明时用 runner 默认。
     """
-    if record.is_terminal:
+    if record.is_terminal or record.stop_reason:
         return record
-    limits = record.input.execution.limits
-    if limits and limits.max_interventions is not None and record.intervention_count > limits.max_interventions:
-        return _terminal(
-            record, record.stage, "search_failed",
-            f"the intervention budget ({limits.max_interventions}) is exhausted; "
-            "stopping rather than looping. Search failure is NOT a claim that the reaction is "
-            "impossible",
-        )
+    try:
+        _verify_provided_guess_binding(record)
+    except (OSError, ValueError) as exc:
+        return _block(record, record.stage, 'provided_guess_artifact_changed', str(exc), needs=['guess'])
     start = STAGE_ORDER.index(record.stage)
     for stage in STAGE_ORDER[start:]:
         if stage in _NOT_IMPLEMENTED_STAGES:
@@ -3303,6 +3430,19 @@ def resume(record: TsProcessRecord, request: TsResumeRequest,
     """Accept a durable input revision before automatically continuing."""
     from cloudra.tools.core.ts_revision import resume_revised_process
     return resume_revised_process(record, request, event_sink=event_sink)
+
+
+def stop(record: TsProcessRecord, reason: str) -> TsProcessRecord:
+    """Stop this pipeline and request cancellation through the compute ledger."""
+    from cloudra.infra.flocks import locked
+    from cloudra.services.ts_pipeline_context import pipeline_database, require_pipeline_producer
+    from cloudra.services.ts_pipeline_store import stop_process
+
+    require_pipeline_producer(record.owner_conversation_id, record.owner_session_id)
+    with locked(str(Path(record.run_dir) / '.pipeline.lock')):
+        state = stop_process(pipeline_database(), process_id=record.pipeline_id,
+            project_id=record.owner_conversation_id, owner_id=record.owner_session_id, reason=reason)
+    return TsProcessRecord.model_validate(state)
 
 
 

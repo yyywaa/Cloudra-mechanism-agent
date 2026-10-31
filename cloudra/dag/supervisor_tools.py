@@ -12,6 +12,7 @@ Its tool surface is therefore a small, capability-gated subset declared in
   directory/post/call, with the same peer-call behavior as other agents);
 - ``review_decision``: DAG verdict tools (draft adjudication, call reviews,
   coverage contract).
+- ``process_write``: ordinary file tools restricted to project-root PROCESS.md.
 
 Everything else — research-file writes, compute submission, ad-hoc Python or
 Bash, unknown tools — is rejected at the execution layer, not just hidden
@@ -170,7 +171,7 @@ class SupervisorToolExecutor:
         try:
             arguments = Read_input_schema.model_validate(arguments).model_dump()
         except ValidationError as exc:
-            return _error(validation_feedback(exc))
+            return _error(validation_feedback(exc, schema=Read_input_schema))
         raw_path = str(arguments.get("path") or "")
         try:
             resolved = self._resolve_evidence_path(raw_path)
@@ -255,7 +256,7 @@ class SupervisorToolExecutor:
         try:
             input_obj = entry.input_schema(**arguments)
         except ValidationError as exc:
-            return _error(validation_feedback(exc))
+            return _error(validation_feedback(exc, schema=entry.input_schema))
         session = self._session or SimpleNamespace(id=session_id or "supervisor")
         # Several tool classes narrow the `subagent` field to the legacy Agent
         # type (dag_* verdict tools among them), so pydantic construction with
@@ -279,8 +280,25 @@ class SupervisorToolExecutor:
                 "dag_view/dag_view_evidence/dag_delivery_report), get_skill, agent_hub, "
                 "and the dag_* review-decision tools."
             )
+        from cloudra.tools.Plantool.dag_tools._common import final_review_request_id
+
+        if final_review_request_id(self._agent) and (
+            access == "process_write" or (access == "review_decision" and name != "dag_review_evidence")
+        ):
+            return _error(
+                "[permission denied] Final-delivery reviewers may decide only their assigned exit request; "
+                "process notes, draft decisions, evidence decisions, and coverage changes belong to the process Supervisor."
+            )
         if access == "hub":
             return await self._execute_hub(arguments, session_id=session_id)
+        if access == "process_write":
+            try:
+                path = await asyncio.to_thread(self._resolve_evidence_path, str(arguments.get('path') or ''))
+            except WorkspaceError as exc:
+                return _error(f'[permission denied] {name}: {exc}')
+            if self._workspace_root is None or path != self._workspace_root / 'PROCESS.md':
+                return _error('[permission denied] The Supervisor may write only project-root PROCESS.md.')
+            arguments = {**arguments, 'path': 'PROCESS.md'}
         if name == "read":
             return await asyncio.to_thread(self._execute_read, arguments)
         if access == "evidence_read" and not name.startswith("dag_"):
@@ -288,6 +306,20 @@ class SupervisorToolExecutor:
             if denied:
                 return _error(denied)
         try:
+            if access == 'process_write':
+                from cloudra.base.tools_class import use_approval_handler
+                from cloudra.infra.yolo_guard import reset_session_yolo, set_session_yolo
+
+                async def approve_note(**_fields):
+                    # The path above is already restricted to the authorized notebook.
+                    return True, ''
+
+                token = set_session_yolo(False)
+                try:
+                    with use_approval_handler(approve_note):
+                        return await self._run_tool_entry(name, arguments, session_id=session_id)
+                finally:
+                    reset_session_yolo(token)
             return await self._run_tool_entry(name, arguments, session_id=session_id)
         except Exception as exc:
             # Tool-layer failures go back to the model as an error result

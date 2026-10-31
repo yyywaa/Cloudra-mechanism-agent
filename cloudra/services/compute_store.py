@@ -738,6 +738,25 @@ async def aextend_compute_lease(db: ComputeDB, task_id: int, seconds: int) -> No
         await con.commit()
 
 
+def _compute_job_failure_refusal(job: Mapping[str, Any]) -> str | None:
+    """Shared facts required before controller-side orphan failure."""
+    from cloudra.infra.compute_utils import calc_lock_path, guard_lock_path
+    from cloudra.infra.flocks import is_lock_held
+
+    task_id = int(job["id"])
+    workdir = os.path.dirname(job.get("path") or "")
+    if workdir and os.path.isdir(os.path.join(workdir, ".cloudra")):
+        for lock_path in (guard_lock_path(workdir, task_id), calc_lock_path(workdir, task_id)):
+            if os.path.isfile(lock_path) and is_lock_held(lock_path):
+                return f"job {task_id} still holds a calculator or guard lock; failure was not recorded"
+    if (job.get("scheduler") or "local") != "local" and job.get("scheduler_job_id"):
+        return (
+            f"job {task_id} has a submitted remote/scheduler execution; "
+            "local lock absence cannot establish its exit; leave finalization to its execution poller"
+        )
+    return None
+
+
 def reap_exhausted_compute_leases(
     db: ComputeDB,
     *,
@@ -746,33 +765,22 @@ def reap_exhausted_compute_leases(
     """Fail expired compute jobs that consumed their retry budget; 返回被 reap 的 id。
 
     存活以 flock 为准：guard 或 calculator 仍持锁的作业不算死，即使租约过期
-    也不落 failed（租约只服务认领，对账会给活作业续租）。
+    也不落 failed。已提交的远端作业由其 poller 确认，不能凭本机无锁判死。
     """
-    from cloudra.infra.compute_utils import calc_lock_path, guard_lock_path
-    from cloudra.infra.flocks import is_lock_held
-
     now = time.time()
     compute_ids: list[int] = []
-
-    def _alive(task_id: int, path: str) -> bool:
-        workdir = os.path.dirname(path or "")
-        if not workdir:
-            return False
-        return is_lock_held(guard_lock_path(workdir, task_id)) or is_lock_held(
-            calc_lock_path(workdir, task_id)
-        )
 
     def write() -> None:
         with db.connect() as con:
             candidates = con.execute(
-                """SELECT id, path FROM compute_jobs WHERE state='running'
+                f"""SELECT {_SELECT_COLUMNS} FROM compute_jobs WHERE state='running'
                 AND lease_expires_at<? AND COALESCE(attempt_count, 0)>=?""",
                 (now, max_attempts),
             ).fetchall()
             dead = [
                 int(row[0])
                 for row in candidates
-                if not _alive(int(row[0]), row[1] or "")
+                if _compute_job_failure_refusal(_row_dict(row)) is None
             ]
             if not dead:
                 return
@@ -794,6 +802,86 @@ def reap_exhausted_compute_leases(
 # 取消请求（执行端确认退出后才写终态）
 # ---------------------------------------------------------------------------
 
+def request_compute_cancellations_in_transaction(
+    con, job_ids: Sequence[int], *, reason: str,
+) -> dict[str, int]:
+    """Request cancellation under the caller's transaction; never signal execution."""
+    counts = {"ready_cancelled": 0, "cancel_requested": 0}
+    if not job_ids:
+        return counts
+    placeholders = ",".join("?" for _ in job_ids)
+    cur = con.execute(
+        "UPDATE compute_jobs SET state='cancelled', end_timestamp=?, last_error=? "
+        f"WHERE state='ready' AND id IN ({placeholders})",
+        (time.time(), reason[:500], *job_ids),
+    )
+    counts["ready_cancelled"] = cur.rowcount
+    cur = con.execute(
+        "UPDATE compute_jobs SET state='cancel_requested', last_error=? "
+        f"WHERE state='running' AND id IN ({placeholders})",
+        (reason[:500], *job_ids),
+    )
+    counts["cancel_requested"] = cur.rowcount
+    return counts
+
+
+async def arequest_compute_job_cancellation(
+    db: ComputeDB, task_id: int, *, project_id: str, reason: str,
+) -> dict[str, Any]:
+    """Cancel one project-owned job; running work awaits its execution owner."""
+    reason = reason.strip()
+    if not reason:
+        raise ValueError("cancellation reason is required")
+    if not project_id or not await asyncio.to_thread(_db_ready, db):
+        raise LookupError("compute job not found")
+
+    def write() -> dict[str, Any]:
+        with db.connect() as con:
+            con.execute("BEGIN IMMEDIATE")
+            row = con.execute(
+                "SELECT state FROM compute_jobs WHERE id=? AND conversation_id=?",
+                (task_id, project_id),
+            ).fetchone()
+            if row is None:
+                raise LookupError("compute job not found")
+            previous = row[0]
+            request_compute_cancellations_in_transaction(con, [task_id], reason=reason)
+            state = con.execute("SELECT state FROM compute_jobs WHERE id=?", (task_id,)).fetchone()[0]
+            con.commit()
+        success = state in {"cancelled", "cancel_requested"}
+        if state == "cancel_requested":
+            message = "Cancellation requested; the execution owner must confirm that the calculation has exited."
+        elif state == "cancelled":
+            message = "Job is cancelled."
+        else:
+            message = f"Job is already terminal ({state}); its result was not changed."
+        return dict(is_success=success, job_id=task_id, previous_state=previous, state=state, message=message)
+
+    return await asyncio.to_thread(retry_on_locked, write)
+
+
+async def acancel_project_compute_jobs(
+    db: ComputeDB, project_ids: Sequence[str], *, reason: str,
+) -> dict[str, int]:
+    """Request cancellation only for the supplied projects (explicit batch stop)."""
+    if not project_ids or not await asyncio.to_thread(_db_ready, db):
+        return {"ready_cancelled": 0, "cancel_requested": 0}
+
+    def write() -> dict[str, int]:
+        with db.connect() as con:
+            con.execute("BEGIN IMMEDIATE")
+            placeholders = ",".join("?" for _ in project_ids)
+            ids = [row[0] for row in con.execute(
+                "SELECT id FROM compute_jobs WHERE state IN ('ready', 'running') "
+                f"AND conversation_id IN ({placeholders})", tuple(project_ids),
+            )]
+            counts = request_compute_cancellations_in_transaction(con, ids, reason=reason)
+            con.commit()
+            return counts
+
+    return await asyncio.to_thread(retry_on_locked, write)
+
+
 async def acancel_all_compute_jobs(db: ComputeDB) -> dict[str, int]:
     """取消排队作业，并向所有运行中作业发出账本取消请求。
 
@@ -803,25 +891,17 @@ async def acancel_all_compute_jobs(db: ComputeDB) -> dict[str, int]:
     counts = {"ready_cancelled": 0, "cancel_requested": 0}
     if not await asyncio.to_thread(_db_ready, db):
         return counts
-    now = time.time()
+    def write() -> dict[str, int]:
+        with db.connect() as con:
+            con.execute("BEGIN IMMEDIATE")
+            ids = [row[0] for row in con.execute(
+                "SELECT id FROM compute_jobs WHERE state IN ('ready', 'running')",
+            )]
+            result = request_compute_cancellations_in_transaction(con, ids, reason="cancelled by cancel-all")
+            con.commit()
+            return result
 
-    async def write() -> dict[str, int]:
-        async with db.aconnect() as con:
-            cur = await con.execute(
-                "UPDATE compute_jobs SET state='cancelled', end_timestamp=?, "
-                "last_error='cancelled by cancel-all' WHERE state='ready'",
-                (now,),
-            )
-            counts["ready_cancelled"] = cur.rowcount
-            cur = await con.execute(
-                "UPDATE compute_jobs SET state='cancel_requested' "
-                "WHERE state='running'"
-            )
-            counts["cancel_requested"] = cur.rowcount
-            await con.commit()
-            return counts
-
-    return await aretry_on_locked(write)
+    return await asyncio.to_thread(retry_on_locked, write)
 
 
 # ---------------------------------------------------------------------------
@@ -843,22 +923,41 @@ async def afinalize_compute_job(
     sql = "UPDATE compute_jobs SET state=?, end_timestamp=?, last_error=? WHERE id=?"
     if only_running:
         sql += " AND state='running'"
-    async with db.aconnect() as con:
-        cur = await con.execute(sql, (state, time.time(), last_error, task_id))
-        await con.commit()
-        return cur.rowcount == 1
+    async def write() -> bool:
+        async with db.aconnect() as con:
+            cur = await con.execute(sql, (state, time.time(), last_error, task_id))
+            await con.commit()
+            return cur.rowcount == 1
+
+    return await aretry_on_locked(write)
 
 
 async def afail_compute_job(db: ComputeDB, task_id: int, message: str) -> bool:
-    """标记 failed（executor 拉起失败 / agent 手动标记），带 CAS 限制仅覆盖 ready/running，顺带清租约。"""
-    async with db.aconnect() as con:
-        cur = await con.execute(
-            "UPDATE compute_jobs SET state='failed', end_timestamp=?, "
-            "last_error=?, lease_expires_at=0 WHERE id=? AND state IN ('ready', 'running')",
-            (time.time(), message[:500], task_id),
-        )
-        await con.commit()
-        return cur.rowcount == 1
+    """Fail an unowned orphan/startup error; held locks/submitted remote jobs refuse.
+
+    False means the CAS state is no longer ready/running. A refusal explains why
+    execution is still protected; neither its lease nor its review is changed.
+    """
+    def write() -> bool:
+        with db.connect() as con:
+            row = con.execute(
+                f"SELECT {_SELECT_COLUMNS} FROM compute_jobs WHERE id=? AND state IN ('ready', 'running')",
+                (task_id,),
+            ).fetchone()
+            if row is None:
+                return False
+            refusal = _compute_job_failure_refusal(_row_dict(row))
+            if refusal is not None:
+                raise ValueError(refusal)
+            cur = con.execute(
+                "UPDATE compute_jobs SET state='failed', end_timestamp=?, "
+                "last_error=?, lease_expires_at=0 WHERE id=? AND state IN ('ready', 'running')",
+                (time.time(), message[:500], task_id),
+            )
+            con.commit()
+            return cur.rowcount == 1
+
+    return await asyncio.to_thread(retry_on_locked, write)
 
 
 async def aupdate_compute_pid(db: ComputeDB, task_id: int, column: str, pid: int) -> None:

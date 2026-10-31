@@ -20,8 +20,7 @@ Pure filesystem + parsing; no LLM, no DB.
 from __future__ import annotations
 
 import json
-import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Optional
 
@@ -39,9 +38,13 @@ from cloudra.benchmark.schema import (
     MechanismNode,
     NodeRole,
 )
+from cloudra.tools.core.irc_evidence import normal_log
 
 # 交付侧识别的常规图论 type 别名 → 系统 NodeRole。未知 type 不做猜测映射：
 # 留原样让校验 fail-loud（无法识别的声明不该被静默吞成另一个角色）。
+# D1（2026-10-29 公平性修复）：节点/边的 accessible 声明允许写在
+# properties 里（agent 交付形状不统一）；加载时提升到顶层字段，并在
+# accessible_source 上记录来源，供 integrity 报告说明用的是哪种形状。
 _NODE_TYPE_ALIASES = {
     "reactant": NodeRole.REACTANT.value,
     "product": NodeRole.PRODUCT.value,
@@ -67,11 +70,25 @@ class _DeliveredNode(MechanismNode):
         if not isinstance(data, dict):
             return data
         data = dict(data)
+        # D1：节点级 accessible 声明可能写在 properties 里（agent 交付形状
+        # 不统一）。顶层缺省时从 properties 提升；两处都没有 = default。
+        if "accessible" not in data:
+            props = data.get("properties")
+            nested = _coerce_accessible(props.get("accessible")) if isinstance(props, dict) else None
+            if nested is not None:
+                data["accessible"] = nested
+                data["accessible_source"] = "properties"
+            else:
+                data["accessible_source"] = "default"
+        else:
+            data["accessible_source"] = "top_level"
         # role 缺失，或 role 是自由文本（不是合法 NodeRole 枚举值）而 type 能映射
         # 时，以 type 的映射值为 role；自由文本并进 label，不丢信息。role 本身
         # 是合法枚举值时不动；type 也映射不了则留原样，让校验 fail-loud。
         alias = _NODE_TYPE_ALIASES.get(str(data.get("type") or "").strip().lower())
-        if alias is not None and data.get("role") not in {r.value for r in NodeRole}:
+        role = data.get("role")
+        # 别名只补缺省/自由文本；列表等错误类型交给 Pydantic 指明字段。
+        if alias is not None and (role is None or isinstance(role, str)) and role not in {r.value for r in NodeRole}:
             free_text = str(data["role"]).strip() if data.get("role") is not None else ""
             if free_text:
                 label = str(data.get("label") or "").strip()
@@ -100,33 +117,56 @@ class _DeliveredEdge(MechanismEdge):
         if not isinstance(data, dict):
             return data
         data = dict(data)
+        # D1：边级 accessible 声明同样允许写在 properties 里。
+        if "accessible" not in data:
+            props = data.get("properties")
+            nested = _coerce_accessible(props.get("accessible")) if isinstance(props, dict) else None
+            if nested is not None:
+                data["accessible"] = nested
+                data["accessible_source"] = "properties"
+            else:
+                data["accessible_source"] = "default"
+        else:
+            data["accessible_source"] = "top_level"
         if "from" not in data and "source" in data:
             data["from"] = data["source"]
         if "to" not in data and "target" in data:
             data["to"] = data["target"]
         return data
 
+
+def _coerce_accessible(value: object) -> bool | None:
+    """把交付 JSON 里常见的 bool/字符串/整数字面量归一成 bool；其他 → None。
+
+    只接受语义明确的写法；无法识别的值保持原样（让 pydantic 报字段错误），
+    而不是静默猜成 accessible=true。"""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and not isinstance(value, bool):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in ("true", "yes", "1", "accessible"):
+            return True
+        if lowered in ("false", "no", "0", "inaccessible"):
+            return False
+    return None
+
 # file extensions we treat as computational evidence worth parsing for SMILES
 _EVIDENCE_SUFFIXES = {".gjf", ".com", ".inp", ".xyz", ".log", ".out", ".sdf", ".mol", ".json"}
 
-# 超过该大小的文件只做类型分类、不整读扫 SMILES，也不进 Layer 2 的帧解析
-# （两层共享同一上限：超大文件在 Layer 1 没贡献绑定，cclib 整读只会拖住评分器）
-MAX_SCAN_BYTES = 20 * 1024 * 1024
+# Bound incidental metadata discovery, not eligibility of native scientific logs.
+MAX_METADATA_BYTES = 20 * 1024 * 1024
 
 # `smiles:` 注释行是交付协议的一部分（query 明确要求证据文件携带）。
 # 容忍 JSON/YAML 引号与注释前缀："smiles": "X"、smiles: 'X'、# smiles: X。
 # 注意不能把 [ ] 排除在捕获集外——离子/ bracket SMILES（[F-]、[OH3+]）依赖它们。
-_SMILES_LINE_RE = re.compile(
-    r"[\"']?\bsmiles\b[\"']?\s*[:=]\s*[\"']?([^\s,;\"'}]+)", re.IGNORECASE
-)
-
-
 @dataclass
 class EvidenceFile:
     path: str
     smiles_found: list[str] = field(default_factory=list)
     kind: str = ""  # 'gaussian'|'orca'|'xyz'|'json'|'unknown'
-    size: int = 0   # 字节数；Layer 2 据此跳过超过 MAX_SCAN_BYTES 的文件
+    size: int = 0   # 原始字节数，仅作文件信息，不是科学资格条件
 
 
 @dataclass
@@ -151,6 +191,8 @@ class IntegrityReport:
     node_bindings: list[NodeBinding] = field(default_factory=list)
     # 平均绑定质量（含 partial credit；分母只含参与绑定的节点）
     binding_quality: float = 1.0
+    # D1 诊断：哪些元素的可达性声明来自 properties（非规范顶层字段）。
+    accessible_sources: dict = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
 
 
@@ -175,29 +217,35 @@ def find_graph_json(sandbox: Path) -> Optional[Path]:
     return None
 
 
-def load_delivered_graph(path: Path) -> Optional[GoldMechanismGraph]:
-    """Parse a delivered graph JSON into GoldMechanismGraph.
+def parse_delivered_graph(data: object) -> GoldMechanismGraph:
+    """解析共用交付格式，保留字段错误供收尾检查反馈给模型。
 
     交付侧宽松加载（Postel）：agent 多写的键（energy/metadata 等）忽略、
     边缺 id 自动补；gold 侧仍由 strict schema 约束。端点引用完整性由
     GoldMechanismGraph 的 validator 把关：悬空 from/to/via → 校验失败、
-    返回 None（不可解析），不再静默造幽灵节点进图比较。"""
+    不再静默造幽灵节点进图比较。此处只检查格式，不判断科学交付是否完整。"""
+    if not isinstance(data, dict):
+        raise ValueError("Delivery graph must be a JSON object.")
+    if "nodes" not in data or not isinstance(data["nodes"], list):
+        raise ValueError("Delivery graph requires a nodes list.")
+    if not isinstance(data.get("edges", []), list):
+        raise ValueError("Delivery graph edges must be a list.")
+    nodes = [_DeliveredNode.model_validate(n) for n in data["nodes"]]
+    edges = [_DeliveredEdge.model_validate(e) for e in data.get("edges", [])]
+    return GoldMechanismGraph(
+        nodes=[MechanismNode(**n.model_dump()) for n in nodes],
+        edges=[
+            MechanismEdge(**(e.model_dump() | {"id": e.id or f"e{i}"}))
+            for i, e in enumerate(edges)
+        ],
+    )
+
+
+def load_delivered_graph(path: Path) -> Optional[GoldMechanismGraph]:
+    """Read a delivered graph; scoring records malformed delivery as unparseable."""
     try:
         data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
-    except Exception:
-        return None
-    if not isinstance(data, dict):
-        return None
-    try:
-        nodes = [_DeliveredNode.model_validate(n) for n in data.get("nodes", [])]
-        edges = [_DeliveredEdge.model_validate(e) for e in data.get("edges", [])]
-        return GoldMechanismGraph(
-            nodes=[MechanismNode(**n.model_dump()) for n in nodes],
-            edges=[
-                MechanismEdge(**(e.model_dump() | {"id": e.id or f"e{i}"}))
-                for i, e in enumerate(edges)
-            ],
-        )
+        return parse_delivered_graph(data)
     except Exception:
         return None
 
@@ -221,23 +269,83 @@ def _smiles_in_json(obj) -> list[str]:
 
 
 def _smiles_in_text(text: str) -> list[str]:
-    out = [m.group(1) for m in _SMILES_LINE_RE.finditer(text)]
-    # JSON 摘要文件：正则抓到的是引号内首个值，数组形式走结构化兜底
+    # Structured files are read as JSON; annotation parsing is for raw text.
     try:
         data = json.loads(text)
     except Exception:
         data = None
     if isinstance(data, (dict, list)):
-        out.extend(_smiles_in_json(data))
-    return out
+        return _smiles_in_json(data)
+    found = []
+    for line in text.splitlines():
+        offset = 0
+        while (index := line.lower().find('smiles', offset)) >= 0:
+            offset = index + len('smiles')
+            if index and (line[index - 1].isalnum() or line[index - 1] == '_'):
+                continue
+            suffix = line[offset:].lstrip("'\" \t")
+            if not suffix or suffix[0] not in ':=':
+                continue
+            value = suffix[1:].lstrip().lstrip("'\"")
+            end = next((i for i, char in enumerate(value) if char.isspace() or char in ",;\"'}"), len(value))
+            if end:
+                found.append(value[:end])
+    return found
+
+
+def _smiles_in_native_log(lines, kind: str):
+    archive_prefix: str | None = None
+    archive_title: list[str] | None = None
+    archive_tail = ""
+    for line in lines:
+        if kind == "gaussian" and line.lstrip().startswith(r"1\1\GINC-"):
+            archive_prefix, archive_title, archive_tail = "", None, ""
+        if archive_prefix is not None:
+            if not line.strip():
+                archive_prefix, archive_title, archive_tail = None, None, ""
+                continue
+            # Gaussian wraps archive records with one formatting space per
+            # physical line. Decode their fields before parsing the title:
+            # double backslashes separate route/title/charge+geometry, whereas
+            # a single backslash inside a stereochemical SMILES is data.
+            fragment = line.rstrip("\r\n").removeprefix(" ")
+            if archive_title is None:
+                archive_prefix += fragment
+                fields = archive_prefix.split(r"\\", 3)
+                if len(fields) == 4:
+                    archive_title = _smiles_in_text(fields[2])
+                    # The remaining archive may contain a quadratic-size
+                    # Hessian. Retain no coordinates or numerical body.
+                    archive_prefix = ""
+                    del fields
+            archive_tail = (archive_tail + fragment)[-3:]
+            if archive_tail != r"\\@":
+                continue
+            archive_prefix = None
+            if archive_title is not None:
+                yield from archive_title
+            continue
+        if "smiles" in line.lower():
+            yield from _smiles_in_text(line)
+
+
+def evidence_within_sandbox(path: Path, sandbox: Path) -> bool:
+    """Resolved files, including symlink targets, must belong to this task."""
+    try:
+        path.resolve(strict=True).relative_to(sandbox.resolve())
+        return path.is_file()
+    except (OSError, RuntimeError, ValueError):
+        return False
 
 
 def scan_evidence_files(sandbox: Path, exclude: Optional[Path] = None) -> list[EvidenceFile]:
     files: list[EvidenceFile] = []
     for p in sorted(sandbox.rglob("*")):
-        if not p.is_file():
-            continue
+        # 先按后缀筛掉二进制波函文件（.chk/.fchk 等），避免为它们做路径解析：
+        # 证据只可能是文本输入/输出（.log/.out 及少量结构文件）。
         if p.suffix.lower() not in _EVIDENCE_SUFFIXES:
+            continue
+        if not evidence_within_sandbox(p, sandbox):
             continue
         if p.name == "mechanism_graph.json":
             continue
@@ -248,10 +356,17 @@ def scan_evidence_files(sandbox: Path, exclude: Optional[Path] = None) -> list[E
         kind = _classify(p)
         try:
             size = p.stat().st_size
-            if size > MAX_SCAN_BYTES:
-                text = ""  # 超大日志不整读；保留分类结果，SMILES 扫描跳过
+            if kind in {'gaussian', 'orca'} and p.suffix.lower() in {'.log', '.out'}:
+                # Native logs are not JSON. Discover annotations one line at a
+                # time instead of making a second full-size in-memory copy.
+                with p.open(encoding='utf-8', errors='replace') as stream:
+                    smiles = list(dict.fromkeys(_smiles_in_native_log(stream, kind)))
+                text = ''
+            elif size > MAX_METADATA_BYTES:
+                text, smiles = '', []
             else:
                 text = p.read_text(encoding="utf-8", errors="replace")
+                smiles = _smiles_in_text(text)
         except Exception:
             continue
         # 机理图形状的 JSON（顶层 nodes+edges）一律不是证据：交付图的多份改名
@@ -265,7 +380,7 @@ def scan_evidence_files(sandbox: Path, exclude: Optional[Path] = None) -> list[E
                 continue
         files.append(EvidenceFile(
             path=str(p.relative_to(sandbox)),
-            smiles_found=_smiles_in_text(text),
+            smiles_found=smiles,
             kind=kind,
             size=size,
         ))
@@ -325,7 +440,6 @@ def _species_file_qualities(
         q = 0.0
         for fs in f.smiles_found:
             # A similar fingerprint cannot replace missing molecular components.
-            # Separate component evidence is handled by _component_union_coverage.
             if len(fs.split(".")) != len(species_smiles.split(".")):
                 continue
             if species_substitution_cost([species_smiles], [fs], cfg) <= match_threshold:
@@ -340,34 +454,13 @@ def _species_file_qualities(
     return best, paths
 
 
-def _component_union_coverage(
-    species_smiles: str,
-    files: list[EvidenceFile],
-    cfg: GedConfig,
-    match_threshold: float,
-    partial_quality: float,
-) -> tuple[float, list[str]]:
-    """逐组分联合覆盖兜底（用户裁决：络合物优化不干净时允许拆开交付）。
-
-    仅在整络合物标注绑不上时启用：把络合物 SMILES 按 "." 拆成单组分，每个
-    组分走与整绑相同的结构比对（指纹/哈希 + protonation variant，不走字符串
-    相等）——每个组分都至少被一个证据文件标注则联合覆盖成立，返回
-    (最弱组分质量, 覆盖文件并集)；任一组分无覆盖返回 (0.0, [])。单组分物种
-    无此通道（与整绑同义）。"""
-    components = species_smiles.split(".")
-    if len(components) <= 1:
-        return 0.0, []
-    quality = 1.0
-    paths: list[str] = []
-    for comp in components:
-        q, qpaths = _species_file_qualities(
-            comp, files, cfg, match_threshold, partial_quality
-        )
-        if not qpaths:
-            return 0.0, []
-        quality = min(quality, q)
-        paths.extend(qpaths)
-    return quality, sorted(set(paths))
+def _evidence_paths(value) -> list[str]:
+    """evidence_log may be one path or a list of paths; keep declared order."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        return [item for item in value if isinstance(item, str)]
+    return []
 
 
 def bind_graph_to_evidence(
@@ -376,33 +469,38 @@ def bind_graph_to_evidence(
     cfg: Optional[GedConfig] = None,
     match_threshold: float = 0.2,
     partial_quality: float = 0.7,
+    *,
+    sandbox: Path,
 ) -> list[NodeBinding]:
-    """Bind each accessible non-TS node to evidence files whose parsed SMILES
-    match the node's claimed SMILES. A node's SMILES list holds whole species:
-    a multi-molecule complex is ONE dot-joined complex SMILES (``C=O.CN``) —
-    the schema folds component lists into that form at parse time
-    (``MechanismNode._fold_complex_components``). Binding is two-layered:
+    """Bind each declared species to matching evidence for its complete identity.
 
-    1. 整络合物优先：evidence ``smiles:`` annotations are matched against the
-       whole dot-joined complex (the delivery contract's primary form);
-    2. 逐组分联合覆盖兜底（用户裁决：络合物在允许方法下优化不干净时允许拆开
-       交付）：整络合物绑不上时拆成单组分，每个组分都至少被一个证据文件标注
-       （同一结构比对/protonation 通道）则该物种也算覆盖——图拓扑不受影响，
-       节点仍是单个络合物。
-
-    The node binds when every listed species is matched (either layer) by at
-    least one evidence file. Binding is graded: fingerprint/hash-level matches
-    give quality 1.0; protonation/charge-state-only variants give
-    `partial_quality` (the node's quality is its weakest species — 兜底通道下
-    即最弱组分). TS nodes carry no SMILES and are bound indirectly via their
-    edge's endpoints: a TS counts as evidenced only when at least one edge
-    routes through it (`via`) and both endpoint species of that edge are
-    themselves bound to evidence; its quality inherits the weaker endpoint.
-
-    `accessible=false` 的节点（含 TS）是"允许方法下不可达"的显式声明：不参与
-    绑定、不产出 NodeBinding；via 边任一端点不可达时该 TS 随之绑不上
-    （端点不在绑定集合里）。"""
+    A dot-connected entry requires whole-complex geometry. Multiple entries
+    describe separated species and each needs its own matching evidence.
+    Inaccessible nodes are exempt; TS nodes retain explicit evidence lineage.
+    """
     cfg = cfg or GedConfig()
+    sandbox = Path(sandbox)
+    available = files
+    from cloudra.dag.file_science import _geometry_species
+    verified = []
+    for evidence in files:
+        identities = []
+        try:
+            usable = evidence.kind == 'xyz' or normal_log(sandbox / evidence.path)
+        except (OSError, ValueError):
+            usable = False  # An unrelated malformed candidate is not usable evidence.
+        if usable:
+            for identity in evidence.smiles_found:
+                try:
+                    if _geometry_species(str(sandbox / evidence.path), identity):
+                        identities.append(identity)
+                except (ValueError, RuntimeError) as exc:
+                    # Dependency failures must not become missing molecular evidence.
+                    if isinstance(exc, RuntimeError) and isinstance(exc.__cause__, ImportError):
+                        raise
+                    continue
+        verified.append(replace(evidence, smiles_found=identities))
+    files = verified
     bindings: list[NodeBinding] = []
     by_id: dict[str, NodeBinding] = {}
     ts_ids = {n.id for n in graph.nodes if n.role == NodeRole.TRANSITION_STATE}
@@ -416,6 +514,36 @@ def bind_graph_to_evidence(
         bindings.append(nb)
         if node.id in ts_ids:
             continue
+        if 'evidence_log' in node.properties:
+            # evidence_log 可以是单个路径或路径列表；逐个尝试，直到某个文件
+            # 真能把该节点绑到证据。只使用模型当前声明的路径，不回溯历史尝试。
+            for raw in _evidence_paths(node.properties['evidence_log']):
+                try:
+                    path = (sandbox / raw).resolve()
+                    relative = str(path.relative_to(sandbox.resolve()))
+                    # D4: 显式引用也接受原生 xTB 输出 / .xyz（不可能任务的常见
+                    # 交付形态）；物种身份仍由几何 -> 物种检查确认，不放松标准。
+                    evidence = next((item for item in available if item.path == relative
+                                     and item.kind in {'gaussian', 'orca', 'xyz', 'log'}), None)
+                    if evidence is None or not node.smiles:
+                        continue
+                    native = evidence.kind in {'xyz', 'log'}
+                    identities = list(evidence.smiles_found)
+                    identities.extend(identity for identity in node.smiles if _geometry_species(str(path), identity))
+                    identities = list(dict.fromkeys(identities))
+                    usable = bool(identities) and (native or normal_log(path))
+                    if usable:
+                        candidate = replace(evidence, smiles_found=list(identities))
+                        qualities = [_species_file_qualities(identity, [candidate], cfg, match_threshold, partial_quality)[0]
+                                     for identity in node.smiles]
+                        if all(quality > 0 for quality in qualities):
+                            nb.bound_files, nb.matched, nb.quality = [relative], True, min(qualities)
+                            break
+                except (ValueError, RuntimeError, OSError) as exc:
+                    if isinstance(exc, RuntimeError) and isinstance(exc.__cause__, ImportError):
+                        raise
+                    continue
+            continue  # A bad explicit reference must never select other history.
         if not node.smiles:
             # 物种节点不带 SMILES = 只有声明没有可取证内容，不予绑定；
             # 否则 agent 把 SMILES 全留空即可零证据通过本层。
@@ -426,11 +554,6 @@ def bind_graph_to_evidence(
             q, qpaths = _species_file_qualities(
                 species_smiles, files, cfg, match_threshold, partial_quality
             )
-            if not qpaths:
-                # 整络合物标注绑不上 → 逐组分联合覆盖兜底（两层语义见 docstring）
-                q, qpaths = _component_union_coverage(
-                    species_smiles, files, cfg, match_threshold, partial_quality
-                )
             if qpaths:
                 nb.bound_files.extend(qpaths)
             else:
@@ -446,6 +569,28 @@ def bind_graph_to_evidence(
         nb = by_id.get(ts_id)
         if nb is None:
             continue
+        node = next(n for n in graph.nodes if n.id == ts_id)
+        if 'evidence_log' in node.properties:
+            # 绑定列表里所有可用的原生日志（TS opt 与 frequency 常分开提交），
+            # accuracy 才能在频率日志里找到鞍点；缺失路径不等同于伪造证据。
+            # D4: TS 的显式引用同样接受原生 xTB 输出 / .xyz 血缘。
+            for raw in _evidence_paths(node.properties['evidence_log']):
+                try:
+                    path = (sandbox / raw).resolve()
+                    relative = str(path.relative_to(sandbox.resolve()))
+                    ref = next((f for f in available if f.path == relative
+                                and f.kind in {'gaussian', 'orca', 'xyz', 'log'}), None)
+                    ref_usable = ref is not None and (ref.kind in {'xyz', 'log'} or normal_log(path))
+                    if ref_usable:
+                        endpoint_quality = max((min(by_id[e.from_node].quality, by_id[e.to_node].quality)
+                                                for e in graph.edges if e.via == ts_id and e.from_node in by_id and e.to_node in by_id), default=0.0)
+                        nb.bound_files.append(relative)
+                        nb.matched = True
+                        nb.quality = max(nb.quality, endpoint_quality)
+                except (ValueError, OSError):
+                    continue
+            nb.bound_files = sorted(set(nb.bound_files))
+            continue
         for e in graph.edges:
             if e.via != ts_id:
                 continue
@@ -453,7 +598,14 @@ def bind_graph_to_evidence(
             if a is not None and b is not None and a.matched and b.matched:
                 nb.matched = True
                 nb.quality = min(a.quality, b.quality)
-                nb.bound_files = sorted(set(a.bound_files) | set(b.bound_files))
+                from cloudra.benchmark.barrier_evidence import (
+                    _declared_node_energy_hartree,
+                    _identify_by_declared_energy,
+                )
+                declared = _declared_node_energy_hartree(node)
+                candidates = [f.path for f in available if f.kind in {'gaussian', 'orca'}]
+                selected = _identify_by_declared_energy(sandbox, candidates, declared) if declared is not None else None
+                nb.bound_files = [selected] if selected else []
                 break
     return bindings
 
@@ -487,6 +639,23 @@ def audit_integrity(
     report.graph_parseable = True
     report.delivered_graph = graph
 
+    # D1 诊断：报告可达性声明的来源（顶层 / properties / 缺省）。
+    nested_nodes = {n.id: n.accessible for n in graph.nodes
+                    if n.accessible_source == "properties"}
+    nested_edges = {e.id: e.accessible for e in graph.edges
+                    if e.accessible_source == "properties"}
+    defaulted_nodes = [n.id for n in graph.nodes if n.accessible_source == "default"]
+    report.accessible_sources = {
+        "nodes": nested_nodes,
+        "edges": nested_edges,
+        "defaulted_nodes": defaulted_nodes,
+    }
+    if nested_nodes or nested_edges:
+        report.notes.append(
+            "accessible flag read from nested properties (D1 hoist): "
+            f"nodes {sorted(nested_nodes)}, edges {sorted(nested_edges)}"
+        )
+
     # 兜底发现的交付图文件自身排除出证据扫描：其内嵌 SMILES 不构成计算证据
     report.evidence_files = scan_evidence_files(sandbox, exclude=graph_path)
     report.node_bindings = bind_graph_to_evidence(
@@ -495,6 +664,7 @@ def audit_integrity(
         cfg,
         match_threshold=rubric.match_threshold,
         partial_quality=rubric.protonation_partial_quality,
+        sandbox=sandbox,
     )
 
     report.binding_quality = (

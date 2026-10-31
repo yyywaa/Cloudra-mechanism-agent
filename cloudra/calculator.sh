@@ -6,7 +6,7 @@
 # 用法：
 #   calculator.sh <input_file> <job_type> [xtb 任务参数]
 #
-# 其中 job_type 支持：gaussian, vasp, orca, cp2k, xtb
+# 其中 job_type 支持：gaussian, vasp, orca, cp2k, xtb, chem_task, shell
 # job_type=xtb 时透传显式任务参数：
 #   --chrg N --uhf M --task sp|opt|hess|ohess --parallel N [--alpb NAME]
 #
@@ -96,13 +96,71 @@ _resolve_symlink_chain() {
     printf '%s/%s\n' "$dir" "$(basename "$path")"
 }
 
+_orca_uses_external_program() {
+    # Keep the remote entry point self-contained: ORCA keywords are
+    # case-insensitive, quoted values are data, and # comments may close on
+    # the same line. Only native ! ExtOpt / %method ProgExt controls count.
+    awk '
+        function consume(    keyword) {
+            if (word == "") return
+            if (!quoted) {
+                keyword = tolower(word)
+                if (first) {
+                    simple = substr(keyword, 1, 1) == "!"
+                    if (simple) keyword = substr(keyword, 2)
+                    first = 0
+                }
+                if (substr(keyword, 1, 1) == "%") {
+                    block = substr(keyword, 2)
+                    simple = 0
+                } else if (keyword == "end") {
+                    block = ""
+                } else if ((simple && keyword == "extopt") ||
+                           (block == "method" && keyword == "progext")) {
+                    found = 1
+                }
+            }
+            word = ""
+            quoted = 0
+        }
+        {
+            first = 1
+            simple = 0
+            comment = 0
+            for (i = 1; i <= length($0); i++) {
+                char = substr($0, i, 1)
+                if (quote != "") {
+                    if (escaped) escaped = 0
+                    else if (char == "\\") escaped = 1
+                    else if (char == quote) quote = ""
+                } else if (comment) {
+                    if (char == "#") comment = 0
+                } else if (char == "#") {
+                    consume()
+                    comment = 1
+                } else if (char == "\"" || char == sprintf("%c", 39)) {
+                    quote = char
+                    quoted = 1
+                    word = word char
+                } else if (index(" \t\r=;", char)) {
+                    consume()
+                } else {
+                    word = word char
+                }
+            }
+            if (quote == "") consume()
+        }
+        END { exit(found ? 0 : 1) }
+    ' "$1"
+}
+
 run_orca() {
     # ORCA external MLIP（输入含 `%method ProgExt`，如 MACE-OMol25）会把能量/梯度
     # 卸载给 Python 侧的 mace/ase：macOS 上其 libomp 与 ORCA 自带 OpenMP 重复装载
     # 会报 OMP Error #15，且 MACE 需要单线程调用（OMP Error #15 探针见
     # deploy/mace_omol25_orca_external_setup.md §3.1）。仅在输入声明外部 MLIP 时注入，
     # 普通 DFT 任务不设 OMP_NUM_THREADS=1，避免锁死 ORCA 的 OpenMP 线程层。
-    if grep -qE 'ExtOpt|ProgExt' "$INPUT_FILE"; then
+    if _orca_uses_external_program "$INPUT_FILE"; then
         export KMP_DUPLICATE_LIB_OK=TRUE
         export OMP_NUM_THREADS=1
         echo "[calculator] MLIP external route detected: KMP_DUPLICATE_LIB_OK=TRUE OMP_NUM_THREADS=1" >&2
@@ -155,13 +213,25 @@ run_orca() {
     # basename 本身含空白时继续使用作业目录内的硬链接安全名，并在日志留映射。
     local input_arg
     input_arg=$(basename "$INPUT_FILE")
+    local original_stem="${input_arg%.*}"
     local safe_input_name=""
+    local safe_stem=""
     case "$input_arg" in
         *[[:space:]]*)
             safe_input_name=$(printf '%s' "$input_arg" | tr '[:space:]' '_')
             safe_input_name=".cloudra_orasafe_$$_$safe_input_name"
             ln "$INPUT_FILE" "$WORKDIR/$safe_input_name"
             input_arg="$safe_input_name"
+            safe_stem="${safe_input_name%.*}"
+            # Existing same-stem files can be native restart dependencies.
+            # Copy rather than hard-link: ORCA may update them during execution.
+            local existing suffix
+            for existing in "$WORKDIR/$original_stem".*; do
+                [ -f "$existing" ] || continue
+                [ "$existing" = "$WORKDIR/$(basename "$INPUT_FILE")" ] && continue
+                suffix="${existing#"$WORKDIR/$original_stem"}"
+                cp -p -- "$existing" "$WORKDIR/$safe_stem$suffix"
+            done
             echo "[calculator] orca input mapped to safe execution name: $safe_input_name (original: $INPUT_FILE)" >&2
             ;;
     esac
@@ -170,6 +240,25 @@ run_orca() {
     local orca_status=$?
     set -e
     if [ -n "$safe_input_name" ]; then
+        # ORCA names native artifacts after the execution stem. Restore that
+        # stem even when the engine failed; partial artifacts are evidence too.
+        # Preserve an existing destination before replacing it.
+        local artifact target suffix backup_dir
+        backup_dir="$WORKDIR/.cloudra/orca-name-map-$$"
+        mkdir -p "$backup_dir"
+        printf '%s\t%s\n' "$safe_input_name" "$(basename "$INPUT_FILE")" > "$backup_dir/mapping.tsv"
+        for artifact in "$WORKDIR/$safe_stem"*; do
+            [ -e "$artifact" ] || [ -L "$artifact" ] || continue
+            [ "$artifact" = "$WORKDIR/$safe_input_name" ] && continue
+            suffix="${artifact#"$WORKDIR/$safe_stem"}"
+            target="$WORKDIR/$original_stem$suffix"
+            if [ -e "$target" ] || [ -L "$target" ]; then
+                mv -- "$target" "$backup_dir/$(basename "$target")"
+            fi
+            mv -- "$artifact" "$target"
+            printf '%s\t%s\n' "$(basename "$artifact")" "$(basename "$target")" >> "$backup_dir/mapping.tsv"
+            echo "[calculator] orca artifact mapped: $(basename "$artifact") -> $(basename "$target")" >&2
+        done
         rm -f "$WORKDIR/$safe_input_name" || true
     fi
     [ "$orca_status" -eq 0 ] || exit "$orca_status"
@@ -282,6 +371,9 @@ case "$JOB_TYPE" in
         ;;
     xtb)
         run_xtb "$@"
+        ;;
+    shell)
+        exec bash -- "$INPUT_FILE"
         ;;
     *)
         echo "不支持的 job_type: $JOB_TYPE" >&2

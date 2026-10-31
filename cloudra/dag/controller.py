@@ -147,17 +147,18 @@ class DagController(SupervisionMixin, StopAuditMixin, EvidenceInboxMixin, Drafts
                 "rationale": draft["rationale"],
                 "reject_reason": draft["reject_reason"],
             }
+        report = await asyncio.to_thread(self.delivery_report, reuse_science=True)
         projection = build_projection(
             snapshot,
             mode=self.mode,
-            contract=self.contract,
+            report=report,
             history=history,
             pending_reviews=pending,
             rejected_draft=rejected_draft,
         )
         return projection.to_prompt_text(actor_id=self.agent_id)
 
-    def delivery_report(self):
+    def delivery_report(self, *, reuse_science=False):
         """Evaluate the selected delivery, keeping machine facts and reviews separate."""
         if not self.enabled:
             return None
@@ -219,7 +220,7 @@ class DagController(SupervisionMixin, StopAuditMixin, EvidenceInboxMixin, Drafts
             claim_spec=effective_claim, evidence_facts=facts,
         )
         if self.mode is OrchestrationMode.DAG_GUIDED:
-            report = self._apply_review_stage_credits(report, delivery, selected)
+            report = self._apply_review_stage_credits(report, delivery, selected, reuse_science=reuse_science)
         unresolved = list(report.unresolved)
         for missing in sorted(selected - elements.keys()):
             unresolved.append(CoverageGateResult(
@@ -275,7 +276,7 @@ class DagController(SupervisionMixin, StopAuditMixin, EvidenceInboxMixin, Drafts
             ))
         return gaps
 
-    def _apply_review_stage_credits(self, report, delivery, selected):
+    def _apply_review_stage_credits(self, report, delivery, selected, *, reuse_science=False):
         """Require scientific checks AND explicit Supervisor acceptance for file stages.
 
         A per-file review records Supervisor judgment, but it is deliberately
@@ -299,7 +300,7 @@ class DagController(SupervisionMixin, StopAuditMixin, EvidenceInboxMixin, Drafts
             if not set(targets) & selected:
                 continue
             key = (request.kind, targets, normalize_claim(request.question))
-            if request.state == "queued":
+            if request.state in {"queued", "superseded"}:
                 latest[key] = None
                 continue
             if request.state != "resolved":
@@ -337,8 +338,8 @@ class DagController(SupervisionMixin, StopAuditMixin, EvidenceInboxMixin, Drafts
             if not expected:
                 continue
             checks = file_scientific_checks(self.store, delivery, target,
-                                            irc_files=proposal.get("irc_files"), workspace_root=self.working_directory,
-                                            evidence_refs=refs)
+                                            irc_files=proposal.get("irc_files"), endpoint_refs=proposal.get("endpoint_refs"), workspace_root=self.working_directory,
+                                            evidence_refs=refs, use_cache=reuse_science)
             for stage in expected:
                 check = checks[stage]
                 if check["status"] == "passed":
@@ -396,6 +397,10 @@ class DagController(SupervisionMixin, StopAuditMixin, EvidenceInboxMixin, Drafts
             ))
 
         requests = self.store.list_review_requests(state=None)
+        newest = {}
+        for request in requests:
+            key = (request.kind, tuple(sorted(request.target_ids)), normalize_claim(request.question))
+            newest[key] = request
         latest = {}
         for request in requests:
             if request.kind not in {"evidence", "exception"}:
@@ -404,6 +409,12 @@ class DagController(SupervisionMixin, StopAuditMixin, EvidenceInboxMixin, Drafts
             if not relevant:
                 continue
             key = (request.kind, tuple(sorted(request.target_ids)), normalize_claim(request.question))
+            if request.state == 'superseded':
+                latest.pop(key, None)
+                if newest[key].request_id == request.request_id:
+                    for target in sorted(relevant):
+                        gap(target, 'stale_evidence_review', f'Review {request.request_id} is superseded; resubmit current evidence for a new decision.')
+                continue
             # A queued replacement never erases the previous decision. It adds
             # an outstanding review until the Supervisor actually resolves it.
             if request.state == "queued":
@@ -419,7 +430,8 @@ class DagController(SupervisionMixin, StopAuditMixin, EvidenceInboxMixin, Drafts
         for request, decision in latest.values():
             if decision.verdict in {"reject", "needs_evidence"}:
                 for target in sorted(set(request.target_ids) & selected):
-                    gap(target, "supervisor_review_gap", f"{decision.verdict}: {decision.reason}")
+                    gap(target, "supervisor_review_gap",
+                        f"Review {request.request_id} ({request.question}): {decision.verdict}: {decision.reason}")
 
         # Low-level call bindings retain stage-specific decisions. The normal
         # per-file interface above does not split a file into stage submissions.

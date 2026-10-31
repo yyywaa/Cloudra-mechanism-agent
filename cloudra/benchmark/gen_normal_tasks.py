@@ -20,8 +20,9 @@ atom-mapped SMILES registered in `cloudra/benchmark/normal_registry/` (per-famil
 modules), so the indexing convention cannot drift from the query's mapped
 reactants. The registry is validated fail-loud: atom-map conservation and formal
 charge conservation per step, unmapped registry SMILES must equal the pool
-SMILES (reactants and final products), every step must show at least one bond
-order change.
+SMILES (or cover the net equation for schematic tasks), every step must show
+at least one bond order change. Gold structures always use the complete
+mapped registry states.
 
 task_id 口径：normal 的族字母与 easy 有交叉（X 族两档都有），task_id 一律加
 "N" 前缀（池内 A1 -> NA1），family 字段保留池内族字母。system.single_step
@@ -36,6 +37,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -206,18 +208,21 @@ def _validate_task(pid: str, entry: dict, pool_reactants: list[str], pool_produc
     try:
         pool_r = sorted(_canonical_pool(pool_reactants))
         pool_p = sorted(_canonical_pool(pool_products))
-        # 映射反应物的无映射形式必须等于池内反应物（顺序无关）
-        if sorted(_unmap_canonical(entry["mapped_reactants"])) != pool_r:
+        mapped_r = sorted(_unmap_canonical(entry["mapped_reactants"]))
+        schematic = bool(entry.get("smiles_schematic"))
+        # 净反应式允许省略参与物种，完整映射体系仍须包含题面的全部组分。
+        reactants_match = Counter(pool_r) <= Counter(mapped_r) if schematic else mapped_r == pool_r
+        if not reactants_match:
             errors.append(
                 f"mapped_reactants 去映射后与池内反应物不一致: "
-                f"{sorted(_unmap_canonical(entry['mapped_reactants']))} != {pool_r}"
+                f"{mapped_r} != {pool_r}"
             )
         maps = _map_numbers(entry["mapped_reactants"])
         if len(maps) != len(set(maps)):
             errors.append("mapped_reactants 映射号重复")
-        prev = entry["mapped_reactants"]
         steps = entry["steps"]
         for k, step in enumerate(steps, 1):
+            prev = entry["mapped_reactants"] if k == 1 else steps[k - 2]["out"]
             out = step["out"]
             if sorted(_map_numbers(prev)) != sorted(_map_numbers(out)):
                 errors.append(f"第 {k} 步原子不守恒（映射号集合变化）")
@@ -234,12 +239,14 @@ def _validate_task(pid: str, entry: dict, pool_reactants: list[str], pool_produc
             weight = step.get("weight", 1.0)
             if not float(weight) > 0:
                 errors.append(f"第 {k} 步 weight 必须为正: {weight}")
-            prev = out
-        if sorted(_unmap_canonical(steps[-1]["out"])) != pool_p:
-            errors.append(
-                f"末步产物去映射后与池内产物不一致: "
-                f"{sorted(_unmap_canonical(steps[-1]['out']))} != {pool_p}"
-            )
+        if steps:
+            mapped_p = sorted(_unmap_canonical(steps[-1]["out"]))
+            products_match = Counter(pool_p) <= Counter(mapped_p) if schematic else mapped_p == pool_p
+            if not products_match:
+                errors.append(
+                    f"末步产物去映射后与池内产物不一致: "
+                    f"{mapped_p} != {pool_p}"
+                )
     except ValueError as e:
         errors.append(str(e))
     return errors
@@ -250,18 +257,21 @@ def _validate_task(pid: str, entry: dict, pool_reactants: list[str], pool_produc
 # ---------------------------------------------------------------------------
 
 
-def _build_graph(pid: str, reactants: list[str], products: list[str], entry: dict) -> GoldMechanismGraph:
+def _build_graph(pid: str, entry: dict) -> GoldMechanismGraph:
     tid = f"N{pid}"
-    nodes = [MechanismNode(id=f"{tid}_R", role=NodeRole.REACTANT, smiles=complex_smiles(reactants), label="reactant")]
+    nodes = [MechanismNode(id=f"{tid}_R", role=NodeRole.REACTANT,
+                          smiles=complex_smiles(_unmap_canonical(entry["mapped_reactants"])), label="reactant")]
     edges: list[MechanismEdge] = []
-    prev_mapped, prev_id = entry["mapped_reactants"], nodes[0].id
-    n = len(entry["steps"])
-    for k, step in enumerate(entry["steps"], 1):
+    steps = entry["steps"]
+    n = len(steps)
+    for k, step in enumerate(steps, 1):
+        prev_mapped = entry["mapped_reactants"] if k == 1 else steps[k - 2]["out"]
+        prev_id = nodes[0].id if k == 1 else f"{tid}_I{k - 1}"
         last = k == n
         node = MechanismNode(
             id=f"{tid}_P" if last else f"{tid}_I{k}",
             role=NodeRole.PRODUCT if last else NodeRole.INTERMEDIATE,
-            smiles=complex_smiles(products) if last else _unmap_canonical(step["out"]),
+            smiles=complex_smiles(_unmap_canonical(step["out"])),
             label="product" if last else f"intermediate {k}",
         )
         ts = MechanismNode(id=f"{tid}_TS{k}", role=NodeRole.TRANSITION_STATE, smiles=[], label=f"TS{k}")
@@ -278,7 +288,6 @@ def _build_graph(pid: str, reactants: list[str], products: list[str], entry: dic
             )
         )
         nodes.extend([ts, node])
-        prev_mapped, prev_id = step["out"], node.id
     return GoldMechanismGraph(nodes=nodes, edges=edges)
 
 
@@ -317,8 +326,10 @@ def _query(
         f"{conditions_modeling_guidance(conditions)} "
         f"{schematic_clause}"
         f"Atom-mapped reactant SMILES: {mapped}. "
-        "The 1-based map numbers in it are the indexing convention for `bond_changes` "
-        "(keep using the plain SMILES above for graph nodes and evidence annotations). "
+        "The 1-based map numbers in it are the indexing convention for `bond_changes`. "
+        "Graph nodes and `smiles:` evidence annotations must use the unmapped SMILES of the "
+        "complete system actually computed, including any explicitly modeled solvent, catalysts "
+        "and counterions. "
         "The reaction may proceed through a multi-step network: represent each intermediate "
         "you identify as a node and each elementary step as an edge; competing pathways you "
         "investigate deserve their own edges. "
@@ -382,7 +393,7 @@ def parse_normal_md(src: Path, only: set[str] | None = None) -> list[TaskSpec]:
             all_errors[pid] = errors
             continue
 
-        graph = _build_graph(pid, reactants, products, entry)
+        graph = _build_graph(pid, entry)
         barrier_enabled = any(e.barrier_kcal_mol is not None for e in graph.edges)
         name = entry["name_en"]
         conditions = entry["conditions_en"]
