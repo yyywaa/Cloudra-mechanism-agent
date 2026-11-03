@@ -44,7 +44,8 @@ def main() -> None:
                 log.write(line)
                 log.flush()
             code = process.wait()
-        if code not in (0, -15, 143, 241):
+        # Windows os.kill(..., SIGTERM) exits with +15, unlike POSIX signal codes.
+        if code not in (0, 15):
             raise RuntimeError(f"Cloudra exited with code {code}. See {log_path}")
     except Exception as exc:
         ctypes.windll.user32.MessageBoxW(0, str(exc), "Cloudra", 0x10)
