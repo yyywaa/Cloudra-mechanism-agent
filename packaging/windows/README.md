@@ -12,7 +12,7 @@ From a checkout of the `windows` branch:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File packaging/windows/build.ps1
 ```
 
-The script creates `dist/Cloudra-VERSION-windows-x64-Setup.exe`. Intermediate files are under `build/windows-installer`, which the build recreates. Both directories are ignored by Git.
+The script creates `dist/Cloudra-VERSION-windows-x64-Setup.exe`. Intermediate files are under `%TEMP%\cloudra-windows-package`, which the build recreates. A short staging path keeps Inno Setup below its source-path limit even when the checkout lives in a deeply nested folder. The final `dist` directory is ignored by Git.
 
 The payload contains:
 

@@ -2,7 +2,8 @@ $ErrorActionPreference = 'Stop'
 $env:PYTHONUTF8 = '1'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 Set-Location -LiteralPath $repo
-$work = Join-Path $repo 'build\windows-installer'
+# Inno's source reader needs short paths even when Git enables long paths.
+$work = Join-Path ([IO.Path]::GetTempPath()) 'cloudra-windows-package'
 $output = Join-Path $repo 'dist'
 $payload = Join-Path $work 'Cloudra'
 $resources = Join-Path $payload 'resources'
