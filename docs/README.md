@@ -4,6 +4,8 @@
 
 第一次使用，从[安装与第一个任务](../README_CN.md#安装与启动)开始。阅读论文或核查实验结果，从[论文、数据与复现](RESEARCH_DATA_CN.md)开始。
 
+Windows 用户可直接使用 [Setup.exe 原生安装与桌面启动指南](INSTALL_WINDOWS_CN.md)，无需预装 Python 或 Node.js。
+
 ## 使用与理解结果
 
 | 文档 | 你可以在这里找到 |

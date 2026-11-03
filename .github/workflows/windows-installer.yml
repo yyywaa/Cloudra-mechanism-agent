@@ -1,0 +1,157 @@
+name: Windows native installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [windows]
+  pull_request:
+    branches: [windows]
+
+jobs:
+  install:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: Cloudra install smoke
+    steps:
+      - name: Enable long paths for this build runner
+        working-directory: ${{ github.workspace }}
+        run: git config --global core.longpaths true
+
+      - uses: actions/checkout@v4
+        with:
+          path: Cloudra install smoke
+          # Package inputs only; the separate CI still checks the complete checkout.
+          sparse-checkout: |
+            cloudra
+            frontend
+            packaging
+            scripts
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build the bundled native setup wizard
+        shell: powershell
+        run: ./packaging/windows/build.ps1
+
+      - name: Install without user prerequisites and check payload
+        shell: powershell
+        run: |
+          $setup = (Get-ChildItem dist/Cloudra-*-windows-x64-Setup.exe | Select-Object -First 1).FullName
+          $installRoot = Join-Path $env:RUNNER_TEMP 'Cloudra installed smoke'
+          $result = Start-Process -FilePath $setup -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$installRoot`"") -Wait -PassThru
+          if ($result.ExitCode -ne 0) { throw "Setup failed: $($result.ExitCode)" }
+          "CLOUDRA_INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          foreach ($file in @(
+              'resources/python/python.exe',
+              'resources/python/pythonw.exe',
+              'resources/node/node.exe',
+              'resources/frontend/dist/index.html',
+              'resources/python/Lib/site-packages/cloudra/runtime_v2/js_host/node_modules/quickjs-emscripten/package.json',
+              'desktop_launcher.py',
+              'licenses/frontend/packages.json',
+              'BUILD_INFO.json'
+          )) {
+              if (-not (Test-Path -LiteralPath (Join-Path $installRoot $file))) { throw "Missing installed file: $file" }
+          }
+          & "$installRoot/resources/python/python.exe" -c "import sys; print(chr(0x4e2d)); assert sys.stdout.encoding.lower() == 'utf-8'"
+          if ($LASTEXITCODE -ne 0) { throw 'The isolated bundled interpreter cannot print Unicode.' }
+          & "$installRoot/resources/python/python.exe" -m cloudra --version
+          if ($LASTEXITCODE -ne 0) { throw 'The bundled Cloudra interpreter failed.' }
+          & "$installRoot/resources/node/node.exe" --version
+          if ($LASTEXITCODE -ne 0) { throw 'The bundled Node runtime failed.' }
+          $shell = New-Object -ComObject WScript.Shell
+          foreach ($folder in @('DesktopDirectory', 'Programs')) {
+              $link = Join-Path ([Environment]::GetFolderPath($folder)) 'Cloudra.lnk'
+              if (-not (Test-Path -LiteralPath $link)) { throw "Missing shortcut: $link" }
+              $shortcut = $shell.CreateShortcut($link)
+              if ($shortcut.TargetPath -ne (Join-Path $installRoot 'resources/python/pythonw.exe')) {
+                  throw "Shortcut does not use bundled pythonw.exe: $link"
+              }
+              if ($shortcut.Arguments -ne ('"' + (Join-Path $installRoot 'desktop_launcher.py') + '"')) {
+                  throw "Shortcut does not use the installed desktop launcher: $link"
+              }
+          }
+          $stopLink = Join-Path ([Environment]::GetFolderPath('Programs')) 'Stop Cloudra.lnk'
+          if (-not (Test-Path -LiteralPath $stopLink)) { throw 'Missing Stop Cloudra shortcut.' }
+          $stopShortcut = $shell.CreateShortcut($stopLink)
+          if ($stopShortcut.Arguments -ne ('"' + (Join-Path $installRoot 'desktop_launcher.py') + '" --stop')) {
+              throw 'Stop Cloudra shortcut does not forward to the installed launcher.'
+          }
+
+      - name: Start the installed web service with isolated empty data
+        shell: powershell
+        run: |
+          $root = $env:CLOUDRA_INSTALL_ROOT
+          $python = Join-Path $root 'resources/python/python.exe'
+          $env:CLOUDRA_DATA_DIR = Join-Path $env:RUNNER_TEMP 'cloudra-native-smoke-data'
+          $env:CLOUDRA_CONFIG_FILE = Join-Path $env:RUNNER_TEMP 'cloudra-native-smoke-config.yaml'
+          $env:CLOUDRA_NO_BROWSER = '1'
+          $env:CLOUDRA_API_PORT = '8765'
+          Remove-Item Env:CLOUDRA_RUNTIME_STORE -ErrorAction SilentlyContinue
+          $launcher = Join-Path $root 'desktop_launcher.py'
+          $runtime = Start-Process -FilePath "$root/resources/python/pythonw.exe" -ArgumentList ('"' + $launcher + '"') -WorkingDirectory "$root/resources" -PassThru
+          try {
+              $healthy = $false
+              for ($attempt = 0; $attempt -lt 60; $attempt++) {
+                  try {
+                      $response = Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8765/api/v2/runtime/health' -TimeoutSec 2
+                      if ($response.StatusCode -eq 200) { $healthy = $true; break }
+                  } catch { }
+                  if ($runtime.HasExited) { break }
+                  Start-Sleep -Seconds 1
+              }
+              if (-not $healthy) {
+                  $log = Join-Path $env:LOCALAPPDATA 'Cloudra/logs/desktop-launch.log'
+                  if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Tail 80 }
+                  throw 'Installed Cloudra never became healthy through its desktop launcher.'
+              }
+              $page = Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8765/' -TimeoutSec 5
+              if ($page.StatusCode -ne 200) { throw 'Installed frontend did not load.' }
+              Push-Location "$root/resources/python/Lib/site-packages/cloudra/runtime_v2/js_host"
+              try {
+                  & "$root/resources/node/node.exe" --test host.test.mjs
+                  if ($LASTEXITCODE -ne 0) { throw 'The packaged JavaScript host failed.' }
+              } finally { Pop-Location }
+          } finally {
+              & $python -m cloudra stop
+              if (-not $runtime.WaitForExit(30000)) { throw 'The packaged desktop launcher did not exit after cloudra stop.' }
+          }
+
+      - name: Capture the real native setup window
+        continue-on-error: true
+        shell: powershell
+        run: |
+          $setup = (Get-ChildItem dist/Cloudra-*-windows-x64-Setup.exe | Select-Object -First 1).FullName
+          Start-Process -FilePath $setup -ArgumentList '/SP-'
+          Start-Sleep -Seconds 4
+          Add-Type -AssemblyName System.Windows.Forms
+          Add-Type -AssemblyName System.Drawing
+          $bounds = [Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bitmap = New-Object Drawing.Bitmap $bounds.Width, $bounds.Height
+          $graphics = [Drawing.Graphics]::FromImage($bitmap)
+          $graphics.CopyFromScreen($bounds.Location, [Drawing.Point]::Empty, $bounds.Size)
+          $bitmap.Save((Join-Path (Get-Location) 'dist/windows-installer-preview.png'))
+          $graphics.Dispose()
+          $bitmap.Dispose()
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-x64
+          path: Cloudra install smoke/dist/Cloudra-*-windows-x64-Setup.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-preview
+          path: Cloudra install smoke/dist/windows-installer-preview.png
+          if-no-files-found: warn
+          retention-days: 14
