@@ -1,50 +1,56 @@
-# Windows beginner installation: open Cloudra with a double-click
+# Install Cloudra on Windows with Setup.exe
 
 [中文](INSTALL_WINDOWS_CN.md) · [Project home](../README.md)
 
-This guide runs Cloudra natively on Windows. You do not need WSL, Git, or terminal commands. The first installation needs an internet connection; use 64-bit Windows 10/11.
+Use the native Windows installer. **You do not need to install Python, Node.js, Git, or WSL first.** The package includes the runtimes, Cloudra core dependencies, JavaScript tool host, and prebuilt web interface.
 
-## 1. Install Python and Node.js
+The current build targets Windows 10/11 x64. The installer is unsigned; a test build is not a formal release. Install quantum-chemistry tools separately as needed.
 
-You only need to install these once. Skip ahead if Python ≥ 3.11, Node.js ≥ 22.12, and npm are already installed.
+## 1. Download the installer
 
-1. Open the [official Python Windows downloads page](https://www.python.org/downloads/windows/) and choose the **Python 3.13 Windows installer (64-bit)**. Run it, check **Add python.exe to PATH**, and click **Install Now**. Keep the default pip and Python Launcher options. Most Intel/AMD PCs use the 64-bit installer; choose the matching architecture for an ARM PC.
-2. Open the [official Node.js download page](https://nodejs.org/en/download) and choose **Windows Installer (.msi)**. We suggest the **latest maintained 22.x release**, with **22.12** as the minimum. Keep the default npm and PATH options. You do not need the optional native-module compilation tools.
-3. Close any installation windows opened before these installations. If Cloudra still cannot find Python or Node.js, sign out of Windows and sign back in.
+When a package is available on the [releases page](https://github.com/yyywaa/Cloudra-mechanism-agent/releases), choose **Cloudra-VERSION-windows-x64-Setup.exe**. A source ZIP is not an installer.
 
-See Python's official [installation steps](https://docs.python.org/3.13/using/windows.html#installation-steps) for the installer options. Do not use the embeddable ZIP distribution.
+During PR review, packages are produced by the [Windows native installer workflow](https://github.com/yyywaa/Cloudra-mechanism-agent/actions/workflows/windows-installer.yml):
 
-## 2. Download the Windows branch
+1. Open a successful workflow run for the branch or PR you intend to test.
+2. Under **Artifacts**, download **windows-installer-x64**. GitHub usually requires you to sign in.
+3. Extract the downloaded ZIP and open **Cloudra-VERSION-windows-x64-Setup.exe** inside it.
 
-1. Open the repository's [windows branch](https://github.com/yyywaa/Cloudra-mechanism-agent/tree/windows). Check that the branch selector says **windows**, then choose **Code → Download ZIP**. You can also [download the windows ZIP directly](https://github.com/yyywaa/Cloudra-mechanism-agent/archive/refs/heads/windows.zip).
-2. Right-click the downloaded ZIP and open **Properties**. If **Unblock** appears, check it after verifying that the file came from the repository above, then apply. Right-click the ZIP and choose **Extract All**. Do not run the installer inside a ZIP preview.
-3. Keep the extracted project folder in a permanent location, such as `C:\Cloudra` or a `Cloudra` folder in your user directory. Prefer a short path. The desktop shortcut will point to this folder.
+These are test packages. Do not treat a build as verified until its installation checks pass. The same run's **windows-installer-preview** artifact contains a screenshot of the actual setup wizard.
 
-Use the **windows branch** for this guide. The master branch targets Linux/macOS.
+## 2. Click through setup
 
-## 3. Double-click the installer
+1. Double-click **Setup.exe**. If Windows shows an unknown-publisher warning, verify that the file came from the repository and build above. Current packages are unsigned. Do not disable SmartScreen or security software, or bypass your organization's policy.
+2. Click **Next**, read the license, choose an installation folder, and click **Install**. No model names or API keys are requested.
+3. Installation is per-user and does not require administrator privileges. The default location is `%LOCALAPPDATA%\Programs\Cloudra`.
+4. The desktop shortcut is selected by default; a **Cloudra** Start menu entry is also created. On the final page, leave **Launch Cloudra** checked and click **Finish** to open the interface.
 
-Open the project folder and double-click **install.cmd**. If file extensions are hidden, it may appear as **install**, with type “Windows Command Script.”
+Setup uses files already in the package; it does not download Python, Node.js, or frontend dependencies. Model requests and online tools still require internet access.
 
-The window creates a project-local Python environment, installs Cloudra's core dependencies and JavaScript tool runtime, and installs and builds the web interface. Allow a few minutes for the first download and keep the window open until **Installation complete** appears. A **Cloudra** shortcut will then appear on your desktop.
+## 3. Start using Cloudra
 
-Installation does not ask for model credentials or require administrator access. The script sets the PowerShell execution policy only for its own process. If Windows or an organization policy blocks execution, keep the message and contact your administrator; do not turn off protection features.
+Double-click **Cloudra** on the desktop or use the Start menu. It starts the local service and opens your default browser without a console window.
 
-## 4. Open Cloudra from the desktop
+1. Open **Global Settings** in the left sidebar, configure the coordinator and follower models, addresses, and credentials, or select ChatGPT / Codex account login, then save.
+2. Create a project, choose a working directory, and describe your research task. See the [configuration guide](CONFIGURATION.md) for model and web-search settings.
+3. Install ORCA, Gaussian, xTB, CREST, or configure remote compute nodes according to your task. Installing Cloudra does not install these engines.
 
-1. Double-click **Cloudra** on your desktop. A console window opens, followed by the Cloudra interface in your default browser.
-2. Open **Global Settings** in the left sidebar, fill in the coordinator and follower models, service addresses, and credentials, then save. You can also choose ChatGPT / Codex account login.
-3. Create a project, choose a working directory, and describe your research task. See the [configuration guide](CONFIGURATION.md) for model and web-search settings.
+Closing the browser tab does not stop Cloudra or automatically end calculations. Clicking the shortcut again reopens the running service. To exit the service, select **Stop Cloudra** in the Start menu; active quantum-chemistry jobs retain their existing independent lifecycle. Before updating or uninstalling, end any research tasks you need to stop in Cloudra, then choose Stop Cloudra.
 
-Keep the console window open while using Cloudra. Closing the browser tab does not stop Cloudra. To stop the web service, press **Ctrl+C** in the console window; quantum-chemistry jobs have a separate lifecycle. Double-click the desktop shortcut to open it again. When Cloudra is already running, the shortcut reuses that service and opens the browser.
+## Updates, removal, and help
 
-## Help
+- **Update:** download the new installer, stop the Cloudra service, and run setup again. Setup does not force-close running Python or quantum-chemistry processes.
+- **Uninstall:** open Windows **Settings → Apps → Installed apps**, find **Cloudra**, and uninstall. Keep your project files and user data separately; they are not disposable installation files.
+- **Interface will not open:** startup failures display a message. The launch log is `%LOCALAPPDATA%\Cloudra\logs\desktop-launch.log`. Share the earliest error when requesting help, after removing personal paths or credentials.
+- **No desktop shortcut:** use the Start menu, or rerun setup with the desktop shortcut selected. If OneDrive manages the desktop, setup uses Windows' actual desktop directory.
+- **Optional dependencies:** the package includes the core runtime. Optional chemistry, browser, PDF, visualization components, and external scientific tools need separate task-specific setup; local tools must support Windows.
 
-- **Python, Node.js, or npm not found:** complete step 1, sign out of Windows and back in, then run `install.cmd` again. Use the official Node.js installer with npm included.
-- **Download or installation failure:** keep the specific error shown in the window. Check your connection and double-click `install.cmd` again. It reuses `.venv`, reinstalls dependencies, rebuilds the web interface, and recreates the shortcut.
-- **Startup failure:** the error window stays open. Copy or capture the first error, or double-click `launch-cloudra.cmd` in the project folder.
-- **No desktop shortcut:** check whether installation finished successfully. If OneDrive manages your desktop, the shortcut uses Windows' actual desktop folder. You can also use the project's `launch-cloudra.cmd` directly.
-- **Project folder moved:** Python virtual environments should be recreated after moving. Delete `.venv` inside the moved project folder and double-click `install.cmd` again. The desktop shortcut updates to the new location. You do not need to delete Cloudra research data or global settings.
-- **“Windows protected your PC”:** verify the source and file contents first. Follow Windows' prompts or unblock only this trusted download. Do not disable SmartScreen or security software.
+See [deployment and configuration](README_EN.md#deployment-and-configuration) for SSH and Slurm remote calculations.
 
-The installer installs Cloudra's core runtime dependencies. Install ORCA, Gaussian, xTB, CREST, and optional chemistry, browser, PDF, or visualization dependencies separately as needed; local tools must support Windows. For remote computations, see [SSH remote nodes](../deploy/ssh_remote_node.md) and [HPC / Slurm deployment](../deploy/hpc_cluster_deployment.md).
+## Developer or source installation
+
+Ordinary users can skip this section. To modify the code, use the [windows branch](https://github.com/yyywaa/Cloudra-mechanism-agent/tree/windows), install [Python 3.13](https://www.python.org/downloads/windows/) with **Add python.exe to PATH**, and install [Node.js 22.12 or newer](https://nodejs.org/en/download) with npm.
+
+Extract the source into a permanent folder and double-click **install.cmd**. This source-installation path uses a console window and an internet connection to create `.venv`, install core dependencies, build the frontend, and create a shortcut pointing to the source folder. It is separate from the native Setup.exe installation above. If you move the source folder, delete its `.venv` and rerun `install.cmd`; do not delete research data or global settings.
+
+See the [Windows packaging notes](../packaging/windows/README.md) to build the native installer.

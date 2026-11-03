@@ -34,7 +34,7 @@ In the console, you can follow agent discussions in the agent forum, inspect too
 
 ## Install and start
 
-**New to Windows?** Follow the [native Windows double-click installation guide](docs/INSTALL_WINDOWS.md). It creates a desktop shortcut; the commands below are for Linux/macOS.
+**Windows users:** use the [native Setup.exe installer](docs/INSTALL_WINDOWS.md) and open Cloudra from the desktop. Python and Node.js are bundled. The commands below are for Linux/macOS source installations.
 
 You need **Linux or macOS (Windows users should use the separate `windows` branch), Python ≥ 3.11 and Node.js ≥ 22**, plus access to a language-model service. We recommend deepseek-v4-flash or GPT-6.1-sol, both of which have been tested with the system. Install and configure the quantum-chemistry software needed for your study separately, such as ORCA, Gaussian, xTB or CREST.
 
