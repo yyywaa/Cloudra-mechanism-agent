@@ -22,6 +22,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: Cloudra install smoke
+          # Package inputs only; the separate CI still checks the complete checkout.
+          sparse-checkout: |
+            cloudra
+            frontend
+            packaging
+            scripts
 
       - uses: actions/setup-python@v5
         with:
@@ -55,6 +61,8 @@ jobs:
           )) {
               if (-not (Test-Path -LiteralPath (Join-Path $installRoot $file))) { throw "Missing installed file: $file" }
           }
+          & "$installRoot/resources/python/python.exe" -c "import sys; print(chr(0x4e2d)); assert sys.stdout.encoding.lower() == 'utf-8'"
+          if ($LASTEXITCODE -ne 0) { throw 'The isolated bundled interpreter cannot print Unicode.' }
           & "$installRoot/resources/python/python.exe" -m cloudra --version
           if ($LASTEXITCODE -ne 0) { throw 'The bundled Cloudra interpreter failed.' }
           & "$installRoot/resources/node/node.exe" --version
@@ -118,6 +126,7 @@ jobs:
           }
 
       - name: Capture the real native setup window
+        continue-on-error: true
         shell: powershell
         run: |
           $setup = (Get-ChildItem dist/Cloudra-*-windows-x64-Setup.exe | Select-Object -First 1).FullName
@@ -144,5 +153,5 @@ jobs:
         with:
           name: windows-installer-preview
           path: Cloudra install smoke/dist/windows-installer-preview.png
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14

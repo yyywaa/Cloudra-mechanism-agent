@@ -39,6 +39,7 @@ Expand-Archive -LiteralPath $pythonZip -DestinationPath $pythonDir
 $sitePackages = Join-Path $pythonDir 'Lib\site-packages'
 Write-Host '[Cloudra] Installing core application dependencies into the bundle...'
 Invoke-Checked $buildPython @('-m', 'pip', 'install', '--target', $sitePackages, $repo)
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'sitecustomize.py') -Destination $sitePackages
 # The source commit is recorded below; do not ship a builder's local path.
 Get-ChildItem -LiteralPath $sitePackages -Directory -Filter 'cloudra-*.dist-info' | ForEach-Object {
     Remove-Item -LiteralPath (Join-Path $_.FullName 'direct_url.json') -ErrorAction SilentlyContinue

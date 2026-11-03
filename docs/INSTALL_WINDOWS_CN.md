@@ -16,7 +16,7 @@ PR 审查期间，安装包由 [Windows native installer 工作流](https://gith
 2. 在页面下方 **Artifacts** 下载 **windows-installer-x64**（通常需要登录 GitHub）。
 3. 解压下载的 ZIP，取出其中的 **Cloudra-版本号-windows-x64-Setup.exe**。
 
-构建产物属于测试包；工作流通过之前不能将其视为已验证的发布版本。同一次构建的 **windows-installer-preview** 提供实际安装向导截图。
+构建产物属于测试包；工作流通过之前不能将其视为已验证的发布版本。运行器支持桌面截图时，同一次构建的 **windows-installer-preview** 提供实际安装向导截图。
 
 ## 2. 点击安装
 

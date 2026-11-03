@@ -19,6 +19,7 @@ The payload contains:
 - `resources/python`: the official x64 embeddable CPython runtime and core Python dependencies, including Cloudra and its JavaScript host dependencies.
 - `resources/node`: Node.js and its license; no npm is required at runtime.
 - `resources/frontend`: the frontend package descriptor and prebuilt `dist`.
+- `resources/python/Lib/site-packages/sitecustomize.py`: UTF-8 standard streams for the isolated embeddable runtime, including service subprocesses.
 - `desktop_launcher.py`: a windowless shortcut entrypoint using the bundled interpreter and the existing `cloudra web --skip-build` command.
 - `licenses/frontend`: production frontend dependencies' original license and notice texts, copied by the shared collector.
 - `LICENSE` and `BUILD_INFO.json`: the project license, exact source commit, and runtime versions. Dependency licenses remain in their runtime distributions and wheel metadata.
@@ -29,4 +30,4 @@ Runtime downloads are checked against the official Python release checksum and N
 
 The [Windows native installer workflow](../../.github/workflows/windows-installer.yml) builds the EXE, runs an actual per-user silent installation into a path containing spaces, checks both shortcuts and the bundled runtimes, then starts the installed web service with isolated empty data and checks the UI and JavaScript host. No model calls or quantum-chemistry calculations are run.
 
-The workflow uploads `windows-installer-x64` and a screenshot of the real native wizard as `windows-installer-preview`. Builds remain unsigned unless signing is explicitly configured later; this workflow does not publish a release.
+The workflow uploads `windows-installer-x64` after the installation and runtime checks pass. Desktop capture is optional; when available, a screenshot of the real native wizard is uploaded as `windows-installer-preview`. Builds remain unsigned unless signing is explicitly configured later; this workflow does not publish a release.

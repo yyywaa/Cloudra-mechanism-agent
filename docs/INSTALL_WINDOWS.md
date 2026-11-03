@@ -16,7 +16,7 @@ During PR review, packages are produced by the [Windows native installer workflo
 2. Under **Artifacts**, download **windows-installer-x64**. GitHub usually requires you to sign in.
 3. Extract the downloaded ZIP and open **Cloudra-VERSION-windows-x64-Setup.exe** inside it.
 
-These are test packages. Do not treat a build as verified until its installation checks pass. The same run's **windows-installer-preview** artifact contains a screenshot of the actual setup wizard.
+These are test packages. Do not treat a build as verified until its installation checks pass. When the runner supports desktop capture, the same run's **windows-installer-preview** artifact contains a screenshot of the actual setup wizard.
 
 ## 2. Click through setup
 

@@ -16,7 +16,6 @@ def main() -> None:
     env = os.environ.copy()
     env["PATH"] = os.pathsep.join((str(resources / "python"), str(resources / "node"), env.get("PATH", "")))
     env["CLOUDRA_FRONTEND_DIR"] = str(resources / "frontend")
-    env["PYTHONUTF8"] = "1"
     log_dir = Path(env["LOCALAPPDATA"]) / "Cloudra" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / "desktop-launch.log"
