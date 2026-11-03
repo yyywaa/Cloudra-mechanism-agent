@@ -1,0 +1,62 @@
+name: Windows beginner installer
+
+on:
+  push:
+    branches: [windows]
+  pull_request:
+    branches: [windows]
+
+jobs:
+  install:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: Cloudra install smoke
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Users commonly extract the ZIP into a folder with spaces.
+          path: Cloudra install smoke
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run the double-click installer
+        shell: cmd
+        run: install.cmd
+
+      - name: Check desktop shortcut and installed runtime
+        shell: powershell
+        run: |
+          $root = (Get-Location).Path
+          $desktop = [Environment]::GetFolderPath('DesktopDirectory')
+          $shell = New-Object -ComObject WScript.Shell
+          $shortcut = $shell.CreateShortcut((Join-Path $desktop 'Cloudra.lnk'))
+          if ($shortcut.TargetPath -ne (Join-Path $root 'launch-cloudra.cmd')) {
+              throw 'Desktop shortcut does not target the installed launcher.'
+          }
+          if ($shortcut.WorkingDirectory -ne $root) {
+              throw 'Desktop shortcut has the wrong working directory.'
+          }
+          foreach ($file in @(
+              '.venv\Scripts\python.exe',
+              '.venv\cloudra-node-path.txt',
+              'frontend\dist\index.html',
+              'cloudra\runtime_v2\js_host\node_modules\quickjs-emscripten\package.json'
+          )) {
+              if (-not (Test-Path -LiteralPath $file)) { throw "Missing installation output: $file" }
+          }
+          & .\.venv\Scripts\python.exe -c 'import sys; assert sys.version_info[:2] == (3, 13)'
+          if ($LASTEXITCODE -ne 0) { throw 'The installer did not use the configured Python 3.13.' }
+          & .\launch-cloudra.cmd --version
+          if ($LASTEXITCODE -ne 0) { throw 'The installed Cloudra launcher failed.' }
+
+      - name: Exercise the JavaScript host
+        shell: cmd
+        run: npm test --prefix cloudra/runtime_v2/js_host

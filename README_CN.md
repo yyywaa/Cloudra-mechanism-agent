@@ -34,6 +34,8 @@ Cloudra会继续维护，我们会增强Agent的性能，尝试引入周期性�
 
 ## 安装与启动
 
+**Windows 新手用户：**请按[原生 Windows 双击安装指南](docs/INSTALL_WINDOWS_CN.md)操作。安装后可从桌面打开 Cloudra；以下命令面向 Linux/macOS。
+
 需要 **Linux 或 macOS（windows系统请下载另外的windows分支）、Python ≥ 3.11、Node.js ≥ 22**，以及可用的语言模型服务（推荐deepseek-v4-flash，或GPT-6.1-sol，它们在系统中经过测试）。量子化学软件按研究任务另行安装和配置，例如 ORCA、Gaussian、xTB 或 CREST。
 
 ```bash

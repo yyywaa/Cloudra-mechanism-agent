@@ -6,6 +6,8 @@ For a first study, start with [installation and your first task](../README.md#in
 
 The landing pages, configuration guide and research-data overview are available in both languages. Detailed chemistry, deployment and API references are currently mainly in Chinese.
 
+Windows users can follow the [double-click installer and desktop launch guide](INSTALL_WINDOWS.md).
+
 ## Use Cloudra and inspect results
 
 | Guide | What you will find |
