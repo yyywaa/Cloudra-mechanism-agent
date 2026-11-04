@@ -189,5 +189,6 @@ jobs:
 
       - name: Run tests with the full optional-dependency set
         # 与 test 矩阵同一条命令：差别只在依赖装齐，跳过的那批用例真的执行
-        run: pytest tests -q -o faulthandler_timeout=300
+        # Show each test name so a hang identifies the blocked scenario.
+        run: pytest tests -vv -o faulthandler_timeout=300
 
