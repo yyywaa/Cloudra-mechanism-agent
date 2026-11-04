@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-import csv, statistics, collections
+import csv
+import statistics
 
 rows = list(csv.DictReader(open("/home/ly/cloudra-p1b-rescore/results.csv")))
 ARMS = ("guided", "record", "standard", "brief-errors")
 TIER = {"E1": "easy", "NB1": "normal", "HA1": "hard", "IA1": "impossible"}
 
+
 def f(x):
     return float(x) if x not in (None, "", "None") else None
+
 
 print(f"rows: {len(rows)}")
 print()
@@ -18,8 +21,10 @@ for arm in ARMS:
     new = [f(r["new_final"]) for r in a if f(r["new_final"]) is not None]
     if not a:
         continue
-    print(f"{arm:13s} {len(a):3d} {statistics.mean(old):9.3f} {statistics.mean(new):9.3f} "
-          f"{statistics.mean(new)-statistics.mean(old):+7.3f} {min(old):+8.3f} {min(new):+8.3f}")
+    print(
+        f"{arm:13s} {len(a):3d} {statistics.mean(old):9.3f} {statistics.mean(new):9.3f} "
+        f"{statistics.mean(new) - statistics.mean(old):+7.3f} {min(old):+8.3f} {min(new):+8.3f}"
+    )
 
 print()
 print("=== by tier: old -> new mean final ===")

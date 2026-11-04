@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Select requested same-backbone guided-standard contrasts; no new tests."""
+
 from pathlib import Path
 
 import pandas as pd
-
 
 p = Path(__file__).parent
 src = Path("/Users/cloudrayyy/Desktop/Cloudra实验数据/Cloudra-P2-final-20261031")
@@ -43,26 +43,51 @@ for name in ["exclude_any_standard_missing_graph", "exclude_raw_fallback_and_all
     add("discussion_sensitivity", name, row)
     # These subset task IDs are already documented in the analysis metadata.
     import json
+
     meta = json.loads((p / "metadata.json").read_text())
-    dropped = set(meta["standard_missing_graph_tasks"] if name == "exclude_any_standard_missing_graph"
-                  else meta["fallback_tasks"] + meta["all_repair_tasks"])
+    dropped = set(
+        meta["standard_missing_graph_tasks"]
+        if name == "exclude_any_standard_missing_graph"
+        else meta["fallback_tasks"] + meta["all_repair_tasks"]
+    )
     sub = per_task[~per_task.task.isin(dropped)]
     rows[-1].update(guided_mean=float(sub.guided.mean()), baseline_mean=float(sub.standard.mean()))
 
 # Published reconstruction provenance supplies REPAIRED components. The final CSV's
 # component columns on these rows are pre-repair zeros and must not be substituted.
 for task, graph, selfc, accuracy, finding in [
-    ("HA1", 1.0, 0.0, 0.0,
-     "Both stereochemical channels were proposed, but neither saddle converged; no barriers, IRC, endpoint verification or favored-channel conclusion could be reconstructed."),
-    ("HF1", 0.799505475368673, 0.875, 0.0,
-     "Both diastereofacial channels had frequency/IRC/endpoint evidence; run favored anti/trans by 0.43 kcal/mol, contrary to the reference's syn/directing-face preference."),
+    (
+        "HA1",
+        1.0,
+        0.0,
+        0.0,
+        "Both stereochemical channels were proposed, but neither saddle converged; no barriers, IRC, endpoint verification or favored-channel conclusion could be reconstructed.",
+    ),
+    (
+        "HF1",
+        0.799505475368673,
+        0.875,
+        0.0,
+        "Both diastereofacial channels had frequency/IRC/endpoint evidence; run favored anti/trans by 0.43 kcal/mol, contrary to the reference's syn/directing-face preference.",
+    ),
 ]:
     row = per_task[per_task.task == task].iloc[0]
-    add("discussion_reconstructed_case", task,
-        dict(task=task, n=1, guided_mean=row.guided, baseline_mean=row.standard,
-             mean_difference=row.guided-row.standard, baseline_graph=graph,
-             baseline_selfc=selfc, baseline_accuracy=accuracy, finding=finding,
-             provenance=str(src / "reconstructions" / "standard" / task / "provenance.md")))
+    add(
+        "discussion_reconstructed_case",
+        task,
+        dict(
+            task=task,
+            n=1,
+            guided_mean=row.guided,
+            baseline_mean=row.standard,
+            mean_difference=row.guided - row.standard,
+            baseline_graph=graph,
+            baseline_selfc=selfc,
+            baseline_accuracy=accuracy,
+            finding=finding,
+            provenance=str(src / "reconstructions" / "standard" / task / "provenance.md"),
+        ),
+    )
 
 pd.DataFrame(rows).to_csv(p / "baseline_comparison.csv", index=False)
 print(pd.DataFrame(rows).to_string(index=False))
