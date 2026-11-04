@@ -410,7 +410,12 @@ def test_calculator_script_xtb_missing_binary(tmp_path, monkeypatch):
     """PATH 无 xtb：明确报错并非零退出。"""
     bindir = tmp_path / "bin"
     bindir.mkdir()
+    # Keep the startup utility available while deliberately hiding xTB.
+    dirname = shutil.which("dirname")
+    assert dirname is not None
+    (bindir / "dirname").symlink_to(dirname)
     monkeypatch.setenv("PATH", str(bindir))
+    assert shutil.which("xtb") is None
 
     script_path = Path(__file__).parent.parent / "cloudra" / "calculator.sh"
     xyz = tmp_path / "water.xyz"
@@ -421,7 +426,8 @@ def test_calculator_script_xtb_missing_binary(tmp_path, monkeypatch):
         text=True,
     )
     assert result.returncode != 0
-    assert "xtb" in result.stderr
+    assert "系统 PATH 中未找到 xtb" in result.stderr
+    assert "command not found" not in result.stderr
 
 
 # 本机有真实 xtb 时顺手实测 calculator.sh 路径（无二进制即 skip）
@@ -484,3 +490,4 @@ def test_electronic_analysis_xtb_stdout_parser_matches_shared_primitives():
     data = ElectronicAnalysis._parse_xtb_stdout(SP_FIXTURE.read_text())
     assert data["total_energy_eh"] == pytest.approx(-5.070320041234)
     assert data["gap_ev"] == pytest.approx(12.345678901234)
+
