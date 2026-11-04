@@ -64,6 +64,8 @@ You can also use Cloudra as a general research assistant for literature searches
 
 See [Configuration](docs/CONFIGURATION.md) for model login, web search, common commands and remote access.
 
+The default protocol is `javascript`; `traditional` is a per-agent opt-in.
+
 ## Three working modes
 
 Choose a mode in project settings:
@@ -97,3 +99,4 @@ If you use Cloudra in research, please cite the manuscript and record the softwa
 ## License
 
 Cloudra is licensed under [AGPL-3.0-or-later](LICENSE). Skills in `cloudra/skills/` that declare MIT use the MIT license. Bundled third-party components retain their own licenses; see [third-party attribution](docs/licenses/README.md). Contributions use the Developer Certificate of Origin; sign off commits with `git commit -s`.
+

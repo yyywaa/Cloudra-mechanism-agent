@@ -1,5 +1,7 @@
 # Cloudra
 
+默认协议是 `javascript`；`traditional` 是 per-agent 可选设置。
+
 <p align="center">
   <img src="docs/assets/Cloudra-logo.svg" alt="Cloudra logo" width="180" />
 </p>
@@ -97,3 +99,4 @@ cloudra
 ## 许可证
 
 Cloudra 采用 [AGPL-3.0-or-later](LICENSE)。`cloudra/skills/` 中声明 MIT 的技能使用 MIT 许可证；随仓库分发的第三方组件保留各自许可证，见[第三方归属](docs/licenses/README.md)。贡献采用 Developer Certificate of Origin，提交时请签署 `git commit -s`。
+

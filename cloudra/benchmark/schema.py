@@ -74,7 +74,7 @@ class MechanismNode(BaseModel):
     # accessible 写在 properties 里的历史形状，加载时提升到顶层）、default
     # （两处都没写，按默认 accessible=true 处理）。gold 侧恒为 top_level。
     # 只作诊断/报告用，不参与任何评分口径。
-    accessible_source: Literal["top_level", "properties", "default"] = "top_level"
+    accessible_source: Literal["top_level", "properties", "default"] = Field(default="top_level", exclude=True)
     label: str = ""
     properties: dict[str, Any] = Field(default_factory=dict)
 
@@ -136,7 +136,7 @@ class MechanismEdge(BaseModel):
     bond_changes: BondChangeSet = Field(default_factory=BondChangeSet)
     accessible: bool = True
     # 同 MechanismNode.accessible_source：边级可达性声明的来源，仅诊断用。
-    accessible_source: Literal["top_level", "properties", "default"] = "top_level"
+    accessible_source: Literal["top_level", "properties", "default"] = Field(default="top_level", exclude=True)
     barrier_kcal_mol: Optional[float] = None
     weight: float = 1.0
     channel: Optional[str] = None
@@ -357,3 +357,4 @@ def complex_smiles(components: list[str]) -> list[str]:
     if len(components) <= 1:
         return list(components)
     return [".".join(components)]
+

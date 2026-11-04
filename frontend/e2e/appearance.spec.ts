@@ -1,6 +1,18 @@
 import { expect, test, type Page } from '@playwright/test';
 import { AGENT, JOB, PROJECT_ACTIVE, installApiMocks, openSpa } from './fixtures';
 
+test('default Acid appearance exposes the project form on demand', async ({ page }) => {
+  await installApiMocks(page, { appearance: 'default', jobs: [] });
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('data-appearance', 'acid');
+  const toggle = page.locator('.acid-project-create-toggle');
+  const name = page.getByPlaceholder('新建项目名…');
+  await expect(name).toBeHidden();
+  await toggle.click();
+  await expect(name).toBeVisible();
+  await expect(name).toBeFocused();
+});
+
 async function mockAppearanceSettings(page: Page) {
   const slot = { provider: 'custom', model: 'test-model', url: 'https://llm.example/v1', key_set: true, context_window: 200000, timeout: 300, supports_vision: true, reasoning_effort: 'high' };
   await page.route('**/api/v2/runtime/config', (route) => route.fulfill({ json: {
@@ -378,3 +390,4 @@ test('Acid gives the reaction network the main stage and keeps inspection contro
     if (width < 1240) await page.screenshot({ path: `/tmp/cloudra-acid-inspection-${width}x${height}.png`, fullPage: true, animations: 'disabled' });
   }
 });
+
