@@ -46,8 +46,8 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    # 任何测试挂起时 15 分钟快速失败，而不是空烧默认 6 小时
-    timeout-minutes: 15
+    # 与 master 一致，为依赖安装和完整测试保留足够时间。
+    timeout-minutes: 30
     strategy:
       # 一格挂掉不许取消其余格：fail-fast 会把 3.12/3.13 判成 cancelled，
       # 那样"3.11 挂了"和"三个版本都挂了"在结果页上无法区分。
@@ -148,7 +148,7 @@ jobs:
     # 不含 visual(pymol-open-source)：需要系统级构建依赖，留给专门的验收环境。
     # 前端 Playwright Chromium 在 frontend job 里装（mocked API E2E），不在本格。
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
@@ -180,3 +180,4 @@ jobs:
       - name: Run tests with the full optional-dependency set
         # 与 test 矩阵同一条命令：差别只在依赖装齐，跳过的那批用例真的执行
         run: pytest tests -q -o faulthandler_timeout=300
+

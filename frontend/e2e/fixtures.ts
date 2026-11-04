@@ -44,6 +44,7 @@ export const JOB = {
 };
 
 type MockOpts = {
+  appearance?: 'modernism' | 'default';
   projects?: object[];
   agents?: object[];
   jobs?: object[];
@@ -61,6 +62,13 @@ async function json(route: Route, body: unknown, status = 200) {
 
 /** Stub the SPA's /api/v2 surface so Vite never needs a live Cloudra API. */
 export async function installApiMocks(page: Page, opts: MockOpts = {}) {
+  // Most existing workbench tests exercise the always-visible Modernism form.
+  // Do not overwrite a theme selected by a test or persisted on reload.
+  await page.addInitScript((appearance) => {
+    if (appearance !== 'default' && !localStorage.getItem('cloudra.appearance')) {
+      localStorage.setItem('cloudra.appearance', 'modernism');
+    }
+  }, opts.appearance);
   const projects = opts.projects ?? [PROJECT_ACTIVE, PROJECT_ARCHIVED];
   const agents = opts.agents ?? [AGENT];
   const jobs = opts.jobs ?? [JOB];
@@ -190,3 +198,4 @@ export async function openSpa(page: Page, hash = '') {
     timeout: 15_000,
   });
 }
+
