@@ -158,13 +158,6 @@ test('all appearances preserve the selected project, agent, DAG and compute work
     for (const name of ['结构、计算与机理', '计算调度', '审计日志']) {
       await expect(page.locator('.console-subnav-bar').getByRole('button', { name, exact: false })).toBeVisible();
     }
-    await page.getByRole('button', { name: '打开记录中的结构' }).click();
-    const viewer = page.getByRole('dialog', { name: '分子工作台' });
-    await expect(viewer.locator('.viewer-webgl-host canvas')).toBeVisible();
-    await viewer.getByRole('group', { name: '分子显示方式' }).getByRole('button', { name: '填充' }).click();
-    await expect(viewer.getByRole('group', { name: '分子显示方式' }).getByRole('button', { name: '填充' })).toHaveAttribute('aria-pressed', 'true');
-    await viewer.getByRole('button', { name: '关闭 ✕' }).click();
-    await page.getByRole('button', { name: '继续并放弃修改' }).click();
     const imageThemes = await page.locator('.dag-canvas-compact image').evaluateAll((images) => images.map((image) => new URL(image.getAttribute('href')!, location.origin).searchParams.get('theme')));
     expect([...new Set(imageThemes)]).toEqual([svgTheme]);
     await page.screenshot({ path: `/tmp/cloudra-appearance-${appearance}.png`, fullPage: true, animations: 'disabled' });
@@ -206,6 +199,12 @@ test('all appearances preserve the selected project, agent, DAG and compute work
   await expect(page.getByPlaceholder('新建项目名…')).toHaveValue('未提交的研究项目');
   await page.getByRole('button', { name: '结构、计算与机理', exact: true }).click();
   await expect(page.locator('.dag-node-rect')).toHaveCount(4);
+  await page.locator('g').filter({ has: page.locator('.dag-node-label').filter({ hasText: '分离产物' }) }).last().locator('.dag-node-rect').click();
+  await page.getByRole('button', { name: '打开记录中的结构' }).click();
+  const viewer = page.getByRole('dialog', { name: '分子工作台' });
+  await expect(viewer.locator('.viewer-webgl-host canvas')).toBeVisible();
+  await viewer.getByRole('group', { name: '分子显示方式' }).getByRole('button', { name: '填充' }).click();
+  await expect(viewer.getByRole('group', { name: '分子显示方式' }).getByRole('button', { name: '填充' })).toHaveAttribute('aria-pressed', 'true');
   expect(patches).toEqual([]);
 });
 
