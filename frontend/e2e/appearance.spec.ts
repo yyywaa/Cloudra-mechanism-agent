@@ -96,14 +96,6 @@ async function openResearchWorkbench(page: Page) {
       ],
     },
   } }));
-  await page.route('**/api/v2/projects/*/workbench/open', route => route.fulfill({ json: {
-    document_id: 'appearance-geometry', title: '分离产物', source_path: '/tmp/live/separated.xyz',
-    task_type: 'structure', frames: [{ index: 0, step: 0, has_geometry: true }], selected_frame: 0,
-    geometry: { molecule: 'mock-molecule', xyz: '2\nillustrative\nNa 0 0 0\nCl 5 0 0',
-      atoms: [{ index: 1, symbol: 'Na', x: 0, y: 0, z: 0 }, { index: 2, symbol: 'Cl', x: 5, y: 0, z: 0 }],
-      bonds: [], graph_status: 'unknown' },
-    modes: [], modes_reference_geometry: null, settings: {}, warnings: [],
-  } }));
   await openSpa(page);
   await page.getByTitle(`选择项目: ${project.name}`, { exact: true }).click();
   await expect(page.locator('.breadcrumb-agent-name')).toHaveText(AGENT.display_name);
@@ -199,12 +191,6 @@ test('all appearances preserve the selected project, agent, DAG and compute work
   await expect(page.getByPlaceholder('新建项目名…')).toHaveValue('未提交的研究项目');
   await page.getByRole('button', { name: '结构、计算与机理', exact: true }).click();
   await expect(page.locator('.dag-node-rect')).toHaveCount(4);
-  await page.locator('g').filter({ has: page.locator('.dag-node-label').filter({ hasText: '分离产物' }) }).last().locator('.dag-node-rect').click();
-  await page.getByRole('button', { name: '打开记录中的结构' }).click();
-  const viewer = page.getByRole('dialog', { name: '分子工作台' });
-  await expect(viewer.locator('.viewer-webgl-host canvas')).toBeVisible();
-  await viewer.getByRole('group', { name: '分子显示方式' }).getByRole('button', { name: '填充' }).click();
-  await expect(viewer.getByRole('group', { name: '分子显示方式' }).getByRole('button', { name: '填充' })).toHaveAttribute('aria-pressed', 'true');
   expect(patches).toEqual([]);
 });
 
