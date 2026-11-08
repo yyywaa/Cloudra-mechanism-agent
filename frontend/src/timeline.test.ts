@@ -493,6 +493,6 @@ const unrelatedMessage = applyStreamEvent(view({ streamText: 'Actual current rep
   type: 'agent.message_emitted', session_seq: 92, data: { content: 'Another response.' },
 });
 assert.equal(unrelatedMessage.streamText, 'Actual current reply.', 'an unrelated committed message cannot erase a stream');
-assert.equal(cancelledStream.frozen[0].incomplete, true, 'uncommitted partial text is visibly marked incomplete');
+assert.equal(cancelledStream.frozen[0].senderLabel, 'assistant (incomplete output, not saved)', 'uncommitted partial text is visibly marked incomplete');
 
 console.log('timeline.message-consistency ok');

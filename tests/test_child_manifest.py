@@ -269,3 +269,82 @@ async def test_manifest_and_report_never_leak_secrets_or_raw_output():
     assert secret not in blob
     assert "RAW_TOOL_OUTPUT" not in blob
     assert len(text) < 2000
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cached", [False, True])
+@pytest.mark.parametrize("answer", ["reviewed answer", ""])
+async def test_manifest_reuses_gate_lookup_and_preserves_empty_answer(monkeypatch, cached, answer):
+    core, child = await _child()
+    core.event_log.append(
+        "agent.completion_gate", stream="agent", project_id=child.project_id,
+        session_id=child.id, run_id=child.current_run.run_id,
+        data={"action": "allow_final", "reason": "accepted", "final_answer": answer},
+    )
+    await _finish(core, child, "succeeded")
+    events = list(core.event_log.query_session(child.id)) if cached else None
+    query = core.event_log.query_session
+    gate_queries = []
+
+    def counted_query(*args, **kwargs):
+        if kwargs.get("types") == {"agent.completion_gate"}:
+            gate_queries.append(kwargs)
+        return query(*args, **kwargs)
+
+    monkeypatch.setattr(core.event_log, "query_session", counted_query)
+    manifest = build_child_manifest(core, child, session_events=events)
+    assert manifest["final_summary"] == answer
+    assert manifest["final_summary_source"] == "message"
+    assert manifest["gate"]["action"] == "allow_final"
+    assert len(gate_queries) == (0 if cached else 1)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cached", [False, True])
+async def test_manifest_keeps_first_terminal_and_ignores_old_run_answer(cached):
+    core, child = await _child()
+    first_run = child.current_run.run_id
+    core.event_log.append(
+        "agent.completion_gate", stream="agent", project_id=child.project_id,
+        session_id=child.id, run_id=first_run,
+        data={"action": "allow_final", "reason": "accepted", "final_answer": "first result"},
+    )
+    await _finish(core, child, "succeeded")
+    terminal = core.event_log.query_session(child.id, types={"agent.state_changed"})[-1]
+    await core.agent_host.transition(child, AgentState.QUEUED, reason="new request")
+    await core.agent_host.start_run(child)
+    core.event_log.append(
+        "agent.message_emitted", stream="agent", project_id=child.project_id,
+        session_id=child.id, run_id=child.current_run.run_id,
+        data={"content": "second result"},
+    )
+    await _finish(core, child, "succeeded")
+    events = list(core.event_log.query_session(child.id)) if cached else None
+    current = build_child_manifest(core, child, session_events=events)
+    assert current["final_summary"] == "second result"
+    assert current["gate"]["run_id"] == first_run
+    frozen = build_child_manifest(core, child, terminal_event=terminal, session_events=events)
+    assert frozen["final_summary"] == "first result"
+    assert frozen["last_run"]["run_id"] == first_run
+    assert frozen["runs"]["total"] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("outcome", ["failed", "cancelled"])
+async def test_manifest_does_not_use_gate_answer_for_failure_or_cancellation(outcome):
+    core, child = await _child()
+    core.event_log.append(
+        "agent.completion_gate", stream="agent", project_id=child.project_id,
+        session_id=child.id, run_id=child.current_run.run_id,
+        data={"action": "continue_work", "reason": "unresolved", "final_answer": "not final"},
+    )
+    if outcome == "failed":
+        await _finish(core, child, outcome, error="failure marker")
+    else:
+        await CommandBus(core).execute(
+            Command(type="agent.cancel", target={"session_id": child.id}, payload={})
+        )
+    manifest = build_child_manifest(core, child)
+    assert manifest["final_summary"] != "not final"
+    assert manifest["final_summary_source"] == ("run_error" if outcome == "failed" else "state_only")
+    assert manifest["unresolved"][0] == "unresolved"

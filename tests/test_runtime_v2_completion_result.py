@@ -70,7 +70,9 @@ async def test_approved_empty_answer_does_not_upgrade_visible_narration_to_a_res
     await core.agent_host.finish_run(agent, outcome="succeeded")
 
     assert build_child_manifest(core, agent)["final_summary"] == ""
-    assert peer_completion_message(core, agent)[2]["final_summary"] == ""
+    peer_manifest = peer_completion_message(core, agent)[2]
+    assert peer_manifest["final_summary"] == ""
+    assert peer_manifest["final_summary_source"] == "agent.completion_gate"
     result = await asyncio.to_thread(_outcome, core, agent, core.event_log.high_session_watermarks[agent.id])
     assert result["result"]["summary"] == ""
     replies = core.event_log.query_session(agent.id, types={"agent.message_emitted"})
@@ -145,6 +147,7 @@ async def test_guided_peer_keeps_accepted_result_when_new_user_message_requires_
         assert provider.call_count("coordinator") == 2
         assert build_child_manifest(harness.core, peer)["final_summary"] == frozen
         assert reports()[0].data["manifest"]["final_summary"] == frozen
+        assert reports()[0].data["manifest"]["final_summary_source"] == "agent.completion_gate"
         result = await asyncio.to_thread(
             _outcome, harness.core, peer, harness.core.event_log.high_session_watermarks[peer.id],
         )

@@ -52,8 +52,6 @@ export interface MessageItem {
   content: string;
   pending?: boolean;
   streaming?: boolean;
-  /** A partial stream is not a saved assistant reply. */
-  incomplete?: boolean;
   /** Image attachments on user messages: workspace paths (from the event
    * payload) plus artifact ids when known (optimistic echo / future payloads). */
   imagePaths?: string[];
@@ -119,7 +117,6 @@ function freezeStream(view: StreamView, seq: number): StreamView {
         sender: 'assistant',
         senderLabel: 'assistant (incomplete output, not saved)',
         content: text,
-        incomplete: true,
       },
     ],
   };

@@ -618,7 +618,6 @@ class TurnPipeline:
                     error = (result.data or {}).get("error") or {}
                     return TurnOutcome(
                         decision="wait_approval",
-                        content=response.content,
                         message=str(error.get("message") or ""),
                         tool_exchanges=tuple(exchanges),
                         reasoning=response.reasoning,
@@ -631,7 +630,6 @@ class TurnPipeline:
             if outcome.decision == "wait_approval":
                 return TurnOutcome(
                     decision="wait_approval",
-                    content=response.content,
                     message=outcome.error.message if outcome.error else "",
                     blocked_call=outcome.call,
                     tool_exchanges=tuple(exchanges),

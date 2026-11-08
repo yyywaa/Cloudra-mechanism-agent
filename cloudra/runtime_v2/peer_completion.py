@@ -137,7 +137,7 @@ def _manifest(core, peer: AgentSession, terminal: EventEnvelope, index: PeerComp
     ) if state == "succeeded" and run_id else []
     if gates and "final_answer" in gates[-1].data:
         summary = gates[-1].data["final_answer"]
-        summary_source = "agent.message_emitted"
+        summary_source = "agent.completion_gate"
     elif final is not None:
         summary = str(final.data["content"]).strip()
         summary_source = "agent.message_emitted"

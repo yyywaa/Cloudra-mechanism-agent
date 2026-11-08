@@ -497,7 +497,7 @@ class AgentRunner:
                     # Share the target lock with MessageDispatcher so a delivery
                     # cannot slip between this check and finish_run.
                     if not await self._finish_gated_run(
-                        agent, run_id, gate, explicit_stop=explicit_stop,
+                        agent, run_id, explicit_stop=explicit_stop,
                     ):
                         continue
                     break
@@ -750,7 +750,7 @@ class AgentRunner:
         if gate.action != "allow_final" or gate.request_id != request.request_id:
             return False
         return await self._finish_gated_run(
-            agent, run_id, gate, explicit_stop=explicit_stop,
+            agent, run_id, explicit_stop=explicit_stop,
             confirmation_messages=messages,
         )
 
@@ -794,7 +794,7 @@ class AgentRunner:
         return delivery
 
     async def _finish_gated_run(
-        self, agent: AgentSession, run_id: str, gate, *, explicit_stop: bool,
+        self, agent: AgentSession, run_id: str, *, explicit_stop: bool,
         confirmation_messages: list[dict] | None = None,
     ) -> bool:
         """One commit/output boundary for model exits and accepted frozen exits."""
@@ -1091,13 +1091,12 @@ class AgentRunner:
             entry: dict = {"role": "assistant", "content": ""}
             if outcome.reasoning:
                 entry["reasoning_content"] = outcome.reasoning
-            if tool_calls:
-                # Structured form; the LLM adapter converts these into the
-                # wire format (assistant tool_calls + matching tool messages).
-                entry["tool_calls"] = [
-                    {"id": call.id, "name": call.name, "arguments": call.arguments}
-                    for call in tool_calls
-                ]
+            # Structured form; the LLM adapter converts these into the
+            # wire format (assistant tool_calls + matching tool messages).
+            entry["tool_calls"] = [
+                {"id": call.id, "name": call.name, "arguments": call.arguments}
+                for call in tool_calls
+            ]
             entries.append(entry)
         for call, result in outcome.tool_exchanges:
             entries.append(

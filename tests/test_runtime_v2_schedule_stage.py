@@ -220,7 +220,8 @@ async def test_schedule_mode_blocks_first_stop_without_reminder():
     )
     assert outcome.blocked_call is not None
     assert outcome.blocked_call.name == "stop"
-    assert "Stop intercepted by Schedule Mode" in (outcome.content or "")
+    assert "Stop intercepted by Schedule Mode" in outcome.message
+    assert outcome.content == ""
 
 
 @pytest.mark.asyncio

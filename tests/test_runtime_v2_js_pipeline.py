@@ -222,12 +222,15 @@ async def test_js_mode_wait_approval_returns_decision_without_blocked_call():
     ))
     pipeline = _pipeline(
         core,
-        LLMResponse(tool_calls=[ToolCall("t1", "js_exec", {"code": "await tools.echo({});"})]),
+        LLMResponse(content="review-narration", tool_calls=[ToolCall("t1", "js_exec", {"code": "await tools.echo({});"})]),
         js_runtime=js,
     )
     outcome = await _run(pipeline, agent)
     assert outcome.decision == "wait_approval"
     assert outcome.message == "needs DAG review approval"
+    assert [event.data["content"] for event in core.event_log.query_session(
+        agent.id, types={"agent.message_emitted"},
+    )] == ["review-narration"]
     assert outcome.blocked_call is None
     # The outer exchange is present exactly once (not repeated as blocked_call).
     assert [call.id for call, _ in outcome.tool_exchanges] == ["t1"]

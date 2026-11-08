@@ -182,6 +182,7 @@ async def test_success_report_is_durable_and_peer_is_not_a_child(tmp_path):
     assert manifest["run_id"] == first_run
     assert manifest["state"] == "succeeded"
     assert manifest["final_summary"] == "first answer"
+    assert manifest["final_summary_source"] == "agent.message_emitted"
     assert "[Peer finished]" in reports[0].data["content"]
     assert store.query_project_events(peer.project_id)[-1]["type"] == "agent.message_injected"
 
