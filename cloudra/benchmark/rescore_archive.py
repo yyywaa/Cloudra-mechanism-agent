@@ -429,10 +429,15 @@ def p2_jobs(archive: Path, tasks_root: Path, selectors: list[OnlySelector]) -> l
         if key in seen:
             raise ValueError(f"duplicate retained P2 run {arm}/{task}")
         seen.add(key)
+        # --only is applied before the sandbox is required, so a partial
+        # archive can rescore one retained run without the other sandboxes.
+        recorded_round = round_from_path(Path(row["sandbox"]))
+        if not matches_only(selectors, arm, recorded_round, task):
+            continue
         sandbox = p2_sandbox(archive, row["campaign"], row["sandbox"])
         round_ = round_from_path(sandbox)
-        if not matches_only(selectors, arm, round_, task):
-            continue
+        if round_ != recorded_round:
+            raise ValueError(f"{arm}/{task} sandbox round {round_} != {recorded_round}")
         tier, spec = load_task(tasks_root, row["tier"], task, arm)
         organized = organized_p2_graph(
             archive, arm, task, sandbox, row.get("repair_source", "")

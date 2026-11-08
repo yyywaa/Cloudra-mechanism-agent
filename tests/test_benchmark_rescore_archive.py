@@ -390,3 +390,29 @@ def test_only_limits_rows(tmp_path):
     rows = _rows(output)
     assert [row["task"] for row in rows] == ["F1"]
     assert rows[0]["round"] == "r1"
+
+
+def test_only_skips_retained_runs_whose_sandboxes_are_absent(tmp_path):
+    archive = _p2_fixture(tmp_path)
+    table = archive / "tables/final_scores_per_run.csv"
+    with table.open("a", encoding="utf-8") as handle:
+        handle.write(
+            "cloudra-p2c-20261025,guided,ZZ9,easy,"
+            "/home/ly/cloudra-p2c-20261025/guided/r1/sandboxes/ZZ9/batch_missing,\n"
+        )
+    output = tmp_path / "partial"
+    assert main(
+        [
+            "--p2-root",
+            str(archive),
+            "--tasks-root",
+            str(_tasks(tmp_path)),
+            "--output",
+            str(output),
+            "--only",
+            "guided/HI1",
+        ]
+    ) == 0
+    rows = _rows(output)
+    assert [row["task"] for row in rows] == ["HI1"]
+    assert rows[0]["reconstruction"] == "false"
