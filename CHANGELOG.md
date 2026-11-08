@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.1.0] - 2026-11-01
 
 ### 修复
+- `wait_background` 挂起收尾时不再把内部门禁 reason（"background work is still pending; stop only suspends"）当成 coordinator 回复发给用户：模型的实际正文优先作为用户可见消息，只有模型未写正文时才退回挂起状态行；否则每轮挂起都会顶掉/清空正在显示的回复（前端收到 `message_emitted` 会清空流式正文）。
 - 为 Python 3.11–3.13 CI 矩阵安装物种证据与公开 JS 场景实际所需的 RDKit 和 JS 宿主依赖。
 - 修复旧运行收尾期间显式重启丢失调度的竞态，并用事件栅栏稳定覆盖该边界。
 - 更新前端 E2E 以验证默认 Acid 外观及显式展开的新建项目表单，恢复完整浏览器回归。

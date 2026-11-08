@@ -835,7 +835,10 @@ class AgentRunner:
                          "message_id": item["message_id"]} for item in confirmation_messages
                     ])
                 final_answer = gate.final_answer if gate.final_answer is not None else candidate_answer
-                if gate.action == "allow_final" and final_answer:
+                if final_answer:
+                    # 模型自己的正文是所有放行结局的用户可见消息；wait_background
+                    # 的挂起不能拿内部门禁 reason 顶掉正在显示的回复（前端收到
+                    # message_emitted 会清掉流式正文，逐轮刷屏）。
                     self._emit_run_message(agent, run_id, final_answer)
                 elif gate.action == "wait_background":
                     self._emit_run_message(agent, run_id, gate.reason or "Run paused awaiting background work.")

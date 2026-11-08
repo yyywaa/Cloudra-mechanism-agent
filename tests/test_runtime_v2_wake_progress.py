@@ -13,6 +13,7 @@ from cloudra.runtime_v2.schemas import AgentState, Command
 from tests.agent_scenarios import (
     ScenarioHarness,
     ScriptedProvider,
+    Step,
     background_completion_resume_steps,
 )
 from tests.test_runtime_v2_compute_notify import _insert_terminal_job, _notified_at
@@ -95,6 +96,33 @@ async def test_scenario_completed_compute_wakes_despite_unrelated_reminder(
         assert len(notices) == 1
         await broker._poll_project(harness.project.id)
         assert provider.call_count("coordinator") == 2
+    finally:
+        await harness.core.reminders.close()
+        await harness.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reply", [
+    Step(text="生产监控正常，下一轮 15 分钟后自动汇报。", tools=[("stop", {})]),
+    Step(text="生产监控正常，本轮挂起等唤醒。"),
+])
+async def test_wait_background_emits_model_reply_not_gate_reason(
+    tmp_path, monkeypatch, reply,
+):
+    """wait_background 挂起时用户看到的是模型正文；内部门禁 reason 不能顶掉回复。"""
+    provider = ScriptedProvider(by_role={"coordinator": [reply]})
+    harness = await ScenarioHarness.start(tmp_path, provider=provider, workspace_dir=tmp_path)
+    try:
+        parent = await harness.spawn("coordinator", query="", orchestration_mode="dag_record")
+        await _stale_reminder(harness, parent, tmp_path, monkeypatch)
+        await harness.bus.execute(Command(type="agent.message", target={"session_id": parent.id},
+                                          payload={"content": "进度如何？"}))
+        await _settled(harness, parent, 1)
+        gates = harness.core.event_log.query_session(parent.id, types={"agent.completion_gate"})
+        assert [gate.data["action"] for gate in gates] == ["wait_background"]
+        emitted = [event.data["content"] for event
+                   in harness.core.event_log.query_session(parent.id, types={"agent.message_emitted"})]
+        assert emitted == [reply.text]
     finally:
         await harness.core.reminders.close()
         await harness.aclose()
