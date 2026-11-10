@@ -52,7 +52,7 @@ jobs:
           mkdir -p 'build/portable smoke'
           tar -xzf dist/installers/*.tar.gz -C 'build/portable smoke'
           'build/portable smoke/Cloudra/Cloudra' --version
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: Cloudra-linux-x64
           path: Cloudra package test/dist/installers/*
