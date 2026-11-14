@@ -384,11 +384,18 @@ class InternalCoordinates(Tool):
         from rdkit.Chem import rdDetermineBonds
 
         mol = Chem.Mol(mol)
-        if not mol.HasProp("cloudra_graph_status") or mol.GetProp("cloudra_graph_status") != "unresolved":
+        if not mol.HasProp("cloudra_graph_status") or mol.GetProp("cloudra_graph_status") not in {"unresolved", "distance-inferred"}:
             if not mol.GetNumConformers():
                 raise ValueError("Input molecule has no coordinates")
             return mol, "input", []
 
+        # Explicit perception recomputes the uncertain graph from coordinates.
+        # Drop earlier inferred/manual preview bonds so a failed retry cannot
+        # duplicate them, or certify their previously unknown bond orders.
+        rw = Chem.RWMol(mol)
+        for bond in list(mol.GetBonds()):
+            rw.RemoveBond(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx())
+        mol = rw.GetMol()
         atoms = to_ase(mol)
         native_charge = molecule_charge(mol)
         if mol.HasProp('cloudra_multiplicity') and charge is not None and charge != native_charge:
@@ -1496,7 +1503,7 @@ class InternalCoordinates(Tool):
         # Keep arbitrary intermediate bond orders editable without optimizing geometry.
         result.UpdatePropertyCache(strict=False)
         Chem.FastFindRings(result)
-        if not result.HasProp('cloudra_graph_status') or result.GetProp('cloudra_graph_status') != 'unresolved':
+        if not result.HasProp('cloudra_graph_status') or result.GetProp('cloudra_graph_status') not in {'unresolved', 'distance-inferred'}:
             result.SetProp('cloudra_graph_status', 'edited')
         return result, {'type': 'bond', 'atoms': raw, 'order': order, 'moved_atoms': [], 'n_moved': 0}
 

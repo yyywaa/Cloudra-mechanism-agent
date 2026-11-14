@@ -3,6 +3,9 @@ export interface WorkbenchSource { frame_index?: number; path?: string; artifact
 export interface WorkbenchAtom {
   index: number; symbol: string; x: number; y: number; z: number; atom_id?: string;
   formal_charge?: number; target_valence?: number | null; bond_valence?: number;
+  hybridization?: 'sp' | 'sp2' | 'sp3' | null;
+  hybridization_override?: 'sp' | 'sp2' | 'sp3' | null;
+  lone_pairs?: number | null;
 }
 export interface GeometryView {
   molecule: string; xyz: string; atoms: WorkbenchAtom[];
@@ -10,6 +13,7 @@ export interface GeometryView {
   graph_status?: string;
   manual_bonds?: boolean;
   warnings?: string[];
+  optimization?: { force_field: 'MMFF94' | 'UFF'; converged: boolean; initial_energy: number; final_energy: number; energy_unit: 'kcal/mol' };
   changes?: { deleted_atom_ids: string[]; deleted_atoms: number[]; index_map: Record<string, number>; moved_atoms: number[]; fragment_smiles?: string };
 }
 export interface FrameSummary { has_geometry?: boolean; index: number; step: number; energy_hartree?: number | null; rms_force?: number | null; max_force?: number | null; force_unit?: string | null; reaction_coordinate?: number | null; scan_coordinates?: number[]; path_number?: number | null; converged?: boolean | null }
@@ -30,10 +34,12 @@ export interface DocumentView {
 export interface Draft { atomMappingChanged?: boolean; geometry: GeometryView; settings: WorkbenchSettings; sourcePath?: string | null; sourceFrame?: number; frozen: FrozenCoordinate[]; scans: ScanCoordinate[] }
 export interface EditRequest {
   molecule?: string;
-  action: 'coordinate' | 'mirror' | 'bond' | 'replace_group' | 'resolve_bonds' | 'add_atom' | 'delete_atom' | 'atom_state' | 'fill_valence';
+  action: 'coordinate' | 'mirror' | 'bond' | 'replace_group' | 'resolve_bonds' | 'add_atom' | 'delete_atom' | 'atom_state' | 'fill_valence' | 'preoptimize';
   atoms?: number[]; value?: number; fixed_side?: 'first' | 'last'; moving_atoms?: number[];
   plane?: 'xy' | 'xz' | 'yz'; order?: number; smiles?: string; attachment_atom?: number;
   element?: string; formal_charge?: number; valence?: number | null;
+  hybridization?: 'sp' | 'sp2' | 'sp3' | null;
+  force_field?: 'MMFF94' | 'UFF';
 }
 export interface FragmentEntry { id: string; smiles: string; name: string; use_count: number; project_use_count: number; attachment_atom?: number; geometry?: GeometryView }
 export interface SaveRequest { title: string; molecule: string; source_path?: string | null; source_frame?: number; settings: WorkbenchSettings; frozen_coordinates: FrozenCoordinate[]; scan_coordinates: ScanCoordinate[]; generate_input: boolean }

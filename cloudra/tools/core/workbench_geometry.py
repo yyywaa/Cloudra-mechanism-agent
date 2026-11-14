@@ -12,6 +12,7 @@ from cloudra.tools.core.molecule import Molecule, _copy_molecule, read_molecule,
 
 _BUILDER_ACTIONS = {'add_atom', 'delete_atom', 'atom_state', 'fill_valence'}
 _TARGET_VALENCE = 'cloudra_target_valence'
+_HYBRIDIZATION = 'cloudra_hybridization'
 
 
 class EditRequest(BaseModel):
@@ -19,7 +20,7 @@ class EditRequest(BaseModel):
 
     molecule: Molecule | None = None
     action: Literal['coordinate', 'mirror', 'bond', 'replace_group', 'resolve_bonds',
-                    'add_atom', 'delete_atom', 'atom_state', 'fill_valence']
+                    'add_atom', 'delete_atom', 'atom_state', 'fill_valence', 'preoptimize']
     atoms: list[int] = Field(default_factory=list)
     value: float | None = Field(default=None, allow_inf_nan=False)
     fixed_side: Literal['first', 'last'] = 'first'
@@ -33,6 +34,8 @@ class EditRequest(BaseModel):
     formal_charge: StrictInt | None = Field(default=None, ge=-128, le=127)
     # One fill request can place at most 32 explicit hydrogen atoms.
     valence: StrictInt | None = Field(default=None, ge=0, le=32)
+    hybridization: Literal['sp', 'sp2', 'sp3'] | None = None
+    force_field: Literal['MMFF94', 'UFF'] = 'MMFF94'
 
     @model_validator(mode='after')
     def valid_edit(self):
@@ -56,8 +59,12 @@ class EditRequest(BaseModel):
         if self.action == 'atom_state':
             if 'formal_charge' in self.model_fields_set and self.formal_charge is None:
                 raise ValueError('formal_charge must be an integer when supplied')
-        elif self.model_fields_set & {'formal_charge', 'valence'}:
-            raise ValueError('formal_charge and valence are only valid for atom_state')
+        elif self.model_fields_set & {'formal_charge', 'valence', 'hybridization'}:
+            raise ValueError('formal_charge, valence and hybridization are only valid for atom_state')
+        if 'force_field' in self.model_fields_set and self.action != 'preoptimize':
+            raise ValueError('force_field is only valid for preoptimize')
+        if self.action == 'preoptimize' and (self.atoms or self.moving_atoms is not None):
+            raise ValueError('preoptimize operates on the complete current conformer')
         if self.action == 'coordinate' and (len(self.atoms) not in (2, 3, 4) or self.value is None):
             raise ValueError('coordinate requires 2/3/4 ordered atoms and an absolute value')
         if self.action in {'bond', 'replace_group'} and len(self.atoms) != 2:
@@ -92,6 +99,66 @@ def _bond_valence(atom) -> float:
     return sum((bond.GetBondTypeAsDouble() for bond in atom.GetBonds()), 0.0)
 
 
+def _local_geometry(mol, atom) -> dict:
+    """Idealized seed domains, not an electronic-structure determination.
+
+    Conventional closed-shell main-group valences are deliberately limited here.
+    A manual target outside this table, radicals, hypervalence and unresolved
+    connectivity remain unknown. Lone pairs occupy domains, never atom vertices.
+    """
+    override = atom.GetProp(_HYBRIDIZATION) if atom.HasProp(_HYBRIDIZATION) else None
+    result = {'hybridization': override, 'hybridization_override': override, 'lone_pairs': None}
+    if _graph_status(mol) in {'unresolved', 'distance-inferred'} or atom.GetNumRadicalElectrons():
+        return result
+    states = {
+        ('B', 0): (3, 0), ('B', -1): (4, 0),
+        ('C', 0): (4, 0), ('C', 1): (3, 0), ('C', -1): (3, 1),
+        ('N', 0): (3, 1), ('N', 1): (4, 0), ('N', -1): (2, 2),
+        ('O', 0): (2, 2), ('O', 1): (3, 1), ('O', -1): (1, 3),
+        ('Si', 0): (4, 0), ('P', 0): (3, 1), ('P', 1): (4, 0),
+        ('S', 0): (2, 2), ('S', -1): (1, 3), ('S', 1): (3, 1),
+    }
+    state = states.get((atom.GetSymbol(), atom.GetFormalCharge()))
+    if state is None:
+        return result
+    valence, lone_pairs = state
+    if _target_valence(atom) not in (None, valence):
+        return result
+    bonds = list(atom.GetBonds())
+    orders = [bond.GetBondTypeAsDouble() for bond in bonds]
+    aromatic = any(order == 1.5 for order in orders)
+    # Aromatic N has pyridine/pyrrole representations whose 1.5 bond sums do
+    # not equal their electron-counting valence. Require a valid aromatic ring.
+    if aromatic:
+        from rdkit import Chem
+
+        checked = Chem.Mol(mol)
+        if Chem.SanitizeMol(checked, catchErrors=True):
+            return result
+        perceived = checked.GetAtomWithIdx(atom.GetIdx())
+        if not perceived.GetIsAromatic():
+            return result
+        result.update(hybridization=override or 'sp2', lone_pairs=lone_pairs)
+        return result
+    if (sum(orders) + atom.GetNumExplicitHs() > valence
+            or any(order not in (1, 2, 3) for order in orders)):
+        return result
+    # A donor lone pair adjoining a pi system uses a p orbital (e.g. amide N).
+    conjugated = lone_pairs > 0 and any(
+        bond.GetBondTypeAsDouble() == 1 and (
+            bond.GetOtherAtom(atom).GetIsAromatic()
+            or any(other.GetIdx() != bond.GetIdx() and other.GetBondTypeAsDouble() in (1.5, 2, 3)
+                   for other in bond.GetOtherAtom(atom).GetBonds())
+        ) for bond in bonds
+    )
+    domains = valence - sum(order - 1 for order in orders) + lone_pairs
+    hybridization = {2: 'sp', 3: 'sp2', 4: 'sp3'}.get(domains)
+    if conjugated and hybridization == 'sp3':
+        hybridization = 'sp2'
+    result.update(hybridization=override or hybridization, lone_pairs=lone_pairs)
+    return result
+
+
 def _check_valence_targets(mol) -> None:
     for atom in mol.GetAtoms():
         target = _target_valence(atom)
@@ -111,6 +178,7 @@ def geometry_view(mol) -> dict:
              'atom_id': atom.GetProp('cloudra_atom_id'),
              'formal_charge': atom.GetFormalCharge(), 'target_valence': _target_valence(atom),
              'bond_valence': _bond_valence(atom),
+             **_local_geometry(mol, atom),
              'x': float(pos[0]), 'y': float(pos[1]), 'z': float(pos[2])}
             for atom, pos in zip(mol.GetAtoms(), positions, strict=True)
         ],
@@ -188,8 +256,47 @@ def _empty_molecule():
     return mol.GetMol()
 
 
+def _domain_directions(vectors, hybridization: str):
+    """Exact ideal-angle candidates when fixed neighbors permit that geometry."""
+    import numpy as np
+
+    cosine = {'sp': -1., 'sp2': -.5, 'sp3': -1 / 3}[hybridization]
+    lengths = np.linalg.norm(vectors, axis=1)
+    unit = vectors[lengths > 1e-9] / lengths[lengths > 1e-9, None]
+    if not len(unit):
+        return np.asarray(fibonacci_sphere_directions(128)), unit, cosine
+    _, singular, vh = np.linalg.svd(unit, full_matrices=True)
+    rank = int(np.sum(singular > 1e-9))
+    center = np.linalg.lstsq(unit, np.full(len(unit), cosine), rcond=None)[0]
+    radius_squared = 1 - float(center @ center)
+    if (radius_squared >= -1e-9 and (rank < 3 or radius_squared < 1e-9)
+            and np.allclose(unit @ center, cosine, atol=1e-9)):
+        radius = max(0., radius_squared) ** .5
+        nullspace = vh[rank:]
+        if radius_squared < 1e-9 or rank == 3:
+            candidates = np.asarray([center])
+        elif len(nullspace) == 1:
+            candidates = np.asarray([center + radius * nullspace[0], center - radius * nullspace[0]])
+        elif len(nullspace) == 2:
+            angles = np.arange(128) * (2 * np.pi / 128)
+            candidates = center + radius * (np.cos(angles)[:, None] * nullspace[0]
+                                            + np.sin(angles)[:, None] * nullspace[1])
+        else:
+            candidates = np.asarray(fibonacci_sphere_directions(128))
+    else:
+        # Existing atoms are immovable. Select the closest angular seed and
+        # explicitly warn the caller that this does not repair old bond angles.
+        candidates = np.asarray(fibonacci_sphere_directions(128))
+        if np.linalg.norm(center) > 1e-9:
+            candidates = np.vstack((candidates, center / np.linalg.norm(center)))
+    lengths = np.linalg.norm(candidates, axis=1)
+    if not np.isfinite(lengths).all() or (lengths < 1e-9).any():
+        raise ValueError('Local geometry produced an undefined placement direction')
+    return candidates / lengths[:, None], unit, cosine
+
+
 def _initial_position(positions, symbols: list[str], element: str, anchor: int | None, order: float,
-                      tetrahedral_neighbors: list[int]):
+                      neighbors: list[int], hybridization: str | None):
     import numpy as np
 
     from cloudra.tools.Chemtool.internal_coordinates import InternalCoordinates
@@ -206,6 +313,8 @@ def _initial_position(positions, symbols: list[str], element: str, anchor: int |
 
     length = InternalCoordinates._reference_bond_length(symbols[anchor], element, order)
     directions = np.asarray(fibonacci_sphere_directions(128))
+    if hybridization:
+        directions, unit, cosine = _domain_directions(positions[neighbors] - positions[anchor], hybridization)
     candidates = positions[anchor] + length * directions
     distances = np.linalg.norm(candidates[:, None] - positions, axis=2)
     usable = (distances > 1e-9).all(axis=1)
@@ -217,17 +326,14 @@ def _initial_position(positions, symbols: list[str], element: str, anchor: int |
         return tuple(candidates[0])
     clearances = [InternalCoordinates._reference_bond_length(element, symbols[index], 1) for index in others]
     clearance = np.min(distances[:, others] / clearances, axis=1)
-    if tetrahedral_neighbors:
-        vectors = positions[tetrahedral_neighbors] - positions[anchor]
-        lengths = np.linalg.norm(vectors, axis=1)
-        defined = lengths > 1e-9
-        unit = vectors[defined] / lengths[defined, None]
-        angle_error = ((directions @ unit.T + 1 / 3) ** 2).sum(axis=1)
-        return tuple(candidates[np.lexsort((-clearance, angle_error))[0]])
+    if hybridization and len(unit):
+        angle_error = ((directions @ unit.T - cosine) ** 2).sum(axis=1)
+        # Round numerical noise so that clearance breaks genuinely equal fits.
+        return tuple(candidates[np.lexsort((-clearance, np.round(angle_error, 12)))[0]])
     return tuple(candidates[clearance.argmax()])
 
 
-def _append_atom(mol, element: str, anchor: int | None, order: float, *, tetrahedral: bool = False):
+def _append_atom(mol, element: str, anchor: int | None, order: float):
     from rdkit import Chem
 
     from cloudra.tools.Chemtool.internal_coordinates import InternalCoordinates
@@ -235,21 +341,20 @@ def _append_atom(mol, element: str, anchor: int | None, order: float, *, tetrahe
     rw = Chem.RWMol(mol)
     symbols = [atom.GetSymbol() for atom in mol.GetAtoms()]
     neighbors = ([atom.GetIdx() for atom in mol.GetAtomWithIdx(anchor).GetNeighbors()]
-                 if tetrahedral and anchor is not None else [])
-    positions = [
-        _initial_position(conf.GetPositions(), symbols, element, anchor, order, neighbors)
-        for conf in rw.GetConformers()
-    ]
+                 if anchor is not None else [])
     atom = Chem.Atom(element)
     atom.SetNoImplicit(True)
     index = rw.AddAtom(atom)
-    for conf, position in zip(rw.GetConformers(), positions, strict=True):
-        conf.SetAtomPosition(index, position)
     result = rw.GetMol()
     if anchor is not None:
         result, _ = InternalCoordinates._op_bond(result, {'atoms': [anchor + 1, index + 1], 'order': order})
+        hybridization = _local_geometry(result, result.GetAtomWithIdx(anchor))['hybridization']
     else:
         result.UpdatePropertyCache(strict=False)
+        hybridization = None
+    for original, conf in zip(mol.GetConformers(), result.GetConformers(), strict=True):
+        position = _initial_position(original.GetPositions(), symbols, element, anchor, order, neighbors, hybridization)
+        conf.SetAtomPosition(index, position)
     return result
 
 
@@ -281,6 +386,11 @@ def _edit_builder(mol, request: EditRequest):
                 atom.ClearProp(_TARGET_VALENCE)
             else:
                 atom.SetIntProp(_TARGET_VALENCE, request.valence)
+        if 'hybridization' in request.model_fields_set:
+            if request.hybridization is None:
+                atom.ClearProp(_HYBRIDIZATION)
+            else:
+                atom.SetProp(_HYBRIDIZATION, request.hybridization)
         mol.UpdatePropertyCache(strict=False)
         return mol
     if _graph_status(mol) == 'unresolved':
@@ -295,10 +405,66 @@ def _edit_builder(mol, request: EditRequest):
     atom.SetNumExplicitHs(0)
     atom.SetNoImplicit(True)
     remaining = target - int(actual)
-    tetrahedral = atom.GetDegree() + remaining == 4
     for _ in range(remaining):
-        mol = _append_atom(mol, 'H', anchor, 1, tetrahedral=tetrahedral)
+        mol = _append_atom(mol, 'H', anchor, 1)
     return mol
+
+
+def _preoptimize(mol, engine: str):
+    import numpy as np
+    from rdkit import Chem
+
+    from cloudra.tools.core.structure_builder import BuildStrategy, _make_force_field
+
+    if not mol.GetNumAtoms() or not mol.GetNumConformers():
+        raise ValueError('preoptimize requires a nonempty molecule with coordinates')
+    if _graph_status(mol) in {'unresolved', 'distance-inferred'}:
+        raise ValueError('preoptimize requires a resolved, declared bond-order graph')
+    if mol.HasProp('cloudra_multiplicity') and mol.GetIntProp('cloudra_multiplicity') != 1:
+        raise ValueError('preoptimize does not support open-shell electronic states')
+    if mol.HasProp('cloudra_total_charge') and mol.GetIntProp('cloudra_total_charge') != Chem.GetFormalCharge(mol):
+        raise ValueError('preoptimize requires atom formal charges consistent with the declared total charge')
+    # Sanitize/type a private working graph. MMFF typing changes aromatic flags;
+    # only its optimized coordinates are ever copied back to the exact draft.
+    working = Chem.Mol(mol)
+    if Chem.SanitizeMol(working, catchErrors=True):
+        raise ValueError('preoptimize requires a chemically valid bond-order and formal-charge graph')
+    if any(original.GetFormalCharge() != checked.GetFormalCharge()
+           for original, checked in zip(mol.GetAtoms(), working.GetAtoms(), strict=True)):
+        raise ValueError('preoptimize cannot silently repair formal charges; correct the declared graph first')
+    if any(atom.GetNumRadicalElectrons() for graph in (mol, working) for atom in graph.GetAtoms()):
+        raise ValueError('preoptimize does not support radical or incomplete-valence graphs')
+    if any(atom.GetNumImplicitHs() or atom.GetNumExplicitHs() for atom in working.GetAtoms()):
+        raise ValueError('preoptimize requires every hydrogen to be an explicit atom; fill valence first')
+    positions = working.GetConformer().GetPositions()
+    if not np.isfinite(positions).all():
+        raise ValueError('preoptimize requires finite coordinates')
+    conf_id = working.GetConformer().GetId()
+    try:
+        force_field = _make_force_field(working, conf_id, engine)
+        if force_field is None:
+            raise ValueError(f'{engine} parameters are unavailable for this graph; no fallback was used')
+        force_field.Initialize()
+        initial_energy = float(force_field.CalcEnergy())
+        status = int(force_field.Minimize(maxIts=BuildStrategy().max_optimization_steps))
+        final_energy = float(force_field.CalcEnergy())
+    except (RuntimeError, OverflowError) as exc:
+        raise ValueError(f'{engine} preoptimization failed: {exc}') from exc
+    optimized = working.GetConformer(conf_id).GetPositions()
+    if status not in (0, 1) or not np.isfinite([initial_energy, final_energy]).all() or not np.isfinite(optimized).all():
+        raise ValueError(f'{engine} preoptimization returned invalid coordinates, energy or status')
+    for index, position in enumerate(optimized):
+        mol.GetConformer().SetAtomPosition(index, position)
+    moved = [index + 1 for index in range(len(positions)) if not np.array_equal(positions[index], optimized[index])]
+    warnings = ['Molecular force-field preoptimization is not quantum-chemical optimization or scientific validation.']
+    if len(Chem.GetMolFrags(working)) > 1:
+        warnings.append('Interfragment interactions are excluded; this does not optimize the relative arrangement of components.')
+    if status == 1:
+        warnings.append('The force-field iteration limit was reached without convergence; the returned coordinates are the last iterate.')
+    return mol, {'moved_atoms': moved, 'warnings': warnings, 'optimization': {
+        'force_field': engine, 'converged': status == 0, 'initial_energy': initial_energy,
+        'final_energy': final_energy, 'energy_unit': 'kcal/mol',
+    }}
 
 
 def edit_geometry(request: EditRequest | dict) -> dict:
@@ -312,13 +478,25 @@ def edit_geometry(request: EditRequest | dict) -> dict:
     if request.action in _BUILDER_ACTIONS:
         result = _edit_builder(mol, request)
         summary = {}
-        if request.action in {'add_atom', 'delete_atom'} and result.GetNumAtoms() and _graph_status(result) != 'unresolved':
+        if request.atoms and request.action in {'add_atom', 'fill_valence', 'atom_state'}:
+            state = _local_geometry(result, result.GetAtomWithIdx(request.atoms[0] - 1))
+            label = state['hybridization']
+            summary['warnings'] = [
+                f'Local {label} is an idealized geometry assumption; existing atom coordinates and bond angles are unchanged. '
+                'Use explicit preoptimization to relax the complete geometry.' if label else
+                'Local geometry is unknown for this electronic state or graph; placement uses spatial clearance only. '
+                'Specify hybridization explicitly if a local geometry is intended.'
+            ]
+        if (request.action in {'add_atom', 'delete_atom'} and result.GetNumAtoms()
+                and _graph_status(result) not in {'unresolved', 'distance-inferred'}):
             result.SetProp('cloudra_graph_status', 'edited')
+    elif request.action == 'preoptimize':
+        result, summary = _preoptimize(mol, request.force_field)
     elif request.action == 'resolve_bonds':
         result, source, warnings = InternalCoordinates._resolve_molecule(mol, None)
         summary = {'moved_atoms': [], 'bond_source': source, 'warnings': warnings}
     else:
-        op = request.model_dump(exclude={'molecule', 'action'}, exclude_none=True)
+        op = request.model_dump(exclude={'molecule', 'action', 'force_field', 'hybridization'}, exclude_none=True)
         op['type'] = request.action
         if request.action == 'replace_group':
             op['smiles'] = connection_smiles(request.smiles, request.attachment_atom)
@@ -344,6 +522,8 @@ def edit_geometry(request: EditRequest | dict) -> dict:
         view['changes']['fragment_smiles'] = op['smiles']
     if summary.get('warnings'):
         view['warnings'] = summary['warnings']
+    if 'optimization' in summary:
+        view['optimization'] = summary['optimization']
     return view
 
 

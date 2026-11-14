@@ -12,6 +12,7 @@ assert.equal(measureCoordinate(atoms, [1, 2]), 1);
 assert.equal(measureCoordinate(atoms, [1, 2, 3]), 90);
 assert.equal(measureCoordinate(atoms, [1, 2, 3, 4]), -90);
 assert.equal(measureCoordinate(atoms, [1, 1]), null);
+assert.equal(measureCoordinate(atoms.map((atom, i) => ({ ...atom, x: i, y: 0, z: 0 })), [1, 2, 3, 4]), null);
 assert.deepEqual(curvePoints([{ index: 0, step: 1 }, { index: 1, step: 2, energy_hartree: -5 }, { index: 2, step: 3, energy_hartree: -4 }], 'energy_hartree').map(p => p.frame), [1, 2]);
 assert.ok(validateSettings({}, true));
 assert.equal(validateSettings({}, false), null);
