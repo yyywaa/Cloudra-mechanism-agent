@@ -156,6 +156,7 @@ def test_build_atom_draft_from_empty_and_delete_last_atom():
     assert first['atoms'][0] == {
         'index': 1, 'symbol': 'C', 'atom_id': first['atoms'][0]['atom_id'],
         'x': 0., 'y': 0., 'z': 0., 'formal_charge': 0, 'target_valence': None, 'bond_valence': 0.,
+        'hybridization': 'sp3', 'hybridization_override': None, 'lone_pairs': 0,
     }
     assert first['bonds'] == []
     atom = _copy_molecule(first['molecule']).GetAtomWithIdx(0)
@@ -210,7 +211,8 @@ def test_atom_state_roundtrips_and_caps_only_explicit_targets():
     state = edit_geometry({'molecule': first['molecule'], 'action': 'atom_state', 'atoms': [1],
                            'formal_charge': 1, 'valence': 1})
     restored = geometry_view(_copy_molecule(state['molecule']))
-    assert restored['atoms'][0] == {**first['atoms'][0], 'formal_charge': 1, 'target_valence': 1}
+    assert restored['atoms'][0] == {**first['atoms'][0], 'formal_charge': 1, 'target_valence': 1,
+                                   'hybridization': None, 'lone_pairs': None}
     attached = edit_geometry({'molecule': restored['molecule'], 'action': 'add_atom', 'element': 'H', 'atoms': [1]})
     with pytest.raises(ValueError, match='target valence'):
         edit_geometry({'molecule': attached['molecule'], 'action': 'bond', 'atoms': [1, 2], 'order': 2})
@@ -351,3 +353,343 @@ def test_add_atom_allows_close_nonnumerical_contacts_in_a_manual_seed():
     distances = np.linalg.norm(positions[:-1] - positions[-1], axis=1)
     assert distances[0] == pytest.approx(1.09)
     assert 1e-9 < min(distances[1:]) < 1.09
+
+
+@pytest.mark.parametrize('element,charge,count,lone_pairs', [('O', 0, 2, 2), ('N', 0, 3, 1), ('C', 0, 4, 0), ('N', 1, 4, 0), ('O', 1, 3, 1)])
+@pytest.mark.parametrize('action', ['add_atom', 'fill_valence'])
+def test_builder_uses_electron_domains_for_both_atom_placement_paths(element, charge, count, lone_pairs, action):
+    view = edit_geometry({'action': 'add_atom', 'element': element})
+    view = edit_geometry({'molecule': view['molecule'], 'action': 'atom_state', 'atoms': [1],
+                          'formal_charge': charge, 'valence': count})
+    if action == 'fill_valence':
+        view = edit_geometry({'molecule': view['molecule'], 'action': action, 'atoms': [1]})
+    else:
+        for _ in range(count):
+            view = edit_geometry({'molecule': view['molecule'], 'action': action, 'atoms': [1], 'element': 'H'})
+    positions = _copy_molecule(view['molecule']).GetConformer().GetPositions()
+    directions = positions[1:] - positions[0]
+    directions /= np.linalg.norm(directions, axis=1)[:, None]
+    np.testing.assert_allclose((directions @ directions.T)[np.triu_indices(count, k=1)], -1 / 3, atol=1e-7)
+    assert view['atoms'][0]['hybridization'] == 'sp3'
+    assert view['atoms'][0]['lone_pairs'] == lone_pairs
+    assert len(view['atoms']) == count + 1
+
+
+@pytest.mark.parametrize('order,hybridization,cosine', [(2, 'sp2', -.5), (3, 'sp', -1.)])
+def test_multiple_bonds_set_geometry_before_placing_new_atom(order, hybridization, cosine):
+    view = edit_geometry({'action': 'add_atom', 'element': 'C'})
+    view = edit_geometry({'molecule': view['molecule'], 'action': 'add_atom', 'atoms': [1], 'element': 'N', 'order': order})
+    view = edit_geometry({'molecule': view['molecule'], 'action': 'add_atom', 'atoms': [1], 'element': 'H'})
+    positions = _copy_molecule(view['molecule']).GetConformer().GetPositions()
+    vectors = positions[1:] - positions[0]
+    vectors /= np.linalg.norm(vectors, axis=1)[:, None]
+    assert vectors[0] @ vectors[1] == pytest.approx(cosine)
+    assert view['atoms'][0]['hybridization'] == hybridization
+
+
+def test_changed_hybridization_keeps_existing_geometry_and_explicitly_warns():
+    view = edit_geometry({'action': 'add_atom', 'element': 'C'})
+    for _ in range(2):
+        view = edit_geometry({'molecule': view['molecule'], 'action': 'add_atom', 'atoms': [1], 'element': 'H'})
+    before = _copy_molecule(view['molecule']).GetConformer().GetPositions()
+    changed = edit_geometry({'molecule': view['molecule'], 'action': 'add_atom', 'atoms': [1], 'element': 'O', 'order': 2})
+    assert changed['atoms'][0]['hybridization'] == 'sp2'
+    np.testing.assert_array_equal(_copy_molecule(changed['molecule']).GetConformer().GetPositions()[:3], before)
+    assert any('existing atom coordinates and bond angles are unchanged' in warning for warning in changed['warnings'])
+
+
+@pytest.mark.parametrize('action', ['add_atom', 'fill_valence'])
+def test_incompatible_fixed_neighbors_keep_new_bond_at_reference_length(action):
+    view = edit_geometry({'action': 'add_atom', 'element': 'C'})
+    for _ in range(3):
+        view = edit_geometry({'molecule': view['molecule'], 'action': 'add_atom', 'atoms': [1], 'element': 'H'})
+    mol = _copy_molecule(view['molecule'])
+    for index, position in enumerate([(1.09, 0, 0), (0, 1.09, 0), (0, 0, 1.09)], start=1):
+        mol.GetConformer().SetAtomPosition(index, position)
+    before = mol.GetConformer().GetPositions()
+    state = edit_geometry({'molecule': mol, 'action': 'atom_state', 'atoms': [1], 'valence': 4})
+    body = {'molecule': state['molecule'], 'action': action, 'atoms': [1]}
+    if action == 'add_atom':
+        body['element'] = 'H'
+    result = edit_geometry(body)
+    positions = _copy_molecule(result['molecule']).GetConformer().GetPositions()
+    np.testing.assert_array_equal(positions[:4], before)
+    assert np.isfinite(positions).all()
+    assert np.linalg.norm(positions[4] - positions[0]) == pytest.approx(1.09)
+
+
+@pytest.mark.parametrize('action', ['add_atom', 'fill_valence', 'atom_state', 'delete_atom', 'bond'])
+def test_builder_edits_do_not_certify_distance_inferred_bond_orders(action):
+    view = edit_geometry({'action': 'add_atom', 'element': 'C'})
+    view = edit_geometry({'molecule': view['molecule'], 'action': 'add_atom', 'atoms': [1], 'element': 'H'})
+    mol = _copy_molecule(view['molecule'])
+    mol.SetProp('cloudra_graph_status', 'distance-inferred')
+    mol.GetAtomWithIdx(0).SetIntProp('cloudra_target_valence', 4)
+    assert geometry_view(mol)['atoms'][0]['hybridization'] is None
+    body = {'molecule': mol, 'action': action, 'atoms': [1]}
+    if action == 'add_atom':
+        body['element'] = 'H'
+    elif action == 'delete_atom':
+        body['atoms'] = [2]
+    elif action == 'bond':
+        body['atoms'] = [1, 2]
+    result = edit_geometry(body)
+    assert result['graph_status'] == 'distance-inferred'
+    assert result['atoms'][0]['hybridization'] is None
+    assert result['atoms'][0]['lone_pairs'] is None
+    with pytest.raises(ValueError, match='resolved'):
+        edit_geometry({'molecule': result['molecule'], 'action': 'preoptimize'})
+
+
+def test_manual_geometry_override_does_not_certify_distance_inferred_graph():
+    view = edit_geometry({'action': 'add_atom', 'element': 'N'})
+    view = edit_geometry({'molecule': view['molecule'], 'action': 'add_atom', 'atoms': [1], 'element': 'H'})
+    mol = _copy_molecule(view['molecule'])
+    mol.SetProp('cloudra_graph_status', 'distance-inferred')
+    state = edit_geometry({'molecule': mol, 'action': 'atom_state', 'atoms': [1], 'hybridization': 'sp2'})
+    result = edit_geometry({'molecule': state['molecule'], 'action': 'add_atom', 'atoms': [1], 'element': 'H'})
+    assert result['graph_status'] == 'distance-inferred'
+    assert result['atoms'][0]['hybridization'] == result['atoms'][0]['hybridization_override'] == 'sp2'
+    assert result['atoms'][0]['lone_pairs'] is None
+    assert rdMolTransforms.GetAngleDeg(_copy_molecule(result['molecule']).GetConformer(), 1, 0, 2) == pytest.approx(120)
+
+
+def test_shared_bond_editor_preserves_distance_inferred_provenance():
+    from cloudra.tools.Chemtool.internal_coordinates import InternalCoordinates
+
+    mol = chain()
+    mol.SetProp('cloudra_graph_status', 'distance-inferred')
+    result, _ = InternalCoordinates._transform_molecule(mol, {'type': 'bond', 'atoms': [1, 2], 'order': 2})
+    assert result.GetProp('cloudra_graph_status') == 'distance-inferred'
+
+
+def test_explicit_resolution_retries_inferred_graph_without_duplicate_bonds(monkeypatch):
+    from rdkit.Chem import rdDetermineBonds
+
+    determine = rdDetermineBonds.DetermineBonds
+
+    def unavailable(*args, **kwargs):
+        raise ValueError('perception unavailable')
+
+    monkeypatch.setattr(rdDetermineBonds, 'DetermineBonds', unavailable)
+    initial = create_geometry('3\n\nO 0 0 0\nH .957 0 0\nH -.239 .927 0\n', 'xyz')
+    inferred = edit_geometry({'molecule': initial['molecule'], 'action': 'resolve_bonds'})
+    repeated = edit_geometry({'molecule': inferred['molecule'], 'action': 'resolve_bonds'})
+    assert inferred['graph_status'] == repeated['graph_status'] == 'distance-inferred'
+    assert inferred['bonds'] == repeated['bonds']
+    monkeypatch.setattr(rdDetermineBonds, 'DetermineBonds', determine)
+    resolved = edit_geometry({'molecule': inferred['molecule'], 'action': 'resolve_bonds'})
+    assert resolved['graph_status'] == 'perceived'
+    assert resolved['atoms'][0]['hybridization'] == 'sp3'
+    assert [atom['atom_id'] for atom in resolved['atoms']] == [atom['atom_id'] for atom in inferred['atoms']]
+
+
+def test_internal_coordinate_forwarding_excludes_editor_only_fields(monkeypatch):
+    from cloudra.tools.Chemtool.internal_coordinates import InternalCoordinates
+
+    transform = InternalCoordinates._transform_molecule
+    forwarded = []
+
+    def capture(mol, operation):
+        forwarded.append(operation)
+        return transform(mol, operation)
+
+    monkeypatch.setattr(InternalCoordinates, '_transform_molecule', capture)
+    edit_geometry({'molecule': chain(), 'action': 'coordinate', 'atoms': [1, 2], 'value': 1.5})
+    assert not {'force_field', 'hybridization'} & forwarded[0].keys()
+
+
+@pytest.mark.parametrize('smiles,index,hybridization,lone_pairs', [
+    ('CC(=O)N', 3, 'sp2', 1), ('c1ccncc1', 3, 'sp2', 1), ('c1cc[nH]c1', 3, 'sp2', 1),
+    ('[NH4+]', 0, 'sp3', 0), ('[OH-]', 0, 'sp3', 3), ('N#C', 0, 'sp', 1),
+])
+def test_local_geometry_reads_conjugation_aromaticity_and_charge(smiles, index, hybridization, lone_pairs):
+    mol = Chem.MolFromSmiles(smiles)
+    mol.AddConformer(Chem.Conformer(mol.GetNumAtoms()))
+    atom = geometry_view(mol)['atoms'][index]
+    assert atom['hybridization'] == hybridization
+    assert atom['lone_pairs'] == lone_pairs
+
+
+def test_aromatic_atom_with_unsupported_target_has_no_automatic_geometry():
+    mol = Chem.MolFromSmiles('c1ccccc1')
+    mol.AddConformer(Chem.Conformer(mol.GetNumAtoms()))
+    state = edit_geometry({'molecule': mol, 'action': 'atom_state', 'atoms': [1], 'valence': 7})
+    assert state['atoms'][0]['hybridization'] is None
+    assert state['atoms'][0]['lone_pairs'] is None
+    manual = edit_geometry({'molecule': state['molecule'], 'action': 'atom_state', 'atoms': [1], 'hybridization': 'sp2'})
+    assert manual['atoms'][0]['hybridization'] == 'sp2'
+    assert manual['atoms'][0]['lone_pairs'] is None
+
+
+def test_fill_imported_implicit_hydrogens_uses_same_planar_amide_geometry():
+    mol = Chem.MolFromSmiles('CC(=O)N')
+    conf = Chem.Conformer(4)
+    for index, position in enumerate([(-1, 1, 0), (0, 0, 0), (0, -1.2, 0), (1.4, 0, 0)]):
+        conf.SetAtomPosition(index, position)
+    mol.AddConformer(conf)
+    before = mol.GetConformer().GetPositions()
+    state = edit_geometry({'molecule': mol, 'action': 'atom_state', 'atoms': [4], 'valence': 3})
+    filled = edit_geometry({'molecule': state['molecule'], 'action': 'fill_valence', 'atoms': [4]})
+    result = _copy_molecule(filled['molecule'])
+    assert result.GetNumAtoms() == 6
+    assert result.GetAtomWithIdx(3).GetNumImplicitHs() == 0
+    assert result.GetAtomWithIdx(3).GetNumExplicitHs() == 0
+    np.testing.assert_array_equal(result.GetConformer().GetPositions()[:4], before)
+    vectors = result.GetConformer().GetPositions()[[1, 4, 5]] - before[3]
+    vectors /= np.linalg.norm(vectors, axis=1)[:, None]
+    np.testing.assert_allclose((vectors @ vectors.T)[np.triu_indices(3, k=1)], -.5, atol=1e-7)
+    assert mol.GetNumAtoms() == 4 and mol.GetAtomWithIdx(3).GetNumImplicitHs() == 2
+
+
+def test_manual_hybridization_roundtrip_clear_and_placement_on_existing_graph():
+    original = edit_geometry({'action': 'add_atom', 'element': 'N'})
+    original = edit_geometry({'molecule': original['molecule'], 'action': 'add_atom', 'atoms': [1], 'element': 'H'})
+    state = edit_geometry({'molecule': original['molecule'], 'action': 'atom_state', 'atoms': [1], 'hybridization': 'sp2'})
+    restored = geometry_view(_copy_molecule(state['molecule']))
+    assert restored['atoms'][0]['hybridization_override'] == 'sp2'
+    assert restored['atoms'][0]['hybridization'] == 'sp2'
+    np.testing.assert_array_equal(_copy_molecule(state['molecule']).GetConformer().GetPositions(),
+                                  _copy_molecule(original['molecule']).GetConformer().GetPositions())
+    attached = edit_geometry({'molecule': state['molecule'], 'action': 'add_atom', 'atoms': [1], 'element': 'H'})
+    assert rdMolTransforms.GetAngleDeg(_copy_molecule(attached['molecule']).GetConformer(), 1, 0, 2) == pytest.approx(120)
+    cleared = edit_geometry({'molecule': attached['molecule'], 'action': 'atom_state', 'atoms': [1], 'hybridization': None})
+    assert cleared['atoms'][0]['hybridization_override'] is None
+    assert cleared['atoms'][0]['hybridization'] == 'sp3'
+
+
+@pytest.mark.parametrize('smiles', ['[Fe+2]', '[CH3]'])
+def test_unsupported_or_radical_geometry_is_unknown(smiles):
+    mol = Chem.MolFromSmiles(smiles)
+    mol.AddConformer(Chem.Conformer(mol.GetNumAtoms()))
+    atom = geometry_view(mol)['atoms'][0]
+    assert atom['hybridization'] is None and atom['lone_pairs'] is None
+
+
+def _explicit_ethanol():
+    from rdkit.Chem import AllChem
+
+    mol = Chem.AddHs(Chem.MolFromSmiles('CCO'))
+    assert AllChem.EmbedMolecule(mol, randomSeed=5) == 0
+    position = mol.GetConformer().GetAtomPosition(0)
+    mol.GetConformer().SetAtomPosition(0, (position.x + .35, position.y, position.z))
+    return mol
+
+
+@pytest.mark.parametrize('engine', ['MMFF94', 'UFF'])
+def test_preoptimization_uses_current_coordinates_and_preserves_graph_identity_and_other_conformers(engine):
+    from cloudra.tools.core.structure_builder import _make_force_field
+
+    mol = _explicit_ethanol()
+    mol.AddConformer(Chem.Conformer(mol.GetConformer()), assignId=True)
+    original = geometry_view(mol)
+    before = serialize_molecule(mol)
+    expected_mol = Chem.Mol(mol)
+    expected_force_field = _make_force_field(expected_mol, 0, engine)
+    expected_force_field.Initialize()
+    expected_energy = expected_force_field.CalcEnergy()
+    optimized = edit_geometry({'molecule': original['molecule'], 'action': 'preoptimize', 'force_field': engine})
+    report = optimized['optimization']
+    assert report['force_field'] == engine and report['energy_unit'] == 'kcal/mol'
+    assert report['converged'] is True and report['initial_energy'] > report['final_energy']
+    assert report['initial_energy'] == pytest.approx(expected_energy)
+    assert [atom['atom_id'] for atom in optimized['atoms']] == [atom['atom_id'] for atom in original['atoms']]
+    assert optimized['bonds'] == original['bonds']
+    assert optimized['changes']['deleted_atoms'] == [] and optimized['changes']['moved_atoms']
+    result = _copy_molecule(optimized['molecule'])
+    assert result.GetNumConformers() == 2
+    np.testing.assert_array_equal(result.GetConformer(1).GetPositions(), mol.GetConformer(1).GetPositions())
+    assert serialize_molecule(mol) == before
+
+
+def test_preoptimization_retains_exact_aromatic_bonds_and_atom_properties():
+    from rdkit.Chem import AllChem
+
+    mol = Chem.AddHs(Chem.MolFromSmiles('c1cc[nH]c1'))
+    assert AllChem.EmbedMolecule(mol, randomSeed=2) == 0
+    mol.GetAtomWithIdx(0).SetProp('cloudra_hybridization', 'sp2')
+    mol.GetAtomWithIdx(0).SetIsotope(13)
+    before = geometry_view(mol)
+    result = edit_geometry({'molecule': before['molecule'], 'action': 'preoptimize'})
+    restored = _copy_molecule(result['molecule'])
+    assert result['bonds'] == before['bonds']
+    assert restored.GetAtomWithIdx(0).GetIsotope() == 13
+    assert restored.GetAtomWithIdx(0).GetProp('cloudra_hybridization') == 'sp2'
+    assert [bond.GetIsAromatic() for bond in restored.GetBonds()] == [bond.GetIsAromatic() for bond in mol.GetBonds()]
+
+
+def test_preoptimization_refuses_sanitization_that_changes_declared_charges():
+    mol = Chem.MolFromSmiles('CN(=O)=O', sanitize=False)
+    mol.UpdatePropertyCache(strict=False)
+    mol.AddConformer(Chem.Conformer(mol.GetNumAtoms()))
+    with pytest.raises(ValueError, match='repair formal charges'):
+        edit_geometry({'molecule': mol, 'action': 'preoptimize'})
+
+
+def test_add_atom_keeps_all_conformer_ids_and_coordinates():
+    original = chain()
+    second = Chem.Conformer(original.GetConformer())
+    second.SetId(7)
+    second.SetAtomPosition(0, (0, 0, 3))
+    original.AddConformer(second, assignId=False)
+    result = _copy_molecule(edit_geometry({'molecule': original, 'action': 'add_atom', 'atoms': [1], 'element': 'H'})['molecule'])
+    assert [conf.GetId() for conf in result.GetConformers()] == [0, 7]
+    for before, after in zip(original.GetConformers(), result.GetConformers(), strict=True):
+        np.testing.assert_array_equal(after.GetPositions()[:4], before.GetPositions())
+        assert np.linalg.norm(after.GetPositions()[4] - after.GetPositions()[0]) == pytest.approx(1.09)
+
+
+@pytest.mark.parametrize('smiles,reason', [('C', 'explicit atom'), ('[CH3]', 'radical'), ('[Fe]', 'parameters')])
+def test_preoptimization_refuses_incomplete_radical_or_unsupported_graphs(smiles, reason):
+    mol = Chem.MolFromSmiles(smiles)
+    mol.AddConformer(Chem.Conformer(mol.GetNumAtoms()))
+    with pytest.raises(ValueError, match=reason):
+        edit_geometry({'molecule': mol, 'action': 'preoptimize'})
+
+
+def test_preoptimization_rejects_unresolved_graph_and_invalid_requests():
+    draft = create_geometry('2\n\nH 0 0 0\nH .74 0 0\n', 'xyz')
+    with pytest.raises(ValueError, match='resolved'):
+        edit_geometry({'molecule': draft['molecule'], 'action': 'preoptimize'})
+    for request in [{'action': 'atom_state', 'atoms': [1], 'hybridization': 'sp3d'},
+                    {'action': 'fill_valence', 'atoms': [1], 'hybridization': 'sp2'},
+                    {'action': 'atom_state', 'atoms': [1], 'force_field': 'UFF'},
+                    {'action': 'preoptimize', 'atoms': [1]},
+                    {'action': 'preoptimize', 'force_field': 'automatic'}]:
+        with pytest.raises(ValueError):
+            edit_geometry({'molecule': draft['molecule'], **request})
+
+
+def test_preoptimization_has_no_silent_force_field_fallback(monkeypatch):
+    from rdkit.Chem import AllChem
+
+    calls = []
+    monkeypatch.setattr(AllChem, 'MMFFHasAllMoleculeParams', lambda mol: False)
+    monkeypatch.setattr(AllChem, 'UFFGetMoleculeForceField', lambda *args, **kwargs: calls.append('UFF'))
+    with pytest.raises(ValueError, match='MMFF94.*no fallback'):
+        edit_geometry({'molecule': _explicit_ethanol(), 'action': 'preoptimize'})
+    assert not calls
+
+
+def test_preoptimization_reports_iteration_limit_without_claiming_convergence(monkeypatch):
+    from cloudra.tools.core import structure_builder
+
+    make = structure_builder._make_force_field
+
+    class LimitedForceField:
+        def __init__(self, force_field):
+            self.force_field = force_field
+
+        def Initialize(self):
+            self.force_field.Initialize()
+
+        def CalcEnergy(self):
+            return self.force_field.CalcEnergy()
+
+        def Minimize(self, **kwargs):
+            return self.force_field.Minimize(maxIts=1)
+
+    monkeypatch.setattr(structure_builder, '_make_force_field', lambda *args: LimitedForceField(make(*args)))
+    result = edit_geometry({'molecule': _explicit_ethanol(), 'action': 'preoptimize'})
+    assert result['optimization']['converged'] is False
+    assert any('without convergence' in warning for warning in result['warnings'])

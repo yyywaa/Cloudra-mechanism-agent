@@ -25,15 +25,15 @@ test('basic save needs no advanced tools or calculation settings', async ({ page
   const { dialog, saved } = await open(page);
   await expect(dialog.getByLabel('内坐标目标值')).toBeHidden();
   await expect(dialog.getByLabel('基团 SMILES', { exact: true })).toBeHidden();
-  await expect(dialog.getByLabel('引擎')).toHaveCount(0);
+  await expect(dialog.getByLabel('引擎', { exact: true })).toHaveCount(0);
   const save = dialog.getByRole('button', { name: '保存编辑稿到项目' });
   await expect(save).toBeInViewport();
   await save.click();
   await expect.poll(() => saved).toMatchObject([{ molecule: 'frame-a', generate_input: false }]);
   await dialog.getByLabel('同时生成原生计算输入').check();
-  await expect(dialog.getByLabel('引擎')).toBeVisible();
+  await expect(dialog.getByLabel('引擎', { exact: true })).toBeVisible();
   await dialog.getByLabel('同时生成原生计算输入').uncheck();
-  await expect(dialog.getByLabel('引擎')).toHaveCount(0);
+  await expect(dialog.getByLabel('引擎', { exact: true })).toHaveCount(0);
 });
 test('source is read-only and save follows the explicit editing draft', async ({ page }) => {
   const { dialog, saved } = await open(page);
@@ -58,8 +58,13 @@ test('mirror scope does not inherit the coordinate moving atom list', async ({ p
   const { dialog } = await open(page);
   const edits: unknown[] = [];
   await page.route('**/workbench/edit', route => { edits.push(route.request().postDataJSON()); return route.fulfill({ json: a }); });
-  await dialog.locator('summary').filter({ hasText: '调整内坐标、冻结与扫描' }).click();
-  await dialog.getByLabel('手动指定移动原子').fill('2');
+  await dialog.getByLabel('原子列表', { exact: true }).getByRole('button', { name: 'H1', exact: true }).click();
+  await dialog.getByLabel('原子列表', { exact: true }).getByRole('button', { name: 'H2', exact: true }).click();
+  await dialog.getByRole('button', { name: '编辑距离', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: '调整距离', exact: true });
+  await editor.getByText('手动指定移动部分', { exact: true }).click();
+  await editor.getByLabel('手动指定移动原子').fill('2');
+  await editor.getByRole('button', { name: '取消', exact: true }).click();
   await dialog.locator('summary').filter({ hasText: '连接感知与镜像' }).click();
   await dialog.getByRole('button', { name: '预览整分子镜像' }).click();
   await expect.poll(() => edits).toEqual([{ action: 'mirror', plane: 'yz', molecule: 'frame-a' }]);

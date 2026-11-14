@@ -486,11 +486,17 @@ def _select_engine(mol) -> Optional[str]:
 
 def _make_force_field(mol, conf_id: int, engine: str):
     if engine == MMFF_ENGINE:
+        if not AllChem.MMFFHasAllMoleculeParams(mol):
+            return None
         props = AllChem.MMFFGetMoleculeProperties(mol, mmffVariant="MMFF94")
         if props is None:
             return None
         return AllChem.MMFFGetMoleculeForceField(mol, props, confId=conf_id)
-    return AllChem.UFFGetMoleculeForceField(mol, confId=conf_id)
+    if engine == UFF_ENGINE:
+        if not AllChem.UFFHasAllMoleculeParams(mol):
+            return None
+        return AllChem.UFFGetMoleculeForceField(mol, confId=conf_id)
+    raise ValueError(f"Unknown force field: {engine}")
 
 
 def _positions(mol, conf_id: int) -> list[list[float]]:

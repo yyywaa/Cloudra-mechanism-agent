@@ -1,0 +1,124 @@
+import { expect, test, type Page } from '@playwright/test';
+
+test.use({ hasTouch: true, launchOptions: { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } });
+
+async function openViewer(page: Page) {
+  await page.goto('/e2e/viewer-interaction.html');
+  await expect(page.locator('.viewer-webgl-host canvas')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => !!(window as any).observed.viewer?.getModel(0)?.molObj)).toBe(true);
+}
+
+async function pick(page: Page, serial: number) {
+  const point = await page.evaluate(serial => {
+    const viewer = (window as any).observed.viewer;
+    const atom = viewer.getModel(0).selectedAtoms({ serial })[0];
+    const point = viewer.modelToScreen(atom);
+    return { x: point.x - window.scrollX, y: point.y - window.scrollY };
+  }, serial);
+  await page.mouse.click(point.x, point.y);
+}
+
+async function rememberModel(page: Page) {
+  await page.evaluate(() => {
+    const observed = (window as any).observed;
+    observed.original = {
+      model: observed.viewer.getModel(0),
+      geometry: observed.viewer.getModel(0).molObj,
+      view: observed.viewer.getView(),
+      clears: observed.clears, animations: observed.animations, stops: observed.stops,
+    };
+  });
+}
+
+async function expectRetained(page: Page, animated = false) {
+  await expect.poll(() => page.evaluate(animated => {
+    const { viewer, original, clears, animations, stops } = (window as any).observed;
+    return {
+      model: viewer.getModel(0) === original.model,
+      geometry: animated || viewer.getModel(0).molObj === original.geometry,
+      view: viewer.getView(), clears: clears - original.clears,
+      animations: animations - original.animations, stops: stops - original.stops,
+    };
+  }, animated)).toEqual({ model: true, geometry: true, view: await page.evaluate(() => (window as any).observed.original.view), clears: 0, animations: 0, stops: 0 });
+}
+
+test('atom selection and parent inputs keep the rendered molecule and camera', async ({ page }) => {
+  await openViewer(page);
+  await rememberModel(page);
+  await pick(page, 1);
+  await expect(page.getByLabel('选择顺序')).toHaveText('1');
+  await expectRetained(page);
+  await pick(page, 2);
+  await expect(page.getByLabel('选择顺序')).toHaveText('1,2');
+  await expectRetained(page);
+  await page.getByLabel('标题').fill('Edited without rebuilding');
+  await page.getByRole('button', { name: '高亮坐标', exact: true }).click();
+  await page.getByRole('button', { name: '编号', exact: true }).click();
+  await page.getByRole('button', { name: '外观', exact: true }).click();
+  await expectRetained(page);
+  expect(await page.evaluate(() => (window as any).observed.backgrounds)).toBe(0);
+});
+
+test('only a blank primary mouse tap clears the selected atoms', async ({ page }) => {
+  await openViewer(page);
+  await pick(page, 1);
+  await expect(page.getByLabel('选择顺序')).toHaveText('1');
+  const canvas = page.locator('.viewer-webgl-host canvas');
+  const bounds = (await canvas.boundingBox())!;
+  const x = bounds.x + 15, y = bounds.y + 15;
+  for (const button of ['left', 'right'] as const) {
+    await page.mouse.move(x, y);
+    await page.mouse.down({ button });
+    await page.mouse.move(x + 60, y + 35, { steps: 4 });
+    await page.mouse.move(x, y, { steps: 4 });
+    await page.mouse.up({ button });
+    await expect(page.getByLabel('选择顺序')).toHaveText('1');
+  }
+  await page.mouse.wheel(0, 50);
+  await page.getByRole('button', { name: 'XYZ', exact: true }).click();
+  await expect(page.getByLabel('选择顺序')).toHaveText('1');
+  await page.getByRole('button', { name: 'XYZ', exact: true }).click();
+  await page.touchscreen.tap(x, y);
+  await expect(page.getByLabel('选择顺序')).toHaveText('1');
+  expect(await page.evaluate(() => (window as any).observed.backgrounds)).toBe(0);
+  await page.mouse.click(x, y);
+  await expect(page.getByLabel('选择顺序')).toHaveText('');
+  expect(await page.evaluate(() => (window as any).observed.backgrounds)).toBe(1);
+});
+
+test('selection overlays follow vibration frames without restarting playback', async ({ page }) => {
+  await openViewer(page);
+  await page.getByRole('button', { name: '振动模式', exact: true }).click();
+  await pick(page, 1);
+  await expect(page.getByLabel('选择顺序')).toHaveText('1');
+  await page.getByRole('button', { name: '振动播放', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).observed.viewer.isAnimated())).toBe(true);
+  await rememberModel(page);
+  await pick(page, 2);
+  await expect(page.getByLabel('选择顺序')).toHaveText('1,2');
+  await page.getByLabel('标题').fill('Playing');
+  await page.getByRole('button', { name: '高亮坐标', exact: true }).click();
+  await expectRetained(page, true);
+  await expect.poll(() => page.evaluate(() => {
+    const viewer = (window as any).observed.viewer;
+    const main = viewer.getModel(0).selectedAtoms({ serial: 1 })[0];
+    const overlay = viewer.getModel(1)?.selectedAtoms({ serial: 1 })[0];
+    return !!overlay && main.x === overlay.x && main.y === overlay.y && main.z === overlay.z;
+  })).toBe(true);
+});
+
+test('enabling view preservation without changing geometry keeps the first subsequent frame in place', async ({ page }) => {
+  await openViewer(page);
+  const bounds = (await page.locator('.viewer-webgl-host canvas').boundingBox())!;
+  await page.mouse.move(bounds.x + 15, bounds.y + 15);
+  await page.mouse.wheel(0, 180);
+  await page.mouse.down({ button: 'right' });
+  await page.mouse.move(bounds.x + 50, bounds.y + 40, { steps: 4 });
+  await page.mouse.up({ button: 'right' });
+  await rememberModel(page);
+  await page.getByRole('button', { name: '保持视角', exact: true }).click();
+  await expectRetained(page);
+  await page.getByRole('button', { name: '下一帧', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).observed.viewer.getModel(0).selectedAtoms({ serial: 1 })[0].x)).toBe(-1);
+  await expect.poll(() => page.evaluate(() => (window as any).observed.viewer.getView())).toEqual(await page.evaluate(() => (window as any).observed.original.view));
+});

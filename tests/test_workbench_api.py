@@ -45,7 +45,8 @@ async def test_manual_builder_round_trip_from_blank_to_saved_structure(tmp_path)
         seed = await edit(action='add_atom', element='N')
         nitrogen = seed['atoms'][0]
         assert nitrogen['symbol'] == 'N' and not seed['bonds']
-        declared = await edit(action='atom_state', molecule=seed['molecule'], atoms=[1], formal_charge=1, valence=4)
+        declared = await edit(action='atom_state', molecule=seed['molecule'], atoms=[1], formal_charge=1, valence=4,
+                              hybridization='sp3')
         ammonium = await edit(action='fill_valence', molecule=declared['molecule'], atoms=[1])
         assert [atom['symbol'] for atom in ammonium['atoms']] == ['N', 'H', 'H', 'H', 'H']
         assert ammonium['atoms'][0]['bond_valence'] == 4
@@ -63,6 +64,16 @@ async def test_manual_builder_round_trip_from_blank_to_saved_structure(tmp_path)
         assert geometry['bonds'] == ammonium['bonds']
         assert geometry['atoms'][0]['formal_charge'] == 1
         assert geometry['atoms'][0]['target_valence'] == 4
+        assert geometry['atoms'][0]['hybridization_override'] == 'sp3'
+        optimized = await edit(action='preoptimize', molecule=geometry['molecule'])
+        assert optimized['optimization']['force_field'] == 'MMFF94'
+        assert optimized['optimization']['converged'] is True
+        assert optimized['optimization']['initial_energy'] >= optimized['optimization']['final_energy']
+        assert optimized['bonds'] == geometry['bonds']
+        assert [atom['atom_id'] for atom in optimized['atoms']] == [atom['atom_id'] for atom in geometry['atoms']]
+
+        response = await client.post(f'{base}/edit', json={'action': 'preoptimize', 'molecule': seed['molecule']})
+        assert response.status_code == 400
 
         empty = await edit(action='delete_atom', molecule=geometry['molecule'], atoms=[1, 2, 3, 4, 5])
         assert empty['atoms'] == [] and empty['bonds'] == []

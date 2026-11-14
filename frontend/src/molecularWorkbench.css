@@ -151,6 +151,44 @@
   background: var(--bg-panel);
 }
 
+.wb-selection-bar, .wb-force-field-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.wb-selection-bar {
+  padding: 8px 10px;
+  background: var(--bg-layer);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.wb-selection-measure { flex: 1; font-size: 12px; min-width: 160px; }
+.wb-force-field-controls { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.wb-optimization { margin: 0; padding: 8px 12px; background: var(--bg-layer); font-size: 12px; }
+.wb-coordinate-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 40px);
+  box-sizing: border-box;
+  overflow-y: auto;
+  margin: auto;
+  padding: 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  color: var(--fg);
+  background: var(--bg-panel);
+  box-shadow: 0 20px 70px #0008;
+}
+.wb-coordinate-dialog::backdrop { background: #0005; }
+.wb-dialog-header, .wb-dialog-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.wb-dialog-header h3 { margin: 0; font-size: 17px; }
+.wb-dialog-measure { padding: 10px 12px; background: var(--bg-layer); border-radius: 5px; font-size: 13px; }
+.wb-dialog-measure strong { float: right; font-family: var(--mono); }
+.wb-coordinate-dialog fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.wb-coordinate-dialog label { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; font-size: 12px; }
+.wb-coordinate-dialog summary { cursor: pointer; margin: 12px 0; font-size: 12px; }
+.wb-dialog-actions { margin-top: 18px; justify-content: flex-end; }
+
 .wb-builder {
   padding: 10px 12px;
   background: var(--bg-layer);
