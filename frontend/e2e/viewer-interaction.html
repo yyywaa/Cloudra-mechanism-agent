@@ -21,7 +21,9 @@
         bonds: [{ atom1: 1, atom2: 2, order: 1 }, { atom1: 1, atom2: 3, order: 1 }],
       };
       const nextGeometry = { ...geometry, atoms: geometry.atoms.map(atom => ({ ...atom, x: atom.x + 0.2 })) };
-      const vectors = [[0, 0.3, 0], [0, -0.3, 0], [0, 0.2, 0]];
+      // Keep O2 stationary so mouse input remains deterministic during software
+      // WebGL playback; C1 and its selection overlay still move each frame.
+      const vectors = [[0, 0.3, 0], [0, 0, 0], [0, 0.2, 0]];
       const observed = window.observed = { clears: 0, animations: 0, stops: 0, backgrounds: 0 };
       for (const [method, counter] of [['clear', 'clears'], ['animate', 'animations'], ['stopAnimate', 'stops']]) {
         const original = GLViewer.prototype[method];
@@ -48,14 +50,16 @@
           h('button', { onClick: () => setPreserveView(true) }, '保持视角'),
           h('button', { onClick: () => setNextFrame(true) }, '下一帧'),
           h('output', { 'aria-label': '选择顺序' }, selected.join(',')),
-          h(Molecule3DViewer, {
+          // Like the workbench viewport, the viewer needs a parent with an
+          // explicit height: its canvas is absolutely positioned in a flex item.
+          h('section', { style: { height: '460px', marginTop: '16px' } }, h(Molecule3DViewer, {
             geometry: nextFrame ? nextGeometry : geometry, title, selectedAtoms: selected, preserveView,
             onAtomPick: index => setSelected(current => current.includes(index) ? current.filter(value => value !== index) : [...current, index]),
             onBackgroundClick: () => { observed.backgrounds++; setSelected([]); },
             coordinateHighlights: highlight ? [[1, 2]] : [],
             modeDisplacements: mode ? vectors : undefined,
             modePlaying: playing,
-          }),
+          })),
         );
       }
       createRoot(document.getElementById('root')).render(h(App));

@@ -4,6 +4,7 @@ test.use({ hasTouch: true, launchOptions: { args: ['--use-angle=swiftshader', '-
 
 async function openViewer(page: Page) {
   await page.goto('/e2e/viewer-interaction.html');
+  await expect.poll(() => page.locator('.viewer-webgl-host').evaluate(host => host.getBoundingClientRect().height)).toBeGreaterThan(250);
   await expect(page.locator('.viewer-webgl-host canvas')).toBeVisible();
   await expect.poll(() => page.evaluate(() => !!(window as any).observed.viewer?.getModel(0)?.molObj)).toBe(true);
 }
@@ -66,7 +67,8 @@ test('only a blank primary mouse tap clears the selected atoms', async ({ page }
   const canvas = page.locator('.viewer-webgl-host canvas');
   const bounds = (await canvas.boundingBox())!;
   const x = bounds.x + 15, y = bounds.y + 15;
-  for (const button of ['left', 'right'] as const) {
+  // 3Dmol uses left to rotate, middle to pan, and right to zoom.
+  for (const button of ['left', 'middle', 'right'] as const) {
     await page.mouse.move(x, y);
     await page.mouse.down({ button });
     await page.mouse.move(x + 60, y + 35, { steps: 4 });
@@ -101,8 +103,12 @@ test('selection overlays follow vibration frames without restarting playback', a
   await expectRetained(page, true);
   await expect.poll(() => page.evaluate(() => {
     const viewer = (window as any).observed.viewer;
-    const main = viewer.getModel(0).selectedAtoms({ serial: 1 })[0];
-    const overlay = viewer.getModel(1)?.selectedAtoms({ serial: 1 })[0];
+    const model = viewer.getModel(0), selection = viewer.getModel(1);
+    // getModel falls back to the last model for an absent ID, so require a
+    // distinct overlay before comparing positions.
+    if (!selection || selection === model) return false;
+    const main = model.selectedAtoms({ serial: 1 })[0];
+    const overlay = selection.selectedAtoms({ serial: 1 })[0];
     return !!overlay && main.x === overlay.x && main.y === overlay.y && main.z === overlay.z;
   })).toBe(true);
 });
@@ -110,11 +116,14 @@ test('selection overlays follow vibration frames without restarting playback', a
 test('enabling view preservation without changing geometry keeps the first subsequent frame in place', async ({ page }) => {
   await openViewer(page);
   const bounds = (await page.locator('.viewer-webgl-host canvas').boundingBox())!;
+  const initialView = await page.evaluate(() => (window as any).observed.viewer.getView());
   await page.mouse.move(bounds.x + 15, bounds.y + 15);
   await page.mouse.wheel(0, 180);
-  await page.mouse.down({ button: 'right' });
+  await expect.poll(() => page.evaluate(() => (window as any).observed.viewer.getView())).not.toEqual(initialView);
+  await page.mouse.down({ button: 'middle' });
   await page.mouse.move(bounds.x + 50, bounds.y + 40, { steps: 4 });
-  await page.mouse.up({ button: 'right' });
+  await page.mouse.up({ button: 'middle' });
+  await expect.poll(() => page.evaluate(() => (window as any).observed.viewer.getView().slice(0, 3))).not.toEqual(initialView.slice(0, 3));
   await rememberModel(page);
   await page.getByRole('button', { name: '保持视角', exact: true }).click();
   await expectRetained(page);

@@ -31,7 +31,7 @@ function AtomState({ atom, bondValence, unresolved, disabled, onEdit }: {
       disabled={disabled} onChange={event => setCharge(event.target.value)} /></label>
     <label>目标价数<input type="number" step={1} min={0} max={32} value={valence} placeholder="未限定"
       disabled={disabled} onChange={event => setValence(event.target.value)} /></label>
-    <label>杂化方式<select value={hybridization} disabled={disabled} onChange={event => setHybridization(event.target.value)}>
+    <label>杂化方式<select aria-label="杂化方式" value={hybridization} disabled={disabled} onChange={event => setHybridization(event.target.value)}>
       <option value="">自动识别</option><option value="sp">sp</option><option value="sp2">sp²</option><option value="sp3">sp³</option>
     </select></label>
     <span className="wb-muted">当前 {atom.hybridization ?? '未确定'} · 孤对电子 {atom.lone_pairs == null ? '未确定' : `${atom.lone_pairs} 对`}</span>
@@ -84,7 +84,7 @@ export function MoleculeBuilder({ geometry, selection, disabled, hasFrozenCoordi
       atom={anchor} bondValence={bondValence} unresolved={geometry?.graph_status === 'unresolved'}
       disabled={disabled} onEdit={onEdit} />}
     <div className="wb-force-field-controls">
-      <label>预优化力场<select value={forceField} disabled={disabled} onChange={event => setForceField(event.target.value as typeof forceField)}><option value="MMFF94">MMFF94</option><option value="UFF">UFF</option></select></label>
+      <label>预优化力场<select aria-label="预优化力场" value={forceField} disabled={disabled} onChange={event => setForceField(event.target.value as typeof forceField)}><option value="MMFF94">MMFF94</option><option value="UFF">UFF</option></select></label>
       <button className="btn outline sm" type="button" disabled={disabled || !geometry?.atoms.length || hasFrozenCoordinates}
         onClick={() => onEdit({ action: 'preoptimize', force_field: forceField })}>力场预优化</button>
       <span className="wb-muted">{hasFrozenCoordinates ? '预优化暂不支持冻结坐标，请先移除冻结定义。' : '优化全部原子，预览后确认；缺参数时提示，不自动更换力场。'}</span>

@@ -18,6 +18,7 @@ export function WorkbenchCoordinateDialog({ selection, kind, current, busy, erro
   onDefine: (coordinate: FrozenCoordinate | ScanCoordinate) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const targetInput = useRef<HTMLInputElement>(null);
   const [target, setTarget] = useState(selection.frozen ? String(selection.frozen.value) : current.toFixed(5));
   const [fixedSide, setFixedSide] = useState<'first' | 'last'>('first');
   const [moving, setMoving] = useState('');
@@ -31,6 +32,7 @@ export function WorkbenchCoordinateDialog({ selection, kind, current, busy, erro
   useEffect(() => {
     const node = dialog.current!;
     node.showModal();
+    targetInput.current?.focus();
     return () => node.close();
   }, []);
 
@@ -62,7 +64,7 @@ export function WorkbenchCoordinateDialog({ selection, kind, current, busy, erro
       <p className="wb-dialog-measure">当前{label} <strong>{current.toFixed(5)} {unit}</strong></p>
       {(validationError || error) && <p className="wb-error" role="alert">{validationError || error}</p>}
       <fieldset disabled={busy}>
-        <label>目标值 {unit}<input autoFocus aria-label="内坐标目标值" type="number" step="any" value={target} onChange={event => setTarget(event.target.value)} /></label>
+        <label>目标值 {unit}<input ref={targetInput} aria-label="内坐标目标值" type="number" step="any" value={target} onChange={event => setTarget(event.target.value)} /></label>
         <label>固定侧<select value={fixedSide} onChange={event => setFixedSide(event.target.value as typeof fixedSide)}><option value="first">固定前侧，移动末侧基团</option><option value="last">固定末侧，移动前侧基团</option></select></label>
         <details><summary>手动指定移动部分</summary><label>手动指定移动原子（逗号分隔，可留空）<input value={moving} onChange={event => setMoving(event.target.value)} placeholder="如 4,5,6" /></label></details>
         <details open={!!selection.frozen || !!selection.scan}>
