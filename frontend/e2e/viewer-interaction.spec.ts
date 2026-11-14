@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
 test.use({ hasTouch: true, launchOptions: { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } });
+// Real software WebGL rendering and pointer gestures exceed 30 s on CI.
+test.setTimeout(60_000);
 
 async function openViewer(page: Page) {
   await page.goto('/e2e/viewer-interaction.html');

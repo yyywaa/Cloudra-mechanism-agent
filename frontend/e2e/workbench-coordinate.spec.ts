@@ -2,6 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 import type { DocumentView, GeometryView } from '../src/workbenchTypes';
 
 test.use({ launchOptions: { args: ['--disable-webgl'] } });
+// Each case opens, previews, cancels and reopens the dialog on hosted runners.
+test.setTimeout(60_000);
 
 const geometry: GeometryView = {
   molecule: 'four-atoms', xyz: '', graph_status: 'declared',

@@ -31,9 +31,13 @@ export function WorkbenchCoordinateDialog({ selection, kind, current, busy, erro
 
   useEffect(() => {
     const node = dialog.current!;
+    const trigger = document.activeElement;
     node.showModal();
     targetInput.current?.focus();
-    return () => node.close();
+    return () => {
+      node.close();
+      if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus();
+    };
   }, []);
 
   const attempt = (operation: () => void) => {
