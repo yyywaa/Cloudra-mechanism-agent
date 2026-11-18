@@ -2,8 +2,9 @@ import { expect, test, type Page } from '@playwright/test';
 import { AGENT, JOB, PROJECT_ACTIVE, installApiMocks, openSpa } from './fixtures';
 
 test('default Acid appearance exposes the project form on demand', async ({ page }) => {
-  await installApiMocks(page, { appearance: 'default', jobs: [] });
+  await installApiMocks(page, { jobs: [] });
   await page.goto('/');
+  expect(await page.evaluate(() => localStorage.getItem('cloudra.appearance'))).toBe('acid');
   await expect(page.locator('html')).toHaveAttribute('data-appearance', 'acid');
   const toggle = page.locator('.acid-project-create-toggle');
   const name = page.getByPlaceholder('新建项目名…');
