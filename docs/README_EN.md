@@ -2,7 +2,7 @@
 
 [中文](README.md) · [Project home](../README.md)
 
-For a first study, start with [installation and your first task](../README.md#install-and-start). For the manuscript and experimental records, start with [Paper, data and reproduction](RESEARCH_DATA.md).
+Start with [installation and desktop startup](INSTALL.md); native Windows users should follow the [guide on the `windows` branch](https://github.com/yyywaa/Cloudra-mechanism-agent/blob/windows/docs/INSTALL_WINDOWS.md). For the preprint and experimental records, start with [Paper, data and reproduction](RESEARCH_DATA.md); the preprint is available as [arXiv:2611.02909](https://arxiv.org/abs/2611.02909).
 
 The landing pages, configuration guide and research-data overview are available in both languages. Detailed chemistry, deployment and API references are currently mainly in Chinese.
 
@@ -12,10 +12,11 @@ Windows users can use the [native Setup.exe and desktop launch guide](INSTALL_WI
 
 | Guide | What you will find |
 | --- | --- |
+| [Installation and desktop startup](INSTALL.md) | macOS / Linux packages, desktop launchers and first use, plus source installation. |
 | [Configuration](CONFIGURATION.md) | Model login, web search, chat commands and server access. |
 | [TS workflow and scientific validation](TS_PROCESS_SOP.md) | Transition-state searches, revisions, stopping, frequency and IRC evidence. |
 | [DAG orchestration](DAG_ORCHESTRATION.md) | Modes, mechanism graphs, evidence binding and Supervisor review. |
-| [Paper, data and reproduction](RESEARCH_DATA.md) | Manuscript sources, figure reproduction, original runs, Gold evidence and new benchmark runs. |
+| [Paper, data and reproduction](RESEARCH_DATA.md) | Preprint, figure reproduction, original runs, Gold evidence and new benchmark runs. |
 
 ## Deployment and configuration
 
@@ -41,4 +42,4 @@ See [Contributing](../CONTRIBUTING.md) for checks and submissions, and [AGENTS.m
 
 ## Historical records
 
-Completed plans, earlier designs and acceptance records remain in `docs/archive/`, `docs/superpowers/`, `gold_compute/archive/`, `paper/archive/` and `ideapool/archive/` for reference. They do not replace the current guides or authorize new calculations. See [CHANGELOG](../CHANGELOG.md) for version history.
+Completed plans, earlier designs and acceptance records remain in `docs/archive/`, `docs/superpowers/`, `gold_compute/archive/` and `ideapool/archive/` for reference. Earlier manuscripts and editorial artifacts remain in Git history; the current branch provides research data and reproduction code. Historical materials do not replace the current guides or authorize new calculations. See [CHANGELOG](../CHANGELOG.md) for version history.

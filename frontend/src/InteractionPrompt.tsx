@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { LongTextControls, handleLongTextKey } from './LongTextControls';
 import type { Agent } from './types';
 import type { Translations } from './i18n';
+import { pendingBelongsToAgent } from './composerSend';
 import {
   type PendingInteractionItem,
   type PendingApprovalItem,
@@ -53,6 +55,7 @@ export default function InteractionPrompt({
   const [answerDraft, setAnswerDraft] = useState('');
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [longText, setLongText] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Unify and prioritize decision items (matching active agent first)
@@ -64,14 +67,8 @@ export default function InteractionPrompt({
     if (!activeAgent || list.length <= 1) return list;
 
     return list.slice().sort((a, b) => {
-      const aAgentId = a.kind === 'interaction' ? a.data.agent_id : a.data.agent_name;
-      const bAgentId = b.kind === 'interaction' ? b.data.agent_id : b.data.agent_name;
-      const aMatch =
-        (a.data.session_id && a.data.session_id === activeAgent.id) ||
-        (aAgentId && (aAgentId === activeAgent.role_id || aAgentId === activeAgent.display_name));
-      const bMatch =
-        (b.data.session_id && b.data.session_id === activeAgent.id) ||
-        (bAgentId && (bAgentId === activeAgent.role_id || bAgentId === activeAgent.display_name));
+      const aMatch = pendingBelongsToAgent(a.data, activeAgent.id);
+      const bMatch = pendingBelongsToAgent(b.data, activeAgent.id);
       if (aMatch && !bMatch) return -1;
       if (!aMatch && bMatch) return 1;
       return 0;
@@ -111,19 +108,14 @@ export default function InteractionPrompt({
   if (!itemId) return null;
 
   // Resolve asking agent name & object
-  const sessionId = currentItem.data.session_id;
   const rawAgentId = isApproval ? approvalData?.agent_name : interactionData?.agent_id;
-  const askingAgent =
-    agents.find((a) => a.id === sessionId) ||
-    agents.find((a) => a.role_id === rawAgentId || a.display_name === rawAgentId);
+  const askingAgent = agents.find((a) => pendingBelongsToAgent(currentItem.data, a.id));
   const agentDisplayName =
     askingAgent?.display_name || askingAgent?.role_id || String(rawAgentId || 'Agent');
 
   // Check if current item belongs to active viewed agent
   const isCurrentAgent =
-    !activeAgent ||
-    (sessionId && sessionId === activeAgent.id) ||
-    (rawAgentId && (rawAgentId === activeAgent.role_id || rawAgentId === activeAgent.display_name));
+    !activeAgent || pendingBelongsToAgent(currentItem.data, activeAgent.id);
 
   // Parsed data for interaction
   const parsedInteraction = !isApproval
@@ -565,6 +557,8 @@ export default function InteractionPrompt({
         <textarea
           ref={textareaRef}
           className="interaction-textarea"
+          id="interaction-answer-input"
+          data-expanded={longText}
           rows={2}
           placeholder={
             parsedInteraction.defaultAnswer
@@ -575,6 +569,10 @@ export default function InteractionPrompt({
           disabled={sending}
           onChange={(e) => setAnswerDraft(e.target.value)}
           onKeyDown={(e) => {
+            if (longText) {
+              handleLongTextKey(e, () => { void handleSendAnswer(); }, () => setLongText(false));
+              return;
+            }
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               void handleSendAnswer();
@@ -585,9 +583,7 @@ export default function InteractionPrompt({
 
         <div className="interaction-actions-footer">
           <div className="interaction-footer-left">
-            <span className="interaction-keyboard-hint">
-              Enter {t.interactionSubmit} · Shift+Enter 换行
-            </span>
+            <LongTextControls id="interaction-answer-input" expanded={longText} onExpand={setLongText} textarea={textareaRef} t={t} />
           </div>
           <div className="interaction-footer-right">
             {parsedInteraction.allowReject && !showRejectInput && (

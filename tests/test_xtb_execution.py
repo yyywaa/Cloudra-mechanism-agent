@@ -410,7 +410,7 @@ def test_calculator_script_xtb_missing_binary(tmp_path, monkeypatch):
     """PATH 无 xtb：明确报错并非零退出。"""
     bindir = tmp_path / "bin"
     bindir.mkdir()
-    # Keep the startup utility available while deliberately hiding xTB.
+    # Hide xTB without also removing the POSIX utilities used at script startup.
     dirname = shutil.which("dirname")
     assert dirname is not None
     (bindir / "dirname").symlink_to(dirname)
@@ -490,4 +490,3 @@ def test_electronic_analysis_xtb_stdout_parser_matches_shared_primitives():
     data = ElectronicAnalysis._parse_xtb_stdout(SP_FIXTURE.read_text())
     assert data["total_energy_eh"] == pytest.approx(-5.070320041234)
     assert data["gap_ev"] == pytest.approx(12.345678901234)
-

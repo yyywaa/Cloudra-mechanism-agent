@@ -2,14 +2,17 @@
 
 [中文](RESEARCH_DATA_CN.md) · [Documentation](README_EN.md)
 
-The manuscript **Cloudra: Geometric Reasoning and Scientific Validation for Autonomous Reaction Mechanism Exploration** is being prepared for arXiv. Start with the [English and Chinese manuscript sources and SI](../paper/overleaf/README.md).
+This repository provides code, experimental data and analysis scripts for **Cloudra: Geometric Reasoning and Scientific Validation for Autonomous Reaction Mechanism Exploration**, available as [arXiv:2611.02909](https://arxiv.org/abs/2611.02909) [cs.MA], with DOI [10.48550/arXiv.2611.02909](https://doi.org/10.48550/arXiv.2611.02909).
+
+The [SI reproduction sources](../paper/overleaf/Cloudra_SI/companion_data/), [figure scripts](../paper/figures/) and [SI data package](../output/Cloudra_SI/Cloudra_SI_Data.zip) remain at their current paths. Manuscript sources, PDFs and editorial or submission materials are kept locally; earlier tracked versions remain in Git history.
 
 ## Choose what to reproduce
 
 | Your aim | Starting point | What it involves |
 | --- | --- | --- |
 | Reproduce paper tables and figures | [SI reproduction package](benchmarks/P2_DELIVERY.md#si-配套复现包); read the instructions in the extracted `companion_data/` | Use the bundled data and analysis scripts, without rerunning agents or quantum-chemical calculations. |
-| Inspect formal experiment trajectories and native logs | [Full P2 archive](benchmarks/P2_DELIVERY.md) | 50 tasks across four configurations, with 200 retained runs. Upload status is maintained on the delivery page. |
+| Inspect formal experiment trajectories and native logs | [Full P2 archive](benchmarks/P2_DELIVERY.md) | 50 tasks across four configurations, with 200 retained runs. The 14.9 GB archive is publicly available with read-only access. |
+| Re-score the archived organized deliveries | [Archive rescore command](benchmarks/P2_DELIVERY.md#rescore-archived-deliveries) | One command feeds retained P2 sandboxes, and optionally the P1b Standard sandboxes, to `BenchmarkRunner.score_sandbox`. An organized graph is used when the archive has one. Agents and quantum chemistry stay idle. The SI companion still replots figures and tables from CSV. |
 | Inspect the repeated pilot experiments | [P1b packages](benchmarks/P1B_DELIVERY.md) | 48 runs; original records, historical rescoring and Standard offline reconstruction are kept separately. |
 | Inspect behavioral analysis and activation interventions | [Full Chapter 3 source archives](benchmarks/P2_DELIVERY.md#行为实验与激活原始档案) | Use alongside the compact SI package. |
 | Review or rerun Gold reference calculations | [Gold download and reproduction](../gold_compute/evidence/REPRODUCE.md) and [per-task index](../gold_compute/evidence/README.md) | Reading archived outputs submits no calculations. Reruns require the recorded engines, methods, dependencies and compute resources. |
@@ -27,4 +30,4 @@ Missing Gold originals, limitations in IRC provenance and manual acceptance exce
 
 Use the code snapshot recorded in the relevant package when inspecting published results. For a new run, record the commit, model and calculation settings; the current branch may include subsequent development changes.
 
-Use [CITATION.bib](../CITATION.bib) for the manuscript citation and [CITATION.cff](../CITATION.cff) for GitHub citation metadata. The arXiv identifier will be added after publication.
+Use [CITATION.bib](../CITATION.bib) for the preprint citation and [CITATION.cff](../CITATION.cff) for GitHub citation metadata. Both identify [arXiv:2611.02909](https://arxiv.org/abs/2611.02909) and DOI [10.48550/arXiv.2611.02909](https://doi.org/10.48550/arXiv.2611.02909).

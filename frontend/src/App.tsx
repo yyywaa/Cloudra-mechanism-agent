@@ -1,7 +1,10 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api, EVENTS_WINDOW, HISTORY_PAGE_SIZE, streamProject } from './api';
 import Markdown from './Markdown';
-import DagPanel from './DagPanel';
+import { ResearchPanel } from './ResearchPanel';
+import { MolecularWorkbench } from './MolecularWorkbench.tsx';
+import type { WorkbenchSource } from './workbenchTypes';
+import { LongTextControls, handleLongTextKey } from './LongTextControls';
 import OpsPanel from './OpsPanel';
 import type { Agent, CompletionSummary, ComputeJob, EventEnvelope, Project } from './types';
 import GlobalConfig from './GlobalConfig';
@@ -12,7 +15,6 @@ import BenchmarkPanel from './BenchmarkPanel';
 import TelemetryPanel from './TelemetryPanel';
 import HubPanel from './HubPanel';
 import { ConsoleIndexPage, type ConsoleTab } from './ConsoleIndexPage';
-import { ArtifactsPanel } from './ArtifactsPanel';
 import AuditLog from './AuditLog';
 import AttentionDock, { type NotifPermission } from './AttentionDock';
 import InteractionPrompt from './InteractionPrompt';
@@ -30,6 +32,7 @@ import { boundEventPage, boundStreamView, LiveEventBuffer, mergeAndTrimLiveEvent
 import { composerInteractionFor, resolveComposerSendTarget } from './composerSend';
 import { planSseReconnect } from './sseReconnect';
 import { mergeAgentSnapshot, mergeProjectAgentSnapshot } from './agentState';
+import { mergeProjectSnapshot } from './projectState';
 import {
   archiveProjectConfirm,
   cancelAllComputeConfirm,
@@ -39,7 +42,7 @@ import {
 import { ToolRow } from './ToolRow';
 import { ProgramCard } from './ProgramCard';
 import { PathPickerModal } from './PathPickerModal';
-import { completionChipFor } from './completion';
+import { completionChipFor, stateBadgeText } from './completion';
 import { useI18n } from './i18n';
 
 /* ------------------------------------------------------------------ helpers */
@@ -219,6 +222,19 @@ export default function App() {
   const sidebarJobsRequestRef = useRef(0);
   const [viewMode, setViewMode] = useState<'dialogue' | 'console'>('dialogue');
   const [consoleTab, setConsoleTab] = useState<ConsoleTab>('overview');
+  const [workbench, setWorkbench] = useState<{projectId:string;source:WorkbenchSource|null}|null>(null);
+  const [researchRefreshVersion,setResearchRefreshVersion] = useState(0);
+  const openWorkbench = (source:WorkbenchSource|null) => { if(activeProjectId) setWorkbench({projectId:activeProjectId,source}); };
+  useEffect(() => { setWorkbench(null); }, [activeProjectId]);
+  useEffect(() => {
+    const handleWorkbenchShortcut = (event:KeyboardEvent) => {
+      const target=event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || ['INPUT','TEXTAREA','SELECT'].includes(target.tagName))) return;
+      if (event.altKey && (event.code==='KeyM' || event.key.toLowerCase()==='m') && activeProjectId) { event.preventDefault(); setWorkbench(current=>current ?? {projectId:activeProjectId,source:null}); }
+    };
+    window.addEventListener('keydown',handleWorkbenchShortcut);
+    return ()=>window.removeEventListener('keydown',handleWorkbenchShortcut);
+  },[activeProjectId]);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     const saved = localStorage.getItem('cloudra:sidebar-open') ?? localStorage.getItem('cloudra:right-sidebar-open');
     return saved !== null ? saved === 'true' : true;
@@ -232,6 +248,7 @@ export default function App() {
   const pendingMessageSeqRef = useRef(0);
   const [roles, setRoles] = useState<Array<{ role_id: string; display_name: string }>>([]);
   const [draft, setDraft] = useState('');
+  const [longText, setLongText] = useState(false);
   const [slashSelected, setSlashSelected] = useState(0);
   const [slashDismissed, setSlashDismissed] = useState(false);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -286,22 +303,12 @@ export default function App() {
     ? (activeAgent?.settings.visual_mode ?? activeProject.settings.defaults?.visual_mode ?? true) !== false
     : false;
 
-  const hasActiveAgentDecision = Boolean(
-    interactions.find(
-      (ixn) =>
-        (activeAgent?.id && String(ixn.session_id) === String(activeAgent.id)) ||
-        (activeAgent?.role_id && String(ixn.agent_id) === String(activeAgent.role_id))
-    ) ||
-    approvals.find(
-      (appr) =>
-        (activeAgent?.id && String(appr.session_id) === String(activeAgent.id)) ||
-        (activeAgent?.role_id && (String(appr.agent_name) === String(activeAgent.role_id) || String(appr.agent_name) === String(activeAgent.display_name)))
-    ) ||
-    ((interactions.length > 0 || approvals.length > 0) && !activeAgent)
-  );
+  const hasActiveAgentDecision = Boolean(activeAgent
+    ? composerInteractionFor([...interactions, ...approvals], activeAgent.id)
+    : interactions.length || approvals.length);
 
   // Slash commands autocomplete calculation
-  const isSlashPrompt = draft.startsWith('/') && !draft.includes('\n');
+  const isSlashPrompt = !longText && draft.startsWith('/') && !draft.includes('\n');
   const slashPrefix = isSlashPrompt ? draft.trim().toLowerCase() : '';
   const matchingSlash = useMemo(() => {
     if (!isSlashPrompt || slashDismissed) return [];
@@ -400,6 +407,7 @@ export default function App() {
   const activeAgentIdRef = useRef(activeAgentId);
   const agentSelectionVersionRef = useRef(0);
   const agentStateThroughRef = useRef(new Map<string, number>());
+  const projectStateThroughRef = useRef(new Map<string, number>());
   const maxSeqRef = useRef(0);
 
   const projectsRef = useRef(projects);
@@ -518,7 +526,9 @@ export default function App() {
   /* ------------------------------------------------------- initial loading */
 
   useEffect(() => {
-    api.listProjects(true).then(setProjects).catch(reportError);
+    api.listProjects(true).then((list) => setProjects((prev) =>
+      list.map((project) => mergeProjectSnapshot(prev.find((p) => p.id === project.id), project)),
+    )).catch(reportError);
     api.listRoles().then(setRoles).catch(reportError);
   }, [reportError]);
 
@@ -530,7 +540,7 @@ export default function App() {
       // 批次运行期间新项目可能尚未进入侧边栏缓存：先刷新再定位。
       api.listProjects(true)
         .then((list) => {
-          setProjects(list);
+          setProjects((prev) => list.map((project) => mergeProjectSnapshot(prev.find((p) => p.id === project.id), project)));
           setActiveProjectId(projectId);
         })
         .catch(reportError);
@@ -540,15 +550,22 @@ export default function App() {
 
   /* ---------------------------------------------------- project switching */
 
+  const updateProjectView = useCallback((view: { project: Project; cursor: number }) => {
+    if ((projectStateThroughRef.current.get(view.project.id) ?? 0) > view.cursor) return;
+    projectStateThroughRef.current.set(view.project.id, view.cursor);
+    setProjects((prev) => prev.map((project) => project.id === view.project.id ? mergeProjectSnapshot(project, view.project) : project));
+  }, []);
+
   const refreshAgentStates = useCallback(async (projectId: string) => {
     const view = await api.projectView(projectId);
     if (activeProjectIdRef.current !== projectId) return;
+    updateProjectView(view);
     const latestSeq = new Map(agentStateThroughRef.current);
     for (const agent of view.agents) {
       agentStateThroughRef.current.set(agent.id, Math.max(latestSeq.get(agent.id) ?? 0, view.cursor));
     }
     setAgents((prev) => mergeProjectAgentSnapshot(prev, view.agents, view.cursor, latestSeq));
-  }, []);
+  }, [updateProjectView]);
 
   const selectProject = useCallback((projectId: string) => {
     setActiveProjectId(projectId);
@@ -642,6 +659,7 @@ export default function App() {
       .projectView(activeProjectId)
       .then((view) => {
         if (cancelled) return;
+        updateProjectView(view);
         const agents = dedupeAgents(view.agents);
         for (const agent of agents) agentStateThroughRef.current.set(agent.id, view.cursor);
         setAgents(agents);
@@ -666,7 +684,7 @@ export default function App() {
         flushRafRef.current = null;
       }
     };
-  }, [activeProjectId, selectAgent, reportError]);
+  }, [activeProjectId, selectAgent, reportError, updateProjectView]);
 
   /* ------------------------------------------------------------ SSE stream */
 
@@ -731,12 +749,33 @@ export default function App() {
             return;
           }
           cursor = Math.max(cursor, event.seq);
+        if ((event.type === 'project.settings_changed' || event.type === 'project.updated')
+          && event.seq > (projectStateThroughRef.current.get(event.project_id) ?? 0)) {
+          projectStateThroughRef.current.set(event.project_id, event.seq);
+          setProjects((prev) => prev.map((project) => {
+            if (project.id !== event.project_id) return project;
+            const changes = event.data.changes as Record<string, unknown>;
+            return mergeProjectSnapshot(project, event.type === 'project.settings_changed'
+              ? { ...project, settings: changes as unknown as Project['settings'], updated_at: event.created_at }
+              : { ...project, ...changes, updated_at: event.created_at });
+          }));
+        }
         const sessionId = event.session_id;
         const updateAgent = Boolean(sessionId && event.seq > (agentStateThroughRef.current.get(sessionId) ?? 0));
         if (sessionId && event.seq > 0) {
           agentStateThroughRef.current.set(sessionId, Math.max(agentStateThroughRef.current.get(sessionId) ?? 0, event.seq));
         }
         // Agent list / chip state updates, regardless of selection.
+        if (event.type === 'agent.settings_changed' && sessionId && updateAgent) {
+          const revision = Number(event.data.settings_revision);
+          // RuntimeSettings.apply treats null as absent. Empty strings and
+          // false are deliberate resets and must survive this projection.
+          const changes = Object.fromEntries(Object.entries(event.data.changes as Record<string, unknown>)
+            .filter(([, value]) => value !== null && value !== undefined));
+          setAgents((prev) => prev.map((agent) => agent.id === sessionId && revision > agent.settings_revision
+            ? { ...agent, settings: { ...agent.settings, ...changes }, settings_revision: revision, updated_at: event.created_at }
+            : agent));
+        }
         if (event.type === 'agent.spawned' && activeProjectId && updateAgent) {
           const spawned = { ...event.data, completion: null } as unknown as Agent;
           setAgents((prev) => prev.some((agent) => agent.id === spawned.id) ? prev : [...prev, spawned]);
@@ -903,9 +942,11 @@ export default function App() {
   }, []);
 
   // One fallback supplies both the active Inspector and cross-project attention.
+  // Metadata snapshots must not restart the timer and trigger extra reads.
+  const pendingProjectIds = JSON.stringify(projects.filter((p) => !p.archived).map((p) => p.id));
   // Three project workers bound fan-out; slow rounds never overlap themselves.
   useEffect(() => {
-    const targets = projects.filter((p) => !p.archived);
+    const targets: string[] = JSON.parse(pendingProjectIds);
     if (targets.length === 0) return;
     let cancelled = false;
     let running = false;
@@ -917,9 +958,9 @@ export default function App() {
         let index = 0;
         const worker = async () => {
           while (!cancelled && index < targets.length) {
-            const project = targets[index++];
-            const pending = await refreshProjectPending(project.id);
-            if (pending) next.set(project.id, pending);
+            const projectId = targets[index++];
+            const pending = await refreshProjectPending(projectId);
+            if (pending) next.set(projectId, pending);
           }
         };
         await Promise.all(Array.from({ length: Math.min(3, targets.length) }, worker));
@@ -943,7 +984,7 @@ export default function App() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [projects, notifyAttention, refreshProjectPending]);
+  }, [pendingProjectIds, notifyAttention, refreshProjectPending]);
 
   const handleAttentionDecide = useCallback(
     async (item: PendingAttention, decision: 'approve' | 'deny') => {
@@ -980,7 +1021,7 @@ export default function App() {
   async function createProject(name: string, workspaceDir?: string) {
     const resp = await api.createProject(name, workspaceDir);
     setProjects((prev) => prev.some((p) => p.id === resp.data.id)
-      ? prev.map((p) => (p.id === resp.data.id ? resp.data : p))
+      ? prev.map((p) => (p.id === resp.data.id ? mergeProjectSnapshot(p, resp.data) : p))
       : [...prev, resp.data]);
     setActiveProjectId(resp.data.id);
     pushToast('ok', `Project "${name}" created`);
@@ -1011,8 +1052,8 @@ export default function App() {
 
   async function unarchiveProject(p: Project) {
     try {
-      await api.unarchiveProject(p.id);
-      setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, archived: false } : x)));
+      const resp = await api.unarchiveProject(p.id);
+      setProjects((prev) => prev.map((x) => (x.id === p.id ? mergeProjectSnapshot(x, resp.data) : x)));
       pushToast('ok', `Project "${p.name}" restored`);
     } catch (e) {
       reportError(e);
@@ -1026,7 +1067,7 @@ export default function App() {
     if (value === (project.workspace_dir ?? null)) return;
     try {
       const resp = await api.patchProject(project.id, { workspace_dir: value });
-      setProjects((prev) => prev.map((p) => (p.id === project.id ? resp.data : p)));
+      setProjects((prev) => prev.map((p) => (p.id === project.id ? mergeProjectSnapshot(p, resp.data) : p)));
       pushToast('ok', value ? `Workspace → ${value}` : 'Workspace cleared');
     } catch (e) {
       reportError(e);
@@ -1038,8 +1079,8 @@ export default function App() {
       return;
     }
     try {
-      await api.archiveProject(p.id);
-      setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, archived: true } : x)));
+      const resp = await api.archiveProject(p.id);
+      setProjects((prev) => prev.map((x) => (x.id === p.id ? mergeProjectSnapshot(x, resp.data) : x)));
       if (activeProjectId === p.id) setActiveProjectId(null);
       pushToast('ok', `Project "${p.name}" archived`);
     } catch (e) {
@@ -1115,15 +1156,26 @@ export default function App() {
     }
   }
 
-  async function cancelAllComputeJobs() {
-    if (cancellingComputeRef.current || !window.confirm(cancelAllComputeConfirm(lang))) {
+  async function cancelCompute(job?: ComputeJob) {
+    if (cancellingComputeRef.current || !activeProject) return;
+    const question = job
+      ? (lang === 'zh' ? `取消作业 #${job.id}（${job.path}）？` : `Cancel job #${job.id} (${job.path})?`)
+      : cancelAllComputeConfirm(lang);
+    if (!window.confirm(question)) {
       return;
     }
     cancellingComputeRef.current = true;
     setCancellingCompute(true);
     try {
-      const counts = await api.cancelAllComputeJobs();
-      pushToast('ok', formatCancelAllToast(counts, lang));
+      if (job) {
+        const result = await api.cancelComputeJob(activeProject.id, job.id);
+        if (result.state === 'cancelled') pushToast('ok', lang === 'zh' ? `已取消作业 #${job.id}` : `Cancelled job #${job.id}`);
+        else if (result.state === 'cancel_requested') pushToast('ok', lang === 'zh' ? `已请求停止作业 #${job.id}，等待确认退出。` : `Stop requested for job #${job.id}; awaiting exit.`);
+        else pushToast('error', result.message);
+      } else {
+        const counts = await api.cancelAllComputeJobs();
+        pushToast('ok', formatCancelAllToast(counts, lang));
+      }
     } catch (e) {
       reportError(e);
     } finally {
@@ -1143,6 +1195,10 @@ export default function App() {
       interactions,
     });
     if (target.kind === 'noop' || !activeProject) return;
+    const projectId = activeProject.id;
+    const selectionVersion = agentSelectionVersionRef.current;
+    const ownsComposer = () => activeProjectIdRef.current === projectId
+      && agentSelectionVersionRef.current === selectionVersion;
     const content = draft.trim();
     const pendingId = `pending-${++pendingMessageSeqRef.current}`;
     const images = pendingImages.map((p) => p.path);
@@ -1236,11 +1292,10 @@ export default function App() {
       }
       if (target.kind === 'respond') {
         if (await handleRespondInteraction(target.interactionId, content)) {
-          if (activeProjectIdRef.current === activeProject.id) setDraft((current) => current === draft ? '' : current);
+          if (ownsComposer()) setDraft((current) => current === draft ? '' : current);
         }
         return;
       }
-      setPendingImages([]);
       if (!activeAgent) {
         // With images attached the spawn `query` cannot carry them, so spawn
         // idle and deliver text + images as the first message instead.
@@ -1253,11 +1308,23 @@ export default function App() {
             orchestration_mode: activeProject.settings.orchestration_mode,
           },
         });
-        setDraft((current) => current === draft ? '' : current);
-        if (images.length > 0) {
-          await api.sendMessage(resp.data.id, content, images, imageArtifactIds, lang);
+        if (ownsComposer()) {
+          // Creation already succeeded even if the first image message fails.
+          setAgents((current) => current.some((agent) => agent.id === resp.data.id) ? current : [...current, resp.data]);
         }
-        await selectAgent(resp.data.id);
+        try {
+          if (images.length > 0) {
+            await api.sendMessage(resp.data.id, content, images, imageArtifactIds, lang);
+          }
+          if (ownsComposer()) {
+            setDraft((current) => current === draft ? '' : current);
+            setPendingImages((current) => current.filter((image) => !images.includes(image.path)));
+          }
+        } finally {
+          // Keep the accepted agent as the retry target, and load its history
+          // after delivery so a successful first message is visible without SSE.
+          if (ownsComposer()) await selectAgent(resp.data.id);
+        }
       } else {
         // The command receipt confirms this exact local send; SSE may arrive independently.
         setPendingMessages((prev) => [
@@ -1274,10 +1341,13 @@ export default function App() {
             imageArtifactIds: imageArtifactIds.length > 0 ? imageArtifactIds : undefined,
           },
         ]);
-        setDraft('');
         const agentId = activeAgent.id;
         const version = agentSelectionVersionRef.current;
         const receipt = await api.sendMessage(agentId, content, images, imageArtifactIds, lang);
+        if (ownsComposer()) {
+          setDraft((current) => current === draft ? '' : current);
+          setPendingImages((current) => current.filter((image) => !images.includes(image.path)));
+        }
         setPendingMessages((prev) => prev.filter((message) => message.id !== pendingId));
         void api.eventDetail(agentId, receipt.event_id).then((message) => {
           if (version !== agentSelectionVersionRef.current) return;
@@ -1287,7 +1357,6 @@ export default function App() {
       }
     } catch (e) {
       setPendingMessages((prev) => prev.filter((message) => message.id !== pendingId));
-      setPendingImages((prev) => (prev.length === 0 ? pendingImages : prev));
       reportError(e);
     } finally {
       setSending(false);
@@ -1296,6 +1365,8 @@ export default function App() {
 
   async function spawnRole(roleId: string) {
     if (!activeProject || !roleId) return;
+    const projectId = activeProject.id;
+    const selectionVersion = agentSelectionVersionRef.current;
     try {
       const resp = await api.spawnAgent(activeProject.id, {
         role_id: roleId,
@@ -1307,7 +1378,9 @@ export default function App() {
           invocation_protocol: activeProject.settings.defaults?.invocation_protocol ?? 'javascript',
         },
       });
-      await selectAgent(resp.data.id);
+      if (activeProjectIdRef.current === projectId && agentSelectionVersionRef.current === selectionVersion) {
+        await selectAgent(resp.data.id);
+      }
       pushToast('ok', `Spawned ${roleId}`);
     } catch (e) {
       reportError(e);
@@ -1321,6 +1394,17 @@ export default function App() {
       const fresh = byId.get(agent.id);
       return fresh ? mergeAgentSnapshot(agent, fresh, true) : agent;
     }));
+  }
+
+  async function syncProjectAgentSettings(projectId: string, patch: Record<string, unknown>) {
+    const current = await api.listAgents(projectId);
+    const targets = dedupeAgents(current.filter((agent) => Object.entries(patch)
+      .some(([field, value]) => agent.settings[field as keyof Agent['settings']] !== value)));
+    const results = await Promise.allSettled(targets.map((agent) => api.patchSettings(agent.id, patch)));
+    updateAgentSettings(results.flatMap((result) => result.status === 'fulfilled' ? [result.value.data] : []));
+    const failures = results.flatMap((result, index) => result.status === 'rejected'
+      ? [`${targets[index].display_name}: ${String(result.reason)}`] : []);
+    if (failures.length) throw new Error(`项目默认值已保存，以下智能体未同步；可重试保存：${failures.join('；')}`);
   }
 
   async function handleSaveProjectSettings(patch: {
@@ -1351,19 +1435,10 @@ export default function App() {
       }
 
       const resp = await api.patchProject(activeProject.id, payload);
-      setProjects((prev) => prev.map((p) => (p.id === activeProject.id ? resp.data : p)));
+      setProjects((prev) => prev.map((p) => (p.id === activeProject.id ? mergeProjectSnapshot(p, resp.data) : p)));
 
-      // If orchestration_mode changed, cascade to existing agents in project
-      if (patch.orchestration_mode && patch.orchestration_mode !== activeProject.settings.orchestration_mode) {
-        const targets = dedupeAgents(
-          agents.filter((a) => a.project_id === activeProject.id && a.settings.orchestration_mode !== patch.orchestration_mode),
-        );
-        if (targets.length > 0) {
-          const updated = await Promise.all(
-            targets.map((a) => api.patchSettings(a.id, { orchestration_mode: patch.orchestration_mode })),
-          );
-          updateAgentSettings(updated.map((result) => result.data));
-        }
+      if (patch.orchestration_mode) {
+        await syncProjectAgentSettings(activeProject.id, { orchestration_mode: patch.orchestration_mode });
       }
 
       pushToast('ok', '项目全局设置已更新');
@@ -1411,14 +1486,8 @@ export default function App() {
           ),
         },
       });
-      setProjects((prev) => prev.map((p) => (p.id === activeProject.id ? resp.data : p)));
-      const targets = dedupeAgents(
-        agents.filter((a) => a.project_id === activeProject.id && a.settings.schedule_mode !== checked),
-      );
-      const updated = await Promise.all(targets.map((a) => api.patchSettings(a.id, { schedule_mode: checked })));
-      if (updated.length > 0) {
-        updateAgentSettings(updated.map((result) => result.data));
-      }
+      setProjects((prev) => prev.map((p) => (p.id === activeProject.id ? mergeProjectSnapshot(p, resp.data) : p)));
+      await syncProjectAgentSettings(activeProject.id, { schedule_mode: checked });
       pushToast('ok', `Schedule mode ${checked ? 'on' : 'off'} (project-wide)`);
     } catch (e) {
       reportError(e);
@@ -1441,14 +1510,8 @@ export default function App() {
           ),
         },
       });
-      setProjects((prev) => prev.map((p) => (p.id === activeProject.id ? resp.data : p)));
-      const targets = dedupeAgents(
-        agents.filter((a) => a.project_id === activeProject.id && a.settings.yolo !== checked),
-      );
-      const updated = await Promise.all(targets.map((a) => api.patchSettings(a.id, { yolo: checked })));
-      if (updated.length > 0) {
-        updateAgentSettings(updated.map((result) => result.data));
-      }
+      setProjects((prev) => prev.map((p) => (p.id === activeProject.id ? mergeProjectSnapshot(p, resp.data) : p)));
+      await syncProjectAgentSettings(activeProject.id, { yolo: checked });
       pushToast('ok', `YOLO ${checked ? 'on' : 'off'} (project-wide)`);
     } catch (e) {
       reportError(e);
@@ -1471,20 +1534,8 @@ export default function App() {
           ),
         },
       });
-      setProjects((prev) => prev.map((p) => (p.id === activeProject.id ? resp.data : p)));
-      const targets = dedupeAgents(
-        agents.filter(
-          (a) =>
-            a.project_id === activeProject.id &&
-            (a.settings.invocation_protocol ?? 'javascript') !== protocol,
-        ),
-      );
-      const updated = await Promise.all(
-        targets.map((a) => api.patchSettings(a.id, { invocation_protocol: protocol })),
-      );
-      if (updated.length > 0) {
-        updateAgentSettings(updated.map((result) => result.data));
-      }
+      setProjects((prev) => prev.map((p) => (p.id === activeProject.id ? mergeProjectSnapshot(p, resp.data) : p)));
+      await syncProjectAgentSettings(activeProject.id, { invocation_protocol: protocol });
       pushToast('ok', `Invocation protocol → ${protocol} (project-wide; next run)`);
     } catch (e) {
       reportError(e);
@@ -1507,14 +1558,8 @@ export default function App() {
           ),
         },
       });
-      setProjects((prev) => prev.map((p) => (p.id === activeProject.id ? resp.data : p)));
-      const targets = dedupeAgents(
-        agents.filter((a) => a.project_id === activeProject.id && (a.settings.visual_mode ?? true) !== checked),
-      );
-      const updated = await Promise.all(targets.map((a) => api.patchSettings(a.id, { visual_mode: checked })));
-      if (updated.length > 0) {
-        updateAgentSettings(updated.map((result) => result.data));
-      }
+      setProjects((prev) => prev.map((p) => (p.id === activeProject.id ? mergeProjectSnapshot(p, resp.data) : p)));
+      await syncProjectAgentSettings(activeProject.id, { visual_mode: checked });
       pushToast('ok', `Visual mode ${checked ? 'on' : 'off'} (project-wide)`);
     } catch (e) {
       reportError(e);
@@ -1525,10 +1570,13 @@ export default function App() {
 
   async function onPickImages(files: FileList | null) {
     if (!files || files.length === 0 || !activeProject) return;
+    const projectId = activeProject.id;
+    const selectionVersion = agentSelectionVersionRef.current;
     setUploading(true);
     try {
       for (const file of Array.from(files)) {
         const resp = await api.uploadFile(activeProject.id, file);
+        if (activeProjectIdRef.current !== projectId || agentSelectionVersionRef.current !== selectionVersion) return;
         uploadedArtifactsRef.current.set(resp.path, resp.artifact_id);
         setPendingImages((prev) => [...prev, { path: resp.path, artifactId: resp.artifact_id, name: file.name, size: file.size }]);
       }
@@ -1655,14 +1703,10 @@ export default function App() {
     label: string;
   }>(() => {
     // 历史工具行和已到达的分片不能替代 Agent 的当前生命周期状态。
-    if (activeAgent?.state === 'waiting_approval') {
-      return { type: 'waiting', label: 'Waiting for approval' };
-    }
-    if (activeAgent?.state === 'waiting_input') {
-      return { type: 'waiting', label: 'Waiting for user input' };
-    }
     if (activeAgent?.state !== 'running') {
-      return { type: 'idle', label: 'Ready' };
+      const state = activeAgent?.state;
+      return { type: state === 'waiting_approval' || state === 'waiting_input' ? 'waiting' : 'idle',
+        label: state ? stateBadgeText(state, lang) : (lang === 'zh' ? '未选择 Agent' : 'No agent selected') };
     }
     if (streamView.streamText) {
       return { type: 'generating', label: 'Streaming response…' };
@@ -1677,7 +1721,7 @@ export default function App() {
       return { type: 'thinking', label: 'Reasoning / Thinking…' };
     }
     return { type: 'running', label: 'Processing turn…' };
-  }, [streamView.streamText, runningTool, liveThinking, activeAgent?.state]);
+  }, [streamView.streamText, runningTool, liveThinking, activeAgent?.state, lang]);
 
   // Agent tree: sub-agents fold under their parent's chip in the agent bar.
   const childrenOf = useMemo(() => {
@@ -2155,17 +2199,6 @@ export default function App() {
               >
                 {t.sidebarBenchmark}
               </button>
-              <button
-                type="button"
-                className="btn ghost sm"
-                data-testid="cancel-all-compute-foot"
-                disabled={cancellingCompute}
-                onClick={() => { void cancelAllComputeJobs(); }}
-              >
-                {cancellingCompute
-                  ? (lang === 'zh' ? '请求中…' : 'Requesting…')
-                  : (lang === 'zh' ? '取消全部计算' : 'Cancel All Compute')}
-              </button>
             </div>
           </details>
         </div>
@@ -2290,6 +2323,7 @@ export default function App() {
           </div>
 
           <div className="agentbar-group system-controls">
+            <button type="button" className="btn outline sm" disabled={!activeProject} title="Alt+M" onClick={()=>openWorkbench(null)}>{lang === 'zh' ? '分子工作台' : 'Molecular workbench'}</button>
             <button
               type="button"
               className="btn outline sm project-settings-btn"
@@ -2370,10 +2404,10 @@ export default function App() {
             )}
             {activeProject && timeline.length === 0 && activeAgent?.state !== 'running' && (
               <div className="chat-empty">
-                <div className="big">{activeAgent ? `${activeAgent.display_name} is ready` : 'No activity yet'}</div>
+                <div className="big">{lang === 'zh' ? '当前没有对话记录' : 'No conversation yet'}</div>
                 {activeAgent
-                  ? 'Type a query below and press Send to start this agent.'
-                  : 'Send a message below to start the coordinator.'}
+                  ? (lang === 'zh' ? `可向 ${activeAgent.display_name} 发送消息。` : `Send a message to ${activeAgent.display_name}.`)
+                  : (lang === 'zh' ? '发送第一条消息以启动协调 Agent。' : 'Send a message below to start the coordinator.')}
               </div>
             )}
             {activeAgent && canLoadOlder && sessionEvents.length > 0 && (
@@ -2479,7 +2513,7 @@ export default function App() {
             {activeAgent?.state === 'queued' && timeline.length > 0 && (
               <div className="run-status">
                 <span className="state-dot queued" />
-                <span>queued — enter a query below to start</span>
+                <span>{stateBadgeText(activeAgent.state, lang)}</span>
               </div>
             )}
           </div>
@@ -2552,6 +2586,8 @@ export default function App() {
             )}
             <textarea
               ref={composerTextareaRef}
+              id="chat-message-input"
+              data-expanded={longText}
               data-testid="composer-input"
               rows={2}
               value={draft}
@@ -2561,6 +2597,10 @@ export default function App() {
                 setSlashSelected(0);
               }}
               onKeyDown={(e) => {
+                if (longText) {
+                  handleLongTextKey(e, () => { void sendMessage(); }, () => setLongText(false));
+                  return;
+                }
                 if (matchingSlash.length > 0) {
                   if (e.key === 'ArrowDown') {
                     e.preventDefault();
@@ -2622,7 +2662,7 @@ export default function App() {
                   <span className="yolo-tag">{activeProject.settings.defaults?.yolo === true ? 'YOLO' : 'SAFE'}</span>
                 </button>
               )}
-              <span className="composer-hint">Enter to send · Shift+Enter for newline</span>
+              <LongTextControls id="chat-message-input" expanded={longText} onExpand={setLongText} textarea={composerTextareaRef} t={t} />
               {visualOn && (
                 <>
                   <input
@@ -2650,8 +2690,8 @@ export default function App() {
               {activeProject && (
                 <ComposerModelPicker
                   key={`${activeAgent?.id ?? activeProject.id}:${globalOpen}`}
-                  currentModel={activeAgent?.settings.model || activeProject.settings.defaults?.model}
-                  reasoningEffort={activeAgent?.settings.reasoning_effort ?? activeProject.settings.defaults?.reasoning_effort}
+                  currentModel={activeAgent ? activeAgent.settings.model : activeProject.settings.defaults?.model}
+                  reasoningEffort={activeAgent ? activeAgent.settings.reasoning_effort : activeProject.settings.defaults?.reasoning_effort}
                   slot={activeAgent && activeAgent.role_id !== 'coordinator' ? 'follower' : 'coordinator'}
                   onConfigure={() => setGlobalOpen(true)}
                   onChoose={async (model, effort) => {
@@ -2665,7 +2705,7 @@ export default function App() {
                           defaults: { ...activeProject.settings.defaults, ...changes },
                         },
                       });
-                      setProjects((prev) => prev.map((project) => project.id === activeProject.id ? response.data : project));
+                      setProjects((prev) => prev.map((project) => project.id === activeProject.id ? mergeProjectSnapshot(project, response.data) : project));
                     }
                   }}
                 />
@@ -2692,12 +2732,11 @@ export default function App() {
             </button>
             <button
               type="button"
-              className={`console-subnav-btn ${consoleTab === 'dag' ? 'active' : ''}`}
-              onClick={() => setConsoleTab('dag')}
+              className={`console-subnav-btn ${consoleTab === 'research' ? 'active' : ''}`}
+              onClick={() => setConsoleTab('research')}
             >
-              <span>{t.tabDag}</span>
-              {(activeProject?.settings.orchestration_mode === 'dag_guided' ||
-                activeProject?.settings.defaults?.orchestration_mode === 'dag_guided') && (
+              <span>{lang === 'zh' ? '结构、计算与机理' : 'Research results'}</span>
+              {activeProject && activeProject.settings.orchestration_mode !== 'standard' && (
                 <span className="subnav-dot-active" />
               )}
             </button>
@@ -2710,13 +2749,6 @@ export default function App() {
               {sidebarJobs && sidebarJobs.length > 0 && (
                 <span className="badge sm">{sidebarJobs.length}</span>
               )}
-            </button>
-            <button
-              type="button"
-              className={`console-subnav-btn ${consoleTab === 'artifacts' ? 'active' : ''}`}
-              onClick={() => setConsoleTab('artifacts')}
-            >
-              <span>{t.tabArtifacts}</span>
             </button>
             <button
               type="button"
@@ -2763,6 +2795,8 @@ export default function App() {
               activeAgent={activeAgent}
               sidebarJobs={sidebarJobs}
               onNavigate={(tab) => setConsoleTab(tab)}
+              onContinueDialogue={() => setViewMode('dialogue')}
+              onOpenWorkbench={() => openWorkbench(null)}
               onOpenProjectSettings={() => setProjectSettingsOpen(true)}
               onSelectAgent={(agentId) => selectAgent(agentId)}
               onOpenDialogue={(agentId) => {
@@ -2772,18 +2806,12 @@ export default function App() {
               onError={reportError}
               onToast={(text, kind) => pushToast(kind === 'warn' ? 'info' : (kind ?? 'info'), text)}
             />
-          ) : consoleTab === 'dag' ? (
-            <DagPanel
-              project={activeProject}
-              onError={reportError}
-              onToast={pushToast}
-            />
+          ) : consoleTab === 'research' ? (
+            <ResearchPanel key={activeProject.id} project={activeProject} onError={reportError} onToast={pushToast} onOpenMolecule={openWorkbench} refreshVersion={researchRefreshVersion}/>
           ) : consoleTab === 'compute' ? (
             <div className="console-compute-container">
-              <OpsPanel project={activeProject} agents={agents} onError={reportError} refreshVersion={computeRefreshVersion} />
+              <OpsPanel key={activeProject.id} project={activeProject} activeJobs={sidebarJobs} cancelling={cancellingCompute} onCancel={cancelCompute} agents={agents} onError={reportError} refreshVersion={computeRefreshVersion} />
             </div>
-          ) : consoleTab === 'artifacts' ? (
-            <ArtifactsPanel project={activeProject} onError={reportError} />
           ) : consoleTab === 'audit' ? (
             <div className="console-audit-container">
               <AuditLog
@@ -2834,8 +2862,15 @@ export default function App() {
           onRespond={handleAttentionRespond}
         />
       </div>
+        {workbench && activeProject && workbench.projectId===activeProject.id && <MolecularWorkbench key={activeProject.id} project={activeProject} source={workbench.source} onClose={()=>setWorkbench(null)} onError={reportError} onSaved={(result)=>{setResearchRefreshVersion(n=>n+1);pushToast('ok',`已保存结构：${result.path}`);}} onContinueInChat={(result)=>{
+          setDraft(current => [current, lang === 'zh' ? `结构已保存至：${result.path}` : `Structure saved to: ${result.path}`].filter(Boolean).join('\n\n'));
+          setWorkbench(null);
+          setViewMode('dialogue');
+          requestAnimationFrame(() => composerTextareaRef.current?.focus());
+        }}/>}
         {projectSettingsOpen && activeProject && (
           <ProjectSettingsModal
+            key={activeProject.id}
             project={activeProject}
             agents={agents.filter((a) => a.project_id === activeProject.id)}
             activeAgentId={activeAgentId}

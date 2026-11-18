@@ -13,7 +13,7 @@ async function setup(page: Page, agents = [AGENT]) {
   const requests: string[] = [];
   page.on('request', (request) => requests.push(request.url()));
   await installApiMocks(page, { agents, jobs: [] });
-  await page.route('**/api/v2/projects/*/view', (route) => route.fulfill({ json: { agents, cursor: 100 } }));
+  await page.route('**/api/v2/projects/*/view', (route) => route.fulfill({ json: { project: PROJECT_ACTIVE, agents, cursor: 100 } }));
   await page.route('**/api/v2/projects/*/hub/posts', (route) => route.fulfill({ json: { posts: [] } }));
   await page.addInitScript(() => {
     class ControlledSource {
@@ -203,6 +203,7 @@ test('a failed identical send removes only its own pending bubble', async ({ pag
   const composer = page.getByTestId('composer-input');
   await composer.fill('identical request');
   await composer.press('Enter');
+  await expect(composer).toHaveValue('');
   await expect(bubble(page, 'identical request')).toHaveCount(1);
   await composer.fill('identical request');
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
@@ -399,7 +400,7 @@ test('reconnect reconciles stopped agents across the whole project without requi
   let viewReads = 0;
   await page.route('**/api/v2/projects/*/view', (route) => {
     viewReads++;
-    return route.fulfill({ json: { agents: disconnected
+    return route.fulfill({ json: { project: PROJECT_ACTIVE, agents: disconnected
       ? runningAgents.map((agent) => ({ ...agent, state: 'cancelled', current_run: null }))
       : runningAgents, cursor: disconnected ? 150 : 100 } });
   });
@@ -423,7 +424,7 @@ test('reconnect reconciles stopped agents across the whole project without requi
   await expect(page.locator('.breadcrumb-agent-wrap .state-dot.cancelled')).toHaveCount(1);
   await page.getByRole('button', { name: '控制台', exact: true }).click();
   await page.getByRole('button', { name: '项目总览', exact: true }).click();
-  await expect(page.locator('.portal-agent-card').filter({ hasText: WORKER.display_name }).locator('.state-badge')).toHaveText('cancelled');
+  await expect(page.locator('.portal-agent-card').filter({ hasText: WORKER.display_name }).locator('.state-badge')).toHaveText('已取消');
   expect(viewReads).toBe(2);
 });
 
@@ -435,7 +436,7 @@ test('reconnect snapshot keeps newer stream state beyond its cursor while reconc
   await page.route('**/api/v2/projects/*/view', async (route) => {
     const reconnect = ++reads === 2;
     if (reconnect) await new Promise<void>((resolve) => { release = resolve; });
-    await route.fulfill({ json: { agents: reconnect
+    await route.fulfill({ json: { project: PROJECT_ACTIVE, agents: reconnect
       ? runningAgents.map((agent) => ({ ...agent, state: 'cancelled', current_run: null }))
       : runningAgents, cursor: reconnect ? 150 : 100 } });
   });

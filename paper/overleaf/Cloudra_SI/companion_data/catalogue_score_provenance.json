@@ -12,16 +12,15 @@
   "all_200_task_arm_pairs_unique": true,
   "all_four_fields_present": true,
   "source_numeric_strings_preserved": true,
-  "all_50_original_json_files_copied_byte_identically": true,
   "display_precision": {
     "composite_decimals": 4,
     "component_decimals": 6
   },
   "catalogue_source": "paper/figures/cloudrabench_design_20261029/task_catalogue.csv",
-  "catalogue_source_sha256": "2321c959dc15954c4532e9859788dd68eb8dba23d0cc2677c6981d36a70e625d",
+  "catalogue_source_sha256": "3f29f8e4965eedd7d2b85213b3db94fbe4b8f2f43f997af348f72c08b8298f13",
   "score_source": "paper/figures/benchmark_p2_20261031/source_data/publication_scores_per_run.csv",
-  "score_source_sha256": "3a211750e47ee5fb291e8d1699c16a6bec1a8dec31e8a2a0483605e4b5b6faec",
-  "companion_score_sha256": "b2e0d7f8fe6c591d64ce30e3c24e44631fae3e3a3eff89a5c00966df64f921b0",
+  "score_source_sha256": "bcc3d1807240d8993705e68da7dd90c2cb79d362a13111775ffa5e5f6b6a7372",
+  "companion_score_sha256": "0bd9fbb19f2a71e31168300da9adc0a38f09f75b2f18eb78de338cc61a866159",
   "original_json_hashes": {
     "ideapool/tasks/easy/D1.json": "f480bdc4a2406dcb095aae62457a4cbf2c75ac222f922f1f8d05264cb34ef02b",
     "ideapool/tasks/easy/D3.json": "d11790f97b9080042a94a426579d6f42bf5677ec9abfefd2f01c37491d7bda99",
@@ -73,5 +72,9 @@
     "ideapool/tasks/normal/NU5.json": "e21de58c01c797b1fe1f27600132ca239ca18d969e8d5205799f15aa0cdace68",
     "ideapool/tasks/normal/NU6.json": "9bd39921af7ff0f85e02e7b0b236f4445ae1124a04037721c323e62a26a57930",
     "ideapool/tasks/normal/NY3.json": "898e12abaabc62ec3c3122566ced4fc63005db396627c02bc0307d5e07f570c6"
-  }
+  },
+  "evaluation_manifest": "evaluation_manifest.json",
+  "all_50_final_task_json_files_copied_byte_identically": true,
+  "target_correspondence_postprocess": "revision_20261102/target_matching/target_matching_accuracy_corrections.csv",
+  "final_reference_manifest": "evaluation_manifest.json"
 }

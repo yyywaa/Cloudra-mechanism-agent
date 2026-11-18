@@ -91,7 +91,8 @@ export async function installApiMocks(page: Page, opts: MockOpts = {}) {
       return json(route, rows);
     }
     if (method === 'GET' && path.endsWith('/view')) {
-      return json(route, { agents, cursor: 0 });
+      const project = projects.find((item) => (item as { id: string }).id === path.split('/')[4]);
+      return json(route, { project, agents, cursor: 0 });
     }
     if (method === 'GET' && path === '/api/v2/roles') {
       return json(route, [{ role_id: 'coordinator', display_name: 'Coordinator' }]);
@@ -133,6 +134,12 @@ export async function installApiMocks(page: Page, opts: MockOpts = {}) {
     }
     if (method === 'GET' && path.includes('/artifacts')) {
       return json(route, []);
+    }
+    if (method === 'GET' && path.endsWith('/workbench/products')) {
+      return json(route, { products: [], objects: [] });
+    }
+    if (method === 'GET' && path.endsWith('/workbench/fragments')) {
+      return json(route, { fragments: [] });
     }
     if (method === 'GET' && (path.includes('/dag/') || path.includes('/goal'))) {
       return json(route, path.includes('/projection')
@@ -193,7 +200,8 @@ export async function installApiMocks(page: Page, opts: MockOpts = {}) {
 
 export async function openSpa(page: Page, hash = '') {
   await page.goto(`/${hash}`);
-  await page.getByPlaceholder('新建项目名…').waitFor({
+  // Acid keeps project creation collapsed until the user asks for it.
+  await page.locator('.left-sidebar-title').waitFor({
     state: 'visible',
     timeout: 15_000,
   });

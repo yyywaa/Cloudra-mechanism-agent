@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance="acid">
+  <head><meta charset="utf-8"><title>Molecular viewer interaction test</title></head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import { createElement as h, useState } from 'react';
+      import { createRoot } from 'react-dom/client';
+      import { GLViewer } from '3dmol/build/3Dmol.es6-min.js';
+      import { Molecule3DViewer } from '/src/Molecule3DViewer.tsx';
+      import { applyAppearance } from '/src/appearance.ts';
+      import '/src/styles.css';
+      import '/src/appearance.css';
+
+      const geometry = {
+        atoms: [
+          { index: 1, symbol: 'C', x: -1.2, y: 0, z: 0 },
+          { index: 2, symbol: 'O', x: 1.2, y: 0, z: 0 },
+          { index: 3, symbol: 'H', x: -1.7, y: 1.1, z: 0 },
+        ],
+        bonds: [{ atom1: 1, atom2: 2, order: 1 }, { atom1: 1, atom2: 3, order: 1 }],
+      };
+      const nextGeometry = { ...geometry, atoms: geometry.atoms.map(atom => ({ ...atom, x: atom.x + 0.2 })) };
+      // Keep O2 stationary so mouse input remains deterministic during software
+      // WebGL playback; C1 and its selection overlay still move each frame.
+      const vectors = [[0, 0.3, 0], [0, 0, 0], [0, 0.2, 0]];
+      const observed = window.observed = { clears: 0, animations: 0, stops: 0, backgrounds: 0 };
+      for (const [method, counter] of [['clear', 'clears'], ['animate', 'animations'], ['stopAnimate', 'stops']]) {
+        const original = GLViewer.prototype[method];
+        GLViewer.prototype[method] = function (...args) {
+          observed[counter]++;
+          observed.viewer = this;
+          return original.apply(this, args);
+        };
+      }
+      function App() {
+        const [selected, setSelected] = useState([]);
+        const [title, setTitle] = useState('Interaction');
+        const [highlight, setHighlight] = useState(false);
+        const [mode, setMode] = useState(false);
+        const [playing, setPlaying] = useState(false);
+        const [preserveView, setPreserveView] = useState(false);
+        const [nextFrame, setNextFrame] = useState(false);
+        return h('main', { style: { width: '900px', margin: '20px auto' } },
+          h('label', null, '标题', h('input', { value: title, onChange: event => setTitle(event.target.value) })),
+          h('button', { onClick: () => setHighlight(value => !value) }, '高亮坐标'),
+          h('button', { onClick: () => setMode(value => !value) }, '振动模式'),
+          h('button', { onClick: () => setPlaying(value => !value) }, '振动播放'),
+          h('button', { onClick: () => applyAppearance('punk') }, '外观'),
+          h('button', { onClick: () => setPreserveView(true) }, '保持视角'),
+          h('button', { onClick: () => setNextFrame(true) }, '下一帧'),
+          h('output', { 'aria-label': '选择顺序' }, selected.join(',')),
+          // Like the workbench viewport, the viewer needs a parent with an
+          // explicit height: its canvas is absolutely positioned in a flex item.
+          h('section', { style: { height: '460px', marginTop: '16px' } }, h(Molecule3DViewer, {
+            geometry: nextFrame ? nextGeometry : geometry, title, selectedAtoms: selected, preserveView,
+            onAtomPick: index => setSelected(current => current.includes(index) ? current.filter(value => value !== index) : [...current, index]),
+            onBackgroundClick: () => { observed.backgrounds++; setSelected([]); },
+            coordinateHighlights: highlight ? [[1, 2]] : [],
+            modeDisplacements: mode ? vectors : undefined,
+            modePlaying: playing,
+          })),
+        );
+      }
+      createRoot(document.getElementById('root')).render(h(App));
+    </script>
+  </body>
+</html>

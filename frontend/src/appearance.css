@@ -337,9 +337,7 @@
 :root[data-appearance='modernism'] .project-node.active > .project-node-header { background: transparent; color: var(--accent); }
 :root[data-appearance='modernism'] .project-agent-swarm { background: rgba(214, 239, 255, 0.22); border-color: var(--border); }
 :root[data-appearance='modernism'] .project-title-text { font-size: 13px; }
-:root[data-appearance='modernism'] .agentbar { min-height: 72px; padding: 14px 18px; gap: 16px; flex-wrap: wrap; border-radius: 24px; }
-:root[data-appearance='modernism'] .agentbar-left { flex-wrap: wrap; flex-basis: 220px; }
-:root[data-appearance='modernism'] .agentbar-group.system-controls { flex-wrap: wrap; }
+:root[data-appearance='modernism'] .agentbar { min-height: 72px; padding: 14px 18px; gap: 16px; border-radius: 24px; }
 :root[data-appearance='modernism'] .brand-logo-text { color: var(--fg); }
 :root[data-appearance='modernism'] .agentbar .view-mode-switcher { padding: 4px; border-radius: 999px; border: 1px solid var(--border); background: rgba(190, 226, 248, 0.3); }
 :root[data-appearance='modernism'] .view-mode-switcher .view-mode-btn { height: 34px; padding: 0 16px; border-radius: 999px; }
@@ -426,7 +424,7 @@
   :root[data-appearance='modernism'] .left-sidebar:not(.collapsed) { width: 248px; }
   :root[data-appearance='modernism'] .dag-grid-container { display: flex; flex-direction: column; overflow-y: auto; }
   :root[data-appearance='modernism'] :is(.dag-left-focus-col, .dag-right-col) { display: contents; }
-  :root[data-appearance='modernism'] .dag-3d-visualizer-card { min-height: 360px; flex: none; }
+  :root[data-appearance='modernism'] .dag-open-structure { flex: none; }
   :root[data-appearance='modernism'] .dag-topology-card.full-half { min-height: 320px; flex: none; }
   :root[data-appearance='modernism'] :is(.dag-stats-card.full-half, .dag-evidence-shelf-card.compact-shelf) { min-height: 240px; flex: none; }
   :root[data-appearance='modernism'] :is(.chat-column, .composer-wrap) { padding-left: 20px; padding-right: 20px; }
@@ -486,12 +484,10 @@
 :root[data-appearance='acid'] .btn.ghost { padding: 0 10px; color: var(--fg-secondary); }
 :root[data-appearance='acid'] :is(button, a, input, select, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 :root[data-appearance='acid'] .agentbar { padding: 16px 28px; gap: 20px; background: #ffffff; min-height: 76px; }
-:root[data-appearance='acid'] .agentbar-left { min-width: 0; flex: 1; }
 :root[data-appearance='acid'] .brand-logo-text { font-size: 18px; }
-:root[data-appearance='acid'] .header-breadcrumb { min-width: 0; flex-wrap: wrap; row-gap: 4px; }
 :root[data-appearance='acid'] .breadcrumb-project { font-size: 14px; }
 :root[data-appearance='acid'] .breadcrumb-separator { display: none; }
-:root[data-appearance='acid'] :is(.breadcrumb-agent, .breadcrumb-agent-wrap) { flex-basis: 100%; font-size: 12px; }
+:root[data-appearance='acid'] :is(.breadcrumb-agent, .breadcrumb-agent-wrap) { font-size: 12px; }
 :root[data-appearance='acid'] .agentbar .view-mode-switcher { padding: 4px; gap: 2px; border: 0; border-radius: 12px; background: #f1f4e9; }
 :root[data-appearance='acid'] .view-mode-switcher .view-mode-btn { height: 34px; padding: 0 16px; border-radius: 8px; }
 :root[data-appearance='acid'] .view-mode-switcher .view-mode-btn.active { background: #ffffff; color: var(--fg); box-shadow: 0 1px 3px rgba(48, 59, 39, 0.1); }
@@ -516,7 +512,7 @@
 :root[data-appearance='acid'] .dag-card { border: 0; border-radius: 0; box-shadow: none; background: transparent; }
 :root[data-appearance='acid'] :is(.dag-topology-card.full-half, .dag-stats-card.full-half) { height: auto; }
 :root[data-appearance='acid'] .dag-topology-card { grid-column: 1; grid-row: 1; padding-right: 28px; border-right: 1px solid var(--border-subtle); }
-:root[data-appearance='acid'] .dag-3d-visualizer-card { grid-column: 2; grid-row: 1; margin-left: 28px; border-radius: 12px; }
+:root[data-appearance='acid'] .dag-open-structure { grid-column: 2; grid-row: 1; margin-left: 28px; border-radius: 12px; }
 :root[data-appearance='acid'] .dag-stats-card { grid-column: 1; grid-row: 2; padding: 20px 28px 0 0; border-top: 1px solid var(--border-subtle); border-right: 1px solid var(--border-subtle); }
 :root[data-appearance='acid'] .dag-evidence-shelf-card.compact-shelf { grid-column: 2; grid-row: 2; height: auto; margin-left: 28px; padding-top: 20px; border-top: 1px solid var(--border-subtle); }
 :root[data-appearance='acid'] :is(.dag-card-header, .dag-card-header.compact) { background: transparent; border: 0; padding: 0 0 14px; gap: 12px; flex-wrap: wrap; }
@@ -576,15 +572,12 @@
 :root[data-appearance='acid'] :is(.agent-status-badge.state-idle, .agent-status-badge.state-cancelled) { color: var(--fg-tertiary); }
 :root[data-appearance='acid'] :is(.task-banner-text, .breadcrumb-task-text) { color: var(--accent); }
 @media (max-width: 1240px) {
-  :root[data-appearance='acid'] .agentbar { flex-wrap: wrap; gap: 12px 20px; }
-  :root[data-appearance='acid'] .agentbar-left { flex-basis: calc(100% - 220px); }
-  :root[data-appearance='acid'] .agentbar-group.system-controls { width: 100%; justify-content: flex-end; }
   :root[data-appearance='acid'] .console-subnav-pills { gap: 16px; }
 }
 @media (max-width: 1240px) {
   :root[data-appearance='acid'] .dag-grid-container { display: flex; flex-direction: column; gap: 28px; }
   :root[data-appearance='acid'] .dag-topology-card { order: 0; min-height: 320px; flex: none; padding: 0; border: 0; }
-  :root[data-appearance='acid'] .dag-3d-visualizer-card { order: 1; height: 400px; min-height: 400px; flex: none; margin: 0; }
+  :root[data-appearance='acid'] .dag-open-structure { order: 1; flex: none; margin: 0; }
   :root[data-appearance='acid'] .dag-stats-card { order: 2; min-height: 240px; flex: none; padding: 20px 0 0; border-right: 0; }
   :root[data-appearance='acid'] .dag-evidence-shelf-card.compact-shelf { order: 3; min-height: 240px; flex: none; margin: 0; }
   :root[data-appearance='acid'] .console-subnav-bar { align-items: flex-start; padding-top: 8px; padding-bottom: 8px; }

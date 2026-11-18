@@ -389,6 +389,11 @@ def queued_native_ts_optimization(workspace: Path, seed: str, project_id: str, o
     return db, record, step
 
 
+def background_completion_resume_steps(hold: asyncio.Event) -> list[Step]:
+    """旧提醒仍待触发时，真实后台完成也必须开启一轮处理。"""
+    return [Step(tools=[("stop", {})]), Step(wait_for=hold)]
+
+
 def supervisor_feedback_recovery_steps() -> list[Step]:
     """协调员收到督导反馈后重新进入一轮，未完成计算仍受结题门禁保护。"""
     return [Step(tools=[("agent_hub", {"action": "browse"})]), Step(stop=True)]
@@ -751,3 +756,14 @@ def scoped_compute_cancellation_steps(job_ids: list[int], ready: asyncio.Event) 
                 "  const result = await tools.cancel_compute_job(args);\n"
                 "  text(JSON.stringify(result));\n}",
     })]), Step(stop=True)]
+
+
+def visible_background_reply_steps(resume: asyncio.Event) -> list[Step]:
+    """Show narration and a parked reply, then resume the same conversation."""
+    return [
+        Step(text="before-background-marker", tools=[("schedule", {
+            "delay_seconds": 3600, "message": "check-background-marker",
+        })]),
+        Step(text="parked-reply-marker", stop=True),
+        Step(wait_for=resume, text="resumed-reply-marker", stop=True),
+    ]

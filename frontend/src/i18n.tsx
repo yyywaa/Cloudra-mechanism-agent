@@ -4,6 +4,10 @@ export type Lang = 'zh' | 'en';
 
 export const DICTIONARY = {
   zh: {
+    expandLongText: '长文本模式',
+    collapseLongText: '收起长文本',
+    longTextKeys: 'Enter 换行 · Ctrl / ⌘ + Enter 发送',
+    compactTextKeys: 'Enter 发送 · Shift + Enter 换行',
     // Top Bar & Global
     dialogue: '对话流',
     console: '控制台',
@@ -44,6 +48,7 @@ export const DICTIONARY = {
     projectWorkbench: 'PROJECT WORKBENCH',
     defaultWorkspace: '默认工作区',
     dagModeActive: 'DAG 编排引导模式',
+    dagModeRecord: 'DAG 记录模式',
     dagModeInactive: '基础会话推演',
     yoloActive: 'YOLO 自动执行',
     safeActive: 'SAFE 审批保护',
@@ -199,7 +204,7 @@ export const DICTIONARY = {
     opsRefreshQueue: '刷新队列',
     opsLoadingJobs: '加载计算作业列表中…',
     opsQueueEmptyTitle: '当前暂无排队或执行中的计算任务',
-    opsQueueEmptyDesc: '所有计算节点的并发槽位均处于空闲就绪状态。当智能体发起 ORCA、Gaussian、xTB 计算时，作业状态与进度将在此实时展现。',
+    opsQueueEmptyDesc: '可在「最近 100 条」查看本项目的作业记录。',
     opsRemindersTitle: '守护唤醒与定时任务 (Scheduled Reminders)',
     opsRemindersCount: (count: number) => `${count} 个任务`,
     opsRefreshReminders: '刷新任务',
@@ -283,6 +288,10 @@ export const DICTIONARY = {
     approvalTimelineWaiting: '等待人工审批授权 — 请在下方操作卡片确认或拒绝',
   },
   en: {
+    expandLongText: 'Long text',
+    collapseLongText: 'Collapse editor',
+    longTextKeys: 'Enter for newline · Ctrl / ⌘ + Enter to send',
+    compactTextKeys: 'Enter to send · Shift + Enter for newline',
     // Top Bar & Global
     dialogue: 'Dialogue',
     console: 'Console',
@@ -323,6 +332,7 @@ export const DICTIONARY = {
     projectWorkbench: 'PROJECT WORKBENCH',
     defaultWorkspace: 'Default Workspace',
     dagModeActive: 'DAG-Guided Mode',
+    dagModeRecord: 'DAG Record Mode',
     dagModeInactive: 'Standard Dialogue',
     yoloActive: 'YOLO Auto-Exec',
     safeActive: 'SAFE Approval',
@@ -478,7 +488,7 @@ export const DICTIONARY = {
     opsRefreshQueue: 'Refresh Queue',
     opsLoadingJobs: 'Loading compute jobs…',
     opsQueueEmptyTitle: 'No queued or executing quantum chemistry jobs',
-    opsQueueEmptyDesc: 'All node compute slots are currently idle and ready. When agents launch ORCA, Gaussian, or xTB calculations, job status and logs will stream here.',
+    opsQueueEmptyDesc: 'Select Latest 100 to view this project’s job history.',
     opsRemindersTitle: 'Daemon Wakeups & Scheduled Reminders',
     opsRemindersCount: (count: number) => `${count} Reminders`,
     opsRefreshReminders: 'Refresh Reminders',

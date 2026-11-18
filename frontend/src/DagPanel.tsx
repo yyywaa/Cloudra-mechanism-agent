@@ -1,28 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import dagre from 'dagre';
 import { api } from './api';
 import type { Project } from './types';
 import { hasSaddleEvidence } from './tsEvidence';
-import { Molecule3DViewer } from './Molecule3DViewer';
+import type { WorkbenchSource } from './workbenchTypes';
+import type { ChemicalObject } from './researchProducts';
 import { useAppearance } from './appearance';
 
-/* Structured DAG panel:
-   - Left Column:
-     - Top-left: RDKit 2D molecular structure depiction frame
-     - Bottom-left: Draggable slider & categorized evidence shelf for the selected node/step
-   - Right Column:
-     - Top-right: Reaction DAG topology graph + overall physical consistency & completion stats
-     - Right Main: 3D Molecular Structure Visualizer (Cartesian ball-and-stick, vibration animation)
-   - Bottom Drawer: Collapsible graph mutation forms & audit reviews
-*/
+/* Reaction graph, explicit evidence references and mutation controls. */
 
 type Json = Record<string, any>;
 type Sel = { kind: 'node' | 'edge'; id: string } | null;
 type SpeciesSmiles = string | string[] | null | undefined;
 
 interface DagData {
-  mode: string;
   delivery: Json | null;
   report: Json | null;
   history: Json[];
@@ -577,8 +569,18 @@ export default function DagPanel({
   project,
   onError,
   onToast,
+  onOpenMolecule,
+  onSelectObject,
+  selectedObject,
+  refreshVersion = 0,
+  onChanged,
 }: {
   project: Project;
+  onOpenMolecule?: (source: WorkbenchSource) => void;
+  onSelectObject?: (object: ChemicalObject | null) => void;
+  selectedObject?: ChemicalObject | null;
+  refreshVersion?: number;
+  onChanged: () => void;
   onError: (e: unknown) => void;
   onToast: (kind: 'error' | 'ok' | 'info', text: string) => void;
 }) {
@@ -589,49 +591,48 @@ export default function DagPanel({
   const [evidenceCategory, setEvidenceCategory] = useState<'all' | 'geometry' | 'frequency' | 'irc' | 'thermo'>('all');
   const [stageSliderIdx, setStageSliderIdx] = useState<number>(0);
   const [showAdminDrawer, setShowAdminDrawer] = useState<boolean>(false);
+  const loadVersion = useRef(0);
 
   const load = useCallback(async () => {
-    const [delivery, report, history, projection, reviews, draft] = await Promise.all([
-      api.dagDelivery(project.id),
-      api.dagReport(project.id),
-      api.dagHistory(project.id),
-      api.dagProjection(project.id),
-      api.dagReviews(project.id),
-      api.dagDraft(project.id),
-    ]);
-    setData({
-      mode: delivery.mode,
-      delivery: delivery.graph,
-      report,
-      history,
-      projection,
-      reviews,
-      draft,
-    });
-  }, [project.id]);
+    const version = ++loadVersion.current;
+    try {
+      const [delivery, report, history, projection, reviews, draft] = await Promise.all([
+        api.dagDelivery(project.id),
+        api.dagReport(project.id),
+        api.dagHistory(project.id),
+        api.dagProjection(project.id),
+        api.dagReviews(project.id),
+        api.dagDraft(project.id),
+      ]);
+      if (version !== loadVersion.current) return;
+      setData({ delivery: delivery.graph, report, history, projection, reviews, draft });
+    } catch (error) {
+      if (version === loadVersion.current) throw error;
+    }
+  }, [project.id, project.settings.orchestration_mode]);
 
   useEffect(() => {
     load().catch(onError);
-  }, [load]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { loadVersion.current++; };
+  }, [load, refreshVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Default selection to first node if none selected
   useEffect(() => {
-    if (!sel && data?.delivery?.nodes && data.delivery.nodes.length > 0) {
-      setSel({ kind: 'node', id: String(data.delivery.nodes[0].node_id) });
-    }
-  }, [data?.delivery?.nodes, sel]);
+    if (selectedObject !== undefined) setSel(selectedObject);
+  }, [selectedObject?.kind, selectedObject?.id]);
+  useEffect(() => { onSelectObject?.(sel); }, [sel?.kind, sel?.id, onSelectObject]);
 
   async function applyOps(operations: unknown[], rationale: string, okMsg: string) {
     setBusy(true);
     try {
-      const projection = await api.dagProjection(project.id);
-      const base = (projection?.revisions as Record<string, number> | undefined) ?? {};
+      const revision = data?.delivery?.revision;
+      if (!Number.isInteger(revision) || revision < 0) throw new Error('请先刷新并读取当前反应图，再提交修改。');
+      const base = { delivery: revision as number };
       const result = await api.dagMutations(project.id, operations, base, rationale);
       if (result.accepted === false) {
         throw new Error(`rejected: ${String(result.rejection_code ?? '')} ${String(result.rejection_reason ?? '')}`);
       }
       onToast('ok', okMsg);
-      await load();
+      onChanged();
     } catch (e) {
       onError(e);
     } finally {
@@ -645,7 +646,7 @@ export default function DagPanel({
       const result = await api.dagReplan(project.id, replanNote.trim());
       onToast(result.queued ? 'ok' : 'info', String(result.summary ?? 'replan queued'));
       setReplanNote('');
-      await load();
+      onChanged();
     } catch (e) {
       onError(e);
     } finally {
@@ -654,9 +655,10 @@ export default function DagPanel({
   }
 
   const graph = data?.delivery;
+  const mode = project.settings.orchestration_mode;
   const nodes = (graph?.nodes ?? []) as Json[];
   const edges = (graph?.edges ?? []) as Json[];
-  const revisions = (data?.projection?.revisions ?? {}) as Record<string, number>;
+  const revisions = graph ? { delivery: graph.revision as number } : {};
   const report = data?.report;
   const pending = (data?.reviews?.pending ?? []) as Json[];
   const recent = (data?.reviews?.recent ?? []) as Json[];
@@ -736,7 +738,6 @@ export default function DagPanel({
     const minimaRate = nodes.length > 0 ? Math.round((verifiedMinima / nodes.length) * 100) : 0;
     const tsRate = edges.length > 0 ? Math.round((verifiedTs / edges.length) * 100) : 0;
     const ircRate = edges.length > 0 ? Math.round((verifiedIrc / edges.length) * 100) : 0;
-    const pathClosure = nodes.length >= 2 && edges.length >= nodes.length - 1;
 
     return {
       nodesCount: nodes.length,
@@ -747,7 +748,6 @@ export default function DagPanel({
       minimaRate,
       tsRate,
       ircRate,
-      pathClosure,
     };
   }, [nodes, edges]);
 
@@ -757,7 +757,7 @@ export default function DagPanel({
       <div className="dag-topbar">
         <div className="dag-topbar-left">
           <span className="dag-main-title">反应机理图与证据交付看板</span>
-          <Badge text={data?.mode ?? 'standard'} kind={data?.mode === 'dag_guided' ? 'ok' : undefined} />
+          <Badge text={mode} kind={mode === 'dag_guided' ? 'ok' : undefined} />
           <Badge text={`delivery r${revisions.delivery ?? '-'}`} />
           {report && (
             <Badge text={report.complete ? '交付完备' : '交付中'} kind={report.complete ? 'ok' : 'warn'} />
@@ -773,13 +773,13 @@ export default function DagPanel({
           >
             {showAdminDrawer ? '收起图操作' : '图操作与审计'}
           </button>
-          <button type="button" className="btn ghost sm" onClick={() => load().catch(onError)} disabled={busy}>
+          <button type="button" className="btn ghost sm" onClick={onChanged} disabled={busy}>
             {busy ? '刷新中…' : '刷新'}
           </button>
         </div>
       </div>
 
-      {data?.mode === 'standard' && (
+      {mode === 'standard' && (
         <div className="dag-standard-notice">
           <span>
             ℹ 当前项目处于标准对话模式。你可以在上方项目配置中开启 DAG 引导，也可以在此自由交互设计反应拓扑与三维立体结构。
@@ -791,15 +791,11 @@ export default function DagPanel({
       <div className="dag-grid-container">
         {/* Left Column: 3D Visualizer (Top) + Compact Evidence Shelf (Bottom) */}
         <div className="dag-left-focus-col">
-          {/* Top-left: 3D Molecular Structure Visualizer */}
-          <div className="dag-card dag-3d-visualizer-card">
-            <Molecule3DViewer
-              smiles={currentItem?.smiles}
-              xyz={currentItem?.xyz}
-              title={currentItem?.label}
-              isTransitionState={currentItem?.isTS}
-              saddleEvidenceSupported={currentItem?.saddleEvidenceSupported}
-            />
+          <div className="dag-card dag-open-structure">
+            <strong>{currentItem?.label || '选择物种或反应步'}</strong>
+            {currentItem?.xyz && <button className="btn outline sm" onClick={() => onOpenMolecule?.({input_text:currentItem.xyz,input_format:'xyz'})}>打开记录中的结构</button>}
+            {!currentItem?.xyz && currentItem?.smiles && <button className="btn outline sm" onClick={() => onOpenMolecule?.({smiles:currentItem.smiles})}>以 SMILES 新建编辑稿</button>}
+            <span className="dim">点选图对象筛选明确关联的结果；从下方计算卡片打开实际来源帧。</span>
           </div>
 
           {/* Bottom-left: Compact Evidence Shelf & Slider ("矮胖点，带滚动条") */}
@@ -926,6 +922,7 @@ export default function DagPanel({
                         <div className="stage-ref-box">
                           <span className="ref-type-tag">{String(activeStage.ref.ref_type)}:</span>
                           <span className="ref-id-tag mono">{String(activeStage.ref.ref_id)}</span>
+                          {['file','artifact'].includes(String(activeStage.ref.ref_type)) && onOpenMolecule && <button className="btn outline sm" onClick={() => onOpenMolecule(activeStage.ref.ref_type === 'artifact' ? {artifact_id:String(activeStage.ref.ref_id)} : {file_evidence:activeStage.ref})}>打开来源工作台</button>}
                           {activeStage.ref.ref_type === 'artifact' && (
                             <a
                               href={api.artifactDownloadUrl(project.id, String(activeStage.ref.ref_id))}
@@ -957,7 +954,7 @@ export default function DagPanel({
               <span className="mono-subhead">反应网络有向无环图 (DAG 拓扑)</span>
               <div className="topology-header-actions">
                 <span className="badge sm">{nodes.length} 节点 · {edges.length} 反应步</span>
-                <span className="dag-zoom-hint">点击节点或过渡态边查看 3D 构象</span>
+                <span className="dag-zoom-hint">点击图对象定位已关联计算与证据</span>
               </div>
             </div>
             <div className="topology-viewport">
@@ -974,9 +971,6 @@ export default function DagPanel({
             <div className="dag-card-header">
               <div className="overview-header-left">
                 <span className="mono-subhead">反应机理自洽性与交付总览</span>
-                <span className={`badge sm ${completionStats.pathClosure ? 'ok' : 'neutral'}`}>
-                  {completionStats.pathClosure ? '路径连通闭合' : '拓扑开放'}
-                </span>
                 {report && (
                   <span className={`badge sm ${report.complete ? 'ok' : 'warn'}`}>
                     {report.complete ? '物理交付已完备' : '探索与计算中'}
@@ -1138,7 +1132,7 @@ export default function DagPanel({
               </div>
             )}
 
-            {data?.mode === 'dag_guided' && (
+            {mode === 'dag_guided' && (
               <div className="admin-subblock">
                 <div className="dag-title">向导师智能体 (Supervisor) 申请重新规划</div>
                 <input

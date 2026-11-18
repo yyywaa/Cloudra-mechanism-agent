@@ -1,6 +1,6 @@
 {
   "name": "cloudra-frontend",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Cloudra web frontend",
   "type": "module",
@@ -13,6 +13,7 @@
     "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {
+    "3dmol": "^2.5.5",
     "dagre": "^0.8.5",
     "katex": "^0.19.1",
     "react": "^19.0.0",
@@ -23,11 +24,11 @@
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1",
+    "@playwright/test": "^1.65.1",
     "@types/dagre": "^0.7.54",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.2",
+    "@vitejs/plugin-react": "^6.3.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.5"
   }

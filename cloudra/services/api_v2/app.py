@@ -27,7 +27,7 @@ from cloudra.runtime_v2.core import RuntimeCore
 from cloudra.runtime_v2.schemas import CommandRejected
 from cloudra.services.api_token import resolve_api_token
 
-from .context import ApiContext
+from .context import LOOPBACK_CLIENTS, ApiContext
 from .routers import build_routers
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,6 @@ _SHUTDOWN_GRACE_SECONDS = 15.0
 # Host 校验白名单：本地 API 只接受回环地址与 TestClient 的 testserver；
 # 其它 Host（DNS rebinding 的域名）一律 400，挡掉浏览器跨域页面重绑定访问。
 _ALLOWED_HOSTS = {"127.0.0.1", "localhost", "::1", "testserver"}
-_LOOPBACK_CLIENTS = {"127.0.0.1", "::1", "localhost", "testclient"}
 
 # web_launcher 显式绑定的地址（uvicorn 子进程 env 传入 `cloudra web --host`）。
 _BIND_HOST_ENV = "CLOUDRA_API_BIND_HOST"
@@ -216,34 +215,6 @@ class _BodyGuardMiddleware:
         await self.app(scope, replay, send)
 
 
-def _daemon_watchdog_interval() -> float:
-    """巡检间隔秒数（CLOUDRA_DAEMON_WATCHDOG_SECONDS，缺省 30；非法值回落缺省）。"""
-    raw = os.environ.get("CLOUDRA_DAEMON_WATCHDOG_SECONDS", "").strip()
-    try:
-        return float(raw) if raw else 30.0
-    except ValueError:
-        return 30.0
-
-
-async def _daemon_watchdog_loop(interval: float) -> None:
-    """周期 ensure 守护进程（scheduler/kg_vec）：守护崩溃退出后由本循环重拉起。
-
-    首轮延迟一个间隔——web_launcher 启动时已 ensure 过一次，避免重复探测。
-    ensure_daemons 自身只记日志不外抛，这里的 except 是兜底中的兜底。
-    """
-    await asyncio.sleep(interval)
-    while True:
-        try:
-            from cloudra.services.daemon_supervisor import ensure_daemons
-
-            await asyncio.to_thread(ensure_daemons)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.warning("daemon watchdog tick failed", exc_info=True)
-        await asyncio.sleep(interval)
-
-
 def _ensure_fd_limit(min_limit: int = 10240) -> None:
     """在 POSIX/macOS 上提升文件描述符软限制，防止高并发或长驻服务耗尽 fd。"""
     try:
@@ -289,14 +260,8 @@ def create_v2_app(
     benchmark_service = BenchmarkService(core, bus)
 
     @asynccontextmanager
-    async def lifespan(_app: FastAPI):
-        # 应用启动即显式启动：清除 `cloudra stop` 留下的关停标志/marker，
-        # 守护自愈与拉起从新一轮生命周期重新开始。
-        from cloudra.services.daemon_supervisor import clear_daemons_shutdown
-
-        watchdog_task: asyncio.Task | None = None
+    async def runtime_lifespan(_app: FastAPI):
         try:
-            await asyncio.to_thread(clear_daemons_shutdown)
             await core.reminders.rearm_all()
             await core.email_listener.start()
             await compute_notify.start()
@@ -329,24 +294,9 @@ def create_v2_app(
                         "supervision reconcile failed for project %s", project.id,
                         exc_info=True,
                     )
-            # 计算认领只由独立守护进程（cloudra scheduler）承担，与 API 分家；
-            # web 启动时无活实例会自动 detach 拉起（web_launcher），之后由下面的
-            # 自愈巡检兜底重拉起（CLOUDRA_DAEMON_WATCHDOG=off 关闭，测试默认关）。
-            if os.environ.get("CLOUDRA_DAEMON_WATCHDOG", "").strip().lower() not in {"off", "0", "false"}:
-                watchdog_task = asyncio.create_task(
-                    _daemon_watchdog_loop(_daemon_watchdog_interval()), name="daemon-watchdog"
-                )
             yield
         finally:
-            # 停止语义契约 3 的固定顺序：
-            # 1) 停止新任务准入与守护自愈拉起：取消 watchdog 任务（本进程
-            #    不再有 ensure 调用方）。正常关停不置全局关停标志——守护
-            #    进程刻意长存，不随 API 退出；显式全停（POST
-            #    /api/v2/runtime/shutdown / cloudra stop）才置标志落 marker。
-            if watchdog_task is not None:
-                watchdog_task.cancel()
-                await asyncio.gather(watchdog_task, return_exceptions=True)
-            # 2) 取消并 await 所有注册推理/收尾任务（runner/finalize，含
+            # 1) 取消并 await 所有注册推理/收尾任务（runner/finalize，含
             #    停止准入 `_accepting=False`），回收本服务拥有的 JS host——
             #    有界时间，超时记录后继续关停。benchmark 批次先优雅终止
             #    （级联取消题目 agent，不碰计算），core.aclose() 兜底。
@@ -363,7 +313,7 @@ def create_v2_app(
                 )
             except Exception:
                 logger.exception("core.aclose() failed during shutdown")
-            # 3) 关闭 broker/客户端/流与持久化收尾。
+            # 2) 关闭 broker/客户端/流与持久化收尾。
             # 快照是缓存不是权威（事件表才是），但关机前补一次让下次 restore
             # 的增量尾巴尽量短；失败不阻断关停。
             try:
@@ -375,6 +325,18 @@ def create_v2_app(
                     await close()
                 except Exception:
                     logger.exception("%s failed during shutdown", close.__qualname__)
+
+    @asynccontextmanager
+    async def lifespan(application):
+        from cloudra.infra.config import get_config
+        from cloudra.tools import use_tool_entries
+        from cloudra.tools.mcp import MCPToolManager
+
+        manager = MCPToolManager(get_config().mcp_servers)
+        async with manager.lifespan(core.external_tools):
+            with use_tool_entries(core.external_tools):
+                async with runtime_lifespan(application) as state:
+                    yield state
 
     app = FastAPI(title="Cloudra API v2", version=__version__, lifespan=lifespan)
     app.state.runtime_core = core
@@ -412,7 +374,7 @@ def create_v2_app(
             # token=off 只给回环客户端。工厂路径不设 BIND_HOST 时，
             # Host: 127.0.0.1 能骗过白名单，但 ASGI client 仍是对端地址。
             client_host = request.client.host if request.client else ""
-            if client_host not in _LOOPBACK_CLIENTS:
+            if client_host not in LOOPBACK_CLIENTS:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token"
                 )

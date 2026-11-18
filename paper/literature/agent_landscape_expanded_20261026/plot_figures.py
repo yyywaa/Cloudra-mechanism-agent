@@ -21,61 +21,10 @@ COLORS = dict(zip(GROUPS, ["#658568", "#587C92", "#BD9950", "#7A858A"]))
 INK = "#263238"
 TASKS = "TEOFRD"
 LABELS = {
-    "en": {
-        "groups": [
-            "Materials / surfaces",
-            "Molecules / complexes",
-            "Soft matter /\nbiomolecules",
-            "Multiple target\nclasses",
-        ],
-        "group_titles": [
-            "Materials / surfaces",
-            "Molecules / complexes",
-            "Soft matter / biomolecules",
-            "Multiple target classes",
-        ],
-        "number": "Number of systems",
-        "system": "System",
-        "positive": "Filled: positive evidence; blank: unencoded.",
-        "task_names": [
-            "Structure / editing",
-            "Static energy / properties",
-            "Geometry optimization",
-            "Vibrations / thermo.",
-            "Explicit paths / TS",
-            "Dynamics",
-        ],
-        "work": "Cloudra · this work (outside sample)",
-        "position": "Geometry perception + operators\nEvidence DAG · molecular mechanism exploration",
-        "sample": "Structured sample; counts are not field prevalence.",
-    },
-    "zh": {
-        "groups": ["材料 / 表面", "有限分子 / 配合物", "软物质 / 生物分子", "跨类展示"],
-        "group_titles": ["材料 / 表面", "有限分子 / 配合物", "软物质 / 生物分子", "跨类展示"],
-        "number": "系统数量",
-        "system": "系统",
-        "positive": "实心：正面证据；空白：未编码。",
-        "task_names": [
-            "结构构建 / 编辑",
-            "静态能量 / 性质",
-            "几何优化",
-            "振动 / 频率热化学",
-            "显式路径 / 过渡态",
-            "分子 / 量子动力学",
-        ],
-        "work": "Cloudra · 本工作（不计入样本）",
-        "position": "几何感知 + 几何算子\n证据 DAG · 分子反应机理探索",
-        "sample": "结构化文献样本，不代表全领域比例。",
-    },
+    "en": {"groups": ["Materials / surfaces", "Molecules / complexes", "Soft matter /\nbiomolecules", "Multiple target\nclasses"], "group_titles": ["Materials / surfaces", "Molecules / complexes", "Soft matter / biomolecules", "Multiple target classes"], "number": "Number of systems", "system": "System", "positive": "Filled: positive evidence; blank: unencoded.", "task_names": ["Structure / editing", "Static energy / properties", "Geometry optimization", "Vibrations / thermo.", "Explicit paths / TS", "Dynamics"], "work": "Cloudra · this work (outside sample)", "position": "Geometry perception + operators\nEvidence DAG · molecular mechanism exploration", "sample": "Structured sample; counts are not field prevalence."},
+    "zh": {"groups": ["材料 / 表面", "有限分子 / 配合物", "软物质 / 生物分子", "跨类展示"], "group_titles": ["材料 / 表面", "有限分子 / 配合物", "软物质 / 生物分子", "跨类展示"], "number": "系统数量", "system": "系统", "positive": "实心：正面证据；空白：未编码。", "task_names": ["结构构建 / 编辑", "静态能量 / 性质", "几何优化", "振动 / 频率热化学", "显式路径 / 过渡态", "分子 / 量子动力学"], "work": "Cloudra · 本工作（不计入样本）", "position": "几何感知 + 几何算子\n证据 DAG · 分子反应机理探索", "sample": "结构化文献样本，不代表全领域比例。"},
 }
-SHORT = {
-    "multireference_qc_agent": "Multireference QC",
-    "evolving_ts_workflows": "Evolving TS workflows",
-    "mdagent_biomolecular_2026": "MDAgent (bio, 2026)",
-    "dynamate_biomolecular": "DynaMate (protein–ligand)",
-    "matagent_lv": "MatAgent (Lv et al.)",
-    "ursa_lammps": "URSA LAMMPS agent",
-}
+SHORT = {"multireference_qc_agent": "Multireference QC", "evolving_ts_workflows": "Evolving TS workflows", "mdagent_biomolecular_2026": "MDAgent (bio, 2026)", "dynamate_biomolecular": "DynaMate (protein–ligand)", "matagent_lv": "MatAgent (Lv et al.)", "ursa_lammps": "URSA LAMMPS agent"}
 MANIFEST = []
 
 
@@ -87,15 +36,7 @@ def style(language):
             path = Path("/System/Library/Fonts/Supplemental/Songti.ttc")
         font_manager.fontManager.addfont(path)
         family = font_manager.FontProperties(fname=path).get_name()
-    return {
-        "font.family": family,
-        "font.size": 7.8,
-        "text.color": INK,
-        "pdf.fonttype": 42,
-        "ps.fonttype": 42,
-        "svg.fonttype": "none",
-        "axes.unicode_minus": False,
-    }
+    return {"font.family": family, "font.size": 7.8, "text.color": INK, "pdf.fonttype": 42, "ps.fonttype": 42, "svg.fonttype": "none", "axes.unicode_minus": False}
 
 
 def canvas(height):
@@ -115,11 +56,11 @@ def save(fig, stem, language, height):
 
 
 def axis(ax, start, width, y, upper, language):
-    ax.plot([start, start + width], [y, y], color="#AAB5B3", lw=0.6)
+    ax.plot([start, start + width], [y, y], color="#AAB5B3", lw=.6)
     step = 5 if upper <= 30 else 10
     for value in range(0, upper + 1, step):
         x = start + width * value / upper
-        ax.plot([x, x], [y, y + 0.8], color="#AAB5B3", lw=0.6)
+        ax.plot([x, x], [y, y + .8], color="#AAB5B3", lw=.6)
         ax.text(x, y + 3.2, str(value), ha="center", va="center", fontsize=7.5)
     ax.text(start + width / 2, y + 7.3, LABELS[language]["number"], ha="center", va="center", fontsize=7.5)
 
@@ -153,11 +94,7 @@ def tasks(language):
         ax.add_patch(Rectangle((43, y - 1.9), 34 * value / upper, 3.8, color="#587C92", ec="none"))
         ax.text(43 + 34 * value / upper + 1.2, y, str(value), va="center", weight="bold", fontsize=8)
     axis(ax, 43, 34, 56, upper, language)
-    note = (
-        "Tasks overlap; coverage is not scientific acceptance."
-        if language == "en"
-        else "任务可重叠；覆盖不等于科学验收。"
-    )
+    note = "Tasks overlap; coverage is not scientific acceptance." if language == "en" else "任务可重叠；覆盖不等于科学验收。"
     ax.text(2, 69.5, note, va="center", fontsize=7.5)
     save(fig, "tasks", language, 73)
 
@@ -167,14 +104,11 @@ def matrices(language):
     xs = [49, 55.7, 62.4, 69.1, 75.8, 82.5]
     for gi, group in enumerate(GROUPS):
         records = [r for r in ROWS if r["physical_target"] == group]
-        wrapped = [
-            (r, textwrap.fill(SHORT.get(r["id"], r["name"]), 26, break_long_words=False, break_on_hyphens=False))
-            for r in records
-        ]
+        wrapped = [(r, textwrap.fill(SHORT.get(r["id"], r["name"]), 26, break_long_words=False, break_on_hyphens=False)) for r in records]
         sized = [(r, label, max(5.1, (label.count("\n") + 1) * 3.2 + 1.1)) for r, label in wrapped]
         panel_count = max(1, math.ceil(sum(r[2] for r in sized) / 82))
         per_panel = math.ceil(len(sized) / panel_count)
-        pages = [sized[i : i + per_panel] for i in range(0, len(sized), per_panel)]
+        pages = [sized[i:i + per_panel] for i in range(0, len(sized), per_panel)]
         for pi, chunk in enumerate(pages, 1):
             callout = group == "finite_molecules_complexes" and pi == len(pages)
             height = 21 + sum(item[2] for item in chunk) + (19 if callout else 0)
@@ -186,7 +120,7 @@ def matrices(language):
             ax.text(2, 10, text["system"], va="center", weight="bold")
             for x, task in zip(xs, TASKS):
                 ax.text(x, 10, task, ha="center", va="center", weight="bold")
-            ax.plot([1.5, 84.5], [13.2, 13.2], color="#AAB5B3", lw=0.6)
+            ax.plot([1.5, 84.5], [13.2, 13.2], color="#AAB5B3", lw=.6)
             y = 13.5
             for i, (record, label, rh) in enumerate(chunk):
                 if i % 2 == 0:
@@ -198,7 +132,7 @@ def matrices(language):
                 y += rh
             ax.text(2, y + 4, text["positive"], va="center", fontsize=7.5)
             if callout:
-                ax.plot([1.5, 84.5], [y + 8, y + 8], color="#9CAF9F", lw=0.7)
+                ax.plot([1.5, 84.5], [y + 8, y + 8], color="#9CAF9F", lw=.7)
                 ax.text(2.8, y + 12, text["work"], va="center", weight="bold", fontsize=7.5, color="#3D6250")
                 ax.text(2.8, y + 15.2, text["position"], va="top", linespacing=1.12, fontsize=7.5)
             save(fig, f"matrix_{group}_{pi:02d}", language, height)

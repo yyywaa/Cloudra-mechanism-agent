@@ -24,6 +24,8 @@ _SENSITIVE_CONFIG_KEY_PARTS = {"key", "password", "secret", "token", "credential
 
 def _is_sensitive_config_key(key: str) -> bool:
     """Return whether a dotted/underscored config path contains a secret field."""
+    if key == "mcp_servers" or key.startswith("mcp_servers."):
+        return True
     parts = key.lower().replace(".", "_").split("_")
     return any(part in _SENSITIVE_CONFIG_KEY_PARTS for part in parts)
 
@@ -55,6 +57,9 @@ def cli(ctx, version, host, port, coordinator_model, coordinator_url, coordinato
         )
         sys.exit(_launch_or_exit(_frontend_or_exit(), rebuild=False, skip_build=False,
                                  host=host, port=port))
+
+    if ctx.invoked_subcommand == "mcp":
+        return
 
     _apply_config_overrides(
         coordinator_model, coordinator_url, coordinator_key,
@@ -109,6 +114,24 @@ def web(host, port, rebuild, skip_build):
     """启动 Web 前端（API + SPA 单端口服务）。"""
     sys.exit(_launch_or_exit(_frontend_or_exit(), rebuild=rebuild, skip_build=skip_build,
                              host=host, port=port))
+
+
+@cli.command(name="mcp")
+@click.option("--api-url", envvar="CLOUDRA_MCP_API_URL", help="已运行的 Cloudra API 地址。")
+def mcp_bridge(api_url):
+    """通过 stdio 将通用 Agent 接到已运行的 Cloudra。"""
+    import asyncio
+
+    try:
+        from cloudra.services.mcp_server import run
+    except ModuleNotFoundError as exc:
+        if (exc.name or "").split(".")[0] != "mcp":
+            raise
+        raise click.ClickException('请安装 MCP 依赖：pip install "cloudra[mcp]"') from None
+    try:
+        asyncio.run(run(api_url))
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 def _login_codex_account() -> None:
@@ -412,7 +435,7 @@ def config_get(key):
     value = getattr(target, final_key)
 
     # Mask sensitive values
-    if _is_sensitive_config_key(key) and isinstance(value, str) and value:
+    if _is_sensitive_config_key(key) and value:
         value = "***"
 
     console.print(value)
@@ -1002,7 +1025,7 @@ def stop_cmd(timeout):
     回收 JS host），守护进程看到 daemons.stop marker 后自行退出。在跑的
     计算作业（guard/calculator/QM）不会被杀——它们跑到终态自行收尾；
     Slurm 作业的取消走现有的 cancel_requested → scancel 路径。
-    再次运行 `cloudra`/`cloudra web` 会清除 marker 并重新拉起守护。
+    再次运行 `cloudra`/`cloudra web` 会启动一轮新的 API 和调度器。
     """
     from cloudra.services.shutdown import stop_all
 
@@ -1026,7 +1049,8 @@ def stop_cmd(timeout):
             f"[yellow]  注意：仍有 {running} 个计算作业在跑；按可靠性铁律它们不被 kill，"
             "会运行到终态自行收尾。[/yellow]"
         )
-    console.print("[green]关停标志已生效：守护进程不会被自动重新拉起；下次 `cloudra` 启动时清除。[/green]")
+    if report["api_stopped"] is False or "running" in report["daemons"].values():
+        raise click.exceptions.Exit(1)
 
 
 @cli.command()

@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { api } from './api';
 import type { Project, Agent, ComputeJob } from './types';
+import { stateBadgeText } from './completion';
 import { useI18n, type Translations } from './i18n';
 
-export type ConsoleTab = 'overview' | 'dag' | 'compute' | 'artifacts' | 'audit' | 'telemetry' | 'hub';
+export type ConsoleTab = 'overview' | 'research' | 'compute' | 'audit' | 'telemetry' | 'hub';
 
 function NetworkSvg() {
   return (
@@ -110,25 +111,6 @@ function getRoleMeta(roleId: string, t: Translations) {
   };
 }
 
-function getStateMeta(state: string, t: Translations) {
-  switch (state) {
-    case 'running':
-      return { label: t.stateRunning, dotClass: 'running' };
-    case 'waiting_for_input':
-    case 'waiting_for_dependents':
-    case 'waiting_for_message':
-      return { label: t.stateWaiting, dotClass: 'waiting' };
-    case 'idle':
-      return { label: t.stateIdle, dotClass: 'idle' };
-    case 'errored':
-      return { label: t.stateErrored, dotClass: 'errored' };
-    case 'finished':
-      return { label: t.stateFinished, dotClass: 'finished' };
-    default:
-      return { label: state, dotClass: 'neutral' };
-  }
-}
-
 export interface ConsoleIndexPageProps {
   project: Project;
   agents: Agent[];
@@ -136,6 +118,8 @@ export interface ConsoleIndexPageProps {
   sidebarJobs: ComputeJob[] | null;
   onNavigate: (tab: ConsoleTab) => void;
   onOpenProjectSettings: () => void;
+  onContinueDialogue: () => void;
+  onOpenWorkbench: () => void;
   onSelectAgent?: (agentId: string) => void;
   onOpenDialogue?: (agentId: string) => void;
   onError: (err: unknown) => void;
@@ -149,12 +133,14 @@ export function ConsoleIndexPage({
   sidebarJobs,
   onNavigate,
   onOpenProjectSettings,
+  onContinueDialogue,
+  onOpenWorkbench,
   onSelectAgent,
   onOpenDialogue,
   onError,
   onToast,
 }: ConsoleIndexPageProps) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
 
   const [goal, setGoal] = useState<{
     objective: string;
@@ -168,22 +154,21 @@ export function ConsoleIndexPage({
     current_focus: '',
   });
   const [savingGoal, setSavingGoal] = useState(false);
-  const [artifactsCount, setArtifactsCount] = useState<number | null>(null);
+  const goalRequestRef = useRef(0);
+  const goalEditRef = useRef(0);
+  const changeGoalDraft = (next: typeof goalDraft) => {
+    ++goalEditRef.current;
+    setGoalDraft(next);
+  };
   const [hubPostsCount, setHubPostsCount] = useState<number | null>(null);
   const [dagSummary, setDagSummary] = useState<{
-    mode: string;
     nodeCount: number;
     edgeCount: number;
-    accepted: boolean;
   } | null>(null);
 
   const activeJobs = sidebarJobs ? sidebarJobs.filter((j) => ['running', 'queued', 'ready', 'cancel_requested'].includes(j.state)) : [];
   const stoppingJobs = activeJobs.filter((j) => j.state === 'cancel_requested');
-  const dagModeActive =
-    project.settings.orchestration_mode === 'dag_guided' ||
-    project.settings.defaults?.orchestration_mode === 'dag_guided' ||
-    dagSummary?.mode === 'dag_guided' ||
-    dagSummary?.mode === 'dag_record';
+  const dagModeActive = project.settings.orchestration_mode !== 'standard';
 
   const childrenOf = useMemo(() => {
     const m = new Map<string, Agent[]>();
@@ -203,7 +188,6 @@ export function ConsoleIndexPage({
 
   const renderAgentNode = (agent: Agent, depth: number): React.ReactNode => {
     const roleMeta = getRoleMeta(agent.role_id, t);
-    const stateMeta = getStateMeta(agent.state, t);
     const isActive = activeAgent?.id === agent.id;
     const children = childrenOf.get(agent.id) ?? [];
 
@@ -243,9 +227,9 @@ export function ConsoleIndexPage({
 
           <div className="agent-card-actions">
             <div className="agent-status-box">
-              <span className={`state-badge ${stateMeta.dotClass}`}>
+              <span className={`state-badge ${agent.state}`}>
                 <span className="badge-dot" />
-                <span>{stateMeta.label}</span>
+                <span>{stateBadgeText(agent.state, lang)}</span>
               </span>
               {agent.current_run && (
                 <span className="agent-run-badge" title={agent.current_run.run_id}>
@@ -283,67 +267,70 @@ export function ConsoleIndexPage({
 
   // Load Goal
   useEffect(() => {
-    if (!activeAgent) {
-      setGoal(null);
-      return;
-    }
-    api.getGoal(activeAgent.id)
-      .then((res) => {
-        if (res.goal) {
+    const requestVersion = ++goalRequestRef.current;
+    const editVersion = goalEditRef.current;
+    setGoal(null);
+    setGoalDraft({ objective: '', completion_criteria: '', current_focus: '' });
+    setEditingGoal(false);
+    setSavingGoal(false);
+    if (activeAgent) {
+      api.getGoal(activeAgent.id)
+        .then((res) => {
+          if (requestVersion !== goalRequestRef.current) return;
           setGoal(res.goal);
-          setGoalDraft(res.goal);
-        } else {
-          setGoal(null);
-        }
-      })
-      .catch(() => setGoal(null));
+          if (res.goal && editVersion === goalEditRef.current) setGoalDraft(res.goal);
+        })
+        .catch(() => {
+          if (requestVersion === goalRequestRef.current) setGoal(null);
+        });
+    }
+    return () => { ++goalRequestRef.current; };
   }, [activeAgent?.id]);
-
-  // Load Artifacts Count
-  useEffect(() => {
-    api.artifacts(project.id)
-      .then((arts) => {
-        setArtifactsCount(Array.isArray(arts) ? arts.length : 0);
-      })
-      .catch(() => setArtifactsCount(null));
-  }, [project.id]);
 
   // Load Hub Posts Count
   useEffect(() => {
+    let cancelled = false;
+    setHubPostsCount(null);
     api.hubPosts(project.id)
       .then((res) => {
-        setHubPostsCount(Array.isArray(res.posts) ? res.posts.length : 0);
+        if (!cancelled) setHubPostsCount(Array.isArray(res.posts) ? res.posts.length : 0);
       })
-      .catch(() => setHubPostsCount(null));
+      .catch(() => { if (!cancelled) setHubPostsCount(null); });
+    return () => { cancelled = true; };
   }, [project.id]);
 
   // Load DAG Summary
   useEffect(() => {
+    let cancelled = false;
+    setDagSummary(null);
     api.dagDelivery(project.id)
       .then((res) => {
+        if (cancelled) return;
         const g = res.graph as { nodes?: unknown[]; edges?: unknown[] } | null;
         setDagSummary({
-          mode: res.mode || 'standard',
           nodeCount: g?.nodes?.length ?? 0,
           edgeCount: g?.edges?.length ?? 0,
-          accepted: Boolean(g),
         });
       })
-      .catch(() => setDagSummary(null));
-  }, [project.id]);
+      .catch(() => { if (!cancelled) setDagSummary(null); });
+    return () => { cancelled = true; };
+  }, [project.id, project.settings.orchestration_mode]);
 
   const handleSaveGoal = async () => {
     if (!activeAgent) return;
+    const requestVersion = ++goalRequestRef.current;
+    const editVersion = goalEditRef.current;
     setSavingGoal(true);
     try {
       const res = await api.setGoal(activeAgent.id, goalDraft);
+      if (requestVersion !== goalRequestRef.current) return;
       setGoal(res.goal);
-      setEditingGoal(false);
+      if (editVersion === goalEditRef.current) setEditingGoal(false);
       onToast(t.goalSavedToast, 'info');
     } catch (err) {
-      onError(err);
+      if (requestVersion === goalRequestRef.current) onError(err);
     } finally {
-      setSavingGoal(false);
+      if (requestVersion === goalRequestRef.current) setSavingGoal(false);
     }
   };
 
@@ -366,7 +353,7 @@ export function ConsoleIndexPage({
           <div className="portal-tags-group">
             <span className={`portal-tag ${dagModeActive ? 'active' : 'neutral'}`}>
               <span className="tag-dot" />
-              {dagModeActive ? t.dagModeActive : t.dagModeInactive}
+              {project.settings.orchestration_mode === 'dag_record' ? t.dagModeRecord : dagModeActive ? t.dagModeActive : t.dagModeInactive}
             </span>
             <span className={`portal-tag ${project.settings.defaults?.yolo ? 'yolo' : 'safe'}`}>
               {project.settings.defaults?.yolo ? t.yoloActive : t.safeActive}
@@ -385,6 +372,13 @@ export function ConsoleIndexPage({
           </div>
         </div>
 
+        <nav className="portal-task-actions" aria-label={lang === 'zh' ? '研究操作' : 'Research actions'}>
+          <button className="btn primary" onClick={onContinueDialogue}>{lang === 'zh' ? '继续研究对话' : 'Continue research conversation'}</button>
+          <button className="btn outline" onClick={onOpenWorkbench}>{lang === 'zh' ? '打开分子工作台' : 'Open molecular workbench'}</button>
+          <button className="btn outline" onClick={() => onNavigate('research')}>{lang === 'zh' ? '查看研究结果' : 'View research results'}</button>
+          <button className="btn outline" onClick={() => onNavigate('compute')}>{lang === 'zh' ? '查看计算任务' : 'View compute jobs'}{activeJobs.length > 0 && (lang === 'zh' ? `（${activeJobs.length} 个进行中）` : ` (${activeJobs.length} active)`)}</button>
+        </nav>
+
         {/* Core Scientific Objective / Hypothesis Card */}
         <div className="portal-goal-container">
           <div className="portal-goal-head">
@@ -397,7 +391,7 @@ export function ConsoleIndexPage({
                 type="button"
                 className="btn ghost sm"
                 onClick={() => {
-                  setGoalDraft(goal || { objective: '', completion_criteria: '', current_focus: '' });
+                  changeGoalDraft(goal || { objective: '', completion_criteria: '', current_focus: '' });
                   setEditingGoal(true);
                 }}
               >
@@ -434,7 +428,7 @@ export function ConsoleIndexPage({
                   rows={2}
                   placeholder={t.objectivePlaceholder}
                   value={goalDraft.objective}
-                  onChange={(e) => setGoalDraft({ ...goalDraft, objective: e.target.value })}
+                  onChange={(e) => changeGoalDraft({ ...goalDraft, objective: e.target.value })}
                 />
               </div>
               <div className="goal-row-2col">
@@ -445,7 +439,7 @@ export function ConsoleIndexPage({
                     className="input sm"
                     placeholder={t.completionCriteriaPlaceholder}
                     value={goalDraft.completion_criteria}
-                    onChange={(e) => setGoalDraft({ ...goalDraft, completion_criteria: e.target.value })}
+                    onChange={(e) => changeGoalDraft({ ...goalDraft, completion_criteria: e.target.value })}
                   />
                 </div>
                 <div className="goal-field">
@@ -455,7 +449,7 @@ export function ConsoleIndexPage({
                     className="input sm"
                     placeholder={t.currentFocusPlaceholder}
                     value={goalDraft.current_focus}
-                    onChange={(e) => setGoalDraft({ ...goalDraft, current_focus: e.target.value })}
+                    onChange={(e) => changeGoalDraft({ ...goalDraft, current_focus: e.target.value })}
                   />
                 </div>
               </div>
@@ -492,6 +486,8 @@ export function ConsoleIndexPage({
         </div>
       </section>
 
+      <details className="portal-details">
+        <summary>{lang === 'zh' ? '协作与运行详情' : 'Collaboration & runtime details'}</summary>
       {/* Middle Section: Agent Fleet & Collaboration Hierarchy */}
       <section className="portal-agent-section">
         <div className="portal-agent-header">
@@ -557,7 +553,7 @@ export function ConsoleIndexPage({
           {/* Card 1: DAG Exploration */}
           <div
             className={`portal-nav-card ${dagModeActive ? 'card-highlight' : ''}`}
-            onClick={() => onNavigate('dag')}
+            onClick={() => onNavigate('research')}
           >
             <div className="nav-card-top">
               <div className="nav-card-icon-wrap icon-cyan">
@@ -577,9 +573,9 @@ export function ConsoleIndexPage({
             </div>
 
             <div className="nav-card-body">
-              <h3 className="nav-card-heading">{t.cardDagTitle}</h3>
+              <h3 className="nav-card-heading">{lang === 'zh' ? '结构、计算与机理' : 'Structures, calculations & mechanism'}</h3>
               <p className="nav-card-desc">
-                {t.cardDagDesc}
+                {lang === 'zh' ? '查看真实计算过程、结构与文件产物；从独立分子工作台编辑并保存。' : 'Open calculation frames, structures and artifacts; edit molecules in the independent workbench.'}
               </p>
             </div>
 
@@ -587,7 +583,7 @@ export function ConsoleIndexPage({
               <span className="nav-card-meta">
                 {dagSummary?.nodeCount ? t.cardDagMetaActive(dagSummary.nodeCount, dagSummary.edgeCount) : t.cardDagMetaDefault}
               </span>
-              <span className="nav-card-arrow">{t.cardDagAction}</span>
+              <span className="nav-card-arrow">{lang === 'zh' ? '打开研究结果 →' : 'Open research results →'}</span>
             </div>
           </div>
 
@@ -628,35 +624,6 @@ export function ConsoleIndexPage({
                 {sidebarJobs ? t.cardComputeMeta(sidebarJobs.length) : t.cardComputeMetaDefault}
               </span>
               <span className="nav-card-arrow">{t.cardComputeAction}</span>
-            </div>
-          </div>
-
-          {/* Card 3: Artifacts Download */}
-          <div className="portal-nav-card" onClick={() => onNavigate('artifacts')}>
-            <div className="nav-card-top">
-              <div className="nav-card-icon-wrap icon-purple">
-                {/* Vector SVG: Package Box */}
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                  <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                  <line x1="12" y1="22.08" x2="12" y2="12" />
-                </svg>
-              </div>
-              <span className="badge sm neutral">
-                {artifactsCount !== null ? t.cardArtifactsBadge(artifactsCount) : t.cardArtifactsBadgeDefault}
-              </span>
-            </div>
-
-            <div className="nav-card-body">
-              <h3 className="nav-card-heading">{t.cardArtifactsTitle}</h3>
-              <p className="nav-card-desc">
-                {t.cardArtifactsDesc}
-              </p>
-            </div>
-
-            <div className="nav-card-footer">
-              <span className="nav-card-meta">{t.cardArtifactsMeta}</span>
-              <span className="nav-card-arrow">{t.cardArtifactsAction}</span>
             </div>
           </div>
 
@@ -749,6 +716,7 @@ export function ConsoleIndexPage({
           </div>
         </div>
       </section>
+      </details>
     </div>
   );
 }

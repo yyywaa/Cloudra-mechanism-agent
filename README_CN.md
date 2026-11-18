@@ -1,7 +1,5 @@
 # Cloudra
 
-默认协议是 `javascript`；`traditional` 是 per-agent 可选设置。
-
 <p align="center">
   <img src="docs/assets/Cloudra-logo.svg" alt="Cloudra logo" width="180" />
 </p>
@@ -18,7 +16,7 @@
 
 Cloudra会继续维护，我们会增强Agent的性能，尝试引入周期性体系计算，MD等需求广泛的领域。Cloudra的目标是成为通用的化学智能体，我们正在为此努力。
 
-目前该项目正处于论文投稿阶段。
+Cloudra 预印本已在 [arXiv](https://arxiv.org/abs/2611.02909) 公开。
 
 ## 可以怎样使用
 
@@ -34,29 +32,19 @@ Cloudra会继续维护，我们会增强Agent的性能，尝试引入周期性�
 
 研究过程中可以查看 Agent 的讨论（智能体论坛）与工具结果、计算队列（由Cloudra内部自造的小型hpc程序支持）和原生日志等。使用机理图模式（dag-guided）时，还可以查看物种、三维结构、反应步骤及其证据状态。这些在控制台中查看。
 
+控制台的「结构、计算与机理」页面统一展示结构、计算和文件产物；standard 项目也可直接使用。点击结构预览或按 **Alt+M** 打开独立分子窗口，可查看实际计算帧与模式，编辑结构、定义冻结／扫描并保存给 Agent。操作见[分子工作台指南](docs/MOLECULAR_WORKBENCH_CN.md)。
+
 ## 安装与启动
 
-**Windows 用户：**下载安装 [Setup.exe 原生安装包](docs/INSTALL_WINDOWS_CN.md)，按向导点击安装，即可从桌面打开 Cloudra，无需预装 Python 或 Node.js。以下命令面向 Linux/macOS 源码安装。
+下载适合自己系统的安装包，双击安装，再从桌面或应用程序打开 Cloudra。安装包已包含 Python、Node.js、基础依赖和网页界面，无需先安装开发工具。详细步骤见[新手安装教程](docs/INSTALL_CN.md)。
 
-需要 **Linux 或 macOS（windows系统请下载另外的windows分支）、Python ≥ 3.11、Node.js ≥ 22**，以及可用的语言模型服务（推荐deepseek-v4-flash，或GPT-6.1-sol，它们在系统中经过测试）。量子化学软件按研究任务另行安装和配置，例如 ORCA、Gaussian、xTB 或 CREST。
+| 系统 | 安装方式 |
+| --- | --- |
+| macOS | 双击 `.pkg` 安装，再打开“应用程序”中的 Cloudra；见[macOS 教程](docs/INSTALL_CN.md#macos-安装)。 |
+| Linux | 安装 `.deb`，或解压便携 `.tar.gz`，然后打开 Cloudra；见[Linux 教程](docs/INSTALL_CN.md#linux-安装)。 |
+| Windows，原生运行 | 双击 `Setup.exe` 安装，从开始菜单或桌面打开；见 [`windows` 分支教程](https://github.com/yyywaa/Cloudra-mechanism-agent/blob/windows/docs/INSTALL_WINDOWS_CN.md)。 |
 
-```bash
-git clone https://github.com/yyywaa/Cloudra-mechanism-agent.git
-cd Cloudra-mechanism-agent
-./install.sh
-
-# 安装时选择默认的 .venv 后，在当前终端激活它
-# 如果没有选择，请忽略这一步
-source .venv/bin/activate
-
-# 安装默认 JavaScript 工具运行环境的依赖
-npm ci --prefix cloudra/runtime_v2/js_host --ignore-scripts --no-audit --no-fund
-
-# 构建前端并启动 Web 界面
-cloudra
-```
-
-安装脚本会引导初始化配置。启动后打开终端显示的地址，默认是 `127.0.0.1:8000`。
+macOS 和 Linux 安装包可从 [v0.1.1 Release](https://github.com/yyywaa/Cloudra-mechanism-agent/releases/tag/v0.1.1) 下载；macOS 安装包尚未完成开发者签名和公证。开发者及自行部署的用户可按[源码安装步骤](docs/INSTALL_CN.md#从源码安装)使用现有安装脚本。
 
 1. 在全局设置（Global Setting）中配置主 Agent 与协作 Agent 的模型。可使用 OpenAI 兼容接口，也可选择 ChatGPT / Codex 账号登录。同时，也可以选择您偏好的前端UI风格。
 2. 配置研究所需的计算软件和节点；远端计算（如基于SLURM的集群计算）见[部署指南](docs/README.md#部署与配置)。
@@ -65,6 +53,32 @@ cloudra
 当然，您也可以将它作为一个普通的研究助手进行实验，如查文献，调研，写代码等。
 
 模型登录、联网搜索、常用命令及远程访问设置见[配置指南](docs/CONFIGURATION_CN.md)。
+
+### 保留源码安装
+
+准备 Python ≥ 3.11、Node.js ≥ 22.12 和 npm 后，仍可使用原来的安装与启动方式：
+
+```bash
+git clone --branch master https://github.com/yyywaa/Cloudra-mechanism-agent.git
+cd Cloudra-mechanism-agent
+bash install.sh
+source .venv/bin/activate
+cloudra
+```
+
+也可以直接运行 `bash web.sh`。完整步骤见[源码安装](docs/INSTALL_CN.md#从源码安装)。
+
+### macOS 首次打开被拦截
+
+macOS 安装包旁附带 [Unblock-Cloudra.command](packaging/macos/Unblock-Cloudra.command)，仅对确认来自本仓库的 Cloudra 下载使用。
+
+打开“终端”，输入 `bash `（末尾留一个空格），把脚本拖入终端并按回车。脚本会处理同文件夹中的 Cloudra `.pkg` 和已安装的 `Cloudra.app`；如提示密码，输入 Mac 登录密码。完成后重新打开安装包或应用。
+
+也可指定路径：
+
+```bash
+bash /路径/Unblock-Cloudra.command /Applications/Cloudra.app
+```
 
 ## 三种工作模式
 
@@ -82,21 +96,22 @@ cloudra
 
 ## 论文、数据与复现
 
-论文 **Cloudra: Geometric Reasoning and Scientific Validation for Autonomous Reaction Mechanism Exploration** 正在准备提交 arXiv。正式链接将在发布后补充。
+论文 **Cloudra: Geometric Reasoning and Scientific Validation for Autonomous Reaction Mechanism Exploration** 已作为预印本公开：[arXiv:2611.02909](https://arxiv.org/abs/2611.02909) [cs.MA]，DOI：[10.48550/arXiv.2611.02909](https://doi.org/10.48550/arXiv.2611.02909)。
 
-[研究数据与复现入口](docs/RESEARCH_DATA_CN.md)按用途区分：复现论文图表、检查 Agent 原始运行、审查 Gold 参考计算，以及重新运行 Benchmark。正式题库含 50 题；P2 对应四种配置、200 次保留运行。P2 完整归档的上传进度以[交付页](docs/benchmarks/P2_DELIVERY.md)为准。
+[研究数据与复现入口](docs/RESEARCH_DATA_CN.md)按用途区分：复现论文图表、检查 Agent 原始运行、审查 Gold 参考计算，以及重新运行 Benchmark。正式题库含 50 题；P2 对应四种配置、200 次保留运行。P2 完整归档（14.9 GB）已公开只读，文件名、校验值和下载说明见[交付页](docs/benchmarks/P2_DELIVERY.md)。
 
 ## 参与与引用
+
+默认协议是 `javascript`；`traditional` 是 per-agent 可选设置。
 
 欢迎提交问题、使用反馈和改进建议。报告计算问题时，附上软件版本、环境、任务描述、输入文件及相关日志，会更容易定位原因。开发约定见 [CONTRIBUTING.md](CONTRIBUTING.md)，系统结构见[架构说明](docs/ARCHITECTURE.md)。
 
 使用本项目开展研究时，请引用论文，并记录所用软件提交版本：
 
-> Chengyi Yang, Qianxin Zhou, and Yang Li. *Cloudra: Geometric Reasoning and Scientific Validation for Autonomous Reaction Mechanism Exploration*. Working draft, 31 October 2026.
+> Chengyi Yang, Qianxin Zhou, and Yang Li. *Cloudra: Geometric Reasoning and Scientific Validation for Autonomous Reaction Mechanism Exploration*. arXiv:2611.02909 [cs.MA], 2026. [doi:10.48550/arXiv.2611.02909](https://doi.org/10.48550/arXiv.2611.02909).
 
-[BibTeX](CITATION.bib) · [GitHub 引用信息](CITATION.cff)。arXiv 编号将在正式发布后补充。
+[BibTeX](CITATION.bib) · [GitHub 引用信息](CITATION.cff) · [arXiv 预印本](https://arxiv.org/abs/2611.02909)。
 
 ## 许可证
 
 Cloudra 采用 [AGPL-3.0-or-later](LICENSE)。`cloudra/skills/` 中声明 MIT 的技能使用 MIT 许可证；随仓库分发的第三方组件保留各自许可证，见[第三方归属](docs/licenses/README.md)。贡献采用 Developer Certificate of Origin，提交时请签署 `git commit -s`。
-

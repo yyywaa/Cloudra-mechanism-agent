@@ -61,7 +61,8 @@ def test_light_matches_pre_change_numerical_fixture(steps):
     data = json.loads((Path(__file__).parent / 'fixtures/idpp_light_reference.json').read_text())
     expected = next(c['expected'] for c in data['cases'] if c['steps'] == steps)
     actual, report = _idpp_relax(data['images'], mode='light', **({} if steps == 4000 else {'max_iter': steps}))
-    # Allow only floating-point rounding differences between NumPy/libm builds.
+    # NumPy/libm implementations differ by rounding at ~1e-15 after the Adam
+    # updates. Keep a tight absolute bound, with no relative-tolerance allowance.
     np.testing.assert_allclose(actual, expected, rtol=0, atol=1e-14)
     np.testing.assert_array_equal(actual[[0, -1]], np.asarray(data['images'])[[0, -1]])
     assert report['idpp_mode'] == 'light'
@@ -189,4 +190,3 @@ def test_light_degenerate_metadata_is_persisted_without_changing_coordinates(tmp
     assert result.interpolation['legacy_stopping_criterion_met'] is False
     assert json.loads((tmp_path / 'interpolation.json').read_text()) == result.interpolation
     assert 'degenerate_geometry' in result.message
-

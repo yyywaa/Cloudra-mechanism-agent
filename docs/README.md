@@ -2,7 +2,7 @@
 
 [English](README_EN.md) · [项目首页](../README_CN.md)
 
-第一次使用，从[安装与第一个任务](../README_CN.md#安装与启动)开始。阅读论文或核查实验结果，从[论文、数据与复现](RESEARCH_DATA_CN.md)开始。
+第一次使用，从[安装与桌面启动](INSTALL_CN.md)开始；原生 Windows 用户使用 [`windows` 分支教程](https://github.com/yyywaa/Cloudra-mechanism-agent/blob/windows/docs/INSTALL_WINDOWS_CN.md)。核查论文实验结果或复现图表，从[论文、数据与复现](RESEARCH_DATA_CN.md)开始；预印本见 [arXiv:2611.02909](https://arxiv.org/abs/2611.02909)。
 
 Windows 用户可直接使用 [Setup.exe 原生安装与桌面启动指南](INSTALL_WINDOWS_CN.md)，无需预装 Python 或 Node.js。
 
@@ -10,10 +10,13 @@ Windows 用户可直接使用 [Setup.exe 原生安装与桌面启动指南](INST
 
 | 文档 | 你可以在这里找到 |
 | --- | --- |
+| [安装与桌面启动](INSTALL_CN.md) | 下载 macOS / Linux 安装包、桌面启动、首次配置；另附源码安装。 |
 | [配置指南](CONFIGURATION_CN.md) | 模型登录、联网搜索、对话命令与服务访问。 |
+| [分子工作台](MOLECULAR_WORKBENCH_CN.md) | 结构、计算与机理页面；逐帧查看、分子编辑、冻结／扫描、共享基团与保存。 |
+| [混合溶剂建盒](MD_BOX.md) | 周期盒、初始密度检查和溶剂参考数据维护。 |
 | [TS 流程与科学验收](TS_PROCESS_SOP.md) | 过渡态搜索、修订、停止以及频率和 IRC 证据要求。 |
 | [DAG 编排](DAG_ORCHESTRATION.md) | 三种模式、机理图、证据绑定与 Supervisor 审查。 |
-| [论文、数据与复现](RESEARCH_DATA_CN.md) | 论文源文件、图表复算、原始实验、Gold 与重新运行的不同入口。 |
+| [论文、数据与复现](RESEARCH_DATA_CN.md) | 图表复算、原始实验、Gold 与重新运行的不同入口。 |
 
 ## 部署与配置
 
@@ -39,4 +42,4 @@ Windows 用户可直接使用 [Setup.exe 原生安装与桌面启动指南](INST
 
 ## 历史记录
 
-已完成的计划、旧设计和验收过程留在 `docs/archive/`、`docs/superpowers/`、`gold_compute/archive/`、`paper/archive/` 与 `ideapool/archive/`，供需要时追溯。它们不代替上面的当前指南，也不构成新的待算任务。版本变化见 [CHANGELOG](../CHANGELOG.md)。
+已完成的计划、旧设计和验收过程留在 `docs/archive/`、`docs/superpowers/`、`gold_compute/archive/` 与 `ideapool/archive/`，供需要时追溯。旧稿件及其编辑产物保留在 Git 历史中，当前分支提供实验数据与复现代码。历史材料不代替上面的当前指南，也不构成新的待算任务。版本变化见 [CHANGELOG](../CHANGELOG.md)。

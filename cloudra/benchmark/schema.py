@@ -23,7 +23,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
 from cloudra.runtime_v2.schemas import MethodPolicy, OrchestrationMode
 
@@ -73,7 +73,7 @@ class MechanismNode(BaseModel):
     # 交付侧可达性声明的来源：top_level（规范形状）、properties（agent 把
     # accessible 写在 properties 里的历史形状，加载时提升到顶层）、default
     # （两处都没写，按默认 accessible=true 处理）。gold 侧恒为 top_level。
-    # 只作诊断/报告用，不参与任何评分口径。
+    # 只作诊断/报告用，不参与任何评分口径，也不写入版本化任务/交付图。
     accessible_source: Literal["top_level", "properties", "default"] = Field(default="top_level", exclude=True)
     label: str = ""
     properties: dict[str, Any] = Field(default_factory=dict)
@@ -141,6 +141,15 @@ class MechanismEdge(BaseModel):
     weight: float = 1.0
     channel: Optional[str] = None
     favored: Optional[bool] = None
+    # Gold-only energy-reference requirement; deliveries supply native energies.
+    barrier_reference_policy: Literal["lowest_verified_minimum"] | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize_reference(self, handler):
+        data = handler(self)
+        if self.barrier_reference_policy is None:
+            data.pop("barrier_reference_policy", None)
+        return data
 
 
 class GoldMechanismGraph(BaseModel):
@@ -251,6 +260,14 @@ class GoldSpec(BaseModel):
     # hard 档选择性锚点（ΔΔ，仅作定性记录）
     selectivity: Optional[SelectivityReference] = None
 
+    @model_serializer(mode="wrap")
+    def _serialize_gold(self, handler):
+        data = handler(self)
+        graph = data["mechanism_graph"]
+        for element in graph["nodes"] + graph["edges"]:
+            element.pop("accessible_source", None)
+        return data
+
 
 # ---------------------------------------------------------------------------
 # rubric (scoring rules)
@@ -357,4 +374,3 @@ def complex_smiles(components: list[str]) -> list[str]:
     if len(components) <= 1:
         return list(components)
     return [".".join(components)]
-

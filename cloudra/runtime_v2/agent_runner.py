@@ -15,8 +15,8 @@ prefix_installed/appended/compacted 由 apply_event 重建），跨 run、跨重
 连续；run 只是执行生命周期，不再各自重建对话。每个 run 创建自己的
 ContextPrefix owner，但 owner 状态从会话投影回灌（restored），跨 run 不重装
 前缀。发送 LLM 请求前，本轮输入（前缀增量/inbox/通知）经
-ContextBroker.commit_input 落事件并持久化；响应后 assistant/tool 消息经
-append_output 落事件——恰好一次。compact 的候选上下文经
+ContextBroker.commit_input 落事件并持久化；响应正文经 agent.message_emitted 同时投影到 UI 与上下文，工具调用与结果经
+append_output 成对落事件——恰好一次。compact 的候选上下文经
 ContextBroker.install_compacted 一条事件原子安装。
 
 易失状态（3e）：``_tasks`` 与 ``_exit_strikes``（无进展退出计数）是
@@ -33,8 +33,10 @@ import math
 import os
 from contextlib import nullcontext
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from cloudra.dag.models import DeliveryReport
 from cloudra.runtime_v2.dispatcher import WakePolicy
 from cloudra.runtime_v2.failures import RunFailureKind, classify_failure, is_retryable
 from cloudra.runtime_v2.schemas import AgentSession, AgentState
@@ -170,7 +172,12 @@ class AgentRunner:
                 async with run_semaphore:
                     await self._run(agent)
 
-        task = asyncio.create_task(run_with_permit(), name=f"agent:{session_id}")
+        from cloudra.tools import use_tool_entries
+
+        # Tasks copy their creator's context. Reset this token synchronously:
+        # a pending coroutine can later be finalized from another context.
+        with use_tool_entries(self.core.external_tools):
+            task = asyncio.create_task(run_with_permit(), name=f"agent:{session_id}")
         self._tasks[session_id] = task
         task.add_done_callback(lambda done: self._task_finished(session_id, done))
         return task
@@ -181,13 +188,14 @@ class AgentRunner:
         A mailbox delivery can observe WAITING/RUNNING while the runner is in
         its final event flush.  ``schedule`` correctly refuses a second task
         while the old task is alive, so the done callback must retry after the
-        task is actually gone if the wake changed the projection to RUNNING.
+        task is actually gone if a wake changed the projection to RUNNING or
+        an explicit restart queued a fresh run during the old task's cleanup.
         """
         if self._tasks.get(session_id) is not task:
             return
         self._tasks.pop(session_id, None)
         agent = self.core.agents.get(session_id)
-        if agent is None or agent.state is not AgentState.RUNNING:
+        if agent is None or agent.state not in {AgentState.RUNNING, AgentState.QUEUED}:
             return
         if self._inbox_has_pending(agent):
             self.schedule(session_id)
@@ -410,7 +418,6 @@ class AgentRunner:
                         candidate_answer=outcome.content,
                     )
                     if gate.action == "continue_work":
-                        # Keep the candidate private until the completion gate permits delivery.
                         strike, exhausted = self._track_exit_strike(agent, run_id, gate)
                         if exhausted:
                             notice = (
@@ -419,7 +426,11 @@ class AgentRunner:
                                 f"{gate.reason}). The run was NOT marked complete; send a new "
                                 "message to resume with fresh instructions."
                             )
-                            self._emit_run_message(agent, run_id, notice)
+                            core.event_log.append(
+                                "agent.warning", stream="agent", project_id=agent.project_id,
+                                session_id=agent.id, run_id=run_id,
+                                data={"message": notice},
+                            )
                             await core.agent_host.finish_run(
                                 agent,
                                 outcome="failed",
@@ -487,7 +498,6 @@ class AgentRunner:
                     # cannot slip between this check and finish_run.
                     if not await self._finish_gated_run(
                         agent, run_id, gate, explicit_stop=explicit_stop,
-                        candidate_answer=outcome.content,
                     ):
                         continue
                     break
@@ -564,9 +574,13 @@ class AgentRunner:
             await reconcile_supervision(self.core, agent.project_id)
         await deliver_child_completion_to_parent(self.core, agent)
         await deliver_peer_completion(self.core, agent)
-        await self.maybe_wake_parked_delivery(agent.project_id)
+        await self.maybe_wake_parked_delivery(
+            agent.project_id, background_finished=agent.role_id != "coordinator",
+        )
 
-    async def maybe_wake_parked_delivery(self, project_id: str) -> None:
+    async def maybe_wake_parked_delivery(
+        self, project_id: str, *, background_finished: bool = False,
+    ) -> None:
         """Resume a guided delivery wait once all project background work settles.
 
         Called by terminal agent and compute-notice events. The notice is
@@ -622,7 +636,12 @@ class AgentRunner:
                     continue
                 if await asyncio.to_thread(
                     has_running_siblings, core, project_id=project_id, session_id=coordinator.id,
-                ) or await asyncio.to_thread(core.reminders.pending, coordinator.id):
+                ):
+                    continue
+                # A real result supersedes an old polling reminder. The
+                # coordinator's own stop still waits for its reminder rather
+                # than immediately reopening the run it just parked.
+                if not background_finished and await asyncio.to_thread(core.reminders.pending, coordinator.id):
                     continue
                 # The DB check awaits; a regular child message may have
                 # already woken this coordinator in the meantime.
@@ -642,6 +661,10 @@ class AgentRunner:
                     and (event.data.get("manifest") or {}).get("parked_run_id")
                     == parked_run_id
                 ), None))
+                # History IO yields to submitters. Do not act on the earlier
+                # empty compute snapshot if a new job appeared meanwhile.
+                if await pending_compute_jobs_exist(data_dir=None, project_id=project_id):
+                    continue
                 if not still_parked():
                     continue
                 if marker is not None:
@@ -679,16 +702,6 @@ class AgentRunner:
                     },
                     wake=WakePolicy.PARK_TERMINAL,
                 )
-
-    def _emit_run_message(self, agent: AgentSession, run_id: str, content: str) -> None:
-        self.core.event_log.append(
-            "agent.message_emitted",
-            stream="agent",
-            project_id=agent.project_id,
-            session_id=agent.id,
-            run_id=run_id,
-            data={"sender": agent.role_id, "content": content},
-        )
 
     async def _confirm_reviewed_exit(self, agent: AgentSession, run_id: str, messages: list[dict]) -> bool:
         """Confirm a frozen accepted submission before asking for another LLM turn."""
@@ -741,9 +754,48 @@ class AgentRunner:
             confirmation_messages=messages,
         )
 
+    def _record_delivery(self, agent: AgentSession, report: DeliveryReport) -> dict:
+        """Bind the committed DAG report to this run using immutable file references."""
+        delivery = {
+            "unresolved": [gap.detail for gap in (*report.unresolved, *report.inconclusive)],
+            "artifact_ids": [],
+        }
+        output = report.output_artifact
+        if not output or not output.get("snapshot_path"):
+            return delivery
+
+        from cloudra.dag.delivery_artifact import current_artifact_digest
+        from cloudra.persistence.artifacts import ArtifactService
+        from cloudra.persistence.database import ConversationDB
+        from cloudra.persistence.paths import project_workspace_dir
+        from cloudra.services.session_store import ensure_session_record
+
+        try:
+            project = self.core.require_project(agent.project_id)
+            root = Path(project.workspace_dir) if project.workspace_dir else project_workspace_dir(agent.project_id)
+            snapshot = Path(output["snapshot_path"])
+            if current_artifact_digest(output["snapshot_path"]) != output["sha256"]:
+                raise ValueError("Committed delivery snapshot no longer matches the audited digest.")
+            ensure_session_record(ConversationDB(agent.project_id), agent.id, agent.role_id)
+            artifact, _created = ArtifactService().snapshot_file(
+                conversation_id=agent.project_id,
+                session_id=agent.id,
+                source=snapshot,
+                allowed_root=root,
+                name=Path(output["path"]).name,
+            )
+            if artifact.sha256 != output["sha256"]:
+                raise ValueError("Registered artifact does not match the audited digest.")
+        except Exception:
+            logger.exception("Could not register the committed delivery artifact for agent %s", agent.id)
+            delivery["unresolved"].append("The audited delivery file could not be registered for download.")
+        else:
+            delivery["artifact_ids"].append(artifact.artifact_id)
+        return delivery
+
     async def _finish_gated_run(
         self, agent: AgentSession, run_id: str, gate, *, explicit_stop: bool,
-        candidate_answer: str = "", confirmation_messages: list[dict] | None = None,
+        confirmation_messages: list[dict] | None = None,
     ) -> bool:
         """One commit/output boundary for model exits and accepted frozen exits."""
         core = self.core
@@ -760,10 +812,13 @@ class AgentRunner:
                     if any(event.session_id == agent.id and event.data.get("message_id") not in consumed
                            for event in core.mailbox.unread()):
                         return False
+                delivery = None
                 for stage in getattr(self.pipeline, "stages", ()):
                     hook = getattr(stage, "on_run_end", None)
                     if hook is not None:
-                        await hook(agent, explicit_stop=explicit_stop)
+                        report = await hook(agent, explicit_stop=explicit_stop)
+                        if isinstance(report, DeliveryReport):
+                            delivery = await asyncio.to_thread(self._record_delivery, agent, report)
                 if confirmation_messages is not None:
                     # Consume the durable receipt without fabricating an LLM
                     # response or another stop tool call. Recovery uses these ids.
@@ -771,12 +826,9 @@ class AgentRunner:
                         {"role": "user", "content": item.get("content", ""),
                          "message_id": item["message_id"]} for item in confirmation_messages
                     ])
-                final_answer = gate.final_answer if gate.final_answer is not None else candidate_answer
-                if gate.action == "allow_final" and final_answer:
-                    self._emit_run_message(agent, run_id, final_answer)
-                elif gate.action == "wait_background":
-                    self._emit_run_message(agent, run_id, gate.reason or "Run paused awaiting background work.")
-                await core.agent_host.finish_run(agent, outcome="succeeded")
+                # Model-authored text was already committed and shown at the
+                # response boundary. Gate outcomes change task status only.
+                await core.agent_host.finish_run(agent, outcome="succeeded", delivery=delivery)
                 if self._inbox_has_pending(agent):
                     await core.agent_host.wake(agent, runner=core.runner)
         await self._deliver_completion(agent)
@@ -857,6 +909,8 @@ class AgentRunner:
                 # 收尾依据（结构化）：投影成 UI 的「已验证完成 / 部分交付 /
                 # 未独立验证」。绝不由 reason 文本反推。
                 "basis": gate.basis,
+                **({"final_answer": gate.final_answer if gate.final_answer is not None else candidate_answer}
+                   if gate.action == "allow_final" else {}),
             },
         )
         return gate, source
@@ -1024,8 +1078,8 @@ class AgentRunner:
     async def _commit_turn_output(self, agent: AgentSession, run_id: str, outcome) -> None:
         """响应消息恰好一次落进会话上下文投影（context.appended）。
 
-        输入（前缀增量/inbox/通知）已在发送前由 ContextBroker.commit_input
-        入投影；这里只用同一事件原子追加 assistant tool_calls 与全部匹配的
+        输入已在发送前提交；可见正文由 emit_assistant 的单条事件提交。
+        这里只用同一事件原子追加 assistant tool_calls 与全部匹配的
         tool outputs。run_turn 失败/取消时不调用，不能留下 provider 拒绝的
         半条工具调用；已提交的输入仍留在投影里（它确实进入过请求）。
         """
@@ -1033,8 +1087,8 @@ class AgentRunner:
         tool_calls = [call for call, _ in outcome.tool_exchanges]
         if outcome.blocked_call is not None:
             tool_calls.append(outcome.blocked_call)
-        if outcome.content or tool_calls:
-            entry: dict = {"role": "assistant", "content": outcome.content}
+        if tool_calls:
+            entry: dict = {"role": "assistant", "content": ""}
             if outcome.reasoning:
                 entry["reasoning_content"] = outcome.reasoning
             if tool_calls:
