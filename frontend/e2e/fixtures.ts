@@ -198,4 +198,3 @@ export async function openSpa(page: Page, hash = '') {
     timeout: 15_000,
   });
 }
-
