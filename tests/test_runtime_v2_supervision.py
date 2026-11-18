@@ -1672,9 +1672,7 @@ async def test_new_review_arriving_mid_turn_is_consumed_in_same_run(tmp_path):
     core, bus, _stages = _full_wiring(llm)
     project = await _guided_project(bus, tmp_path, "race-mid-turn")
     llm.project_id = project.id
-    # Task 4A：覆盖通过的交付图让结束门禁透明——否则 supervisor 完成回传唤醒
-    # coordinator 后其纯文本收尾会创建退出审批并再次通知 supervisor（多一个
-    # run），干扰"同一 run 消费中途待办"的断言。
+    # 完整交付仍需独立终审；过程督导与终审会话的身份必须分开计数。
     await _seed_complete_delivery(project.id)
     coordinator = await _spawn_guided_coordinator(bus, project)
     supervisor = None
@@ -1701,6 +1699,12 @@ async def test_new_review_arriving_mid_turn_is_consumed_in_same_run(tmp_path):
         for rid in (request_1, request_2):
             decision = await asyncio.to_thread(_decision_for, project.id, rid)
             assert decision is not None, f"{rid} was lost"
+        # 等协调者完成终审，确定性覆盖终审会话已创建的调度顺序。
+        await _wait_state(coordinator, "succeeded")
+        assert any(
+            a.project_id == project.id and a.final_review_request_id is not None
+            for a in core.agents.values()
+        )
         # 最多一个 runner：同一个 run 内消费，不开新 run。
         runs = [
             e for e in core.event_log.query_session(supervisor.id) if e.type == "run.started"
@@ -1710,6 +1714,7 @@ async def test_new_review_arriving_mid_turn_is_consumed_in_same_run(tmp_path):
             a
             for a in core.agents.values()
             if a.project_id == project.id and a.role_id == SUPERVISOR_ROLE_ID
+            and a.final_review_request_id is None
         ]
         assert len(supervisors) == 1
     finally:
@@ -1794,9 +1799,7 @@ async def test_new_review_arriving_between_stop_decision_and_finish_is_consumed_
             )
         )
     ).data
-    # Task 4A：覆盖通过的交付图让结束门禁对 coordinator 透明——否则督导完成
-    # 回传唤醒 coordinator 后其纯文本收尾会创建退出审批请求，在第二 run 收尾
-    # 后残留 queued 待办，干扰"新送审被消费完"的断言。
+    # 完整交付仍需独立终审；下方唯一性断言只统计过程督导。
     await _seed_complete_delivery(project.id)
     llm = _MailboxAdjudicatorLLM(project.id)
     trap = _StopWindowTrap(core, project.id, coordinator.id)
@@ -1873,6 +1876,7 @@ async def test_new_review_arriving_between_stop_decision_and_finish_is_consumed_
             a
             for a in core.agents.values()
             if a.project_id == project.id and a.role_id == SUPERVISOR_ROLE_ID
+            and a.final_review_request_id is None
         ]
         assert len(supervisors) == 1
     finally:
