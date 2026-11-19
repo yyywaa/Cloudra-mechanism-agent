@@ -87,3 +87,28 @@ mcp_servers:
 每个连接可选 `permissions`，复用现有 `read/write/manage/script/destructive` 布尔字段；默认要求 `read` 和 `script`。需要审批的服务可设 `destructive: true`，沿用现有审批流程。远端工具注解不授予本地权限。配置显示和 CLI get/set 会隐藏连接凭据。
 
 文本、图片及结构化结果保留；图片进入现有工作区产物流程。外部工具返回成功代表工具执行成功，科学结论仍按现有证据标准验收。首版使用预配置鉴权头，不提供交互式 OAuth 或运行中配置热更新。
+
+### 生信数据源 MCP 示例
+
+以下为已验证可直接接入（无需账号与凭据）的 6 个生信与药物发现数据源示例，可直接合并到 `config.yaml` 的 `mcp_servers` 下（严格无 `type` 字段；`tooluniverse` 需环境中可用 `uvx`）：
+
+```yaml
+mcp_servers:
+  pubmed:
+    url: https://pubmed.mcp.claude.com/mcp
+  biorxiv:
+    url: https://hcls.mcp.claude.com/biorxiv/mcp
+  chembl:
+    url: https://hcls.mcp.claude.com/chembl/mcp
+  c-trials:
+    url: https://hcls.mcp.claude.com/clinical_trials/mcp
+  opentargets:
+    url: https://mcp.platform.opentargets.org/mcp
+  tooluniverse:
+    command: uvx
+    args: ["--refresh", "tooluniverse"]
+    env:
+      PYTHONIOENCODING: "utf-8"
+```
+
+> 提示：配置键 `c-trials` 含连字符 `-`，Cloudra 会按稳定规则将其规范化为下划线并附加 12 位哈希后缀（例如 `mcp__c_trials__search_trials__7dc25e7d1366`）。

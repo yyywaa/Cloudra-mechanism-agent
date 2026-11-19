@@ -106,3 +106,28 @@ Discovered tools join the existing catalog as `mcp__server__tool`; the program g
 Optional per-server `permissions` reuse the existing boolean `read/write/manage/script/destructive` fields. Defaults require `read` and `script`; `destructive: true` uses the existing approval flow. Remote annotations do not grant local permissions. Configuration displays and CLI get/set hide connection credentials.
 
 Text, images and structured results are preserved; images enter the workspace artifact flow. Successful external calls still require the existing scientific evidence checks for scientific acceptance. This version supports preconfigured authentication headers; configuration changes require restart and interactive OAuth is not included.
+
+### Bio-research MCP server examples
+
+The following six public life-science and drug-discovery MCP servers require no account or credentials and can be added under `mcp_servers` in `config.yaml` (omit any `type` field; `tooluniverse` requires `uvx` on `PATH`):
+
+```yaml
+mcp_servers:
+  pubmed:
+    url: https://pubmed.mcp.claude.com/mcp
+  biorxiv:
+    url: https://hcls.mcp.claude.com/biorxiv/mcp
+  chembl:
+    url: https://hcls.mcp.claude.com/chembl/mcp
+  c-trials:
+    url: https://hcls.mcp.claude.com/clinical_trials/mcp
+  opentargets:
+    url: https://mcp.platform.opentargets.org/mcp
+  tooluniverse:
+    command: uvx
+    args: ["--refresh", "tooluniverse"]
+    env:
+      PYTHONIOENCODING: "utf-8"
+```
+
+> Note: Because the `c-trials` server key contains a hyphen (`-`), Cloudra automatically normalizes it to underscores and appends a stable 12-character hash suffix (for example, `mcp__c_trials__search_trials__7dc25e7d1366`).
