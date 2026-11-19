@@ -165,7 +165,7 @@ For the top 3 highest-risk assumptions, Cloudra should help design the critical 
 
 Cloudra should query biomedical literature and target/clinical databases to help calibrate risk assessments:
 - **Literature & preprints:** `mcp__pubmed__search_articles`, `mcp__pubmed__get_article_metadata`, `mcp__pubmed__get_full_text_article`, `mcp__biorxiv__search_preprints`, and native `search` (`source=openalex`/`arxiv`).
-- **Target genetics, chemical precedent & clinical feasibility (when relevant):** `mcp__opentargets__search_entities` / `mcp__opentargets__query_open_targets_graphql`, `mcp__chembl__target_search` / `mcp__chembl__get_bioactivity`, and `mcp__c_trials__search_trials__7dc25e7d1366` / `mcp__c_trials__get_trial_details__5b3ae6375c74`.
+- **Target genetics, chemical precedent & clinical feasibility (when relevant):** `mcp__opentargets__search_entities` / `mcp__opentargets__query_open_targets_graphql`, `mcp__chembl__target_search` / `mcp__chembl__get_bioactivity`, and `mcp__c_trials__search_trials` / `mcp__c_trials__get_trial_details`.
 
 **Search for:**
 1. **Precedents:** Has anyone done something similar? (Reduces technical risk)

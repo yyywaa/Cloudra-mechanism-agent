@@ -119,7 +119,7 @@ END: Comprehensive, rigorous project ready to execute
 
 **Literature & Database Integration Point 2:**
 - Search `mcp__pubmed__search_articles` / `mcp__biorxiv__search_preprints` for technical precedents (has method worked before?)
-- Query `mcp__opentargets__search_entities` / `mcp__opentargets__query_open_targets_graphql`, `mcp__chembl__target_search` / `mcp__chembl__get_bioactivity`, and `mcp__c_trials__search_trials__7dc25e7d1366` for target genetics, chemical precedent, and clinical feasibility where applicable
+- Query `mcp__opentargets__search_entities` / `mcp__opentargets__query_open_targets_graphql`, `mcp__chembl__target_search` / `mcp__chembl__get_bioactivity`, and `mcp__c_trials__search_trials` for target genetics, chemical precedent, and clinical feasibility where applicable
 - Identify benchmarks (success rates, effect sizes)
 - Assess timeline realism
 
@@ -307,7 +307,7 @@ END: Comprehensive, rigorous project ready to execute
 **Throughout the workflow, combine P0 MCP tools and Cloudra native retrieval strategically:**
 - **PubMed & PMC:** `mcp__pubmed__search_articles`, `mcp__pubmed__get_article_metadata`, `mcp__pubmed__find_related_articles`, `mcp__pubmed__get_full_text_article`
 - **Preprints (competition/frontier check):** `mcp__biorxiv__search_preprints`, `mcp__biorxiv__get_preprint`, `mcp__biorxiv__search_published_preprints`
-- **Target/drug/clinical landscape (translational projects):** `mcp__opentargets__search_entities`, `mcp__opentargets__query_open_targets_graphql`, `mcp__chembl__target_search`, `mcp__chembl__get_bioactivity`, `mcp__c_trials__search_trials__7dc25e7d1366`, `mcp__tooluniverse__find_tools`
+- **Target/drug/clinical landscape (translational projects):** `mcp__opentargets__search_entities`, `mcp__opentargets__query_open_targets_graphql`, `mcp__chembl__target_search`, `mcp__chembl__get_bioactivity`, `mcp__c_trials__search_trials`, `mcp__tooluniverse__find_tools`
 - **Cross-disciplinary & full-text extraction:** native `search` (`source=openalex`/`arxiv`/`web`), `browser`, and `read`
 
 **Mapping by skill stage:**

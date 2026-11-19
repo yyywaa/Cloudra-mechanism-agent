@@ -27,7 +27,7 @@ Combine structured Socratic dialogue with Cloudra's native tools and biomedical 
 - **Target, pharmacology & clinical-precedent calibration (biomedical/translational scoping in Skills 1–3)**:
   - Target genetics & disease associations: `mcp__opentargets__search_entities`, `mcp__opentargets__query_open_targets_graphql`, and `mcp__opentargets__get_open_targets_graphql_schema`.
   - Known chemical probes, bioactivity & mechanisms: `mcp__chembl__target_search`, `mcp__chembl__compound_search`, `mcp__chembl__get_bioactivity`, `mcp__chembl__get_mechanism`, and `mcp__chembl__drug_search`.
-  - Clinical trials & endpoint precedents: `mcp__c_trials__search_trials__7dc25e7d1366`, `mcp__c_trials__get_trial_details__5b3ae6375c74`, and `mcp__c_trials__analyze_endpoints__1e68c893c208`.
+  - Clinical trials & endpoint precedents: `mcp__c_trials__search_trials`, `mcp__c_trials__get_trial_details`, and `mcp__c_trials__analyze_endpoints`.
   - Broad specialized scientific databases: `mcp__tooluniverse__find_tools`, `mcp__tooluniverse__get_tool_info`, and `mcp__tooluniverse__execute_tool`.
 
 ---
