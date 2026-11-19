@@ -1,0 +1,111 @@
+# Cloudra 示例配置文件（零凭据）
+# 查看实际运行时配置路径：cloudra config get config_file
+# 复制到该路径后填写所需模型凭据，然后重启 Cloudra 服务。
+# 注意：mcp_servers 条目采用 extra="forbid" 严格校验，严禁填写 `type` 字段。
+
+# data_dir: ~/.local/share/cloudra  # 可选；留空时按操作系统使用默认用户数据目录
+
+llm:
+  coordinator:
+    provider: deepseek
+    model: deepseek-4-pro
+    url: https://api.deepseek.com/
+    key: ""
+    supports_vision: true
+    native_search: auto
+    native_search_params: {}
+    context_window: 200000
+    timeout: 300
+    reasoning_effort: null
+  follower:
+    provider: deepseek
+    model: deepseek-4-pro
+    url: https://api.deepseek.com/
+    key: ""
+    supports_vision: true
+    native_search: auto
+    native_search_params: {}
+    context_window: 200000
+    timeout: 300
+    reasoning_effort: null
+
+tool_document_loading:
+  strategy: llm
+  semantic_backend: jev
+  jev:
+    endpoint: ""
+    model: ""
+    key: ""
+    min_probability: null
+    max_tools: null
+  reranker:
+    endpoint: ""
+    model: ""
+    key: ""
+    min_score: null
+    max_tools: null
+
+email:
+  enabled: false
+  smtp_server: smtp.gmail.com
+  smtp_port: 465
+  imap_server: imap.gmail.com
+  imap_port: 993
+  user: ""
+  password: ""
+  sender_name: Cloudra Assistant
+  whitelist: []
+  poll_interval: 60
+
+flower:
+  enabled: true
+  repo_dir: ""
+  env_python: ""
+  checkpoint: ""
+
+compute:
+  allow_local_calculator: false
+
+search_provider: deepseek
+deepseek_api_key: ""
+openalex_api_key: ""
+openalex_mailto: ""
+plugins: []
+
+# ----------------------------------------------------------------------------
+# 外部 MCP 数据层（需先安装 `pip install 'cloudra[mcp]'`；tooluniverse 需 `uvx`）
+# 远程 Streamable HTTP 连接仅写 url（可选 headers/permissions）；
+# 本地 stdio 连接仅写 command（可选 args/env/cwd/permissions）；均无 type 字段。
+# ----------------------------------------------------------------------------
+mcp_servers:
+  pubmed:
+    url: https://pubmed.mcp.claude.com/mcp
+  biorxiv:
+    url: https://hcls.mcp.claude.com/biorxiv/mcp
+  chembl:
+    url: https://hcls.mcp.claude.com/chembl/mcp
+  c_trials:
+    url: https://hcls.mcp.claude.com/clinical_trials/mcp
+  opentargets:
+    url: https://mcp.platform.opentargets.org/mcp
+  tooluniverse:
+    command: uvx
+    # 省略 --refresh 以复用 uv 本地缓存（避免每次启动联网检查 PyPI 拖慢启动）；如需升级可手动运行 uvx --refresh tooluniverse --help
+    args: ["tooluniverse"]
+    env:
+      PYTHONIOENCODING: "utf-8"
+      TOOLUNIVERSE_LOG_LEVEL: "ERROR"
+      FASTMCP_LOG_LEVEL: "ERROR"
+      FASTMCP_SHOW_SERVER_BANNER: "false"
+
+  # --------------------------------------------------------------------------
+  # BioMCP 降级预案（默认注释关闭，避免与在线 pubmed / c_trials 工具重复）：
+  # 当 *.mcp.claude.com 云端点不可用时，取消下方注释并重启 Cloudra 即可一键启用。
+  # 使用 `uvx --from biomcp-python` 隔离运行，与 cloudra[mcp]（mcp>=2,<3）零依赖冲突，
+  # 覆盖 PubMed/Europe PMC 文献、ClinicalTrials.gov 临床试验、变异/基因/药物/openFDA。
+  # --------------------------------------------------------------------------
+  # biomcp:
+  #   command: uvx
+  #   args: ["--from", "biomcp-python", "biomcp", "run"]
+  #   env:
+  #     PYTHONIOENCODING: "utf-8"

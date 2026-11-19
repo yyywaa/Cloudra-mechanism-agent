@@ -101,26 +101,39 @@ class MCPToolManager:
             raise RuntimeError('MCP servers are configured; install the SDK with pip install "cloudra[mcp]"') from None
 
         result_schema = types.CallToolResult.model_json_schema(by_alias=True)
+        existing_names = {entry.tool_name for entry in entries}
         owned: list[ToolEntry] = []
-        owners = []
+        owners: list[tuple[str, asyncio.Task[None], asyncio.Future[list[ToolEntry]], asyncio.Event]] = []
         try:
+            loop = asyncio.get_running_loop()
             for server, config in self.servers.items():
-                ready = asyncio.get_running_loop().create_future()
+                ready: asyncio.Future[list[ToolEntry]] = loop.create_future()
                 stop = asyncio.Event()
                 owner = asyncio.create_task(self._server_owner(
-                    server, config, {entry.tool_name for entry in entries}, result_schema, ready, stop,
+                    server, config, set(existing_names), result_schema, ready, stop,
                 ))
-                owners.append((owner, ready, stop))
+                owners.append((server, owner, ready, stop))
+            seen_names = set(existing_names)
+            for server, owner, ready, stop in owners:
                 discovered = await ready
+                if any(entry.tool_name in seen_names for entry in discovered):
+                    logger.warning(
+                        "MCP server %r unavailable during tool discovery: duplicate MCP tool name (ValueError)",
+                        server,
+                    )
+                    stop.set()
+                    await asyncio.gather(owner, return_exceptions=True)
+                    continue
+                seen_names.update(entry.tool_name for entry in discovered)
                 entries.extend(discovered)
                 owned.extend(discovered)
             yield
         finally:
-            for owner, ready, stop in owners:
+            for _, owner, ready, stop in owners:
                 stop.set()
                 if not ready.done() or ready.cancelled():
                     owner.cancel()
-            await asyncio.gather(*(owner for owner, _, _ in owners), return_exceptions=True)
+            await asyncio.gather(*(owner for _, owner, _, _ in owners), return_exceptions=True)
             owned_ids = {id(entry) for entry in owned}
             entries[:] = [entry for entry in entries if id(entry) not in owned_ids]
 

@@ -90,7 +90,7 @@ mcp_servers:
 
 ### 生信数据源 MCP 示例
 
-以下为已验证可直接接入（无需账号与凭据）的 6 个生信与药物发现数据源示例，可直接合并到 `config.yaml` 的 `mcp_servers` 下（严格无 `type` 字段；`tooluniverse` 需环境中可用 `uvx`）：
+以下为已验证可直接接入（无需账号与凭据）的 6 个生信与药物发现数据源示例，可直接合并到 `config.yaml` 的 `mcp_servers` 下（严格无 `type` 字段；`tooluniverse` 需环境中可用 `uvx`）。仓库根目录亦提供完整的零凭据参考模板 [`config.example.yaml`](../config.example.yaml)。
 
 ```yaml
 mcp_servers:
@@ -100,15 +100,27 @@ mcp_servers:
     url: https://hcls.mcp.claude.com/biorxiv/mcp
   chembl:
     url: https://hcls.mcp.claude.com/chembl/mcp
-  c-trials:
+  c_trials:
     url: https://hcls.mcp.claude.com/clinical_trials/mcp
   opentargets:
     url: https://mcp.platform.opentargets.org/mcp
   tooluniverse:
     command: uvx
-    args: ["--refresh", "tooluniverse"]
+    args: ["tooluniverse"]
     env:
       PYTHONIOENCODING: "utf-8"
+      TOOLUNIVERSE_LOG_LEVEL: "ERROR"
+      FASTMCP_LOG_LEVEL: "ERROR"
+      FASTMCP_SHOW_SERVER_BANNER: "false"
+
+  # 降级预案（默认关闭，避免与在线 pubmed / c_trials 重复）：
+  # 当 *.mcp.claude.com 云端点不可用时取消注释并重启服务即可一键切换。
+  # 通过 uvx 隔离运行 biomcp-python（因其锁定 mcp<2，不可直接装入 cloudra[mcp] 环境）。
+  # biomcp:
+  #   command: uvx
+  #   args: ["--from", "biomcp-python", "biomcp", "run"]
+  #   env:
+  #     PYTHONIOENCODING: "utf-8"
 ```
 
-> 提示：配置键 `c-trials` 含连字符 `-`，Cloudra 会按稳定规则将其规范化为下划线并附加 12 位哈希后缀（例如 `mcp__c_trials__search_trials__7dc25e7d1366`）。
+> 提示：使用下划线键名 `c_trials` 时，工具直接注册为无哈希后缀的干净名称（如 `mcp__c_trials__search_trials`）。上述 `TOOLUNIVERSE_LOG_LEVEL` / `FASTMCP_*` 环境变量可消除 ToolUniverse 的启动横幅与常规 INFO/缺 Key 告警日志；FastMCP 与 MCP 2.x 客户端握手时的 `server/discover` 探测校验日志属上游协议兼容提示，不影响功能。

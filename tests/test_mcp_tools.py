@@ -382,3 +382,157 @@ def test_mcp_envelope_documents_optional_image_artifacts():
     assert schema["properties"]["image_paths"]["type"] == "array"
     assert schema["properties"]["image_paths"]["items"] == {"type": "string"}
     assert "image_paths" not in schema.get("required", [])
+
+
+@pytest.mark.asyncio
+async def test_lifespan_discovers_servers_concurrently_and_preserves_config_order(monkeypatch):
+    sdk = pytest.importorskip("mcp", reason="requires the optional mcp extra")
+    from cloudra.infra.config import MCPStdioServerConfig
+    from cloudra.tools.mcp import MCPToolManager
+
+    started = set()
+    all_started = asyncio.Event()
+    opened: dict[str, asyncio.Task] = {}
+    closed: dict[str, asyncio.Task] = {}
+    release_order = {"second": 0.0, "third": 0.03, "first": 0.06}
+
+    class ConcurrentClient:
+        def __init__(self, transport):
+            self.server = transport.command
+
+        async def __aenter__(self):
+            opened[self.server] = asyncio.current_task()
+            return self
+
+        async def __aexit__(self, *exc):
+            closed[self.server] = asyncio.current_task()
+
+        async def list_tools(self, *, cursor):
+            started.add(self.server)
+            if len(started) == 3:
+                all_started.set()
+            # Would deadlock if lifespan awaited servers serially.
+            await asyncio.wait_for(all_started.wait(), timeout=2.0)
+            await asyncio.sleep(release_order[self.server])
+            return sdk.types.ListToolsResult(
+                tools=[sdk.types.Tool(name="echo", input_schema={"type": "object"})]
+            )
+
+    monkeypatch.setattr(sdk, "Client", ConcurrentClient)
+    servers = {
+        name: MCPStdioServerConfig(command=name)
+        for name in ("first", "second", "third")
+    }
+    entries = []
+    async with MCPToolManager(servers).lifespan(entries):
+        assert [entry.tool_name for entry in entries] == [
+            "mcp__first__echo",
+            "mcp__second__echo",
+            "mcp__third__echo",
+        ]
+    assert entries == []
+    assert set(opened) == {"first", "second", "third"}
+    assert opened == closed
+
+
+@pytest.mark.asyncio
+async def test_concurrent_discovery_isolates_cross_server_duplicate_and_closes_conflict(monkeypatch, caplog):
+    sdk = pytest.importorskip("mcp", reason="requires the optional mcp extra")
+    from cloudra.infra.config import MCPStdioServerConfig
+    from cloudra.tools import mcp as mcp_mod
+    from cloudra.tools.mcp import MCPToolManager
+
+    closed: list[str] = []
+    opened: dict[str, asyncio.Task] = {}
+    closed_tasks: dict[str, asyncio.Task] = {}
+
+    class CollidingClient:
+        def __init__(self, transport):
+            self.server = transport.command
+
+        async def __aenter__(self):
+            opened[self.server] = asyncio.current_task()
+            return self
+
+        async def __aexit__(self, *exc):
+            closed.append(self.server)
+            closed_tasks[self.server] = asyncio.current_task()
+
+        async def list_tools(self, *, cursor):
+            # Make the later conflicting server finish BEFORE primary to verify config-order precedence.
+            if self.server == "primary":
+                await asyncio.sleep(0.05)
+            return sdk.types.ListToolsResult(
+                tools=[sdk.types.Tool(name="echo", input_schema={"type": "object"})]
+            )
+
+    monkeypatch.setattr(sdk, "Client", CollidingClient)
+    monkeypatch.setattr(
+        mcp_mod,
+        "mcp_tool_name",
+        lambda server, tool: f"mcp__shared__{tool}" if server in {"primary", "conflict"} else f"mcp__{server}__{tool}",
+    )
+    servers = {
+        "primary": MCPStdioServerConfig(command="primary"),
+        "conflict": MCPStdioServerConfig(command="conflict"),
+        "healthy": MCPStdioServerConfig(command="healthy"),
+    }
+    entries = []
+    async with MCPToolManager(servers).lifespan(entries):
+        assert [entry.tool_name for entry in entries] == ["mcp__shared__echo", "mcp__healthy__echo"]
+        # Conflicting server is torn down immediately, while primary & healthy stay alive.
+        assert closed == ["conflict"]
+    assert entries == []
+    assert set(closed) == {"conflict", "primary", "healthy"}
+    assert opened == closed_tasks
+    assert "conflict" in caplog.text
+    assert "duplicate MCP tool name" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_concurrent_discovery_isolates_single_server_failure(monkeypatch, caplog):
+    sdk = pytest.importorskip("mcp", reason="requires the optional mcp extra")
+    from cloudra.infra.config import MCPStdioServerConfig
+    from cloudra.tools.mcp import MCPToolManager
+
+    started = set()
+    all_started = asyncio.Event()
+    opened: dict[str, asyncio.Task] = {}
+    closed: dict[str, asyncio.Task] = {}
+
+    class PartialFailClient:
+        def __init__(self, transport):
+            self.server = transport.command
+
+        async def __aenter__(self):
+            opened[self.server] = asyncio.current_task()
+            started.add(self.server)
+            if len(started) == 3:
+                all_started.set()
+            await asyncio.wait_for(all_started.wait(), timeout=2.0)
+            if self.server == "broken":
+                raise RuntimeError("simulated handshake failure")
+            return self
+
+        async def __aexit__(self, *exc):
+            closed[self.server] = asyncio.current_task()
+
+        async def list_tools(self, *, cursor):
+            return sdk.types.ListToolsResult(
+                tools=[sdk.types.Tool(name="echo", input_schema={"type": "object"})]
+            )
+
+    monkeypatch.setattr(sdk, "Client", PartialFailClient)
+    servers = {
+        "alpha": MCPStdioServerConfig(command="alpha"),
+        "broken": MCPStdioServerConfig(command="broken"),
+        "gamma": MCPStdioServerConfig(command="gamma"),
+    }
+    entries = []
+    async with MCPToolManager(servers).lifespan(entries):
+        assert [entry.tool_name for entry in entries] == ["mcp__alpha__echo", "mcp__gamma__echo"]
+    assert entries == []
+    assert set(closed) == {"alpha", "gamma"}
+    assert closed["alpha"] is opened["alpha"]
+    assert closed["gamma"] is opened["gamma"]
+    assert "broken" in caplog.text

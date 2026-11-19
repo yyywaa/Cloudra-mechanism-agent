@@ -109,7 +109,7 @@ Text, images and structured results are preserved; images enter the workspace ar
 
 ### Bio-research MCP server examples
 
-The following six public life-science and drug-discovery MCP servers require no account or credentials and can be added under `mcp_servers` in `config.yaml` (omit any `type` field; `tooluniverse` requires `uvx` on `PATH`):
+The following six public life-science and drug-discovery MCP servers require no account or credentials and can be added under `mcp_servers` in `config.yaml` (omit any `type` field; `tooluniverse` requires `uvx` on `PATH`). A complete credential-free template is also available in [`config.example.yaml`](../config.example.yaml).
 
 ```yaml
 mcp_servers:
@@ -119,15 +119,27 @@ mcp_servers:
     url: https://hcls.mcp.claude.com/biorxiv/mcp
   chembl:
     url: https://hcls.mcp.claude.com/chembl/mcp
-  c-trials:
+  c_trials:
     url: https://hcls.mcp.claude.com/clinical_trials/mcp
   opentargets:
     url: https://mcp.platform.opentargets.org/mcp
   tooluniverse:
     command: uvx
-    args: ["--refresh", "tooluniverse"]
+    args: ["tooluniverse"]
     env:
       PYTHONIOENCODING: "utf-8"
+      TOOLUNIVERSE_LOG_LEVEL: "ERROR"
+      FASTMCP_LOG_LEVEL: "ERROR"
+      FASTMCP_SHOW_SERVER_BANNER: "false"
+
+  # Fallback preset (commented out by default to avoid duplicating pubmed / c_trials):
+  # Uncomment and restart Cloudra if *.mcp.claude.com endpoints are unavailable.
+  # Runs via isolated `uvx --from biomcp-python` to avoid conflicting with cloudra[mcp]'s mcp>=2,<3.
+  # biomcp:
+  #   command: uvx
+  #   args: ["--from", "biomcp-python", "biomcp", "run"]
+  #   env:
+  #     PYTHONIOENCODING: "utf-8"
 ```
 
-> Note: Because the `c-trials` server key contains a hyphen (`-`), Cloudra automatically normalizes it to underscores and appends a stable 12-character hash suffix (for example, `mcp__c_trials__search_trials__7dc25e7d1366`).
+> Note: Using the underscore key `c_trials` registers clean tool names without hash suffixes (for example, `mcp__c_trials__search_trials`). The `TOOLUNIVERSE_LOG_LEVEL` and `FASTMCP_*` variables suppress ToolUniverse's startup banner, INFO logs, and missing-key warnings; the `server/discover` validation notice during MCP 2.x client handshake is a harmless upstream FastMCP compatibility message.
