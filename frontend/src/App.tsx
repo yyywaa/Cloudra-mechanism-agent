@@ -3,11 +3,25 @@ import { api, EVENTS_WINDOW, HISTORY_PAGE_SIZE, streamProject } from './api';
 import Markdown from './Markdown';
 import { ResearchPanel } from './ResearchPanel';
 import { MolecularWorkbench } from './MolecularWorkbench.tsx';
-import type { WorkbenchSource } from './workbenchTypes';
-import { LongTextControls, handleLongTextKey } from './LongTextControls';
+import { workbenchApi } from './workbenchApi';
+import type { WorkbenchShot, WorkbenchSource } from './workbenchTypes';
+import { useComposerDraft } from './useComposerDraft';
+import { LongTextControls, handleLongTextKey, composingText } from './LongTextControls';
 import OpsPanel from './OpsPanel';
-import type { Agent, CompletionSummary, ComputeJob, EventEnvelope, Project } from './types';
+import type { Agent, CompletionSummary, ComputeJob, EventEnvelope, Project, UpdateCheckResult } from './types';
 import GlobalConfig from './GlobalConfig';
+import OnboardingModal from './OnboardingModal';
+import { UpdateModal } from './UpdateCheckSection';
+import {
+  readDismissedUpdateVersion,
+  readOnboardingDismissed,
+  shouldAutoOpenOnboarding,
+  shouldShowUpdateNotice,
+  writeDismissedUpdateVersion,
+  writeOnboardingDismissed,
+  type OnboardingStarter,
+} from './onboardingState';
+import { openRouterCallbackCode } from './runtimeUrl';
 import ComposerModelPicker from './ComposerModelPicker';
 import ProjectSettingsModal from './ProjectSettingsModal';
 import KnowledgePanel from './KnowledgePanel';
@@ -209,6 +223,8 @@ export default function App() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
   const [projectStream, setProjectStream] = useState<{ projectId: string; cursor: number } | null>(null);
+  const [viewLoadFailed, setViewLoadFailed] = useState<string | null>(null);
+  const [viewRetry, setViewRetry] = useState(0);
   const [events, setEvents] = useState<EventEnvelope[]>([]);
   // One historical page, isolated from the live tail while browsing.
   const [olderEvents, setOlderEvents] = useState<EventEnvelope[]>([]);
@@ -222,9 +238,15 @@ export default function App() {
   const sidebarJobsRequestRef = useRef(0);
   const [viewMode, setViewMode] = useState<'dialogue' | 'console'>('dialogue');
   const [consoleTab, setConsoleTab] = useState<ConsoleTab>('overview');
+  const [researchJob, setResearchJob] = useState<{project: string; id: number} | null>(null);
+  useEffect(() => { if(consoleTab !== 'research') setResearchJob(null); }, [consoleTab]);
+  const [workbenchDelivery,setWorkbenchDelivery] = useState<{agentId:string; eventId:string} | null>(null);
   const [workbench, setWorkbench] = useState<{projectId:string;source:WorkbenchSource|null}|null>(null);
   const [researchRefreshVersion,setResearchRefreshVersion] = useState(0);
-  const openWorkbench = (source:WorkbenchSource|null) => { if(activeProjectId) setWorkbench({projectId:activeProjectId,source}); };
+  const openWorkbench = useCallback((source: WorkbenchSource | null) => {
+    if (activeProjectId) setWorkbench({ projectId: activeProjectId, source });
+  }, [activeProjectId]);
+  const openStructurePath = useCallback((path: string) => openWorkbench({ path }), [openWorkbench]);
   useEffect(() => { setWorkbench(null); }, [activeProjectId]);
   useEffect(() => {
     const handleWorkbenchShortcut = (event:KeyboardEvent) => {
@@ -247,7 +269,6 @@ export default function App() {
   const [pendingMessages, setPendingMessages] = useState<MessageItem[]>([]);
   const pendingMessageSeqRef = useRef(0);
   const [roles, setRoles] = useState<Array<{ role_id: string; display_name: string }>>([]);
-  const [draft, setDraft] = useState('');
   const [longText, setLongText] = useState(false);
   const [slashSelected, setSlashSelected] = useState(0);
   const [slashDismissed, setSlashDismissed] = useState(false);
@@ -265,7 +286,7 @@ export default function App() {
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
   const [globalOpen, setGlobalOpen] = useState(() => {
     return Boolean(
-      new URLSearchParams(window.location.search).has('code') &&
+      openRouterCallbackCode(new URLSearchParams(window.location.search)) &&
         sessionStorage.getItem('openrouter_pkce_verifier')
     );
   });
@@ -274,8 +295,13 @@ export default function App() {
   const [telemetryOpen, setTelemetryOpen] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
-  const [pendingImages, setPendingImages] = useState<Array<{ path: string; artifactId: string; name: string; size: number }>>([]);
-  const [uploading, setUploading] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string>(() =>
+    readDismissedUpdateVersion(typeof window !== 'undefined' ? window.localStorage : null),
+  );
+  const onboardingCheckedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Cross-project pending approvals/ask_user (the AttentionDock + desktop
   // notifications).  Keyed by project id; polled for every non-archived
@@ -298,6 +324,11 @@ export default function App() {
   const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
   const activeAgent = agents.find((a) => a.id === activeAgentId) ?? null;
   const composerInteraction = composerInteractionFor(interactions, activeAgent?.id ?? null);
+  const recipientReady = projectStream?.projectId === activeProjectId
+    && Boolean(activeProject && (activeAgentId ? activeAgent?.project_id === activeProjectId : agents.length === 0));
+  const questionId = composerInteraction?.interaction_id ?? composerInteraction?.id;
+  const { draft, setDraft, pendingImages, setPendingImages, uploading, setUploading, adoptFirstAgent } =
+    useComposerDraft(activeProjectId, activeAgentId, questionId == null ? undefined : String(questionId));
   // Visual mode gates the composer attach button; defaults to on.
   const visualOn = activeProject
     ? (activeAgent?.settings.visual_mode ?? activeProject.settings.defaults?.visual_mode ?? true) !== false
@@ -526,11 +557,79 @@ export default function App() {
   /* ------------------------------------------------------- initial loading */
 
   useEffect(() => {
-    api.listProjects(true).then((list) => setProjects((prev) =>
-      list.map((project) => mergeProjectSnapshot(prev.find((p) => p.id === project.id), project)),
-    )).catch(reportError);
+    api.listProjects(true).then((list) => {
+      setProjects((prev) =>
+        list.map((project) => mergeProjectSnapshot(prev.find((p) => p.id === project.id), project)),
+      );
+      if (!onboardingCheckedRef.current) {
+        onboardingCheckedRef.current = true;
+        const dismissed = readOnboardingDismissed(typeof window !== 'undefined' ? window.localStorage : null);
+        if (shouldAutoOpenOnboarding({ projectsLoaded: true, projectsCount: list.length, dismissed })) {
+          setOnboardingOpen(true);
+        }
+      }
+    }).catch(reportError);
     api.listRoles().then(setRoles).catch(reportError);
+    api.checkForUpdates(false)
+      .then((info) => {
+        if (info && typeof info.status === 'string') {
+          setUpdateInfo(info);
+        }
+      })
+      .catch(() => undefined);
   }, [reportError]);
+
+  const handleCloseOnboarding = useCallback((dontShowAgain: boolean) => {
+    if (dontShowAgain) {
+      writeOnboardingDismissed(typeof window !== 'undefined' ? window.localStorage : null, true);
+    }
+    setOnboardingOpen(false);
+  }, []);
+
+  const handlePickOnboardingStarter = useCallback(
+    (starter: OnboardingStarter, dontShowAgain: boolean) => {
+      if (dontShowAgain) {
+        writeOnboardingDismissed(typeof window !== 'undefined' ? window.localStorage : null, true);
+      }
+      setOnboardingOpen(false);
+      const prompt = lang === 'zh' ? starter.promptZh : starter.promptEn;
+      setDraft(prompt);
+      if (!activeProject) {
+        setProjectCreateExpanded(true);
+        setNewProject(lang === 'zh' ? starter.titleZh : starter.titleEn);
+        pushToast(
+          'info',
+          lang === 'zh'
+            ? '已预填项目名与起始提示词，确认工作目录并创建项目即可开始。'
+            : 'Prefilled project name and starter prompt—create the project to begin.',
+        );
+      } else {
+        pushToast(
+          'ok',
+          lang === 'zh'
+            ? '已将模板提示词填入对话框，修改占位符后即可发送。'
+            : 'Starter prompt filled into the composer—edit placeholders and send.',
+        );
+      }
+    },
+    [activeProject, lang, pushToast, setDraft],
+  );
+
+  const handleDismissUpdateVersion = useCallback((version: string) => {
+    writeDismissedUpdateVersion(typeof window !== 'undefined' ? window.localStorage : null, version);
+    setDismissedUpdateVersion(version);
+  }, []);
+
+  const handleRecheckUpdates = useCallback(async () => {
+    try {
+      const info = await api.checkForUpdates(true);
+      if (info && typeof info.status === 'string') {
+        setUpdateInfo(info);
+      }
+    } catch {
+      /* keep prior state */
+    }
+  }, []);
 
   /* ---------------------------------------------------- benchmark drill-down */
 
@@ -643,6 +742,7 @@ export default function App() {
     setAgents([]);
     agentStateThroughRef.current.clear();
     setProjectStream(null);
+    setViewLoadFailed(null);
     activeAgentIdRef.current = null;
     setActiveAgentId(null);
     setEvents([]);
@@ -652,7 +752,6 @@ export default function App() {
     setStreamView({ streamText: '', frozen: [] });
     maxSeqRef.current = 0;
     setPendingMessages([]);
-    setPendingImages([]);
     setSidebarJobs(null);
     if (!activeProjectId) return;
     api
@@ -674,7 +773,12 @@ export default function App() {
           void selectAgent(agents[0].id);
         }
       })
-      .catch((error) => { if (!cancelled) reportError(error); });
+      .catch((error) => {
+        if (!cancelled) {
+          setViewLoadFailed(activeProjectId);
+          reportError(error);
+        }
+      });
     return () => {
       cancelled = true;
       ++agentSelectionVersionRef.current;
@@ -684,7 +788,7 @@ export default function App() {
         flushRafRef.current = null;
       }
     };
-  }, [activeProjectId, selectAgent, reportError, updateProjectView]);
+  }, [activeProjectId, selectAgent, reportError, updateProjectView, viewRetry]);
 
   /* ------------------------------------------------------------ SSE stream */
 
@@ -1186,25 +1290,50 @@ export default function App() {
     }
   }
 
-  async function sendMessage() {
-    const target = resolveComposerSendTarget({
+  async function sendMessage(shot?: WorkbenchShot) {
+    if (!recipientReady || uploading) {
+      if (shot) {
+        await shot.capture;
+        throw new Error(uploading ? '请等聊天附件上传完成后再发送结构。' : '请等项目会话加载后再发送结构。');
+      }
+      return;
+    }
+    const target = shot ? { kind:'message' as const } : resolveComposerSendTarget({
       draft,
       sending,
       hasProject: Boolean(activeProject),
       activeAgentId: activeAgent?.id ?? null,
       interactions,
     });
+    if (shot && (sending || !activeProject)) {
+      await shot.capture;
+      throw new Error('请等待当前消息发送完毕后重试。');
+    }
     if (target.kind === 'noop' || !activeProject) return;
     const projectId = activeProject.id;
     const selectionVersion = agentSelectionVersionRef.current;
     const ownsComposer = () => activeProjectIdRef.current === projectId
       && agentSelectionVersionRef.current === selectionVersion;
-    const content = draft.trim();
+    let content = draft.trim();
     const pendingId = `pending-${++pendingMessageSeqRef.current}`;
-    const images = pendingImages.map((p) => p.path);
-    const imageArtifactIds = pendingImages.map((p) => p.artifactId);
+    const images = shot ? [] : pendingImages.map((p) => p.path);
+    const imageArtifactIds = shot ? [] : pendingImages.map((p) => p.artifactId);
     setSending(true);
     try {
+      if (shot) {
+        const {image, camera} = await shot.capture;
+        const snapshot = await workbenchApi.snapshot(projectId, {...shot.snapshot, camera});
+        const upload = await api.uploadFile(projectId, new File([image], 'workbench.png', {type:'image/png'}), 'workbench');
+        if (!ownsComposer()) throw new Error('当前对话已切换，请重新选择接收 Agent。');
+        const marks = snapshot.markers.map(mark => {
+          const atoms = mark.atoms.map(atom => atom.element + atom.index + (atom.image.some(Boolean) ? '[' + atom.image.join(',') + ']' : ''));
+          const point = mark.xyz_angstrom ? '；中心 (' + mark.xyz_angstrom.join(', ') + ') Å' : '';
+          return mark.label + ' = ' + atoms.join('、') + point;
+        });
+        content = [shot.text, '', '［分子工作台附件］', ...marks,
+          '结构：' + snapshot.structure_path, '标记、视角与来源：' + snapshot.annotations_path, ...(shot.snapshot.warnings ?? [])].join('\n');
+        images.push(upload.path); imageArtifactIds.push(upload.artifact_id);
+      }
       if (target.kind === 'slash') {
         const lower = content.toLowerCase();
         if (lower.startsWith('/schedule')) {
@@ -1292,7 +1421,7 @@ export default function App() {
       }
       if (target.kind === 'respond') {
         if (await handleRespondInteraction(target.interactionId, content)) {
-          if (ownsComposer()) setDraft((current) => current === draft ? '' : current);
+          setDraft((current) => current === draft ? '' : current);
         }
         return;
       }
@@ -1314,15 +1443,17 @@ export default function App() {
         }
         try {
           if (images.length > 0) {
-            await api.sendMessage(resp.data.id, content, images, imageArtifactIds, lang);
+            const receipt = await api.sendMessage(resp.data.id, content, images, imageArtifactIds, lang);
+            if (shot && ownsComposer()) setWorkbenchDelivery({agentId:resp.data.id,eventId:receipt.event_id});
           }
-          if (ownsComposer()) {
+          if (!shot) {
             setDraft((current) => current === draft ? '' : current);
             setPendingImages((current) => current.filter((image) => !images.includes(image.path)));
           }
         } finally {
           // Keep the accepted agent as the retry target, and load its history
           // after delivery so a successful first message is visible without SSE.
+          adoptFirstAgent(resp.data.id);
           if (ownsComposer()) await selectAgent(resp.data.id);
         }
       } else {
@@ -1344,7 +1475,8 @@ export default function App() {
         const agentId = activeAgent.id;
         const version = agentSelectionVersionRef.current;
         const receipt = await api.sendMessage(agentId, content, images, imageArtifactIds, lang);
-        if (ownsComposer()) {
+        if (shot && ownsComposer()) setWorkbenchDelivery({agentId,eventId:receipt.event_id});
+        if (!shot) {
           setDraft((current) => current === draft ? '' : current);
           setPendingImages((current) => current.filter((image) => !images.includes(image.path)));
         }
@@ -1357,6 +1489,7 @@ export default function App() {
       }
     } catch (e) {
       setPendingMessages((prev) => prev.filter((message) => message.id !== pendingId));
+      if (shot) throw e;
       reportError(e);
     } finally {
       setSending(false);
@@ -1569,14 +1702,13 @@ export default function App() {
 
 
   async function onPickImages(files: FileList | null) {
-    if (!files || files.length === 0 || !activeProject) return;
-    const projectId = activeProject.id;
-    const selectionVersion = agentSelectionVersionRef.current;
+    if (!files || files.length === 0 || !activeProject || !recipientReady || sending || uploading) return;
+    const chosen = Array.from(files);
+    if (fileInputRef.current) fileInputRef.current.value = '';
     setUploading(true);
     try {
-      for (const file of Array.from(files)) {
+      for (const file of chosen) {
         const resp = await api.uploadFile(activeProject.id, file);
-        if (activeProjectIdRef.current !== projectId || agentSelectionVersionRef.current !== selectionVersion) return;
         uploadedArtifactsRef.current.set(resp.path, resp.artifact_id);
         setPendingImages((prev) => [...prev, { path: resp.path, artifactId: resp.artifact_id, name: file.name, size: file.size }]);
       }
@@ -1584,7 +1716,6 @@ export default function App() {
       reportError(e);
     } finally {
       setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }
 
@@ -1681,6 +1812,13 @@ export default function App() {
     agentRunning,
     olderEvents.length,
   ]);
+  const workbenchReply = useMemo(() => {
+    if (!workbenchDelivery || activeAgentId !== workbenchDelivery.agentId) return;
+    const sent = sessionEvents.find(event => event.event_id === workbenchDelivery.eventId);
+    if (sent?.session_seq == null) return;
+    const emitted = sessionEvents.filter(event => event.type === 'agent.message_emitted' && (event.session_seq ?? 0) > sent.session_seq!).at(-1);
+    return emitted && persistedTimeline.find((item): item is MessageItem => item.kind === 'message' && item.id === emitted.event_id && !item.incomplete);
+  }, [workbenchDelivery,activeAgentId,sessionEvents,persistedTimeline]);
   const runningTool = useMemo(
     () => {
       for (const item of timeline) {
@@ -2178,6 +2316,20 @@ export default function App() {
 
         {/* Sidebar actions */}
         <div className="left-sidebar-foot">
+          {shouldShowUpdateNotice(updateInfo, dismissedUpdateVersion) && updateInfo && (
+            <button
+              type="button"
+              className="btn primary sm update-pill-btn"
+              onClick={() => setUpdateModalOpen(true)}
+              title={
+                lang === 'zh'
+                  ? `发现新版本 v${updateInfo.latest_version}，点击查看详情`
+                  : `New version v${updateInfo.latest_version} available`
+              }
+            >
+              <span>↑ v{updateInfo.latest_version}</span>
+            </button>
+          )}
           <button
             type="button"
             className="btn outline sm settings-btn"
@@ -2189,6 +2341,16 @@ export default function App() {
           <details className="sidebar-more">
             <summary>{t.sidebarMore}</summary>
             <div className="sidebar-more-actions">
+              <button
+                type="button"
+                className="btn ghost sm"
+                onClick={(event) => {
+                  event.currentTarget.closest('details')?.removeAttribute('open');
+                  setOnboardingOpen(true);
+                }}
+              >
+                {lang === 'zh' ? '使用引导与体检' : 'Onboarding & Check'}
+              </button>
               <button
                 type="button"
                 className="btn ghost sm"
@@ -2402,7 +2564,11 @@ export default function App() {
                 {t.selectProjectHint}
               </div>
             )}
-            {activeProject && timeline.length === 0 && activeAgent?.state !== 'running' && (
+            {activeProject && !recipientReady && <div className="chat-empty">{viewLoadFailed === activeProject.id
+              ? <button className="btn outline sm" onClick={() => setViewRetry(value => value + 1)}>{lang === 'zh' ? '会话读取失败，重新加载' : 'Retry loading conversations'}</button>
+              : projectStream?.projectId === activeProjectId ? (lang === 'zh' ? '请选择接收消息的 Agent。' : 'Select a recipient agent.')
+              : (lang === 'zh' ? '正在读取项目会话…' : 'Loading project conversations…')}</div>}
+            {recipientReady && activeProject && timeline.length === 0 && activeAgent?.state !== 'running' && (
               <div className="chat-empty">
                 <div className="big">{lang === 'zh' ? '当前没有对话记录' : 'No conversation yet'}</div>
                 {activeAgent
@@ -2461,7 +2627,7 @@ export default function App() {
                       {/* Streaming text renders as plain text to avoid a full
                           remark/KaTeX parse on every token; committed messages
                           get markdown. */}
-                      {item.streaming ? item.content : <Markdown text={item.content} />}
+                      {item.streaming ? item.content : <Markdown text={item.content} onOpenStructure={openStructurePath} />}
                     </div>
                   )}
                 </div>
@@ -2597,6 +2763,7 @@ export default function App() {
                 setSlashSelected(0);
               }}
               onKeyDown={(e) => {
+                if (composingText(e)) return;
                 if (longText) {
                   handleLongTextKey(e, () => { void sendMessage(); }, () => setLongText(false));
                   return;
@@ -2645,7 +2812,7 @@ export default function App() {
                         : `Guide ${activeAgent.display_name}…`
                       : 'Describe the task for the coordinator…'
               }
-              disabled={!activeProject}
+              disabled={!recipientReady}
             />
             <div className="composer-actions">
               {activeProject && (
@@ -2663,7 +2830,7 @@ export default function App() {
                 </button>
               )}
               <LongTextControls id="chat-message-input" expanded={longText} onExpand={setLongText} textarea={composerTextareaRef} t={t} />
-              {visualOn && (
+              {visualOn && !composerInteraction && (
                 <>
                   <input
                     ref={fileInputRef}
@@ -2677,7 +2844,7 @@ export default function App() {
                     type="button"
                     className="btn ghost sm"
                     title="Attach images to the message (png/jpg/jpeg/webp, max 20 MB each)"
-                    disabled={uploading}
+                    disabled={uploading || sending || !recipientReady}
                     onClick={() => fileInputRef.current?.click()}
                   >
                     {uploading ? 'Uploading…' : 'Attach Image'}
@@ -2694,15 +2861,20 @@ export default function App() {
                   reasoningEffort={activeAgent ? activeAgent.settings.reasoning_effort : activeProject.settings.defaults?.reasoning_effort}
                   slot={activeAgent && activeAgent.role_id !== 'coordinator' ? 'follower' : 'coordinator'}
                   onConfigure={() => setGlobalOpen(true)}
-                  onChoose={async (model, effort) => {
-                    const changes = effort === undefined ? { model } : { model, reasoning_effort: effort };
+                  onChoose={async (changes) => {
                     if (activeAgent) {
                       await handleSaveAgentSettings(activeAgent.id, changes);
                     } else {
+                      const merged: Record<string, unknown> = { ...activeProject.settings.defaults, ...changes };
+                      delete merged.api_key;
+                      for (const key of ['model', 'base_url', 'reasoning_effort']) {
+                        if (merged[key] === '') delete merged[key];
+                      }
+                      if (merged.context_window === 0) delete merged.context_window;
                       const response = await api.patchProject(activeProject.id, {
                         settings: {
                           orchestration_mode: activeProject.settings.orchestration_mode,
-                          defaults: { ...activeProject.settings.defaults, ...changes },
+                          defaults: merged,
                         },
                       });
                       setProjects((prev) => prev.map((project) => project.id === activeProject.id ? mergeProjectSnapshot(project, response.data) : project));
@@ -2710,7 +2882,7 @@ export default function App() {
                   }}
                 />
               )}
-              <button className="btn primary sm composer-send-btn" onClick={sendMessage} disabled={!draft.trim() || !activeProject || sending}>
+              <button className="btn primary sm composer-send-btn" onClick={()=>void sendMessage()} disabled={!draft.trim() || !recipientReady || sending || uploading}>
                 {sending ? 'Sending…' : 'Send'}
               </button>
             </div>
@@ -2807,10 +2979,12 @@ export default function App() {
               onToast={(text, kind) => pushToast(kind === 'warn' ? 'info' : (kind ?? 'info'), text)}
             />
           ) : consoleTab === 'research' ? (
-            <ResearchPanel key={activeProject.id} project={activeProject} onError={reportError} onToast={pushToast} onOpenMolecule={openWorkbench} refreshVersion={researchRefreshVersion}/>
+            <ResearchPanel key={activeProject.id} project={activeProject} initialJobId={researchJob?.project === activeProject.id ? researchJob.id : undefined} onError={reportError} onToast={pushToast} onOpenMolecule={openWorkbench} refreshVersion={researchRefreshVersion}/>
           ) : consoleTab === 'compute' ? (
             <div className="console-compute-container">
-              <OpsPanel key={activeProject.id} project={activeProject} activeJobs={sidebarJobs} cancelling={cancellingCompute} onCancel={cancelCompute} agents={agents} onError={reportError} refreshVersion={computeRefreshVersion} />
+              <OpsPanel key={activeProject.id} project={activeProject} onOpenResult={id=>{
+                setResearchJob({project:activeProject.id,id});setConsoleTab('research');
+              }} activeJobs={sidebarJobs} cancelling={cancellingCompute} onCancel={cancelCompute} agents={agents} onError={reportError} refreshVersion={computeRefreshVersion} />
             </div>
           ) : consoleTab === 'audit' ? (
             <div className="console-audit-container">
@@ -2862,12 +3036,9 @@ export default function App() {
           onRespond={handleAttentionRespond}
         />
       </div>
-        {workbench && activeProject && workbench.projectId===activeProject.id && <MolecularWorkbench key={activeProject.id} project={activeProject} source={workbench.source} onClose={()=>setWorkbench(null)} onError={reportError} onSaved={(result)=>{setResearchRefreshVersion(n=>n+1);pushToast('ok',`已保存结构：${result.path}`);}} onContinueInChat={(result)=>{
-          setDraft(current => [current, lang === 'zh' ? `结构已保存至：${result.path}` : `Structure saved to: ${result.path}`].filter(Boolean).join('\n\n'));
-          setWorkbench(null);
-          setViewMode('dialogue');
-          requestAnimationFrame(() => composerTextareaRef.current?.focus());
-        }}/>}
+        {workbench && activeProject && workbench.projectId===activeProject.id && <MolecularWorkbench key={activeProject.id} project={activeProject} source={workbench.source} onClose={()=>setWorkbench(null)} onError={reportError} onSaved={(result)=>{setResearchRefreshVersion(n=>n+1);pushToast('ok',`已保存结构：${result.path}`);}} onLaunch={sendMessage}
+          recipient={activeAgent?.display_name} reply={workbenchReply}
+          onOpenStructure={openStructurePath}/>}
         {projectSettingsOpen && activeProject && (
           <ProjectSettingsModal
             key={activeProject.id}
@@ -2884,6 +3055,26 @@ export default function App() {
         {globalOpen && (
           <GlobalConfig
             onClose={() => setGlobalOpen(false)}
+            onToast={pushToast}
+            onOpenOnboarding={() => setOnboardingOpen(true)}
+          />
+        )}
+        {onboardingOpen && (
+          <OnboardingModal
+            onClose={handleCloseOnboarding}
+            onOpenSettings={() => {
+              setOnboardingOpen(false);
+              setGlobalOpen(true);
+            }}
+            onPickStarter={handlePickOnboardingStarter}
+          />
+        )}
+        {updateModalOpen && updateInfo && (
+          <UpdateModal
+            update={updateInfo}
+            onClose={() => setUpdateModalOpen(false)}
+            onDismissVersion={handleDismissUpdateVersion}
+            onRecheck={handleRecheckUpdates}
             onToast={pushToast}
           />
         )}

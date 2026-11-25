@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "cloudra-subagent": {
+      "command": "cloudra",
+      "args": ["mcp", "--mode", "subagent"]
+    }
+  }
+}

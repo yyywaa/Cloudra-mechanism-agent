@@ -650,3 +650,81 @@ async def test_api_v2_dag_mutations_malformed_operation_is_422():
         )
         assert resp.status_code == 422
         assert "Invalid graph operation" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_agent_key_stays_in_memory_only_for_its_destination(monkeypatch):
+    from cloudra.infra.config import role_model_config
+    from cloudra.runtime_v2.adapters import legacy_default_settings
+
+    core = RuntimeCore(strict_events=True)
+    project = (await _execute(core, "project.create", payload={"name": "key-binding"})).data
+    agent = (await _spawn(core, project.id)).data
+    slot = role_model_config(agent.role_id)
+    monkeypatch.setattr(slot, "url", "https://initial.invalid/api")
+    monkeypatch.setattr(slot, "key", "slot-token")
+
+    async def edit(**changes):
+        await _execute(core, "agent.settings_update", target={"session_id": agent.id}, payload=changes)
+        return core.require_agent(agent.id)
+
+    agent = await edit(api_key="private-a")
+    agent = await edit(model="second-model", yolo=True)
+    assert legacy_default_settings(agent).api_key == "private-a"
+    monkeypatch.setattr(slot, "url", "https://changed.invalid/api")
+    monkeypatch.setattr(slot, "key", "new-slot-token")
+    assert legacy_default_settings(agent).api_key == "new-slot-token"
+    agent = await edit(base_url="https://initial.invalid/api/")
+    assert agent.settings.api_key == "private-a"
+    agent = await edit(base_url="https://new.invalid/api")
+    assert agent.settings.api_key == ""
+    agent = await edit(base_url="https://explicit.invalid/api", api_key="private-b")
+    assert legacy_default_settings(agent).api_key == "private-b"
+    await core.agent_host.start_run(agent)
+    await core.agent_host.finish_run(agent, outcome="succeeded")
+    await _execute(core, "agent.restart", target={"session_id": agent.id}, payload={"settings": {"model": "third-model"}})
+    assert core.require_agent(agent.id).settings.api_key == "private-b"
+    agent = await edit(api_key="")
+    assert agent.settings.api_key == ""
+    for event in core.event_log:
+        assert "private-a" not in event.model_dump_json() and "private-b" not in event.model_dump_json()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("base_url", [None, "https://explicit.invalid/v1"])
+async def test_command_observers_see_the_endpoint_bound_key_on_spawn_update_and_restart(monkeypatch, base_url):
+    from cloudra.infra.config import role_model_config
+    from cloudra.runtime_v2.adapters import legacy_default_settings
+
+    core = RuntimeCore(strict_events=True)
+    slot = role_model_config("coordinator")
+    monkeypatch.setattr(slot, "url", "https://role-default.invalid/v1")
+    monkeypatch.setattr(slot, "key", "")
+    project = (await _execute(core, "project.create", payload={"name": "key-publication"})).data
+    observed = []
+
+    async def observe(event):
+        if event.type in {"agent.message_injected", "agent.settings_changed"}:
+            settings = legacy_default_settings(core.require_agent(event.session_id))
+            observed.append((event.type, settings.base_url, settings.api_key))
+
+    core.event_hub.subscribe(observe)
+    agent = (await _execute(core, "agent.spawn", target={"project_id": project.id}, payload={
+        "role_id": "coordinator", "query": "Initial task", "settings": {"base_url": base_url, "api_key": "new-spawn-key"},
+    })).data
+    await _execute(core, "agent.settings_update", target={"session_id": agent.id}, payload={"api_key": "new-update-key"})
+    await core.agent_host.start_run(agent)
+    await core.agent_host.finish_run(agent, outcome="succeeded")
+    await _execute(core, "agent.restart", target={"session_id": agent.id}, payload={
+        "message": "Restart task", "settings": {"api_key": "new-restart-key"},
+    })
+
+    endpoint = base_url or "https://role-default.invalid/v1"
+    assert observed == [
+        ("agent.message_injected", endpoint, "new-spawn-key"),
+        ("agent.settings_changed", endpoint, "new-update-key"),
+        ("agent.message_injected", endpoint, "new-restart-key"),
+        ("agent.settings_changed", endpoint, "new-restart-key"),
+    ]
+    for event in core.event_log:
+        assert all(key not in event.model_dump_json() for _, _, key in observed)

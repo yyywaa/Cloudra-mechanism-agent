@@ -28,10 +28,16 @@ export function measureCoordinate(atoms: WorkbenchAtom[], selection: number[]): 
   if (!norm(p) || !norm(q)) return null;
   return Math.atan2(dot(cross(axis,p),q), dot(p,q))*180/Math.PI;
 }
-export function curvePoints(frames: FrameSummary[], metric: 'energy_hartree' | 'rms_force' | 'reaction_coordinate') {
-  const observed = frames.filter(frame => typeof frame[metric] === 'number');
-  const useCoordinate = observed.every(frame => typeof frame.reaction_coordinate === 'number');
-  return observed.map(frame => ({ frame: frame.index, x: useCoordinate ? frame.reaction_coordinate as number : frame.index, y: frame[metric] as number, useCoordinate }));
+export function curvePoints(frames: FrameSummary[], metric: 'energy_hartree' | 'rms_force' | 'reaction_coordinate', scanAxis?: number) {
+  const observed = frames.filter(frame => Number.isFinite(frame[metric]));
+  const useReactionCoordinate = scanAxis === undefined && metric !== 'reaction_coordinate'
+    && observed.every(frame => Number.isFinite(frame.reaction_coordinate));
+  return observed.flatMap(frame => {
+    const x = scanAxis !== undefined ? frame.scan_coordinates?.[scanAxis]
+      : useReactionCoordinate ? frame.reaction_coordinate : frame.index;
+    if (x == null || !Number.isFinite(x)) return [];
+    return [{ frame: frame.index, x, y: frame[metric]!, useCoordinate: useReactionCoordinate }];
+  });
 }
 export function validateSettings(settings: WorkbenchSettings, generateInput: boolean): string | null {
   if (!generateInput) return null;
@@ -68,8 +74,9 @@ export function defineFrozenCoordinate(draft: Draft, atoms: number[], target: st
 
 export function detectImportFormat(filename: string): WorkbenchInputFormat | null {
   const suffix = filename.split('.').pop()?.toLowerCase();
+  if (suffix === 'poscar' || suffix === 'contcar' || suffix === 'vasp') return 'poscar';
   if (suffix === 'smi' || suffix === 'smiles') return 'smiles';
-  const formats: WorkbenchInputFormat[] = ['xyz','mol','sdf','log','out','gjf','com','inp','pdb','cif'];
+  const formats: WorkbenchInputFormat[] = ['xyz','mol','sdf','log','out','gjf','com','inp','pdb','cif','extxyz'];
   return formats.find(format=>format===suffix) ?? null;
 }
 
@@ -86,4 +93,13 @@ export function replacementBond(geometry: GeometryView | null | undefined, selec
   if (neighbors.length !== 1) return [];
   const bond = neighbors[0];
   return [bond.atom1 === atom ? bond.atom2 : bond.atom1, atom];
+}
+
+export function workbenchLink(value: string): string | null {
+  if (!value || value.includes('://') || value.startsWith('//') || value.startsWith('#')) return null;
+  let path: string;
+  try { path = decodeURIComponent(value); } catch { return null; }
+  if (path.includes(':') || path.includes('\n') || path.includes('?') || path.includes('#')) return null;
+  const name = path.split('/').pop() ?? '';
+  return detectImportFormat(name) || name === 'structure.json' ? path : null;
 }

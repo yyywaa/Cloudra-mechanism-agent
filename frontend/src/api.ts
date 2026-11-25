@@ -15,6 +15,8 @@ import type {
   Project,
   ProviderPreset,
   RuntimeConfig,
+  RuntimeDiagnostics,
+  UpdateCheckResult,
 } from './types';
 import { bootstrapApiToken } from './apiToken';
 import { trustedRuntimeBase } from './runtimeUrl';
@@ -186,6 +188,8 @@ export const api = {
   // Registered-node capacity views (global ledger, not project-scoped): one
   // entry per node with its own quota, in-flight usage and free headroom.
   computeNodes: () => request<ComputeNode[]>('/api/v2/compute/nodes'),
+  checkNodeEnvironment: (nodeId: string) =>
+    request<{ ok: boolean; detail: string }>(`/api/v2/compute/nodes/${encodeURIComponent(nodeId)}/check`, { method: 'POST' }),
   listPendingReminders: (projectId: string) =>
     request<PendingReminder[]>(`/api/v2/projects/${projectId}/reminders/pending`),
   // ---- AgentHub forum (routers/hub.py): project-scoped post projection + user posts ----
@@ -240,9 +244,10 @@ export const api = {
           : { content, language },
       ),
     }),
-  uploadFile: (projectId: string, file: File) => {
+  uploadFile: (projectId: string, file: File, source?: 'workbench') => {
     const form = new FormData();
     form.append('file', file);
+    if (source === 'workbench') form.append('workbench', 'true');
     // headers:{} replaces the JSON content-type so fetch sets the multipart boundary.
     return request<{ path: string; artifact_id: string }>(`/api/v2/projects/${projectId}/uploads`, {
       method: 'POST',
@@ -284,6 +289,9 @@ export const api = {
       body: JSON.stringify({ code, code_verifier, slot }),
     }),
   runtimeConfig: () => request<RuntimeConfig>('/api/v2/runtime/config'),
+  runtimeDiagnostics: () => request<RuntimeDiagnostics>('/api/v2/runtime/diagnostics'),
+  checkForUpdates: (force = false) =>
+    request<UpdateCheckResult>(`/api/v2/runtime/update-check${force ? '?force=true' : ''}`),
   patchSearchConfig: (changes: { search_provider?: RuntimeConfig['search_provider']; deepseek_api_key?: string }) =>
     request<RuntimeConfig>('/api/v2/runtime/config/search', {
       method: 'PATCH',
@@ -314,6 +322,8 @@ export const api = {
   artifacts: (projectId: string) => request<Array<Record<string, unknown>>>(`/api/v2/projects/${projectId}/artifacts`),
   artifactDownloadUrl: (projectId: string, artifactId: string) =>
     withToken(`${runtimeUrl}/api/v2/artifacts/${artifactId}/download?project_id=${encodeURIComponent(projectId)}`),
+  jobFileUrl: (projectId: string, jobId: number, role: string, download = true) =>
+    withToken(`${runtimeUrl}/api/v2/projects/${encodeURIComponent(projectId)}/workbench/jobs/${jobId}/files/${encodeURIComponent(role)}?download=${download}`),
   // Full human-readable Markdown dump of the project's event stream.
   projectTranscriptUrl: (projectId: string) =>
     withToken(`${runtimeUrl}/api/v2/projects/${projectId}/transcript`),

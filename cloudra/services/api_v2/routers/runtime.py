@@ -112,17 +112,20 @@ def build_router(ctx: ApiContext) -> APIRouter:
     async def openrouter_code_exchange(body: OpenRouterExchangeRequest) -> dict[str, Any]:
         """使用授权码换取 OpenRouter API Key，可选自动落盘到对应 slot。"""
         from cloudra.infra.config import mutate_config
-        from cloudra.infra.providers import apply_provider_preset, exchange_openrouter_code
+        from cloudra.infra.providers import exchange_openrouter_code
 
         key = await asyncio.to_thread(exchange_openrouter_code, body.code, body.code_verifier)
 
         if body.slot:
             def _apply(work) -> None:
                 target = work.coordinator if body.slot == "coordinator" else work.follower
-                apply_provider_preset(target, "openrouter")
-                target.key = key
+                target.apply_changes({"provider": "openrouter", "key": key})
 
             await asyncio.to_thread(mutate_config, _apply)
+            if body.slot == "coordinator":
+                from cloudra.runtime_v2.adapters import legacy_default_runtime_settings
+
+                ctx.core.runtime_defaults = await asyncio.to_thread(legacy_default_runtime_settings)
 
         return {"key": key, "saved": bool(body.slot)}
 
@@ -229,23 +232,19 @@ def build_router(ctx: ApiContext) -> APIRouter:
         and never returned by the GET endpoint.
         """
         from cloudra.infra.config import mutate_config
-        from cloudra.infra.providers import apply_provider_preset, detect_provider_from_url
+        from cloudra.runtime_v2.adapters import legacy_default_runtime_settings
 
         slot = body.slot
         changes = body.changes.model_dump(exclude_unset=True)
 
         def _apply(work) -> None:
             target = work.coordinator if slot == "coordinator" else work.follower
-            if "provider" in changes and changes["provider"]:
-                apply_provider_preset(target, changes["provider"])
-            for field, value in changes.items():
-                setattr(target, field, value)
-            if "url" in changes and "provider" not in changes:
-                detected = detect_provider_from_url(target.url)
-                if detected:
-                    target.provider = detected.id
+            target.apply_changes(changes)
 
         await asyncio.to_thread(mutate_config, _apply)
+        if slot == "coordinator":
+            ctx.core.runtime_defaults = await asyncio.to_thread(legacy_default_runtime_settings)
+
         return await runtime_config()
 
     @router.patch("/api/v2/runtime/config/search", dependencies=ctx.protected)
@@ -279,5 +278,19 @@ def build_router(ctx: ApiContext) -> APIRouter:
                     'message': '; '.join(error['msg'] for error in errors),
                     'errors': errors}) from None
         return await runtime_config()
+
+    @router.get("/api/v2/runtime/diagnostics", dependencies=ctx.protected)
+    async def runtime_diagnostics() -> dict[str, Any]:
+        """Run non-destructive environment self-check across LLM, chemistry, compute, and storage."""
+        from cloudra.infra.diagnostics import run_environment_diagnostics
+
+        return await asyncio.to_thread(run_environment_diagnostics)
+
+    @router.get("/api/v2/runtime/update-check", dependencies=ctx.protected)
+    async def runtime_update_check(force: bool = False) -> dict[str, Any]:
+        """Read-only check against GitHub Releases for a newer Cloudra version."""
+        from cloudra.infra.diagnostics import check_for_updates
+
+        return await asyncio.to_thread(check_for_updates, force=force)
 
     return router

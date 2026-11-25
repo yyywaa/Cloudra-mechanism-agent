@@ -155,7 +155,11 @@ class InternalCoordinates_input_schema(input_schema):
     )
     charge: int = Field(
         default=0,
-        description="Total charge for coordinate-only input. Omit to inherit a Gaussian declaration, otherwise default 0. An explicit value must match Gaussian charge. MOL/SDF use their stored formal charges."
+        description=(
+            "Total charge. Omit to inherit the existing graph or native input charge; "
+            "coordinate-only input with no charge defaults to 0. An explicit charge must match "
+            "a charge already present in the input graph or native calculation input."
+        )
     )
     reactive_atoms: Optional[list[int]] = Field(
         default=None,
@@ -387,6 +391,8 @@ class InternalCoordinates(Tool):
         if not mol.HasProp("cloudra_graph_status") or mol.GetProp("cloudra_graph_status") not in {"unresolved", "distance-inferred"}:
             if not mol.GetNumConformers():
                 raise ValueError("Input molecule has no coordinates")
+            if charge is not None and charge != molecule_charge(mol):
+                raise ValueError("Declared charge differs from the charge of the existing molecular graph")
             return mol, "input", []
 
         # Explicit perception recomputes the uncertain graph from coordinates.
@@ -399,7 +405,7 @@ class InternalCoordinates(Tool):
         atoms = to_ase(mol)
         native_charge = molecule_charge(mol)
         if mol.HasProp('cloudra_multiplicity') and charge is not None and charge != native_charge:
-            raise ValueError(f"Gaussian charge mismatch: declared charge {charge} differs from native charge {native_charge}")
+            raise ValueError(f"Native charge mismatch: declared charge {charge} differs from native charge {native_charge}")
         charge = native_charge if charge is None else charge
         mol.SetIntProp("cloudra_total_charge", charge)
         if mol.GetNumAtoms() == 1:

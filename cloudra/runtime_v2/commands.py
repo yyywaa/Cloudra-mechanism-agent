@@ -1,31 +1,23 @@
-"""Command bus: decide（纯）→ 落日志/发布/持久化 → apply_event → effects。
+"""Command bus: validate cleanly, persist events, apply state, then run effects.
 
-固定四拍（FP 内核化 3b）：
+Every command follows the same sequence:
+1. **Decide (pure)**: ``DECIDERS[type](core, command) -> Decision`` runs all
+   validation without IO or mutation. Invalid commands raise
+   ``CommandRejected`` (optionally carrying audit events to record).
+2. **Persist then apply**: Each draft event is appended, flushed to SQLite
+   (when configured), and applied via ``apply_event``. If persistence fails
+   mid-way, unpersisted tail events are dropped so disk and memory stay in sync.
+3. **Run effects**: Side effects (creating directories via ``to_thread``,
+   scheduling/cancelling runners, enqueueing mailbox messages) run after state
+   is durable. Write-only ``api_key`` values are attached in memory only.
 
-1. **decide**：``DECIDERS[type](core, command) -> Decision``，纯函数——全部
-   守卫校验在这里（非法抛 ``CommandRejected``，拒绝前要留审计轨迹的草稿
-   挂在异常的 ``events`` 上），零 IO、零 mutate、零 await 副作用。
-2. **逐事件 persist-then-apply**：每条草稿 ``append`` → ``flush``（store
-   存在时落库再发布）→ ``apply_event``。中途 ``EventPersistenceError`` 丢弃
-   未落库尾巴再抛出，避免下次 flush 把从未 apply 的事件写进磁盘。包装路径
-   已 apply 再扫尾 flush，失败不丢尾巴、留给下次重试。
-3. **effects**：shell 统一执行副作用（EnsureDir 走 to_thread；runner
-   schedule/cancel；mailbox enqueue；api_key 内存覆盖补挂）。
+Thin broker wrappers (``approval.decide``, ``interaction.respond``,
+``context.inject``, ``agent.compact``) delegate directly to their managers
+because waking in-process asyncio waiters is inherently process-local.
 
-已是事件投影的 broker 不强行进 decide：``approval.decide`` /
-``interaction.respond`` / ``context.inject`` / ``agent.compact`` 保持薄包装
-（WRAPPERS）直接调 broker/manager——它们的"状态"本就事件可推导，且
-future 解析是刻意的 shell 行为（等待者必须在本进程内被唤醒，无法从事件
-重放）。包装路径的事件由 bus 在执行后统一扫尾发布/持久化；状态投影在
-wrapper 内紧跟 append 过 ``apply_event``（如 agent.compact 的
-pending_compactions 投影）。
-
-快照是缓存不是权威：权威是事件表，纯重放（``events_after({})`` 全量）
-必须与"快照+尾巴"逐字段等价（tests/test_runtime_v2_replay_equivalence.py
-守这条）。execute 因此不再每命令整库快照，改为节流后台落（每
-``_SNAPSHOT_EVENT_INTERVAL`` 条事件或 ``_SNAPSHOT_TIME_INTERVAL_S`` 秒，
-取先到，在命令边界检查）；进程关闭路径（api_v2 lifespan finally /
-benchmark backend finally）显式调 ``flush_snapshot()`` 补一次。
+Snapshots are only a throttled cache—the event log is always the source of
+truth, verified by ``tests/test_runtime_v2_replay_equivalence.py``. Shutdown
+hooks call ``flush_snapshot()`` to persist the latest cache before exit.
 """
 
 from __future__ import annotations
@@ -359,8 +351,8 @@ def _decide_spawn_agent(core: RuntimeCore, command: Command) -> Decision:
     effects: list[Effect] = []
     if settings.api_key:
         # api_key 是 write-only 秘密，不进事件/快照；活对象在 apply 后由
-        # PatchApiKey 补挂内存覆盖（重放/恢复出的 core 回落全局 key，与既有语义一致）。
-        effects.append(PatchApiKey(agent.id, settings.api_key))
+        # PatchApiKey 在发布前补挂内存覆盖（重放/恢复出的 core 回落全局 key）。
+        effects.append(PatchApiKey(agent.id, agent.role_id, settings.api_key))
     query = str(payload.get("query") or "").strip()
     if query:
         message_draft, deliver = _message_drafts(
@@ -388,8 +380,8 @@ def _decide_patch_agent_settings(core: RuntimeCore, command: Command) -> Decisio
         # 空字符串表示"清除覆盖、回落全局 key"；按实际值记布尔，别把
         # api_key_set 记成 True（审计事件里要能区分覆盖/回落）。
         changes["api_key_set"] = bool(patch.api_key)
-        # api_key 不进事件：apply 后由 PatchApiKey 补挂内存覆盖（含清 key）。
-        effects.append(PatchApiKey(agent.id, patch.api_key))
+        # api_key 不进事件：投影设置后、发布前补挂内存覆盖（含清 key）。
+        effects.append(PatchApiKey(agent.id, agent.role_id, patch.api_key))
     changes.pop("api_key", None)
     next_revision = agent.settings_revision + 1
     if (
@@ -624,7 +616,7 @@ def _decide_restart_agent(core: RuntimeCore, command: Command) -> Decision:
         changes = settings_patch.model_dump(exclude_unset=True)
         if settings_patch.api_key is not None:
             changes["api_key_set"] = bool(settings_patch.api_key)
-            effects.append(PatchApiKey(agent.id, settings_patch.api_key))
+            effects.append(PatchApiKey(agent.id, agent.role_id, settings_patch.api_key))
         changes.pop("api_key", None)
         next_revision = agent.settings_revision + 1
         drafts.append(
@@ -865,8 +857,6 @@ async def _execute_effect(core: RuntimeCore, effect: Effect) -> None:
     """执行单个效果。只在第四拍被 CommandBus 调用（事件与状态均已落地）。"""
     if isinstance(effect, EnsureDir):
         await asyncio.to_thread(_mkdir, effect.path)
-    elif isinstance(effect, PatchApiKey):
-        core.require_agent(effect.session_id).settings.api_key = effect.api_key
     elif isinstance(effect, DeliverMessage):
         core.mailbox.enqueue(effect.session_id, effect.message)
     elif isinstance(effect, ScheduleAgent):
@@ -1045,22 +1035,42 @@ class CommandBus:
     async def _apply_decision(self, command: Command, decision: Decision) -> CommandResult:
         core = self.core
         envelopes: list[EventEnvelope] = []
+        effects: list[Effect] = []
+        key_patches: dict[str, tuple[str, str | None]] = {}
+        for effect in decision.effects:
+            if isinstance(effect, PatchApiKey):
+                from cloudra.infra.config import role_model_config
+
+                default_endpoint = None
+                if effect.api_key:
+                    default_endpoint = (await asyncio.to_thread(role_model_config, effect.role_id)).url
+                key_patches[effect.session_id] = (effect.api_key, default_endpoint)
+            else:
+                effects.append(effect)
 
         def project(envelope: EventEnvelope) -> None:
             apply_event(core, envelope)
+            # Bind only after the matching settings are durable and projected,
+            # before observers can act on the published settings or first query.
+            if envelope.type in {"agent.spawned", "agent.settings_changed"} and envelope.session_id is not None:
+                key_patch = key_patches.pop(envelope.session_id, None)
+                if key_patch is not None:
+                    key, default_endpoint = key_patch
+                    agent = core.require_agent(envelope.session_id)
+                    agent.settings.bind_api_key(key, agent.settings.base_url or default_endpoint)
             envelopes.append(envelope)
 
         try:
             await core.event_writer.commit_and_apply(decision.events, project)
-            # 拍 4：副作用（runner/mailbox/文件系统/内存秘密覆盖）
-            for effect in decision.effects:
+            # 拍 4：副作用（runner/mailbox/文件系统）
+            for effect in effects:
                 await _execute_effect(core, effect)
         except EventPersistenceError:
             # spawned 已落盘：返回已创建的 agent 并尽量跑完 effects，
             # 避免 HTTP 500 触发新 command_id 再造一个 coordinator。
             if any(envelope.type == "agent.spawned" for envelope in envelopes):
                 persisted = {envelope.type for envelope in envelopes}
-                for effect in decision.effects:
+                for effect in effects:
                     if (
                         isinstance(effect, DeliverMessage)
                         and "agent.message_injected" not in persisted
